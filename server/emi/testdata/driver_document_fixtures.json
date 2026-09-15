@@ -1,0 +1,1107 @@
+{
+  "_comment": "Shared driver-document fixtures. The Python and TypeScript validators must agree on which documents are acceptable. Invalid cases carry `must_mention` rather than a full message: matching wording across two languages is brittle, but both must refuse and both must say which field and why. `python_message` is recorded for reference only. Regenerate with `make driver-fixtures`, never by hand.",
+  "port_spectrum": {
+    "frequencies_hz": [
+      25000000.0,
+      40000000.0,
+      50000000.0,
+      75000000.0,
+      125000000.0,
+      1000000000.0,
+      2000000000.0,
+      3000000000.0,
+      4000000000.0
+    ],
+    "v_real": [
+      2.0,
+      2.0,
+      2.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "v_imag": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "i_real": [
+      0.02,
+      0.02,
+      0.02,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01
+    ],
+    "i_imag": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ]
+  },
+  "reference_magnitude": 0.5,
+  "valid": [
+    {
+      "name": "trapezoid-spi-clock",
+      "document": {
+        "format": "emi-driver",
+        "version": 1,
+        "name": "U3 SPI clock",
+        "net": "/SPI_SCK",
+        "kind": "trapezoid",
+        "role": "signal",
+        "trapezoid": {
+          "amplitude_v": {
+            "value": 3.3,
+            "source": "benchpod",
+            "detail": "high level, ADC mean"
+          },
+          "period_s": {
+            "value": 4e-08,
+            "source": "benchpod",
+            "detail": "LA, 2048 periods"
+          },
+          "pulse_width_s": {
+            "value": 2e-08,
+            "source": "benchpod"
+          },
+          "rise_s": {
+            "value": 1.2e-09,
+            "source": "datasheet"
+          },
+          "fall_s": {
+            "value": 1.2e-09,
+            "source": "datasheet"
+          },
+          "source_impedance_ohm": {
+            "value": 40,
+            "source": "assumed"
+          }
+        }
+      },
+      "expected": {
+        "kind": "trapezoid",
+        "role": "signal",
+        "driver_name": "U3 SPI clock",
+        "weakest_source": "assumed",
+        "sigma_db": 6.0
+      },
+      "resolve": {
+        "frequencies_hz": [
+          25000000.0,
+          40000000.0,
+          50000000.0,
+          75000000.0,
+          125000000.0
+        ],
+        "volts_abs": [
+          2.097736453123487,
+          null,
+          3.526998036850404e-16,
+          0.6909884444119477,
+          0.4047899222046884
+        ],
+        "undriven_hz": [
+          40000000.0
+        ],
+        "magnitude_only": false
+      },
+      "apply": {
+        "frequencies_hz": [
+          25000000.0,
+          40000000.0,
+          50000000.0,
+          75000000.0,
+          125000000.0
+        ],
+        "offset_db": [
+          111.47125796311133,
+          null,
+          null,
+          107.8462550653548,
+          103.20143320545374
+        ],
+        "complete": false
+      }
+    },
+    {
+      "name": "waveform-captured-edge",
+      "document": {
+        "format": "emi-driver",
+        "version": 1,
+        "name": "captured edge",
+        "kind": "waveform",
+        "role": "signal",
+        "waveform": {
+          "sample_interval_s": 1e-10,
+          "samples_v": [
+            0.0,
+            1.1,
+            3.3,
+            3.3,
+            3.3,
+            1.1,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "bandwidth_hz": 2000000000.0,
+          "period_s": {
+            "value": 1e-09,
+            "source": "benchpod"
+          },
+          "source_impedance_ohm": {
+            "value": 50,
+            "source": "assumed"
+          },
+          "rise_s": {
+            "value": 2e-10,
+            "source": "scope"
+          }
+        }
+      },
+      "expected": {
+        "kind": "waveform",
+        "role": "signal",
+        "driver_name": "captured edge",
+        "weakest_source": "assumed",
+        "sigma_db": 6.0
+      },
+      "resolve": {
+        "frequencies_hz": [
+          1000000000.0,
+          2000000000.0,
+          3000000000.0,
+          4000000000.0
+        ],
+        "volts_abs": [
+          1.8033523080503961,
+          0.6230428990087692,
+          0.27690795511500854,
+          0.1557607247521923
+        ],
+        "undriven_hz": [],
+        "magnitude_only": false
+      },
+      "apply": {
+        "frequencies_hz": [
+          1000000000.0,
+          2000000000.0,
+          3000000000.0,
+          4000000000.0
+        ],
+        "offset_db": [
+          115.57918650600547,
+          106.34793391780684,
+          99.30428355557959,
+          94.30673409124759
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "spectrum-analyser-trace",
+      "document": {
+        "format": "emi-driver",
+        "version": 1,
+        "name": "analyser trace",
+        "kind": "spectrum",
+        "role": "signal",
+        "spectrum": {
+          "rbw_hz": 9000,
+          "points": [
+            {
+              "frequency_hz": 25000000.0,
+              "level_dbuv": 96.4
+            },
+            {
+              "frequency_hz": 75000000.0,
+              "level_dbuv": 86.8
+            },
+            {
+              "frequency_hz": 125000000.0,
+              "level_dbuv": 81.2
+            }
+          ],
+          "source_impedance_ohm": {
+            "value": 50,
+            "source": "assumed"
+          }
+        }
+      },
+      "expected": {
+        "kind": "spectrum",
+        "role": "signal",
+        "driver_name": "analyser trace",
+        "weakest_source": "assumed",
+        "sigma_db": 6.0
+      },
+      "resolve": {
+        "frequencies_hz": [
+          10000000.0,
+          25000000.0,
+          43301270.189221926,
+          75000000.0,
+          500000000.0
+        ],
+        "volts_abs": [
+          null,
+          0.06606934480075964,
+          0.038018939632056124,
+          0.021877616239495516,
+          null
+        ],
+        "undriven_hz": [
+          10000000.0,
+          500000000.0
+        ],
+        "magnitude_only": true
+      },
+      "apply": {
+        "frequencies_hz": [
+          25000000.0,
+          75000000.0
+        ],
+        "offset_db": [
+          80.83697499232713,
+          77.25757490560675
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "switching-regulator",
+      "document": {
+        "format": "emi-driver",
+        "version": 1,
+        "name": "buck switch node",
+        "net": "/SPI_SCK",
+        "kind": "trapezoid",
+        "role": "switching-regulator",
+        "trapezoid": {
+          "amplitude_v": {
+            "value": 3.3,
+            "source": "benchpod",
+            "detail": "high level, ADC mean"
+          },
+          "period_s": {
+            "value": 4e-08,
+            "source": "benchpod",
+            "detail": "LA, 2048 periods"
+          },
+          "pulse_width_s": {
+            "value": 2e-08,
+            "source": "benchpod"
+          },
+          "rise_s": {
+            "value": 1.2e-09,
+            "source": "datasheet"
+          },
+          "fall_s": {
+            "value": 1.2e-09,
+            "source": "datasheet"
+          },
+          "source_impedance_ohm": {
+            "value": 40,
+            "source": "assumed"
+          }
+        },
+        "input_current_a": {
+          "value": 0.42,
+          "source": "benchpod"
+        },
+        "input_voltage_v": {
+          "value": 12.0,
+          "source": "datasheet"
+        }
+      },
+      "expected": {
+        "kind": "trapezoid",
+        "role": "switching-regulator",
+        "driver_name": "buck switch node",
+        "weakest_source": "assumed",
+        "sigma_db": 6.0
+      },
+      "resolve": {
+        "frequencies_hz": [
+          25000000.0,
+          75000000.0
+        ],
+        "volts_abs": [
+          2.097736453123487,
+          0.6909884444119477
+        ],
+        "undriven_hz": [],
+        "magnitude_only": false
+      },
+      "apply": {
+        "frequencies_hz": [
+          25000000.0,
+          75000000.0
+        ],
+        "offset_db": [
+          111.47125796311133,
+          107.8462550653548
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "all-measured",
+      "document": {
+        "format": "emi-driver",
+        "version": 1,
+        "name": "U3 SPI clock",
+        "net": "/SPI_SCK",
+        "kind": "trapezoid",
+        "role": "signal",
+        "trapezoid": {
+          "amplitude_v": {
+            "value": 3.3,
+            "source": "benchpod",
+            "detail": "high level, ADC mean"
+          },
+          "period_s": {
+            "value": 4e-08,
+            "source": "benchpod",
+            "detail": "LA, 2048 periods"
+          },
+          "pulse_width_s": {
+            "value": 2e-08,
+            "source": "benchpod"
+          },
+          "rise_s": {
+            "value": 1.2e-09,
+            "source": "scope"
+          },
+          "fall_s": {
+            "value": 1.2e-09,
+            "source": "scope"
+          },
+          "source_impedance_ohm": {
+            "value": 40,
+            "source": "scope"
+          }
+        }
+      },
+      "expected": {
+        "kind": "trapezoid",
+        "role": "signal",
+        "driver_name": "U3 SPI clock",
+        "weakest_source": "benchpod",
+        "sigma_db": 1.5
+      },
+      "resolve": {
+        "frequencies_hz": [
+          25000000.0,
+          75000000.0
+        ],
+        "volts_abs": [
+          2.097736453123487,
+          0.6909884444119477
+        ],
+        "undriven_hz": [],
+        "magnitude_only": false
+      },
+      "apply": {
+        "frequencies_hz": [
+          25000000.0,
+          75000000.0
+        ],
+        "offset_db": [
+          111.47125796311133,
+          107.8462550653548
+        ],
+        "complete": true
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "wrong-format",
+      "document": {
+        "format": "emi-cable",
+        "version": 1,
+        "name": "U3 SPI clock",
+        "net": "/SPI_SCK",
+        "kind": "trapezoid",
+        "role": "signal",
+        "trapezoid": {
+          "amplitude_v": {
+            "value": 3.3,
+            "source": "benchpod",
+            "detail": "high level, ADC mean"
+          },
+          "period_s": {
+            "value": 4e-08,
+            "source": "benchpod",
+            "detail": "LA, 2048 periods"
+          },
+          "pulse_width_s": {
+            "value": 2e-08,
+            "source": "benchpod"
+          },
+          "rise_s": {
+            "value": 1.2e-09,
+            "source": "datasheet"
+          },
+          "fall_s": {
+            "value": 1.2e-09,
+            "source": "datasheet"
+          },
+          "source_impedance_ohm": {
+            "value": 40,
+            "source": "assumed"
+          }
+        }
+      },
+      "must_mention": "format",
+      "python_message": "not a driver document: format='emi-cable'"
+    },
+    {
+      "name": "future-version",
+      "document": {
+        "format": "emi-driver",
+        "version": 2,
+        "name": "U3 SPI clock",
+        "net": "/SPI_SCK",
+        "kind": "trapezoid",
+        "role": "signal",
+        "trapezoid": {
+          "amplitude_v": {
+            "value": 3.3,
+            "source": "benchpod",
+            "detail": "high level, ADC mean"
+          },
+          "period_s": {
+            "value": 4e-08,
+            "source": "benchpod",
+            "detail": "LA, 2048 periods"
+          },
+          "pulse_width_s": {
+            "value": 2e-08,
+            "source": "benchpod"
+          },
+          "rise_s": {
+            "value": 1.2e-09,
+            "source": "datasheet"
+          },
+          "fall_s": {
+            "value": 1.2e-09,
+            "source": "datasheet"
+          },
+          "source_impedance_ohm": {
+            "value": 40,
+            "source": "assumed"
+          }
+        }
+      },
+      "must_mention": "version 2",
+      "python_message": "this driver is version 2 and this build understands version 1. Update the analyzer rather than letting it read the parts it recognises"
+    },
+    {
+      "name": "no-name",
+      "document": {
+        "format": "emi-driver",
+        "version": 1,
+        "name": "  ",
+        "net": "/SPI_SCK",
+        "kind": "trapezoid",
+        "role": "signal",
+        "trapezoid": {
+          "amplitude_v": {
+            "value": 3.3,
+            "source": "benchpod",
+            "detail": "high level, ADC mean"
+          },
+          "period_s": {
+            "value": 4e-08,
+            "source": "benchpod",
+            "detail": "LA, 2048 periods"
+          },
+          "pulse_width_s": {
+            "value": 2e-08,
+            "source": "benchpod"
+          },
+          "rise_s": {
+            "value": 1.2e-09,
+            "source": "datasheet"
+          },
+          "fall_s": {
+            "value": 1.2e-09,
+            "source": "datasheet"
+          },
+          "source_impedance_ohm": {
+            "value": 40,
+            "source": "assumed"
+          }
+        }
+      },
+      "must_mention": "name",
+      "python_message": "a driver needs a name"
+    },
+    {
+      "name": "unknown-kind",
+      "document": {
+        "format": "emi-driver",
+        "version": 1,
+        "name": "U3 SPI clock",
+        "net": "/SPI_SCK",
+        "kind": "sawtooth",
+        "role": "signal",
+        "trapezoid": {
+          "amplitude_v": {
+            "value": 3.3,
+            "source": "benchpod",
+            "detail": "high level, ADC mean"
+          },
+          "period_s": {
+            "value": 4e-08,
+            "source": "benchpod",
+            "detail": "LA, 2048 periods"
+          },
+          "pulse_width_s": {
+            "value": 2e-08,
+            "source": "benchpod"
+          },
+          "rise_s": {
+            "value": 1.2e-09,
+            "source": "datasheet"
+          },
+          "fall_s": {
+            "value": 1.2e-09,
+            "source": "datasheet"
+          },
+          "source_impedance_ohm": {
+            "value": 40,
+            "source": "assumed"
+          }
+        }
+      },
+      "must_mention": "kind",
+      "python_message": "unknown driver kind 'sawtooth'; use one of trapezoid, waveform, spectrum"
+    },
+    {
+      "name": "unknown-role",
+      "document": {
+        "format": "emi-driver",
+        "version": 1,
+        "name": "U3 SPI clock",
+        "net": "/SPI_SCK",
+        "kind": "trapezoid",
+        "role": "antenna",
+        "trapezoid": {
+          "amplitude_v": {
+            "value": 3.3,
+            "source": "benchpod",
+            "detail": "high level, ADC mean"
+          },
+          "period_s": {
+            "value": 4e-08,
+            "source": "benchpod",
+            "detail": "LA, 2048 periods"
+          },
+          "pulse_width_s": {
+            "value": 2e-08,
+            "source": "benchpod"
+          },
+          "rise_s": {
+            "value": 1.2e-09,
+            "source": "datasheet"
+          },
+          "fall_s": {
+            "value": 1.2e-09,
+            "source": "datasheet"
+          },
+          "source_impedance_ohm": {
+            "value": 40,
+            "source": "assumed"
+          }
+        }
+      },
+      "must_mention": "role",
+      "python_message": "unknown role 'antenna'; use one of signal, switching-regulator"
+    },
+    {
+      "name": "missing-field",
+      "document": {
+        "format": "emi-driver",
+        "version": 1,
+        "name": "U3 SPI clock",
+        "net": "/SPI_SCK",
+        "kind": "trapezoid",
+        "role": "signal",
+        "trapezoid": {
+          "amplitude_v": {
+            "value": 3.3,
+            "source": "benchpod",
+            "detail": "high level, ADC mean"
+          },
+          "period_s": {
+            "value": 4e-08,
+            "source": "benchpod",
+            "detail": "LA, 2048 periods"
+          },
+          "pulse_width_s": {
+            "value": 2e-08,
+            "source": "benchpod"
+          },
+          "fall_s": {
+            "value": 1.2e-09,
+            "source": "datasheet"
+          },
+          "source_impedance_ohm": {
+            "value": 40,
+            "source": "assumed"
+          }
+        }
+      },
+      "must_mention": "rise_s",
+      "python_message": "trapezoid.rise_s is missing"
+    },
+    {
+      "name": "no-source-on-a-number",
+      "document": {
+        "format": "emi-driver",
+        "version": 1,
+        "name": "U3 SPI clock",
+        "net": "/SPI_SCK",
+        "kind": "trapezoid",
+        "role": "signal",
+        "trapezoid": {
+          "amplitude_v": {
+            "value": 3.3
+          },
+          "period_s": {
+            "value": 4e-08,
+            "source": "benchpod",
+            "detail": "LA, 2048 periods"
+          },
+          "pulse_width_s": {
+            "value": 2e-08,
+            "source": "benchpod"
+          },
+          "rise_s": {
+            "value": 1.2e-09,
+            "source": "datasheet"
+          },
+          "fall_s": {
+            "value": 1.2e-09,
+            "source": "datasheet"
+          },
+          "source_impedance_ohm": {
+            "value": 40,
+            "source": "assumed"
+          }
+        }
+      },
+      "must_mention": "source",
+      "python_message": "trapezoid.amplitude_v does not say where it came from. Every number in a driver carries a source, one of: scope, spectrum-analyzer, benchpod, datasheet, assumed"
+    },
+    {
+      "name": "unknown-source",
+      "document": {
+        "format": "emi-driver",
+        "version": 1,
+        "name": "U3 SPI clock",
+        "net": "/SPI_SCK",
+        "kind": "trapezoid",
+        "role": "signal",
+        "trapezoid": {
+          "amplitude_v": {
+            "value": 3.3,
+            "source": "vibes"
+          },
+          "period_s": {
+            "value": 4e-08,
+            "source": "benchpod",
+            "detail": "LA, 2048 periods"
+          },
+          "pulse_width_s": {
+            "value": 2e-08,
+            "source": "benchpod"
+          },
+          "rise_s": {
+            "value": 1.2e-09,
+            "source": "datasheet"
+          },
+          "fall_s": {
+            "value": 1.2e-09,
+            "source": "datasheet"
+          },
+          "source_impedance_ohm": {
+            "value": 40,
+            "source": "assumed"
+          }
+        }
+      },
+      "must_mention": "source",
+      "python_message": "trapezoid.amplitude_v: unknown source 'vibes'; use one of scope, spectrum-analyzer, benchpod, datasheet, assumed"
+    },
+    {
+      "name": "non-numeric-value",
+      "document": {
+        "format": "emi-driver",
+        "version": 1,
+        "name": "U3 SPI clock",
+        "net": "/SPI_SCK",
+        "kind": "trapezoid",
+        "role": "signal",
+        "trapezoid": {
+          "amplitude_v": {
+            "value": "3.3",
+            "source": "scope"
+          },
+          "period_s": {
+            "value": 4e-08,
+            "source": "benchpod",
+            "detail": "LA, 2048 periods"
+          },
+          "pulse_width_s": {
+            "value": 2e-08,
+            "source": "benchpod"
+          },
+          "rise_s": {
+            "value": 1.2e-09,
+            "source": "datasheet"
+          },
+          "fall_s": {
+            "value": 1.2e-09,
+            "source": "datasheet"
+          },
+          "source_impedance_ohm": {
+            "value": 40,
+            "source": "assumed"
+          }
+        }
+      },
+      "must_mention": "number",
+      "python_message": "trapezoid.amplitude_v: value must be a number, got str"
+    },
+    {
+      "name": "edges-do-not-fit",
+      "document": {
+        "format": "emi-driver",
+        "version": 1,
+        "name": "U3 SPI clock",
+        "net": "/SPI_SCK",
+        "kind": "trapezoid",
+        "role": "signal",
+        "trapezoid": {
+          "amplitude_v": {
+            "value": 3.3,
+            "source": "benchpod",
+            "detail": "high level, ADC mean"
+          },
+          "period_s": {
+            "value": 4e-08,
+            "source": "benchpod",
+            "detail": "LA, 2048 periods"
+          },
+          "pulse_width_s": {
+            "value": 1e-09,
+            "source": "benchpod"
+          },
+          "rise_s": {
+            "value": 4e-09,
+            "source": "scope"
+          },
+          "fall_s": {
+            "value": 4e-09,
+            "source": "scope"
+          },
+          "source_impedance_ohm": {
+            "value": 40,
+            "source": "assumed"
+          }
+        }
+      },
+      "must_mention": "do not fit",
+      "python_message": "the edges do not fit inside the pulse: a 1 ns pulse at 50 % cannot hold a 4 ns rise and a 4 ns fall"
+    },
+    {
+      "name": "pulse-longer-than-period",
+      "document": {
+        "format": "emi-driver",
+        "version": 1,
+        "name": "U3 SPI clock",
+        "net": "/SPI_SCK",
+        "kind": "trapezoid",
+        "role": "signal",
+        "trapezoid": {
+          "amplitude_v": {
+            "value": 3.3,
+            "source": "benchpod",
+            "detail": "high level, ADC mean"
+          },
+          "period_s": {
+            "value": 4e-09,
+            "source": "benchpod"
+          },
+          "pulse_width_s": {
+            "value": 3.5e-09,
+            "source": "benchpod"
+          },
+          "rise_s": {
+            "value": 2e-09,
+            "source": "scope"
+          },
+          "fall_s": {
+            "value": 2e-09,
+            "source": "scope"
+          },
+          "source_impedance_ohm": {
+            "value": 40,
+            "source": "assumed"
+          }
+        }
+      },
+      "must_mention": "longer than the period",
+      "python_message": "one pulse is longer than the period: 5.5 ns in a 4 ns period"
+    },
+    {
+      "name": "negative-source-impedance",
+      "document": {
+        "format": "emi-driver",
+        "version": 1,
+        "name": "U3 SPI clock",
+        "net": "/SPI_SCK",
+        "kind": "trapezoid",
+        "role": "signal",
+        "trapezoid": {
+          "amplitude_v": {
+            "value": 3.3,
+            "source": "benchpod",
+            "detail": "high level, ADC mean"
+          },
+          "period_s": {
+            "value": 4e-08,
+            "source": "benchpod",
+            "detail": "LA, 2048 periods"
+          },
+          "pulse_width_s": {
+            "value": 2e-08,
+            "source": "benchpod"
+          },
+          "rise_s": {
+            "value": 1.2e-09,
+            "source": "datasheet"
+          },
+          "fall_s": {
+            "value": 1.2e-09,
+            "source": "datasheet"
+          },
+          "source_impedance_ohm": {
+            "value": -10,
+            "source": "assumed"
+          }
+        }
+      },
+      "must_mention": "negative",
+      "python_message": "source impedance must not be negative"
+    },
+    {
+      "name": "waveform-shorter-than-a-period",
+      "document": {
+        "format": "emi-driver",
+        "version": 1,
+        "name": "captured edge",
+        "kind": "waveform",
+        "role": "signal",
+        "waveform": {
+          "sample_interval_s": 1e-10,
+          "samples_v": [
+            0.0,
+            1.1,
+            3.3,
+            3.3,
+            3.3,
+            1.1,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "bandwidth_hz": 2000000000.0,
+          "period_s": {
+            "value": 5e-09,
+            "source": "benchpod"
+          },
+          "source_impedance_ohm": {
+            "value": 50,
+            "source": "assumed"
+          },
+          "rise_s": {
+            "value": 2e-10,
+            "source": "scope"
+          }
+        }
+      },
+      "must_mention": "full period",
+      "python_message": "the capture is 1 ns long and one period is 5 ns. Transforming less than a full period would put every harmonic in the wrong place"
+    },
+    {
+      "name": "waveform-too-few-samples",
+      "document": {
+        "format": "emi-driver",
+        "version": 1,
+        "name": "captured edge",
+        "kind": "waveform",
+        "role": "signal",
+        "waveform": {
+          "sample_interval_s": 1e-10,
+          "samples_v": [
+            1.0
+          ],
+          "bandwidth_hz": 2000000000.0,
+          "period_s": {
+            "value": 1e-09,
+            "source": "benchpod"
+          },
+          "source_impedance_ohm": {
+            "value": 50,
+            "source": "assumed"
+          },
+          "rise_s": {
+            "value": 2e-10,
+            "source": "scope"
+          }
+        }
+      },
+      "must_mention": "two samples",
+      "python_message": "a waveform needs at least two samples"
+    },
+    {
+      "name": "waveform-bad-interval",
+      "document": {
+        "format": "emi-driver",
+        "version": 1,
+        "name": "captured edge",
+        "kind": "waveform",
+        "role": "signal",
+        "waveform": {
+          "sample_interval_s": 0,
+          "samples_v": [
+            0.0,
+            1.1,
+            3.3,
+            3.3,
+            3.3,
+            1.1,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "bandwidth_hz": 2000000000.0,
+          "period_s": {
+            "value": 1e-09,
+            "source": "benchpod"
+          },
+          "source_impedance_ohm": {
+            "value": 50,
+            "source": "assumed"
+          },
+          "rise_s": {
+            "value": 2e-10,
+            "source": "scope"
+          }
+        }
+      },
+      "must_mention": "sample_interval_s",
+      "python_message": "waveform.sample_interval_s must be a positive number"
+    },
+    {
+      "name": "spectrum-out-of-order",
+      "document": {
+        "format": "emi-driver",
+        "version": 1,
+        "name": "analyser trace",
+        "kind": "spectrum",
+        "role": "signal",
+        "spectrum": {
+          "rbw_hz": 9000,
+          "points": [
+            {
+              "frequency_hz": 75000000.0,
+              "level_dbuv": 86.8
+            },
+            {
+              "frequency_hz": 25000000.0,
+              "level_dbuv": 96.4
+            }
+          ],
+          "source_impedance_ohm": {
+            "value": 50,
+            "source": "assumed"
+          }
+        }
+      },
+      "must_mention": "increasing frequency",
+      "python_message": "spectrum points must be in increasing frequency order"
+    },
+    {
+      "name": "regulator-without-supply-numbers",
+      "document": {
+        "format": "emi-driver",
+        "version": 1,
+        "name": "U3 SPI clock",
+        "net": "/SPI_SCK",
+        "kind": "trapezoid",
+        "role": "switching-regulator",
+        "trapezoid": {
+          "amplitude_v": {
+            "value": 3.3,
+            "source": "benchpod",
+            "detail": "high level, ADC mean"
+          },
+          "period_s": {
+            "value": 4e-08,
+            "source": "benchpod",
+            "detail": "LA, 2048 periods"
+          },
+          "pulse_width_s": {
+            "value": 2e-08,
+            "source": "benchpod"
+          },
+          "rise_s": {
+            "value": 1.2e-09,
+            "source": "datasheet"
+          },
+          "fall_s": {
+            "value": 1.2e-09,
+            "source": "datasheet"
+          },
+          "source_impedance_ohm": {
+            "value": 40,
+            "source": "assumed"
+          }
+        }
+      },
+      "must_mention": "input_current_a",
+      "python_message": "a switching-regulator driver needs input_current_a, which the conducted prediction reads (\u00a716.3)"
+    }
+  ]
+}

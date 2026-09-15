@@ -1,0 +1,13 @@
+{
+  "name": "emi-analyzer-desktop",
+  "private": true,
+  "version": "0.0.0",
+  "description": "The EMI Analyzer desktop app: a Tauri window around the emi-local sidecar.",
+  "scripts": {
+    "tauri": "tauri"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.11.4"
+  },
+  "license": "Apache-2.0"
+}

@@ -1,0 +1,435 @@
+"""openEMS model generation tests.
+
+These do not run the solver — they check the things that, when wrong, produce a run that
+completes successfully and returns nothing. Every failure mode encoded here was hit for
+real while building this:
+
+* a dump plane sampled at cell centres instead of grid nodes, missing the copper entirely
+* a port that fell between grid lines and excited nothing
+* a timestep cap below the excitation length, so the source never finished
+* an ``Excite`` attribute written as a child element, silently parsed as ``Unknown``
+
+openEMS reports all four as warnings and then exits zero. The only defence is to check the
+model before handing it over.
+"""
+
+from __future__ import annotations
+
+import math
+import xml.etree.ElementTree as ET
+from pathlib import Path
+
+import numpy as np
+import pytest
+
+from emi_worker.kicad import parse, parse_board
+from emi_worker.kicad.normalize import _board_extent
+from emi_worker.openems import csx, mesh as meshmod
+from emi_worker.openems.model import (
+    BAND_FILL,
+    ModelError,
+    Port,
+    SolveParams,
+    build_model,
+    excitation_band,
+    kappa_from_loss_tangent,
+    required_timesteps,
+)
+
+FIXTURE = Path(__file__).parent / "fixtures" / "tiny.kicad_pcb"
+
+
+@pytest.fixture(scope="module")
+def board():
+    return parse_board(parse(FIXTURE.read_text()))
+
+
+@pytest.fixture(scope="module")
+def transform(board):
+    return _board_extent(board)
+
+
+def _params(**over) -> SolveParams:
+    base = dict(
+        roi=(4.0, 24.0, 30.0, 38.0),
+        frequencies_hz=[500e6, 1e9],
+        ports=[Port(name="p1", x=10.0, y=30.0, layer="F.Cu", half_width_mm=0.15)],
+        dx_um=250, dy_um=250, dz_um=250, air_mm=3.0,
+    )
+    base.update(over)
+    return SolveParams(**base)
+
+
+# ---- mesh ----------------------------------------------------------------------------
+
+def test_required_lines_survive():
+    """Copper edges must land on grid lines, or the solver rounds the geometry."""
+    required = [0.0, 1.234, 5.0, 10.0]
+    lines = meshmod.build_axis(required, min_res=0.05, max_res=1.0, pml=False)
+    for r in required:
+        assert np.min(np.abs(lines - r)) < 1e-9, f"{r} was lost"
+
+
+def test_grading_is_bounded():
+    """A sudden jump in cell size reflects energy — a numerical artefact that looks real."""
+    lines = meshmod.build_axis([0.0, 0.05, 0.1, 40.0], min_res=0.02, max_res=4.0)
+    d = np.diff(lines)
+    ratio = np.maximum(d[1:] / d[:-1], d[:-1] / d[1:])
+    # Cell sizes are discrete and each gap is scaled to fit exactly, so the achieved bound
+    # lands a little above the target. openEMS's own guidance is 1.5, so anything up to
+    # that is fine; what matters is that there is no 2:1 jump.
+    assert ratio.max() <= 1.5
+
+
+def test_pml_padding_is_smoothed_too():
+    """The seam where padding meets the mesh is itself a cell-size discontinuity.
+
+    Smoothing before padding but not after left exactly one 2:1 jump per axis, sitting
+    right where the absorbing boundary begins — the worst possible place for a reflection.
+    """
+    lines = meshmod.build_axis([0.0, 10.0], min_res=0.05, max_res=0.5, pml=True)
+    d = np.diff(lines)
+    ratio = np.maximum(d[1:] / d[:-1], d[:-1] / d[1:])
+    assert ratio.max() <= meshmod.MAX_CELL_RATIO * 1.05
+    assert len(lines) >= 2 * meshmod.PML_LINES
+
+
+def test_air_is_not_meshed_at_dielectric_resolution():
+    """dz describes the dielectric between copper layers, not the air box.
+
+    Slicing 3 mm of air at 25 um adds hundreds of lines describing nothing — and since the
+    timestep is set by the smallest cell anywhere, those lines cost the whole run.
+    """
+    spec = meshmod.MeshSpec(
+        roi=(0, 0, 10, 10), f_max=1e9, dx_um=200, dy_um=200, dz_um=25,
+        air_above_mm=5.0, air_below_mm=5.0,
+    )
+    m = meshmod.build_mesh(spec, [1.0, 2.0], [1.0, 2.0], [0.0175, 1.5825])
+    board_lines = int(((m.z >= 0.0) & (m.z <= 1.6)).sum())
+    air_lines = len(m.z) - board_lines
+    assert board_lines > 40, "the dielectric between layers must be resolved at dz"
+    # 10 mm of air sliced at 25 um would be 400 lines. Grading should need a fraction of
+    # that, since nothing out there needs resolving.
+    assert air_lines < 150, f"the air box has {air_lines} lines; it is being over-meshed"
+
+
+def test_timestep_comes_from_the_smallest_cell():
+    spec = meshmod.MeshSpec(roi=(0, 0, 10, 10), f_max=1e9, dx_um=200, dy_um=200, dz_um=50)
+    m = meshmod.build_mesh(spec, [1.0, 2.0], [1.0, 2.0], [0.0175, 1.5825])
+    expected = (m.min_cell_mm * 1e-3) / (meshmod.SPEED_OF_LIGHT * math.sqrt(3))
+    assert m.timestep_seconds() == pytest.approx(expected, rel=1e-12)
+
+
+# ---- timestep sizing -------------------------------------------------------------------
+
+def test_required_timesteps_covers_the_excitation():
+    """openEMS's own figure, reproduced.
+
+    For dt = 1.069e-13 s and fc = 1 GHz the solver reported the pulse alone needs 26,811
+    timesteps. A run capped below three times that stops before the source finishes and
+    every field is zero — with no error.
+    """
+    n, why = required_timesteps(1.06855e-13, fc=1e9, f_min=1e9)
+    assert why == "three excitation lengths"
+    assert n == pytest.approx(3 * 26811, rel=0.01)
+
+
+def test_required_timesteps_covers_low_frequencies():
+    """At a low f_min the bandwidth requirement dominates instead."""
+    n, why = required_timesteps(1e-13, fc=3e9, f_min=100e6)
+    assert why == "three periods of the lowest frequency"
+    assert n == pytest.approx(3 / 100e6 / 1e-13, rel=0.01)
+
+
+def test_requested_frequencies_are_not_on_the_excitation_edge():
+    """The Gaussian is ~20 dB down at f0 +- fc, so a frequency there is barely excited.
+
+    Measured in M0: a transfer function at 1 GHz moved 3-4 dB between two sources that
+    agreed to 0.01 dB everywhere inside the band. The old code put f_max exactly on the edge.
+    """
+    f0, fc, note = excitation_band(500e6, 1e9)
+    assert note is None
+    assert (1e9 - f0) / fc <= BAND_FILL + 1e-9
+    assert (f0 - 500e6) / fc <= BAND_FILL + 1e-9
+    assert f0 - fc > 0, "a negative lower edge puts DC in the pulse, and the PML cannot absorb it"
+
+
+def test_a_single_frequency_still_gets_a_band():
+    """Width 0 would make the pulse infinitely long; the floor keeps the run finite."""
+    f0, fc, note = excitation_band(1e9, 1e9)
+    assert note is None
+    assert f0 == 1e9 and fc == 500e6
+
+
+def test_a_span_too_wide_for_one_pulse_is_declared(board, transform):
+    """One Gaussian cannot hold both ends of a 33:1 span inside itself.
+
+    The clamp is not a fix, so it is reported rather than applied quietly. This is the span
+    M3's cable band asks for, starting at 30 MHz.
+    """
+    f0, fc, note = excitation_band(30e6, 1e9)
+    assert f0 - fc >= 0, "the lower edge must not go negative, or the pulse carries DC"
+    assert note and "33:1" in note
+    built = build_model(board, transform, _params(frequencies_hz=[30e6, 1e9]))
+    assert any("wider than one excitation pulse" in n for n in built.notes)
+
+
+def test_ordinary_harmonic_sets_say_nothing(board, transform):
+    """The note must be rare enough to mean something.
+
+    Six odd harmonics of a 100 MHz clock span 11:1, which clamps the width — but the
+    requested ends still land at 0.83 fc, barely worse than the 0.8 aimed for. A note on
+    every such solve would be noise, so the trigger is the achieved fill, not the clamp.
+    """
+    for f_min, f_max in [(100e6, 500e6), (100e6, 900e6), (100e6, 1.1e9), (100e6, 1e9)]:
+        _f0, _fc, note = excitation_band(f_min, f_max)
+        assert note is None, f"{f_max / f_min:.0f}:1 should be quiet, got: {note}"
+    built = build_model(board, transform,
+                        _params(frequencies_hz=[100e6, 300e6, 500e6, 700e6, 900e6, 1.1e9]))
+    assert not any("excitation pulse" in n for n in built.notes)
+
+
+def test_the_clamped_band_still_beats_the_edge():
+    """Even where the width is clamped, every requested end is better off than before."""
+    for f_min, f_max in [(100e6, 1e9), (50e6, 1e9), (30e6, 1e9)]:
+        f0, fc, _note = excitation_band(f_min, f_max)
+        assert (f_max - f0) / fc < 1.0, "the old code put this end exactly on the edge"
+        assert f0 - fc >= 0
+
+
+def test_widening_the_band_costs_no_timesteps():
+    """dt comes from the mesh; a wider pulse is a shorter one, so the run cannot grow."""
+    narrow = max((1e9 - 500e6) / 2.0, (1e9 + 500e6) / 2.0 / 2.0)   # what the old code gave
+    _f0, fc, _ = excitation_band(500e6, 1e9)
+    assert fc >= narrow
+    wide_n, _ = required_timesteps(1e-13, fc=fc, f_min=500e6)
+    old_n, _ = required_timesteps(1e-13, fc=narrow, f_min=500e6)
+    assert wide_n <= old_n
+
+
+def test_model_sizes_its_own_timesteps(board, transform):
+    built = build_model(board, transform, _params())
+    dt = built.mesh.timestep_seconds()
+    needed, _ = required_timesteps(dt, fc=built.doc.excitation.fc, f_min=500e6)
+    assert built.doc.max_timesteps == needed
+
+
+def test_too_small_a_cap_is_called_out(board, transform):
+    built = build_model(board, transform, _params(max_timesteps=1000))
+    assert any("below the" in n and "entirely zero" in n for n in built.notes)
+
+
+# ---- model correctness -----------------------------------------------------------------
+
+def test_dumps_use_node_interpolation(board, transform):
+    """Cell interpolation samples at cell centres and misses the copper entirely."""
+    built = build_model(board, transform, _params())
+    dumps = [p for p in built.doc.properties if isinstance(p, csx.DumpBox)]
+    assert dumps
+    for d in dumps:
+        assert d.dump_mode == 1, "copper dumps must sample at grid nodes"
+
+
+def test_dumps_measure_h_not_j(board, transform):
+    """J = kappa * E is identically zero inside a perfect conductor.
+
+    Surface current on PEC copper is |J_s| = |n x H|, so the dump has to be the magnetic
+    field. Using the "electric current density" dump here returns an all-zero map.
+    """
+    built = build_model(board, transform, _params())
+    dumps = [p for p in built.doc.properties if isinstance(p, csx.DumpBox)]
+    for d in dumps:
+        assert d.dump_type == csx.DUMP_H_FREQ
+        assert d.dump_type != csx.DUMP_J_FREQ
+
+
+def test_dump_planes_sit_above_the_copper(board, transform):
+    """Sampling H requires being just off the metal, not inside it."""
+    built = build_model(board, transform, _params())
+    z_lines = built.mesh.z
+    for prop in built.doc.properties:
+        if isinstance(prop, csx.DumpBox):
+            z = prop.primitives[0].p1[2]
+            assert np.min(np.abs(z_lines - z)) < 1e-9, "the dump plane must be a grid line"
+
+
+def test_port_spans_grid_cells(board, transform):
+    """A port that falls between grid lines contains no cells and excites nothing.
+
+    The port's edges are added as required lines, but one may legitimately be merged into a
+    copper edge a few tens of microns away. What has to hold is not that a particular
+    coordinate survived, but that the port still straddles cells in both axes.
+    """
+    params = _params()
+    built = build_model(board, transform, params)
+    port = params.ports[0]
+    for axis, coord in ((built.mesh.x, port.x), (built.mesh.y, port.y)):
+        inside = ((axis >= coord - port.half_width_mm) &
+                  (axis <= coord + port.half_width_mm)).sum()
+        assert inside >= 2, f"port spans only {inside} lines on this axis"
+
+
+def test_port_narrower_than_the_mesh_is_rejected(board, transform):
+    with pytest.raises(ModelError, match="excite nothing|no copper"):
+        build_model(board, transform, _params(
+            ports=[Port(name="p1", x=10.0, y=30.0, layer="F.Cu", half_width_mm=1e-5)],
+        ))
+
+
+def test_model_needs_a_port(board, transform):
+    with pytest.raises(ModelError, match="at least one port"):
+        build_model(board, transform, _params(ports=[]))
+
+
+def test_empty_region_is_rejected(board, transform):
+    """A region with no copper in it cannot be solved, and says so."""
+    with pytest.raises(ModelError, match="no copper"):
+        build_model(board, transform, _params(
+            # Well clear of the board, so the 2 mm copper margin cannot reach the pour.
+            roi=(60.0, 60.0, 64.0, 64.0),
+            # Keep the port inside the region so the copper check is what fires.
+            ports=[Port(name="p1", x=62.0, y=62.0, layer="F.Cu", half_width_mm=0.3)],
+        ))
+
+
+def test_loss_tangent_becomes_conductivity():
+    k = kappa_from_loss_tangent(epsilon_r=4.4, loss_tangent=0.02, frequency=1e9)
+    expected = 2 * math.pi * 1e9 * 8.8541878128e-12 * 4.4 * 0.02
+    assert k == pytest.approx(expected, rel=1e-12)
+
+
+# ---- XML shape -------------------------------------------------------------------------
+
+def test_excite_is_an_attribute_not_a_child():
+    """The one place the schema differs from Material.
+
+    Written as a child <Property>, CSXCAD parses the whole property as Unknown, openEMS
+    warns "no excitation properties found", and then runs to completion producing zeros.
+    """
+    prop = csx.ExcitationProperty(
+        name="p", excite=(0, 0, -1),
+        primitives=[csx.Box(p1=(0, 0, 0), p2=(1, 1, 1))],
+    )
+    el = prop.to_xml()
+    assert el.tag == "Excitation"
+    assert el.get("Excite") == "0,0,-1"
+    assert el.find("Property") is None
+
+
+def test_material_values_are_a_child_property():
+    el = csx.Material(name="FR4", epsilon=4.4, kappa=0.002).to_xml()
+    child = el.find("Property")
+    assert child is not None
+    assert float(child.get("Epsilon")) == 4.4
+
+
+def test_polygon_vertices_use_x1_x2():
+    el = csx.Polygon(vertices=[(0, 0), (1, 0), (1, 1)], elevation=1.6).to_xml()
+    assert el.get("NormDir") == "2"
+    assert el.get("Elevation") == "1.6"
+    v = el.find("Vertex")
+    assert v.get("X1") is not None and v.get("X2") is not None
+    assert v.get("X") is None
+
+
+def test_frequency_domain_dump_must_name_frequencies():
+    with pytest.raises(ValueError, match="names no frequencies"):
+        csx.DumpBox(name="d", dump_type=csx.DUMP_H_FREQ, frequencies=[]).to_xml()
+
+
+def test_document_validates_missing_excitation():
+    doc = csx.CSXDocument(
+        excitation=csx.Excitation(f0=1e9, fc=1e9),
+        x_lines=list(range(30)), y_lines=list(range(30)), z_lines=list(range(30)),
+        f_max=1e9,
+    )
+    assert any("no excitation property" in p for p in doc.validate())
+
+
+def test_document_validates_pml_padding():
+    """PML_8 with too few lines silently becomes a reflecting PEC wall."""
+    doc = csx.CSXDocument(
+        excitation=csx.Excitation(f0=1e9, fc=1e9),
+        x_lines=[0.0, 1.0, 2.0], y_lines=[0.0, 1.0, 2.0], z_lines=[0.0, 1.0, 2.0],
+        f_max=1e9,
+    )
+    problems = doc.validate()
+    assert any("PML" in p and "PEC" in p for p in problems)
+
+
+def test_generated_document_parses_as_xml(board, transform):
+    built = build_model(board, transform, _params())
+    root = ET.fromstring(built.doc.to_string())
+    assert root.tag == "openEMS"
+    assert root.find("FDTD/Excitation") is not None
+    assert root.find("FDTD/BoundaryCond") is not None
+    grid = root.find("ContinuousStructure/RectilinearGrid")
+    assert grid.get("DeltaUnit") == "0.001", "coordinates are millimetres throughout"
+    assert len(grid.find("XLines").text.split(",")) == len(built.mesh.x)
+    # Metal must outrank the dielectric it sits on, or the copper is overwritten.
+    props = root.find("ContinuousStructure/Properties")
+    metals = props.findall("Metal")
+    assert metals, "the model has no copper"
+    for m in metals:
+        for prim in m.find("Primitives"):
+            assert int(prim.get("Priority")) > csx.PRIORITY_DIELECTRIC
+
+
+def test_model_has_a_dump_for_every_copper_layer(board, transform):
+    built = build_model(board, transform, _params())
+    assert set(built.dump_names) == set(board.copper_layer_names)
+
+
+# ---- components in the solve (§12, K2) -------------------------------------------------
+
+def test_k2_a_solve_without_component_modelling_is_unchanged(board, transform):
+    """§19's K2: with no matched parts the result equals today's exactly.
+
+    Asserted on the XML rather than on a flag, because the claim is about what the solver
+    receives. Component modelling is off by default, so this is also what every existing
+    caller gets.
+    """
+    plain = build_model(board, transform, _params())
+    assert plain.modelled_parts == []
+    assert "<LumpedElement" not in plain.doc.to_string() or "cap_" not in plain.doc.to_string()
+
+
+def test_turning_component_modelling_on_changes_nothing_without_matches(board, transform):
+    """The stronger form of K2: asking for components on a board whose parts do not resolve
+    must produce byte-identical XML, not merely an empty parts list. The tiny fixture has no
+    capacitors, so this is exactly that case."""
+    off = build_model(board, transform, _params()).doc.to_string()
+    on = build_model(board, transform, _params(model_components=True)).doc.to_string()
+    assert on == off
+
+
+def test_a_placed_component_adds_three_elements_and_is_reported(board, transform):
+    """Three, not one: the shipped CSXCAD wires R, C and L in parallel (K1), so a series
+    R-L-C has to be three single-value elements in adjacent cells."""
+    from emi_worker.components.document import Resolved, SeriesRLC
+    from emi_worker.components.place import Placement, PlacementPlan
+
+    resolved = Resolved(
+        ref="C1", component_id="generic-mlcc-100n-0402", component_name="100 nF 0402 (generic)",
+        rlc=SeriesRLC(c_f=1e-7, esl_h=4.5e-10, esr_ohm=0.06), generic=True)
+    placement = Placement(ref="C1", resolved=resolved, axis=0, lo=10.0, hi=10.3,
+                          across_lo=30.0, across_hi=30.4, layer=board.copper_layers[0].name)
+
+    built = build_model(board, transform, _params())
+    doc = built.doc
+    z = 0.0
+    for element in csx.series_rlc(
+        "cap_C1", direction=placement.axis, resistance=0.06, inductance=4.5e-10,
+        capacitance=1e-7, cells=placement.cells(z),
+    ):
+        doc.add(element)
+    xml = doc.to_string()
+    assert xml.count('Name="cap_C1') == 3
+    assert 'Name="cap_C1_c"' in xml and 'Name="cap_C1_l"' in xml and 'Name="cap_C1_r"' in xml
+
+    plan = PlacementPlan(placements=[placement])
+    from emi_worker.components.place import modelled_parts
+
+    parts = modelled_parts(plan)
+    assert parts[0]["ref"] == "C1"
+    assert parts[0]["generic"] is True

@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EMI board renderer — dev harness</title>
+<style>
+  :root {
+    --bg: #0e1211; --panel: #161c1a; --rule: #2c3532;
+    --ink: #e4e9e6; --muted: #8b9793; --accent: #d28953;
+    --mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 13px/1.5 var(--mono);
+    display: grid; grid-template-columns: 264px 1fr; height: 100vh; overflow: hidden;
+  }
+  aside {
+    background: var(--panel); border-right: 1px solid var(--rule);
+    padding: 14px; overflow-y: auto; display: flex; flex-direction: column; gap: 16px;
+  }
+  h1 { font-size: 13px; margin: 0; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+  h2 { font-size: 10px; margin: 0 0 6px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+  select, input, button {
+    font: inherit; background: #0e1211; color: var(--ink);
+    border: 1px solid var(--rule); border-radius: 3px; padding: 5px 7px; width: 100%;
+  }
+  button { cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  .layer { display: flex; align-items: center; gap: 8px; padding: 3px 0; }
+  .layer input[type=checkbox] { width: auto; }
+  .swatch { width: 11px; height: 11px; border-radius: 2px; flex: none; }
+  .layer span { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+  .layer small { color: var(--muted); }
+  .stats { color: var(--muted); font-size: 11px; line-height: 1.8; }
+  .stats b { color: var(--ink); font-weight: 500; }
+  .warn { color: #c8a63c; font-size: 11px; line-height: 1.5; margin-top: 4px; }
+  main { position: relative; }
+  canvas { display: block; width: 100%; height: 100%; cursor: grab; }
+  canvas:active { cursor: grabbing; }
+  #hud {
+    position: absolute; left: 12px; bottom: 12px; background: rgba(14,18,17,.86);
+    border: 1px solid var(--rule); border-radius: 3px; padding: 6px 10px;
+    font-size: 11px; color: var(--muted); pointer-events: none;
+  }
+  #hud b { color: var(--ink); font-weight: 500; }
+  ul { list-style: none; margin: 0; padding: 0; max-height: 220px; overflow-y: auto; }
+  li { padding: 2px 0; cursor: pointer; display: flex; justify-content: space-between; gap: 8px; }
+  li:hover { color: var(--accent); }
+  li.on { color: var(--accent); }
+  li small { color: var(--muted); }
+</style>
+</head>
+<body>
+  <aside>
+    <h1>Board renderer</h1>
+
+    <div>
+      <h2>Board</h2>
+      <select id="board"></select>
+    </div>
+
+    <div>
+      <h2>Layers</h2>
+      <div id="layers"></div>
+    </div>
+
+    <div>
+      <h2>Nets by length</h2>
+      <input id="netfilter" placeholder="filter nets…" style="margin-bottom:6px">
+      <ul id="nets"></ul>
+    </div>
+
+    <div>
+      <h2>Stats</h2>
+      <div class="stats" id="stats"></div>
+      <div class="warn" id="warnings"></div>
+    </div>
+
+    <button id="fit">Fit to view (F)</button>
+  </aside>
+
+  <main>
+    <canvas id="c"></canvas>
+    <div id="hud"></div>
+  </main>
+
+<script type="module">
+import { BoardRenderer, DEFAULT_LAYER_COLORS } from './bundle.js'
+
+const canvas = document.getElementById('c')
+const renderer = new BoardRenderer(canvas)
+let doc = null
+let dirty = true
+const mark = () => { dirty = true }
+
+function frame() {
+  if (renderer.resize()) dirty = true
+  if (dirty) { renderer.render(); dirty = false }
+  requestAnimationFrame(frame)
+}
+requestAnimationFrame(frame)
+
+const rgb = (c) => `rgb(${c.map(v => Math.round(v * 255)).join(',')})`
+
+async function load(id) {
+  const t0 = performance.now()
+  const [d, geo] = await Promise.all([
+    fetch(`${id}.board.json`).then(r => r.json()),
+    fetch(`${id}.geometry.bin`).then(r => r.arrayBuffer()),
+  ])
+  const tFetch = performance.now() - t0
+  doc = d
+
+  const t1 = performance.now()
+  renderer.setBoard(d, geo)
+  const tUpload = performance.now() - t1
+
+  renderer.fit()
+  mark()
+
+  // Layers
+  const layers = document.getElementById('layers')
+  layers.innerHTML = ''
+  d.layers.forEach((layer, i) => {
+    const style = renderer.getLayerStyle(layer.name)
+    const row = document.createElement('label')
+    row.className = 'layer'
+    row.innerHTML = `
+      <input type="checkbox" checked>
+      <span class="swatch" style="background:${rgb(style.color)}"></span>
+      <span>${layer.name}</span>
+      <small>${layer.z_mm.toFixed(3)} mm</small>`
+    row.querySelector('input').onchange = (e) => {
+      renderer.setLayerStyle(layer.name, { visible: e.target.checked })
+      mark()
+    }
+    layers.append(row)
+  })
+
+  // Nets
+  const netList = [...d.nets].sort((a, b) => b.length_mm - a.length_mm)
+  const ul = document.getElementById('nets')
+  const filter = document.getElementById('netfilter')
+  function renderNets() {
+    const q = filter.value.toLowerCase()
+    ul.innerHTML = ''
+    for (const n of netList.filter(n => !q || n.name.toLowerCase().includes(q)).slice(0, 200)) {
+      const li = document.createElement('li')
+      li.innerHTML = `<span>${n.name || '(none)'}</span><small>${n.length_mm.toFixed(0)} mm</small>`
+      if (renderer.getHighlightNet() === n.name) li.className = 'on'
+      li.onclick = () => {
+        const next = renderer.getHighlightNet() === n.name ? null : n.name
+        renderer.setHighlightNet(next)
+        renderNets(); mark()
+      }
+      ul.append(li)
+    }
+  }
+  filter.oninput = renderNets
+  renderNets()
+
+  const tris = d.geometry.vertex_count / 3
+  document.getElementById('stats').innerHTML = `
+    <div><b>${d.board.width_mm}</b> × <b>${d.board.height_mm}</b> mm, ${d.board.thickness_mm} mm thick</div>
+    <div><b>${tris.toLocaleString()}</b> triangles in ${d.geometry.groups.length} groups</div>
+    <div><b>${d.nets.length}</b> nets · <b>${d.vias.length}</b> vias · <b>${d.pads.length}</b> pads</div>
+    <div>KiCad ${d.kicad.version}</div>
+    <div>fetch <b>${tFetch.toFixed(0)}</b> ms · upload <b>${tUpload.toFixed(0)}</b> ms</div>`
+  document.getElementById('warnings').textContent =
+    d.warnings.length ? `${d.warnings.length} warning(s): ${d.warnings[0]}` : ''
+}
+
+// Board picker
+const boards = await fetch('boards.json').then(r => r.json())
+const sel = document.getElementById('board')
+for (const b of boards) {
+  const o = document.createElement('option')
+  o.value = b.id
+  o.textContent = `${b.label} — ${b.layers}L, ${b.tris.toLocaleString()} tris`
+  sel.append(o)
+}
+sel.onchange = () => load(sel.value)
+
+// Interaction
+let dragging = false, lastX = 0, lastY = 0
+const dpr = () => Math.min(window.devicePixelRatio || 1, 2)
+canvas.addEventListener('pointerdown', e => {
+  dragging = true; lastX = e.clientX; lastY = e.clientY
+  canvas.setPointerCapture(e.pointerId)
+})
+canvas.addEventListener('pointerup', e => {
+  dragging = false; canvas.releasePointerCapture(e.pointerId)
+})
+canvas.addEventListener('pointermove', e => {
+  const r = canvas.getBoundingClientRect()
+  const p = renderer.toBoard((e.clientX - r.left) * dpr(), (e.clientY - r.top) * dpr())
+  document.getElementById('hud').innerHTML =
+    `x <b>${p.x.toFixed(2)}</b> · y <b>${p.y.toFixed(2)}</b> mm · ` +
+    `zoom <b>${renderer.getView().scale.toFixed(1)}</b> px/mm`
+  if (!dragging) return
+  renderer.panBy((e.clientX - lastX) * dpr(), (e.clientY - lastY) * dpr())
+  lastX = e.clientX; lastY = e.clientY
+  mark()
+})
+canvas.addEventListener('wheel', e => {
+  e.preventDefault()
+  const r = canvas.getBoundingClientRect()
+  renderer.zoomAt((e.clientX - r.left) * dpr(), (e.clientY - r.top) * dpr(),
+                  Math.pow(0.999, e.deltaY))
+  mark()
+}, { passive: false })
+
+document.getElementById('fit').onclick = () => { renderer.fit(); mark() }
+addEventListener('keydown', e => { if (e.key === 'f') { renderer.fit(); mark() } })
+
+await load(boards[0].id)
+</script>
+</body>
+</html>

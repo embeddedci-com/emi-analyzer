@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>EMI Analyzer</title>
+  <style>
+    :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+    body { margin: 0; height: 100vh; display: grid; place-items: center; }
+    main { max-width: 34rem; padding: 0 1.5rem; text-align: center; }
+    .spinner { width: 28px; height: 28px; margin: 0 auto 1rem; border-radius: 50%;
+      border: 3px solid color-mix(in srgb, currentColor 20%, transparent);
+      border-top-color: #2f9e74; animation: spin 0.9s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    pre { text-align: left; white-space: pre-wrap; font-size: 12px; opacity: 0.8; }
+    .failed .spinner { display: none; }
+  </style>
+</head>
+<body>
+  <main id="main">
+    <div class="spinner"></div>
+    <h2 id="title">Starting EMI Analyzer…</h2>
+    <p id="detail">Starting the local server.</p>
+    <pre id="log"></pre>
+  </main>
+  <script>
+    // Called by the desktop shell (src-tauri/src/lib.rs) if the server cannot start.
+    window.emiFailed = function (message, log) {
+      document.getElementById('main').className = 'failed'
+      document.getElementById('title').textContent = 'EMI Analyzer could not start'
+      document.getElementById('detail').textContent = message
+      document.getElementById('log').textContent = log || ''
+    }
+  </script>
+</body>
+</html>

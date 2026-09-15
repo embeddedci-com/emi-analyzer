@@ -1,0 +1,240 @@
+{
+  "format": "emi-cable-library",
+  "version": 1,
+  "_comment": "The built-in cable library (\u00a75). These describe the cable, not the board: length, shield, how the shield is bonded, and what the far end looks like. The far end matters more than most of the rest - open or grounded moves a 1 m cable's first resonance by about a factor of two. Lengths are the common ones; length_options_m is what the UI offers.",
+  "cables": [
+    {
+      "format": "emi-cable",
+      "version": 1,
+      "id": "usb2-shielded",
+      "name": "USB 2.0, shielded",
+      "length_m": 1.0,
+      "length_options_m": [
+        0.3,
+        1.0,
+        2.0
+      ],
+      "shield": "braid",
+      "shield_bond": "360",
+      "pigtail_mm": 0,
+      "balance_lcl_db": null,
+      "cm_choke": null,
+      "far_end": "equipment",
+      "routing": "horizontal-then-drop",
+      "connector_hints": [
+        "usb",
+        "type-c",
+        "micro"
+      ],
+      "sources": []
+    },
+    {
+      "format": "emi-cable",
+      "version": 1,
+      "id": "usb3-shielded",
+      "name": "USB 3.x, shielded",
+      "length_m": 1.0,
+      "length_options_m": [
+        0.3,
+        1.0,
+        2.0
+      ],
+      "shield": "foil+braid",
+      "shield_bond": "360",
+      "pigtail_mm": 0,
+      "balance_lcl_db": null,
+      "cm_choke": null,
+      "far_end": "equipment",
+      "routing": "horizontal-then-drop",
+      "connector_hints": [
+        "usb",
+        "type-c"
+      ],
+      "sources": []
+    },
+    {
+      "format": "emi-cable",
+      "version": 1,
+      "id": "ethernet-utp",
+      "name": "Ethernet, unshielded",
+      "length_m": 2.0,
+      "length_options_m": [
+        1.0,
+        2.0,
+        5.0,
+        30.0
+      ],
+      "shield": "none",
+      "shield_bond": "none",
+      "pigtail_mm": 0,
+      "balance_lcl_db": null,
+      "cm_choke": null,
+      "far_end": "equipment",
+      "routing": "horizontal-then-drop",
+      "connector_hints": [
+        "rj45",
+        "ethernet",
+        "magjack"
+      ],
+      "sources": []
+    },
+    {
+      "format": "emi-cable",
+      "version": 1,
+      "id": "ethernet-ftp",
+      "name": "Ethernet, shielded",
+      "length_m": 2.0,
+      "length_options_m": [
+        1.0,
+        2.0,
+        5.0,
+        30.0
+      ],
+      "shield": "foil",
+      "shield_bond": "360",
+      "pigtail_mm": 0,
+      "balance_lcl_db": null,
+      "cm_choke": null,
+      "far_end": "equipment",
+      "routing": "horizontal-then-drop",
+      "connector_hints": [
+        "rj45",
+        "ethernet",
+        "magjack"
+      ],
+      "sources": []
+    },
+    {
+      "format": "emi-cable",
+      "version": 1,
+      "id": "dc-pigtail",
+      "name": "DC power pigtail",
+      "length_m": 1.5,
+      "length_options_m": [
+        0.5,
+        1.5,
+        3.0
+      ],
+      "shield": "none",
+      "shield_bond": "none",
+      "pigtail_mm": 0,
+      "balance_lcl_db": null,
+      "cm_choke": null,
+      "far_end": "equipment",
+      "routing": "horizontal-then-drop",
+      "connector_hints": [
+        "barrel",
+        "dc",
+        "power",
+        "terminal"
+      ],
+      "sources": []
+    },
+    {
+      "format": "emi-cable",
+      "version": 1,
+      "id": "twisted-pair-leads",
+      "name": "Twisted-pair leads",
+      "length_m": 1.0,
+      "length_options_m": [
+        0.3,
+        1.0,
+        3.0
+      ],
+      "shield": "none",
+      "shield_bond": "none",
+      "pigtail_mm": 0,
+      "balance_lcl_db": null,
+      "cm_choke": null,
+      "far_end": "open",
+      "routing": "horizontal-then-drop",
+      "connector_hints": [
+        "jst",
+        "terminal",
+        "molex",
+        "can",
+        "rs485"
+      ],
+      "sources": []
+    },
+    {
+      "format": "emi-cable",
+      "version": 1,
+      "id": "ribbon-idc",
+      "name": "Ribbon cable, IDC",
+      "length_m": 0.3,
+      "length_options_m": [
+        0.1,
+        0.3,
+        1.0
+      ],
+      "shield": "none",
+      "shield_bond": "none",
+      "pigtail_mm": 0,
+      "balance_lcl_db": null,
+      "cm_choke": null,
+      "far_end": "equipment",
+      "routing": "horizontal",
+      "connector_hints": [
+        "idc",
+        "ffc",
+        "fpc"
+      ],
+      "sources": []
+    },
+    {
+      "format": "emi-cable",
+      "version": 1,
+      "id": "coax-pigtail",
+      "name": "Coaxial pigtail",
+      "length_m": 0.3,
+      "length_options_m": [
+        0.1,
+        0.3,
+        1.0
+      ],
+      "shield": "braid",
+      "shield_bond": "360",
+      "pigtail_mm": 0,
+      "balance_lcl_db": null,
+      "cm_choke": null,
+      "far_end": "equipment",
+      "routing": "horizontal",
+      "connector_hints": [
+        "sma",
+        "u.fl",
+        "ipex",
+        "mmcx",
+        "bnc"
+      ],
+      "sources": []
+    },
+    {
+      "format": "emi-cable",
+      "version": 1,
+      "id": "debug-leads",
+      "name": "Debug flying leads",
+      "length_m": 0.2,
+      "length_options_m": [
+        0.1,
+        0.2,
+        0.5
+      ],
+      "shield": "none",
+      "shield_bond": "none",
+      "pigtail_mm": 0,
+      "balance_lcl_db": null,
+      "cm_choke": null,
+      "far_end": "open",
+      "routing": "horizontal",
+      "connector_hints": [
+        "swd",
+        "jtag",
+        "debug",
+        "header",
+        "hdr"
+      ],
+      "sources": []
+    }
+  ]
+}

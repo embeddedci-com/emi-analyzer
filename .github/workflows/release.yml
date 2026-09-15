@@ -1,0 +1,113 @@
+# Builds the desktop app for every platform and attaches the installers to a draft release.
+#
+# Triggered by a version tag. The version is taken from the tag (v1.2.3 -> 1.2.3) and stamped
+# into both halves: the Go sidecar, where it selects the worker image tag, and the Tauri bundle.
+#
+# Installers are not code-signed. See README.md for what that means on each platform.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to build (no v prefix), for a test build without a tag"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: macos-latest, target: aarch64-apple-darwin, goos: darwin, goarch: arm64 }
+          - { runner: macos-latest, target: x86_64-apple-darwin, goos: darwin, goarch: amd64 }
+          - { runner: ubuntu-22.04, target: x86_64-unknown-linux-gnu, goos: linux, goarch: amd64 }
+          - { runner: windows-latest, target: x86_64-pc-windows-msvc, goos: windows, goarch: amd64, ext: .exe }
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Version
+        id: version
+        run: |
+          v="${{ inputs.version }}"
+          [ -n "$v" ] || v="${GITHUB_REF_NAME#v}"
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            webapp/package-lock.json
+            desktop/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
+
+      - name: Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Build the webapp
+        run: |
+          cd webapp && npm ci && npm run build:app
+          cd .. && cp -R webapp/dist-app/. server/cmd/emi-local/web/
+
+      - name: Build the emi-local sidecar
+        env:
+          CGO_ENABLED: "0"
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          mkdir -p desktop/src-tauri/binaries
+          cd server && go build -trimpath \
+            -ldflags "-s -w -X main.version=${{ steps.version.outputs.version }}" \
+            -o ../desktop/src-tauri/binaries/emi-local-${{ matrix.target }}${{ matrix.ext }} ./cmd/emi-local
+
+      - name: Install the Tauri CLI
+        run: cd desktop && npm ci
+
+      - uses: tauri-apps/tauri-action@v0
+        with:
+          projectPath: desktop
+          tauriScript: npx tauri
+          args: --target ${{ matrix.target }} --config '{"version":"${{ steps.version.outputs.version }}"}'
+          tagName: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+          releaseName: EMI Analyzer ${{ steps.version.outputs.version }}
+          releaseBody: |
+            Install instructions: see the README.
+
+            This release starts the worker image `ghcr.io/${{ github.repository_owner }}/emi-worker:${{ steps.version.outputs.version }}`.
+          releaseDraft: true
+          prerelease: false
+
+      - name: Keep the sidecar as a standalone download
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          f=emi-local-${{ steps.version.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
+          cp desktop/src-tauri/binaries/emi-local-${{ matrix.target }}${{ matrix.ext }} "$f"
+          gh release upload "$GITHUB_REF_NAME" "$f" --clobber

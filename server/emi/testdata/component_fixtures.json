@@ -1,0 +1,567 @@
+{
+  "_comment": "Shared component fixtures. The Python and TypeScript implementations must agree: the browser previews a component's impedance while it is typed, and the worker places that same component in a solve. Regenerate with `make component-fixtures`, never by hand.",
+  "sample_hz": [
+    100000.0,
+    1000000.0,
+    10000000.0,
+    20000000.0,
+    65000000.0,
+    100000000.0,
+    1000000000.0
+  ],
+  "valid": [
+    {
+      "name": "vendor-series-rlc",
+      "document": {
+        "format": "emi-component",
+        "version": 1,
+        "id": "mlcc-100n-0402-x7r",
+        "kind": "capacitor",
+        "name": "MLCC 100 nF 0402 X7R",
+        "provenance": "vendor",
+        "match": {
+          "value": "100n",
+          "package": "0402",
+          "mpn": null
+        },
+        "model": {
+          "type": "series_rlc",
+          "c_f": 1e-07,
+          "esl_h": 6e-10,
+          "esr_ohm": 0.02
+        },
+        "esl_includes_mount": false,
+        "valid_hz": [
+          100000.0,
+          3000000000.0
+        ],
+        "sources": [
+          {
+            "doc": "part datasheet",
+            "rev": "C",
+            "what": "ESL and ESR"
+          }
+        ]
+      },
+      "expected": {
+        "id": "mlcc-100n-0402-x7r",
+        "provenance": "vendor",
+        "generic": false,
+        "model_type": "series_rlc",
+        "describe_provenance": "from the part datasheet (part datasheet rev C (ESL and ESR))",
+        "self_resonance_hz": 20546814.80204999,
+        "complete": true,
+        "impedance": [
+          {
+            "frequency_hz": 100000.0,
+            "real": 0.02,
+            "imag": -15.915117318071106
+          },
+          {
+            "frequency_hz": 1000000.0,
+            "real": 0.02,
+            "imag": -1.5877795197346458
+          },
+          {
+            "frequency_hz": 10000000.0,
+            "real": 0.02,
+            "imag": -0.12145583124881783
+          },
+          {
+            "frequency_hz": 20000000.0,
+            "real": 0.02,
+            "imag": -0.004179247859792637
+          },
+          {
+            "frequency_hz": 65000000.0,
+            "real": 0.02,
+            "imag": 0.22055885111971224
+          },
+          {
+            "frequency_hz": 100000000.0,
+            "real": 0.02,
+            "imag": 0.3610756241215856
+          },
+          {
+            "frequency_hz": 1000000000.0,
+            "real": 0.02,
+            "imag": 3.768319634876833
+          }
+        ]
+      }
+    },
+    {
+      "name": "generic-no-numbers",
+      "document": {
+        "format": "emi-component",
+        "version": 1,
+        "id": "generic-placeholder",
+        "kind": "capacitor",
+        "name": "MLCC 100 nF 0402 X7R",
+        "provenance": "generic",
+        "match": {
+          "value": "100n",
+          "package": "0402",
+          "mpn": null
+        },
+        "model": {
+          "type": "series_rlc",
+          "c_f": 1e-07,
+          "esl_h": null,
+          "esr_ohm": null
+        },
+        "esl_includes_mount": false,
+        "valid_hz": [
+          100000.0,
+          3000000000.0
+        ],
+        "sources": []
+      },
+      "expected": {
+        "id": "generic-placeholder",
+        "provenance": "generic",
+        "generic": true,
+        "model_type": "series_rlc",
+        "describe_provenance": "generic \u2014 typical for this package and value, not a specific part",
+        "self_resonance_hz": null,
+        "complete": false
+      }
+    },
+    {
+      "name": "generic-family",
+      "document": {
+        "format": "emi-component",
+        "version": 1,
+        "id": "generic-mlcc-family",
+        "kind": "capacitor",
+        "name": "MLCC (generic, by package)",
+        "provenance": "generic",
+        "match": {
+          "value": null,
+          "package": null,
+          "mpn": null
+        },
+        "model": {
+          "type": "mlcc_family",
+          "esl_h_by_package": {
+            "0402": 4.5e-10,
+            "0603": 6.5e-10
+          },
+          "esr_ohm_by_c": [
+            [
+              1e-09,
+              0.25
+            ],
+            [
+              1e-07,
+              0.055
+            ],
+            [
+              1e-05,
+              0.013
+            ]
+          ]
+        },
+        "esl_includes_mount": false,
+        "valid_hz": [
+          100000.0,
+          3000000000.0
+        ],
+        "sources": [
+          {
+            "doc": "typical for the package and value class",
+            "what": "ESL and ESR"
+          }
+        ]
+      },
+      "expected": {
+        "id": "generic-mlcc-family",
+        "provenance": "generic",
+        "generic": true,
+        "model_type": "mlcc_family",
+        "describe_provenance": "generic \u2014 typical for this package and value, not a specific part",
+        "family": {
+          "esl_by_package": {
+            "0402": 4.5e-10,
+            "0603": 6.5e-10
+          },
+          "esr_at": [
+            {
+              "c_f": 1e-10,
+              "esr_ohm": 0.25
+            },
+            {
+              "c_f": 1e-09,
+              "esr_ohm": 0.25
+            },
+            {
+              "c_f": 1e-08,
+              "esr_ohm": 0.11726039399558576
+            },
+            {
+              "c_f": 1e-07,
+              "esr_ohm": 0.05500000000000001
+            },
+            {
+              "c_f": 1e-06,
+              "esr_ohm": 0.026739483914241875
+            },
+            {
+              "c_f": 1e-05,
+              "esr_ohm": 0.013
+            },
+            {
+              "c_f": 0.001,
+              "esr_ohm": 0.013
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "wrong-format",
+      "document": {
+        "format": "emi-driver",
+        "version": 1,
+        "id": "mlcc-100n-0402-x7r",
+        "kind": "capacitor",
+        "name": "MLCC 100 nF 0402 X7R",
+        "provenance": "vendor",
+        "match": {
+          "value": "100n",
+          "package": "0402",
+          "mpn": null
+        },
+        "model": {
+          "type": "series_rlc",
+          "c_f": 1e-07,
+          "esl_h": 6e-10,
+          "esr_ohm": 0.02
+        },
+        "esl_includes_mount": false,
+        "valid_hz": [
+          100000.0,
+          3000000000.0
+        ],
+        "sources": [
+          {
+            "doc": "part datasheet",
+            "rev": "C",
+            "what": "ESL and ESR"
+          }
+        ]
+      },
+      "must_mention": "format",
+      "python_message": "not a component document: format='emi-driver'"
+    },
+    {
+      "name": "future-version",
+      "document": {
+        "format": "emi-component",
+        "version": 2,
+        "id": "mlcc-100n-0402-x7r",
+        "kind": "capacitor",
+        "name": "MLCC 100 nF 0402 X7R",
+        "provenance": "vendor",
+        "match": {
+          "value": "100n",
+          "package": "0402",
+          "mpn": null
+        },
+        "model": {
+          "type": "series_rlc",
+          "c_f": 1e-07,
+          "esl_h": 6e-10,
+          "esr_ohm": 0.02
+        },
+        "esl_includes_mount": false,
+        "valid_hz": [
+          100000.0,
+          3000000000.0
+        ],
+        "sources": [
+          {
+            "doc": "part datasheet",
+            "rev": "C",
+            "what": "ESL and ESR"
+          }
+        ]
+      },
+      "must_mention": "version 2",
+      "python_message": "this component is version 2 and this build understands version 1. Update the analyzer rather than reading the parts it recognises"
+    },
+    {
+      "name": "no-name",
+      "document": {
+        "format": "emi-component",
+        "version": 1,
+        "id": "mlcc-100n-0402-x7r",
+        "kind": "capacitor",
+        "name": "  ",
+        "provenance": "vendor",
+        "match": {
+          "value": "100n",
+          "package": "0402",
+          "mpn": null
+        },
+        "model": {
+          "type": "series_rlc",
+          "c_f": 1e-07,
+          "esl_h": 6e-10,
+          "esr_ohm": 0.02
+        },
+        "esl_includes_mount": false,
+        "valid_hz": [
+          100000.0,
+          3000000000.0
+        ],
+        "sources": [
+          {
+            "doc": "part datasheet",
+            "rev": "C",
+            "what": "ESL and ESR"
+          }
+        ]
+      },
+      "must_mention": "name",
+      "python_message": "a component needs a name"
+    },
+    {
+      "name": "unknown-kind",
+      "document": {
+        "format": "emi-component",
+        "version": 1,
+        "id": "mlcc-100n-0402-x7r",
+        "kind": "inductor",
+        "name": "MLCC 100 nF 0402 X7R",
+        "provenance": "vendor",
+        "match": {
+          "value": "100n",
+          "package": "0402",
+          "mpn": null
+        },
+        "model": {
+          "type": "series_rlc",
+          "c_f": 1e-07,
+          "esl_h": 6e-10,
+          "esr_ohm": 0.02
+        },
+        "esl_includes_mount": false,
+        "valid_hz": [
+          100000.0,
+          3000000000.0
+        ],
+        "sources": [
+          {
+            "doc": "part datasheet",
+            "rev": "C",
+            "what": "ESL and ESR"
+          }
+        ]
+      },
+      "must_mention": "kind",
+      "python_message": "unknown component kind 'inductor'; this build models capacitor"
+    },
+    {
+      "name": "unknown-provenance",
+      "document": {
+        "format": "emi-component",
+        "version": 1,
+        "id": "mlcc-100n-0402-x7r",
+        "kind": "capacitor",
+        "name": "MLCC 100 nF 0402 X7R",
+        "provenance": "vibes",
+        "match": {
+          "value": "100n",
+          "package": "0402",
+          "mpn": null
+        },
+        "model": {
+          "type": "series_rlc",
+          "c_f": 1e-07,
+          "esl_h": 6e-10,
+          "esr_ohm": 0.02
+        },
+        "esl_includes_mount": false,
+        "valid_hz": [
+          100000.0,
+          3000000000.0
+        ],
+        "sources": [
+          {
+            "doc": "part datasheet",
+            "rev": "C",
+            "what": "ESL and ESR"
+          }
+        ]
+      },
+      "must_mention": "provenance",
+      "python_message": "unknown provenance 'vibes'; use one of generic, vendor, measured, user"
+    },
+    {
+      "name": "uncited-esl",
+      "document": {
+        "format": "emi-component",
+        "version": 1,
+        "id": "mlcc-100n-0402-x7r",
+        "kind": "capacitor",
+        "name": "MLCC 100 nF 0402 X7R",
+        "provenance": "vendor",
+        "match": {
+          "value": "100n",
+          "package": "0402",
+          "mpn": null
+        },
+        "model": {
+          "type": "series_rlc",
+          "c_f": 1e-07,
+          "esl_h": 6e-10,
+          "esr_ohm": 0.02
+        },
+        "esl_includes_mount": false,
+        "valid_hz": [
+          100000.0,
+          3000000000.0
+        ],
+        "sources": []
+      },
+      "must_mention": "says nothing about where it came from",
+      "python_message": "mlcc-100n-0402-x7r gives an ESL of 6e-10 but says nothing about where it came from. Add a sources entry \u2014 for a generic figure that is simply what it is, and for a vendor part it is the datasheet"
+    },
+    {
+      "name": "vendor-without-sources",
+      "document": {
+        "format": "emi-component",
+        "version": 1,
+        "id": "mlcc-100n-0402-x7r",
+        "kind": "capacitor",
+        "name": "MLCC 100 nF 0402 X7R",
+        "provenance": "vendor",
+        "match": {
+          "value": "100n",
+          "package": "0402",
+          "mpn": null
+        },
+        "model": {
+          "type": "series_rlc",
+          "c_f": 1e-07,
+          "esl_h": null,
+          "esr_ohm": null
+        },
+        "esl_includes_mount": false,
+        "valid_hz": [
+          100000.0,
+          3000000000.0
+        ],
+        "sources": []
+      },
+      "must_mention": "cites none",
+      "python_message": "mlcc-100n-0402-x7r claims to come from a vendor datasheet but cites none"
+    },
+    {
+      "name": "future-model-type",
+      "document": {
+        "format": "emi-component",
+        "version": 1,
+        "id": "mlcc-100n-0402-x7r",
+        "kind": "capacitor",
+        "name": "MLCC 100 nF 0402 X7R",
+        "provenance": "vendor",
+        "match": {
+          "value": "100n",
+          "package": "0402",
+          "mpn": null
+        },
+        "model": {
+          "type": "touchstone",
+          "file": "x.s2p"
+        },
+        "esl_includes_mount": false,
+        "valid_hz": [
+          100000.0,
+          3000000000.0
+        ],
+        "sources": [
+          {
+            "doc": "part datasheet",
+            "rev": "C",
+            "what": "ESL and ESR"
+          }
+        ]
+      },
+      "must_mention": "does not resolve yet",
+      "python_message": "'touchstone' is a model type this build does not resolve yet. The document is valid; the resolver ships in a later phase"
+    },
+    {
+      "name": "unknown-model-type",
+      "document": {
+        "format": "emi-component",
+        "version": 1,
+        "id": "mlcc-100n-0402-x7r",
+        "kind": "capacitor",
+        "name": "MLCC 100 nF 0402 X7R",
+        "provenance": "vendor",
+        "match": {
+          "value": "100n",
+          "package": "0402",
+          "mpn": null
+        },
+        "model": {
+          "type": "vibes"
+        },
+        "esl_includes_mount": false,
+        "valid_hz": [
+          100000.0,
+          3000000000.0
+        ],
+        "sources": [
+          {
+            "doc": "part datasheet",
+            "rev": "C",
+            "what": "ESL and ESR"
+          }
+        ]
+      },
+      "must_mention": "unknown model type",
+      "python_message": "unknown model type 'vibes'"
+    },
+    {
+      "name": "backwards-valid-hz",
+      "document": {
+        "format": "emi-component",
+        "version": 1,
+        "id": "mlcc-100n-0402-x7r",
+        "kind": "capacitor",
+        "name": "MLCC 100 nF 0402 X7R",
+        "provenance": "vendor",
+        "match": {
+          "value": "100n",
+          "package": "0402",
+          "mpn": null
+        },
+        "model": {
+          "type": "series_rlc",
+          "c_f": 1e-07,
+          "esl_h": 6e-10,
+          "esr_ohm": 0.02
+        },
+        "esl_includes_mount": false,
+        "valid_hz": [
+          3000000000.0,
+          100000.0
+        ],
+        "sources": [
+          {
+            "doc": "part datasheet",
+            "rev": "C",
+            "what": "ESL and ESR"
+          }
+        ]
+      },
+      "must_mention": "increasing",
+      "python_message": "valid_hz must be increasing"
+    }
+  ]
+}

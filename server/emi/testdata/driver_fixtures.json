@@ -1,0 +1,1005 @@
+{
+  "_comment": "Shared fixtures for driver spectra. The Python and TypeScript implementations must reproduce these exactly. Regenerate with `make driver-fixtures`, never by hand.",
+  "cases": [
+    {
+      "name": "spi-clock-25mhz",
+      "input": {
+        "amplitude_v": 3.3,
+        "period_s": 4e-08,
+        "pulse_width_s": 2e-08,
+        "rise_s": 1.2e-09,
+        "fall_s": 1.2e-09
+      },
+      "harmonics": 40,
+      "expected": {
+        "corner_1_hz": 15915494.309189534,
+        "corner_2_hz": 265258238.48649225,
+        "series": [
+          {
+            "frequency_hz": 25000000.0,
+            "amplitude_v": 2.097736453123487
+          },
+          {
+            "frequency_hz": 50000000.0,
+            "amplitude_v": 3.526998036850404e-16
+          },
+          {
+            "frequency_hz": 75000000.0,
+            "amplitude_v": 0.6909884444119477
+          },
+          {
+            "frequency_hz": 100000000.0,
+            "amplitude_v": 4.1388100979606304e-16
+          },
+          {
+            "frequency_hz": 125000000.0,
+            "amplitude_v": 0.4047899222046884
+          },
+          {
+            "frequency_hz": 150000000.0,
+            "amplitude_v": 1.8618742785133419e-16
+          },
+          {
+            "frequency_hz": 175000000.0,
+            "amplitude_v": 0.27881842837854315
+          },
+          {
+            "frequency_hz": 200000000.0,
+            "amplitude_v": 3.6281353609263347e-16
+          },
+          {
+            "frequency_hz": 225000000.0,
+            "amplitude_v": 0.2064255693382617
+          },
+          {
+            "frequency_hz": 250000000.0,
+            "amplitude_v": 8.336179128497485e-17
+          },
+          {
+            "frequency_hz": 275000000.0,
+            "amplitude_v": 0.15856618361226307
+          },
+          {
+            "frequency_hz": 300000000.0,
+            "amplitude_v": 1.9065571079108503e-16
+          },
+          {
+            "frequency_hz": 325000000.0,
+            "amplitude_v": 0.1240997260289116
+          },
+          {
+            "frequency_hz": 350000000.0,
+            "amplitude_v": 5.483971965460563e-16
+          },
+          {
+            "frequency_hz": 375000000.0,
+            "amplitude_v": 0.09784989058908374
+          },
+          {
+            "frequency_hz": 400000000.0,
+            "amplitude_v": 3.2318979697757013e-16
+          },
+          {
+            "frequency_hz": 425000000.0,
+            "amplitude_v": 0.07709225365397328
+          },
+          {
+            "frequency_hz": 450000000.0,
+            "amplitude_v": 2.4226826666657073e-16
+          },
+          {
+            "frequency_hz": 475000000.0,
+            "amplitude_v": 0.06025991446073911
+          },
+          {
+            "frequency_hz": 500000000.0,
+            "amplitude_v": 4.263191296274063e-17
+          },
+          {
+            "frequency_hz": 525000000.0,
+            "amplitude_v": 0.04638856392938071
+          },
+          {
+            "frequency_hz": 550000000.0,
+            "amplitude_v": 2.1315956481370318e-16
+          },
+          {
+            "frequency_hz": 575000000.0,
+            "amplitude_v": 0.03485098715629187
+          },
+          {
+            "frequency_hz": 600000000.0,
+            "amplitude_v": 1.2038715313718042e-16
+          },
+          {
+            "frequency_hz": 625000000.0,
+            "amplitude_v": 0.02521900340303289
+          },
+          {
+            "frequency_hz": 650000000.0,
+            "amplitude_v": 3.457084674833932e-16
+          },
+          {
+            "frequency_hz": 675000000.0,
+            "amplitude_v": 0.01718684457191413
+          },
+          {
+            "frequency_hz": 700000000.0,
+            "amplitude_v": 4.98271797715271e-16
+          },
+          {
+            "frequency_hz": 725000000.0,
+            "amplitude_v": 0.010526383780306901
+          },
+          {
+            "frequency_hz": 750000000.0,
+            "amplitude_v": 1.4264463363726514e-16
+          },
+          {
+            "frequency_hz": 775000000.0,
+            "amplitude_v": 0.005059892729253007
+          },
+          {
+            "frequency_hz": 800000000.0,
+            "amplitude_v": 2.9095585636306103e-16
+          },
+          {
+            "frequency_hz": 825000000.0,
+            "amplitude_v": 0.0006429445028081181
+          },
+          {
+            "frequency_hz": 850000000.0,
+            "amplitude_v": 3.746135352200971e-17
+          },
+          {
+            "frequency_hz": 875000000.0,
+            "amplitude_v": 0.0028465530900188695
+          },
+          {
+            "frequency_hz": 900000000.0,
+            "amplitude_v": 7.44160286087495e-17
+          },
+          {
+            "frequency_hz": 925000000.0,
+            "amplitude_v": 0.0055154798723412125
+          },
+          {
+            "frequency_hz": 950000000.0,
+            "amplitude_v": 2.9050399622445635e-16
+          },
+          {
+            "frequency_hz": 975000000.0,
+            "amplitude_v": 0.007460137625703928
+          },
+          {
+            "frequency_hz": 1000000000.0,
+            "amplitude_v": 1.2940842857662484e-17
+          }
+        ],
+        "envelope": [
+          {
+            "label": "0.1*f1",
+            "frequency_hz": 1591549.4309189534,
+            "amplitude_v": 3.3
+          },
+          {
+            "label": "f1",
+            "frequency_hz": 15915494.309189534,
+            "amplitude_v": 3.3
+          },
+          {
+            "label": "3*f1",
+            "frequency_hz": 47746482.9275686,
+            "amplitude_v": 1.1
+          },
+          {
+            "label": "f2",
+            "frequency_hz": 265258238.48649225,
+            "amplitude_v": 0.19799999999999998
+          },
+          {
+            "label": "10*f2",
+            "frequency_hz": 2652582384.8649225,
+            "amplitude_v": 0.0019799999999999996
+          }
+        ]
+      }
+    },
+    {
+      "name": "pwm-10-percent",
+      "input": {
+        "amplitude_v": 5.0,
+        "period_s": 1e-05,
+        "pulse_width_s": 1e-06,
+        "rise_s": 2e-08,
+        "fall_s": 2e-08
+      },
+      "harmonics": 40,
+      "expected": {
+        "corner_1_hz": 318309.8861837907,
+        "corner_2_hz": 15915494.309189534,
+        "series": [
+          {
+            "frequency_hz": 99999.99999999999,
+            "amplitude_v": 0.983625171059445
+          },
+          {
+            "frequency_hz": 199999.99999999997,
+            "amplitude_v": 0.9354646628919653
+          },
+          {
+            "frequency_hz": 300000.0,
+            "amplitude_v": 0.8583428602002547
+          },
+          {
+            "frequency_hz": 399999.99999999994,
+            "amplitude_v": 0.7567470556325969
+          },
+          {
+            "frequency_hz": 499999.99999999994,
+            "amplitude_v": 0.636515057780053
+          },
+          {
+            "frequency_hz": 600000.0,
+            "amplitude_v": 0.5044316476329795
+          },
+          {
+            "frequency_hz": 700000.0,
+            "amplitude_v": 0.36776441395711784
+          },
+          {
+            "frequency_hz": 799999.9999999999,
+            "amplitude_v": 0.23377384902374063
+          },
+          {
+            "frequency_hz": 899999.9999999999,
+            "amplitude_v": 0.10923416576836653
+          },
+          {
+            "frequency_hz": 999999.9999999999,
+            "amplitude_v": 6.620675286216052e-17
+          },
+          {
+            "frequency_hz": 1100000.0,
+            "amplitude_v": 0.08934988305935508
+          },
+          {
+            "frequency_hz": 1200000.0,
+            "amplitude_v": 0.1557671960697915
+          },
+          {
+            "frequency_hz": 1300000.0,
+            "amplitude_v": 0.19787065315583674
+          },
+          {
+            "frequency_hz": 1400000.0,
+            "amplitude_v": 0.2159574517171966
+          },
+          {
+            "frequency_hz": 1499999.9999999998,
+            "amplitude_v": 0.21189257102257444
+          },
+          {
+            "frequency_hz": 1599999.9999999998,
+            "amplitude_v": 0.18888814107158192
+          },
+          {
+            "frequency_hz": 1699999.9999999998,
+            "amplitude_v": 0.1511933557142237
+          },
+          {
+            "frequency_hz": 1799999.9999999998,
+            "amplitude_v": 0.10372180560933245
+          },
+          {
+            "frequency_hz": 1899999.9999999998,
+            "amplitude_v": 0.051647205374934585
+          },
+          {
+            "frequency_hz": 1999999.9999999998,
+            "amplitude_v": 7.351099699701468e-17
+          },
+          {
+            "frequency_hz": 2100000.0,
+            "amplitude_v": 0.04670380754179893
+          },
+          {
+            "frequency_hz": 2200000.0,
+            "amplitude_v": 0.08477390697178941
+          },
+          {
+            "frequency_hz": 2300000.0,
+            "amplitude_v": 0.11157508897566054
+          },
+          {
+            "frequency_hz": 2400000.0,
+            "amplitude_v": 0.12566027820234438
+          },
+          {
+            "frequency_hz": 2500000.0,
+            "amplitude_v": 0.1268010012826568
+          },
+          {
+            "frequency_hz": 2600000.0,
+            "amplitude_v": 0.11591768104018922
+          },
+          {
+            "frequency_hz": 2700000.0,
+            "amplitude_v": 0.0949202463520413
+          },
+          {
+            "frequency_hz": 2800000.0,
+            "amplitude_v": 0.06647650089434134
+          },
+          {
+            "frequency_hz": 2899999.9999999995,
+            "amplitude_v": 0.0337309547833655
+          },
+          {
+            "frequency_hz": 2999999.9999999995,
+            "amplitude_v": 3.001614943152006e-16
+          },
+          {
+            "frequency_hz": 3099999.9999999995,
+            "amplitude_v": 0.03152980010703978
+          },
+          {
+            "frequency_hz": 3199999.9999999995,
+            "amplitude_v": 0.058074938277432826
+          },
+          {
+            "frequency_hz": 3299999.9999999995,
+            "amplitude_v": 0.07747783843944421
+          },
+          {
+            "frequency_hz": 3399999.9999999995,
+            "amplitude_v": 0.0883627403944185
+          },
+          {
+            "frequency_hz": 3499999.9999999995,
+            "amplitude_v": 0.09021441396683227
+          },
+          {
+            "frequency_hz": 3599999.9999999995,
+            "amplitude_v": 0.08337661121959436
+          },
+          {
+            "frequency_hz": 3699999.9999999995,
+            "amplitude_v": 0.06897425200007268
+          },
+          {
+            "frequency_hz": 3799999.9999999995,
+            "amplitude_v": 0.04876980894731303
+          },
+          {
+            "frequency_hz": 3899999.9999999995,
+            "amplitude_v": 0.024969671481400585
+          },
+          {
+            "frequency_hz": 3999999.9999999995,
+            "amplitude_v": 6.634957955277811e-17
+          }
+        ],
+        "envelope": [
+          {
+            "label": "0.1*f1",
+            "frequency_hz": 31830.98861837907,
+            "amplitude_v": 0.9999999999999998
+          },
+          {
+            "label": "f1",
+            "frequency_hz": 318309.8861837907,
+            "amplitude_v": 0.9999999999999998
+          },
+          {
+            "label": "3*f1",
+            "frequency_hz": 954929.6585513721,
+            "amplitude_v": 0.33333333333333326
+          },
+          {
+            "label": "f2",
+            "frequency_hz": 15915494.309189534,
+            "amplitude_v": 0.019999999999999997
+          },
+          {
+            "label": "10*f2",
+            "frequency_hz": 159154943.09189534,
+            "amplitude_v": 0.00019999999999999993
+          }
+        ]
+      }
+    },
+    {
+      "name": "asymmetric-edges",
+      "input": {
+        "amplitude_v": 3.3,
+        "period_s": 4e-08,
+        "pulse_width_s": 1.5e-08,
+        "rise_s": 1e-09,
+        "fall_s": 5e-09
+      },
+      "harmonics": 40,
+      "expected": {
+        "corner_1_hz": 21220659.07891938,
+        "corner_2_hz": 318309886.1837907,
+        "series": [
+          {
+            "frequency_hz": 25000000.0,
+            "amplitude_v": 1.9152044543773472
+          },
+          {
+            "frequency_hz": 50000000.0,
+            "amplitude_v": 0.7051090105235197
+          },
+          {
+            "frequency_hz": 75000000.0,
+            "amplitude_v": 0.2470440825232713
+          },
+          {
+            "frequency_hz": 100000000.0,
+            "amplitude_v": 0.4254871860041127
+          },
+          {
+            "frequency_hz": 125000000.0,
+            "amplitude_v": 0.15186978339389073
+          },
+          {
+            "frequency_hz": 150000000.0,
+            "amplitude_v": 0.17665626661336703
+          },
+          {
+            "frequency_hz": 175000000.0,
+            "amplitude_v": 0.15807781826015574
+          },
+          {
+            "frequency_hz": 200000000.0,
+            "amplitude_v": 0.12283238857267845
+          },
+          {
+            "frequency_hz": 225000000.0,
+            "amplitude_v": 0.09870359023038981
+          },
+          {
+            "frequency_hz": 250000000.0,
+            "amplitude_v": 0.09644414284907195
+          },
+          {
+            "frequency_hz": 275000000.0,
+            "amplitude_v": 0.09954423570120886
+          },
+          {
+            "frequency_hz": 300000000.0,
+            "amplitude_v": 0.05656412916767125
+          },
+          {
+            "frequency_hz": 325000000.0,
+            "amplitude_v": 0.07850050505327724
+          },
+          {
+            "frequency_hz": 350000000.0,
+            "amplitude_v": 0.06156043377623239
+          },
+          {
+            "frequency_hz": 375000000.0,
+            "amplitude_v": 0.051800050411178
+          },
+          {
+            "frequency_hz": 400000000.0,
+            "amplitude_v": 0.04968674490748202
+          },
+          {
+            "frequency_hz": 425000000.0,
+            "amplitude_v": 0.04757005322102708
+          },
+          {
+            "frequency_hz": 450000000.0,
+            "amplitude_v": 0.04118660281489324
+          },
+          {
+            "frequency_hz": 475000000.0,
+            "amplitude_v": 0.03245639691911507
+          },
+          {
+            "frequency_hz": 500000000.0,
+            "amplitude_v": 0.04012318872236559
+          },
+          {
+            "frequency_hz": 525000000.0,
+            "amplitude_v": 0.026568615165080602
+          },
+          {
+            "frequency_hz": 550000000.0,
+            "amplitude_v": 0.027571196925672437
+          },
+          {
+            "frequency_hz": 575000000.0,
+            "amplitude_v": 0.025988176523396734
+          },
+          {
+            "frequency_hz": 600000000.0,
+            "amplitude_v": 0.02208299773665866
+          },
+          {
+            "frequency_hz": 625000000.0,
+            "amplitude_v": 0.01864801814802435
+          },
+          {
+            "frequency_hz": 650000000.0,
+            "amplitude_v": 0.017848883165889836
+          },
+          {
+            "frequency_hz": 675000000.0,
+            "amplitude_v": 0.018198333818935312
+          },
+          {
+            "frequency_hz": 700000000.0,
+            "amplitude_v": 0.01038932984712342
+          },
+          {
+            "frequency_hz": 725000000.0,
+            "amplitude_v": 0.01432206007116078
+          },
+          {
+            "frequency_hz": 750000000.0,
+            "amplitude_v": 0.010716015872119
+          },
+          {
+            "frequency_hz": 775000000.0,
+            "amplitude_v": 0.008319449332634498
+          },
+          {
+            "frequency_hz": 800000000.0,
+            "amplitude_v": 0.00767702428579241
+          },
+          {
+            "frequency_hz": 825000000.0,
+            "amplitude_v": 0.007112776028234708
+          },
+          {
+            "frequency_hz": 850000000.0,
+            "amplitude_v": 0.005501406226713877
+          },
+          {
+            "frequency_hz": 875000000.0,
+            "amplitude_v": 0.003099383334569166
+          },
+          {
+            "frequency_hz": 900000000.0,
+            "amplitude_v": 0.0052529282222729115
+          },
+          {
+            "frequency_hz": 925000000.0,
+            "amplitude_v": 0.0016241028069461248
+          },
+          {
+            "frequency_hz": 950000000.0,
+            "amplitude_v": 0.001953210555466799
+          },
+          {
+            "frequency_hz": 975000000.0,
+            "amplitude_v": 0.0012591745262178734
+          },
+          {
+            "frequency_hz": 1000000000.0,
+            "amplitude_v": 1.6335030497246994e-16
+          }
+        ],
+        "envelope": [
+          {
+            "label": "0.1*f1",
+            "frequency_hz": 2122065.907891938,
+            "amplitude_v": 2.4749999999999996
+          },
+          {
+            "label": "f1",
+            "frequency_hz": 21220659.07891938,
+            "amplitude_v": 2.4749999999999996
+          },
+          {
+            "label": "3*f1",
+            "frequency_hz": 63661977.23675814,
+            "amplitude_v": 0.8249999999999998
+          },
+          {
+            "label": "f2",
+            "frequency_hz": 318309886.1837907,
+            "amplitude_v": 0.165
+          },
+          {
+            "label": "10*f2",
+            "frequency_hz": 3183098861.837907,
+            "amplitude_v": 0.0016500000000000004
+          }
+        ]
+      }
+    },
+    {
+      "name": "near-square-1mhz",
+      "input": {
+        "amplitude_v": 1.0,
+        "period_s": 1e-06,
+        "pulse_width_s": 5e-07,
+        "rise_s": 1e-12,
+        "fall_s": 1e-12
+      },
+      "harmonics": 15,
+      "expected": {
+        "corner_1_hz": 636619.7723675814,
+        "corner_2_hz": 318309886183.7907,
+        "series": [
+          {
+            "frequency_hz": 1000000.0,
+            "amplitude_v": 0.6366197723665341
+          },
+          {
+            "frequency_hz": 2000000.0,
+            "amplitude_v": 6.451425988141759e-17
+          },
+          {
+            "frequency_hz": 3000000.0,
+            "amplitude_v": 0.21220659078605222
+          },
+          {
+            "frequency_hz": 4000000.0,
+            "amplitude_v": 6.031457023611741e-17
+          },
+          {
+            "frequency_hz": 5000000.0,
+            "amplitude_v": 0.12732395446828026
+          },
+          {
+            "frequency_hz": 6000000.0,
+            "amplitude_v": 5.857539683541626e-17
+          },
+          {
+            "frequency_hz": 7000000.0,
+            "amplitude_v": 0.09094568175946696
+          },
+          {
+            "frequency_hz": 8000000.0,
+            "amplitude_v": 5.854550002116487e-17
+          },
+          {
+            "frequency_hz": 9000000.0,
+            "amplitude_v": 0.07073553025363982
+          },
+          {
+            "frequency_hz": 10000000.0,
+            "amplitude_v": 5.891105966397835e-17
+          },
+          {
+            "frequency_hz": 11000000.0,
+            "amplitude_v": 0.057874524749170056
+          },
+          {
+            "frequency_hz": 12000000.0,
+            "amplitude_v": 5.862302729466252e-17
+          },
+          {
+            "frequency_hz": 13000000.0,
+            "amplitude_v": 0.04897075170696962
+          },
+          {
+            "frequency_hz": 14000000.0,
+            "amplitude_v": 2.2014497704074885e-16
+          },
+          {
+            "frequency_hz": 15000000.0,
+            "amplitude_v": 0.0424413181421308
+          }
+        ],
+        "envelope": [
+          {
+            "label": "0.1*f1",
+            "frequency_hz": 63661.97723675814,
+            "amplitude_v": 1.0
+          },
+          {
+            "label": "f1",
+            "frequency_hz": 636619.7723675814,
+            "amplitude_v": 1.0
+          },
+          {
+            "label": "3*f1",
+            "frequency_hz": 1909859.3171027442,
+            "amplitude_v": 0.3333333333333333
+          },
+          {
+            "label": "f2",
+            "frequency_hz": 318309886183.7907,
+            "amplitude_v": 2e-06
+          },
+          {
+            "label": "10*f2",
+            "frequency_hz": 3183098861837.907,
+            "amplitude_v": 1.9999999999999997e-08
+          }
+        ]
+      }
+    },
+    {
+      "name": "slow-edges-1mhz",
+      "input": {
+        "amplitude_v": 12.0,
+        "period_s": 1e-06,
+        "pulse_width_s": 4e-07,
+        "rise_s": 5e-08,
+        "fall_s": 5e-08
+      },
+      "harmonics": 60,
+      "expected": {
+        "corner_1_hz": 795774.7154594767,
+        "corner_2_hz": 6366197.7236758135,
+        "series": [
+          {
+            "frequency_hz": 1000000.0,
+            "amplitude_v": 7.2356951125572495
+          },
+          {
+            "frequency_hz": 2000000.0,
+            "amplitude_v": 2.2084244671199853
+          },
+          {
+            "frequency_hz": 3000000.0,
+            "amplitude_v": 1.4419972518092932
+          },
+          {
+            "frequency_hz": 4000000.0,
+            "amplitude_v": 1.6992079063875523
+          },
+          {
+            "frequency_hz": 5000000.0,
+            "amplitude_v": 4.2681237137907125e-16
+          },
+          {
+            "frequency_hz": 6000000.0,
+            "amplitude_v": 1.039448462877112
+          },
+          {
+            "frequency_hz": 7000000.0,
+            "amplitude_v": 0.519810420363149
+          },
+          {
+            "frequency_hz": 8000000.0,
+            "amplitude_v": 0.4248019765968879
+          },
+          {
+            "frequency_hz": 9000000.0,
+            "amplitude_v": 0.5640047034152496
+          },
+          {
+            "frequency_hz": 10000000.0,
+            "amplitude_v": 2.6469779601696886e-16
+          },
+          {
+            "frequency_hz": 11000000.0,
+            "amplitude_v": 0.37755686757549656
+          },
+          {
+            "frequency_hz": 12000000.0,
+            "amplitude_v": 0.18880087848750607
+          },
+          {
+            "frequency_hz": 13000000.0,
+            "amplitude_v": 0.1507142638922741
+          },
+          {
+            "frequency_hz": 14000000.0,
+            "amplitude_v": 0.19091910542640841
+          },
+          {
+            "frequency_hz": 15000000.0,
+            "amplitude_v": 1.2782635878330207e-15
+          },
+          {
+            "frequency_hz": 16000000.0,
+            "amplitude_v": 0.10620049414922203
+          },
+          {
+            "frequency_hz": 17000000.0,
+            "amplitude_v": 0.044906488810671275
+          },
+          {
+            "frequency_hz": 18000000.0,
+            "amplitude_v": 0.0272644995940734
+          },
+          {
+            "frequency_hz": 19000000.0,
+            "amplitude_v": 0.020043476766086754
+          },
+          {
+            "frequency_hz": 20000000.0,
+            "amplitude_v": 0.0
+          },
+          {
+            "frequency_hz": 21000000.0,
+            "amplitude_v": 0.016407471910560516
+          },
+          {
+            "frequency_hz": 22000000.0,
+            "amplitude_v": 0.018251441877025015
+          },
+          {
+            "frequency_hz": 23000000.0,
+            "amplitude_v": 0.024533034529836722
+          },
+          {
+            "frequency_hz": 24000000.0,
+            "amplitude_v": 0.04720021962187646
+          },
+          {
+            "frequency_hz": 25000000.0,
+            "amplitude_v": 1.1693420231659984e-16
+          },
+          {
+            "frequency_hz": 26000000.0,
+            "amplitude_v": 0.055355243585171486
+          },
+          {
+            "frequency_hz": 27000000.0,
+            "amplitude_v": 0.034939246361857794
+          },
+          {
+            "frequency_hz": 28000000.0,
+            "amplitude_v": 0.03467771237525611
+          },
+          {
+            "frequency_hz": 29000000.0,
+            "amplitude_v": 0.054321499377687286
+          },
+          {
+            "frequency_hz": 30000000.0,
+            "amplitude_v": 1.358898392795075e-15
+          },
+          {
+            "frequency_hz": 31000000.0,
+            "amplitude_v": 0.047538377707216785
+          },
+          {
+            "frequency_hz": 32000000.0,
+            "amplitude_v": 0.026550123537305556
+          },
+          {
+            "frequency_hz": 33000000.0,
+            "amplitude_v": 0.023389082275293082
+          },
+          {
+            "frequency_hz": 34000000.0,
+            "amplitude_v": 0.03237036735603579
+          },
+          {
+            "frequency_hz": 35000000.0,
+            "amplitude_v": 5.419137911829907e-16
+          },
+          {
+            "frequency_hz": 36000000.0,
+            "amplitude_v": 0.020977875387500865
+          },
+          {
+            "frequency_hz": 37000000.0,
+            "amplitude_v": 0.009479894277781179
+          },
+          {
+            "frequency_hz": 38000000.0,
+            "amplitude_v": 0.006117519299501198
+          },
+          {
+            "frequency_hz": 39000000.0,
+            "amplitude_v": 0.004757195997736607
+          },
+          {
+            "frequency_hz": 40000000.0,
+            "amplitude_v": 0.0
+          },
+          {
+            "frequency_hz": 41000000.0,
+            "amplitude_v": 0.004304399234120841
+          },
+          {
+            "frequency_hz": 42000000.0,
+            "amplitude_v": 0.005007765231564734
+          },
+          {
+            "frequency_hz": 43000000.0,
+            "amplitude_v": 0.007018915774086004
+          },
+          {
+            "frequency_hz": 44000000.0,
+            "amplitude_v": 0.014043040548657225
+          },
+          {
+            "frequency_hz": 45000000.0,
+            "amplitude_v": 2.1412477287178472e-16
+          },
+          {
+            "frequency_hz": 46000000.0,
+            "amplitude_v": 0.01768437838543297
+          },
+          {
+            "frequency_hz": 47000000.0,
+            "amplitude_v": 0.011530425802532562
+          },
+          {
+            "frequency_hz": 48000000.0,
+            "amplitude_v": 0.01180005490546908
+          },
+          {
+            "frequency_hz": 49000000.0,
+            "amplitude_v": 0.019027230727462343
+          },
+          {
+            "frequency_hz": 50000000.0,
+            "amplitude_v": 1.6427398784501845e-16
+          },
+          {
+            "frequency_hz": 51000000.0,
+            "amplitude_v": 0.017564160313968527
+          },
+          {
+            "frequency_hz": 52000000.0,
+            "amplitude_v": 0.010054484653180396
+          },
+          {
+            "frequency_hz": 53000000.0,
+            "amplitude_v": 0.009067536702667937
+          },
+          {
+            "frequency_hz": 54000000.0,
+            "amplitude_v": 0.01283269707255718
+          },
+          {
+            "frequency_hz": 55000000.0,
+            "amplitude_v": 1.059540551312913e-15
+          },
+          {
+            "frequency_hz": 56000000.0,
+            "amplitude_v": 0.008669428093814026
+          },
+          {
+            "frequency_hz": 57000000.0,
+            "amplitude_v": 0.003994452221078199
+          },
+          {
+            "frequency_hz": 58000000.0,
+            "amplitude_v": 0.0026259506148871544
+          },
+          {
+            "frequency_hz": 59000000.0,
+            "amplitude_v": 0.0020786254273368336
+          },
+          {
+            "frequency_hz": 60000000.0,
+            "amplitude_v": 1.3570366640911008e-15
+          }
+        ],
+        "envelope": [
+          {
+            "label": "0.1*f1",
+            "frequency_hz": 79577.47154594767,
+            "amplitude_v": 9.6
+          },
+          {
+            "label": "f1",
+            "frequency_hz": 795774.7154594767,
+            "amplitude_v": 9.6
+          },
+          {
+            "label": "3*f1",
+            "frequency_hz": 2387324.14637843,
+            "amplitude_v": 3.1999999999999997
+          },
+          {
+            "label": "f2",
+            "frequency_hz": 6366197.7236758135,
+            "amplitude_v": 1.2
+          },
+          {
+            "label": "10*f2",
+            "frequency_hz": 63661977.236758135,
+            "amplitude_v": 0.012000000000000002
+          }
+        ]
+      }
+    }
+  ]
+}

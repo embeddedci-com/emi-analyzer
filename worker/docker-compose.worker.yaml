@@ -1,0 +1,57 @@
+# Run an EMI worker yourself, dialling into the EMI Analyzer app.
+#
+#   cp .env.example .env      # the app's URL and a key from `emi-local -issue-key`
+#   docker compose -f docker-compose.worker.yaml up -d
+#   docker compose -f docker-compose.worker.yaml logs -f
+#
+# Start the app with `emi-local -worker none` so it does not run a worker of its own as well.
+# See docs/running-a-worker.md.
+#
+# There is no database, no volume and no inbound port: the worker keeps nothing and is never
+# connected *to*. It dials out to the app, registers what it can do, and is handed work over
+# that connection. Add --build to build the image from this directory instead of pulling it.
+
+name: emi-worker
+
+services:
+  worker:
+    build: .
+    image: ghcr.io/embeddedci-com/emi-worker:${EMI_TAG:-latest}
+    # The app listens on the host's loopback; this name reaches it from the container on
+    # Docker Desktop and on Docker Engine 20.10+.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+    environment:
+      # Both are required. Compose stops with these messages if they are missing, rather
+      # than starting a worker that registers as nobody.
+      # Quoted because the messages contain a colon, which YAML would otherwise read as
+      # the start of a mapping.
+      EMBEDDEDCI_URL: "${EMBEDDEDCI_URL:?set it in .env, e.g. http://host.docker.internal:7465}"
+      EMBEDDEDCI_API_KEY: "${EMBEDDEDCI_API_KEY:?issue one with emi-local -issue-key}"
+
+      # Defaults to the container's hostname, which is a random hex string. Worth setting:
+      # it is how this worker is identified in the UI and in the server's logs.
+      EMI_WORKER_NAME: ${EMI_WORKER_NAME:-}
+
+      # A solve is memory-bandwidth bound, so a second concurrent run usually makes both
+      # slower rather than the pair faster. Raise it only for ingest-heavy use.
+      EMI_MAX_CONCURRENT: ${EMI_MAX_CONCURRENT:-1}
+      EMI_LOG_LEVEL: ${EMI_LOG_LEVEL:-INFO}
+
+    # No volume, deliberately. The worker's scratch directory lives in the container's own
+    # filesystem and is emptied as each run ends, so `docker compose down` leaves nothing
+    # to clean up and a restarted worker starts from nothing.
+    #
+    # For a machine whose disk you would rather not write to at all, and which has RAM to
+    # spare, scratch can go in memory instead. A large solve writes several GB of mesh and
+    # field dumps, so size this to the runs you actually accept:
+    # tmpfs:
+    #   - /var/lib/emi-worker:size=8g
+
+    # By default the worker gets the whole machine and advertises it. Cap it here to share
+    # the box with something else -- the worker reads its own cgroup limits, so it will
+    # advertise the cap rather than the host and be handed only runs that fit.
+    # cpus: 8
+    # mem_limit: 16g

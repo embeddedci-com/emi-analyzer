@@ -1,0 +1,10 @@
+{
+  // The container build typechecks what it ships, which is the app.
+  //
+  // Tests are excluded because they are checked by `npm run typecheck` and `npm test`, and
+  // because estimate.test.ts deliberately imports its fixtures from ../../server -- the
+  // Go and TypeScript halves of the cost model are pinned to the same numbers. That import
+  // is correct in the repo and unresolvable inside a build stage holding only webapp/.
+  "extends": "./tsconfig.json",
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx", "dev"]
+}

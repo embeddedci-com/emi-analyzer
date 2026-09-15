@@ -1,0 +1,231 @@
+{
+  "cases": [
+    {
+      "name": "design-doc-worked-example",
+      "input": {
+        "standard_id": "fcc-15b-radiated-3m",
+        "frequencies_hz": [
+          100000000.0
+        ],
+        "paths": [
+          {
+            "kind": "cable",
+            "label": "cable J1 (USB 2.0, 1 m)",
+            "driver_id": "clk",
+            "field_dbuv_per_m": [
+              38.4
+            ],
+            "sigma_terms": {
+              "cable idealisation": 4.5
+            }
+          }
+        ],
+        "shared_sigma_terms": {
+          "driver provenance": 3.0,
+          "mesh preset": 2.0,
+          "far-field interpolation": 1.0
+        }
+      },
+      "expected": {
+        "spectrum": [
+          {
+            "frequency_hz": 100000000.0,
+            "field_dbuv_per_m": 38.4,
+            "limit_dbuv_per_m": 43.5,
+            "margin_db": 5.100000000000001,
+            "shares_indicative": false,
+            "contributions": [
+              {
+                "label": "cable J1 (USB 2.0, 1 m)",
+                "share": 1.0
+              }
+            ]
+          }
+        ],
+        "worst_frequency_hz": 100000000.0,
+        "margin_db": 5.100000000000001,
+        "sigma_db": 5.852349955359813,
+        "sigma_terms": {
+          "driver provenance": 3.0,
+          "mesh preset": 2.0,
+          "far-field interpolation": 1.0,
+          "cable idealisation (cable J1 (USB 2.0, 1 m))": 4.5
+        },
+        "confidence": 0.8082443362667413,
+        "range_80_db": [
+          -2.3910079428605595,
+          12.591007942860562
+        ],
+        "near_misses_hz": []
+      }
+    },
+    {
+      "name": "coherent-and-incoherent-summation",
+      "input": {
+        "standard_id": "fcc-15b-radiated-3m",
+        "frequencies_hz": [
+          200000000.0
+        ],
+        "paths": [
+          {
+            "kind": "board",
+            "label": "board region around U3",
+            "driver_id": "clk",
+            "field_dbuv_per_m": [
+              40.0
+            ],
+            "sigma_terms": {
+              "mesh preset": 2.0
+            }
+          },
+          {
+            "kind": "cable",
+            "label": "cable J1",
+            "driver_id": "clk",
+            "field_dbuv_per_m": [
+              40.0
+            ],
+            "sigma_terms": {
+              "cable idealisation": 4.5
+            }
+          },
+          {
+            "kind": "board",
+            "label": "board region around U7",
+            "driver_id": "buck",
+            "field_dbuv_per_m": [
+              40.0
+            ],
+            "sigma_terms": {
+              "mesh preset": 2.0
+            }
+          }
+        ],
+        "shared_sigma_terms": {}
+      },
+      "expected": {
+        "spectrum": [
+          {
+            "frequency_hz": 200000000.0,
+            "field_dbuv_per_m": 46.98970004336019,
+            "limit_dbuv_per_m": 43.5,
+            "margin_db": -3.4897000433601875,
+            "shares_indicative": true,
+            "contributions": [
+              {
+                "label": "board region around U3",
+                "share": 0.2
+              },
+              {
+                "label": "cable J1",
+                "share": 0.2
+              },
+              {
+                "label": "board region around U7",
+                "share": 0.2
+              }
+            ]
+          }
+        ],
+        "worst_frequency_hz": 200000000.0,
+        "margin_db": -3.4897000433601875,
+        "sigma_db": 2.3769728648009423,
+        "sigma_terms": {
+          "mesh preset (board region around U3)": 0.8944271909999159,
+          "cable idealisation (cable J1)": 2.0124611797498106,
+          "mesh preset (board region around U7)": 0.8944271909999159
+        },
+        "confidence": 0.07103474997948878,
+        "range_80_db": [
+          -6.532225310305394,
+          -0.44717477641498116
+        ],
+        "near_misses_hz": []
+      }
+    },
+    {
+      "name": "near-misses-and-a-quiet-point",
+      "input": {
+        "standard_id": "fcc-15b-radiated-3m",
+        "frequencies_hz": [
+          100000000.0,
+          200000000.0,
+          500000000.0
+        ],
+        "paths": [
+          {
+            "kind": "board",
+            "label": "board region around U3",
+            "driver_id": "clk",
+            "field_dbuv_per_m": [
+              41.0,
+              44.0,
+              10.0
+            ],
+            "sigma_terms": {
+              "mesh preset": 4.0
+            }
+          }
+        ],
+        "shared_sigma_terms": {}
+      },
+      "expected": {
+        "spectrum": [
+          {
+            "frequency_hz": 100000000.0,
+            "field_dbuv_per_m": 41.0,
+            "limit_dbuv_per_m": 43.5,
+            "margin_db": 2.5,
+            "shares_indicative": false,
+            "contributions": [
+              {
+                "label": "board region around U3",
+                "share": 1.0
+              }
+            ]
+          },
+          {
+            "frequency_hz": 200000000.0,
+            "field_dbuv_per_m": 44.0,
+            "limit_dbuv_per_m": 43.5,
+            "margin_db": -0.5,
+            "shares_indicative": false,
+            "contributions": [
+              {
+                "label": "board region around U3",
+                "share": 1.0
+              }
+            ]
+          },
+          {
+            "frequency_hz": 500000000.0,
+            "field_dbuv_per_m": 10.0,
+            "limit_dbuv_per_m": 46.0,
+            "margin_db": 36.0,
+            "shares_indicative": false,
+            "contributions": [
+              {
+                "label": "board region around U3",
+                "share": 1.0
+              }
+            ]
+          }
+        ],
+        "worst_frequency_hz": 200000000.0,
+        "margin_db": -0.5,
+        "sigma_db": 4.0,
+        "sigma_terms": {
+          "mesh preset (board region around U3)": 4.0
+        },
+        "confidence": 0.45026177516988714,
+        "range_80_db": [
+          -5.62,
+          4.62
+        ],
+        "near_misses_hz": [
+          100000000.0
+        ]
+      }
+    }
+  ]
+}

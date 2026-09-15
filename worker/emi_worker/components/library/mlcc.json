@@ -1,0 +1,356 @@
+{
+  "format": "emi-component-library",
+  "version": 1,
+  "_comment": "The built-in GENERIC MLCC library: typical figures for a package and value class, not measurements of any specific part. They exist so a board with no library behind it still gets a self-resonance in roughly the right decade, and they are labelled generic everywhere they surface so nobody mistakes them for a datasheet number. A named part belongs in vendor.json with its datasheet cited. ESL EXCLUDES the mounting loop (esl_includes_mount: false) because the solve models pads, vias and planes itself, and counting that twice would put every SRF low. The family entry at the end is the catch-all: ESL is very nearly a property of the package, so one entry per package covers every value, and the specific entries above it exist only where a class average is not good enough.",
+  "components": [
+    {
+      "format": "emi-component",
+      "version": 1,
+      "id": "generic-mlcc-100n-0402",
+      "kind": "capacitor",
+      "name": "100 nF 0402 (generic)",
+      "provenance": "generic",
+      "match": {
+        "value": "100n",
+        "package": "0402",
+        "mpn": null
+      },
+      "model": {
+        "type": "series_rlc",
+        "c_f": 1e-07,
+        "esl_h": 4.5e-10,
+        "esr_ohm": 0.06
+      },
+      "esl_includes_mount": false,
+      "valid_hz": [
+        100000.0,
+        3000000000.0
+      ],
+      "sources": [
+        {
+          "doc": "typical for the package and value class",
+          "rev": "",
+          "what": "ESL and ESR"
+        }
+      ]
+    },
+    {
+      "format": "emi-component",
+      "version": 1,
+      "id": "generic-mlcc-10n-0402",
+      "kind": "capacitor",
+      "name": "10 nF 0402 (generic)",
+      "provenance": "generic",
+      "match": {
+        "value": "10n",
+        "package": "0402",
+        "mpn": null
+      },
+      "model": {
+        "type": "series_rlc",
+        "c_f": 1e-08,
+        "esl_h": 4.5e-10,
+        "esr_ohm": 0.12
+      },
+      "esl_includes_mount": false,
+      "valid_hz": [
+        100000.0,
+        3000000000.0
+      ],
+      "sources": [
+        {
+          "doc": "typical for the package and value class",
+          "rev": "",
+          "what": "ESL and ESR"
+        }
+      ]
+    },
+    {
+      "format": "emi-component",
+      "version": 1,
+      "id": "generic-mlcc-1n-0402",
+      "kind": "capacitor",
+      "name": "1 nF 0402 (generic)",
+      "provenance": "generic",
+      "match": {
+        "value": "1n",
+        "package": "0402",
+        "mpn": null
+      },
+      "model": {
+        "type": "series_rlc",
+        "c_f": 1e-09,
+        "esl_h": 4.5e-10,
+        "esr_ohm": 0.25
+      },
+      "esl_includes_mount": false,
+      "valid_hz": [
+        100000.0,
+        3000000000.0
+      ],
+      "sources": [
+        {
+          "doc": "typical for the package and value class",
+          "rev": "",
+          "what": "ESL and ESR"
+        }
+      ]
+    },
+    {
+      "format": "emi-component",
+      "version": 1,
+      "id": "generic-mlcc-100n-0603",
+      "kind": "capacitor",
+      "name": "100 nF 0603 (generic)",
+      "provenance": "generic",
+      "match": {
+        "value": "100n",
+        "package": "0603",
+        "mpn": null
+      },
+      "model": {
+        "type": "series_rlc",
+        "c_f": 1e-07,
+        "esl_h": 6.5e-10,
+        "esr_ohm": 0.05
+      },
+      "esl_includes_mount": false,
+      "valid_hz": [
+        100000.0,
+        3000000000.0
+      ],
+      "sources": [
+        {
+          "doc": "typical for the package and value class",
+          "rev": "",
+          "what": "ESL and ESR"
+        }
+      ]
+    },
+    {
+      "format": "emi-component",
+      "version": 1,
+      "id": "generic-mlcc-1u-0603",
+      "kind": "capacitor",
+      "name": "1 \u00b5F 0603 (generic)",
+      "provenance": "generic",
+      "match": {
+        "value": "1u",
+        "package": "0603",
+        "mpn": null
+      },
+      "model": {
+        "type": "series_rlc",
+        "c_f": 1e-06,
+        "esl_h": 6.5e-10,
+        "esr_ohm": 0.03
+      },
+      "esl_includes_mount": false,
+      "valid_hz": [
+        100000.0,
+        1000000000.0
+      ],
+      "sources": [
+        {
+          "doc": "typical for the package and value class",
+          "rev": "",
+          "what": "ESL and ESR"
+        }
+      ]
+    },
+    {
+      "format": "emi-component",
+      "version": 1,
+      "id": "generic-mlcc-100n-0805",
+      "kind": "capacitor",
+      "name": "100 nF 0805 (generic)",
+      "provenance": "generic",
+      "match": {
+        "value": "100n",
+        "package": "0805",
+        "mpn": null
+      },
+      "model": {
+        "type": "series_rlc",
+        "c_f": 1e-07,
+        "esl_h": 9e-10,
+        "esr_ohm": 0.05
+      },
+      "esl_includes_mount": false,
+      "valid_hz": [
+        100000.0,
+        2000000000.0
+      ],
+      "sources": [
+        {
+          "doc": "typical for the package and value class",
+          "rev": "",
+          "what": "ESL and ESR"
+        }
+      ]
+    },
+    {
+      "format": "emi-component",
+      "version": 1,
+      "id": "generic-mlcc-1u-0805",
+      "kind": "capacitor",
+      "name": "1 \u00b5F 0805 (generic)",
+      "provenance": "generic",
+      "match": {
+        "value": "1u",
+        "package": "0805",
+        "mpn": null
+      },
+      "model": {
+        "type": "series_rlc",
+        "c_f": 1e-06,
+        "esl_h": 9e-10,
+        "esr_ohm": 0.025
+      },
+      "esl_includes_mount": false,
+      "valid_hz": [
+        100000.0,
+        1000000000.0
+      ],
+      "sources": [
+        {
+          "doc": "typical for the package and value class",
+          "rev": "",
+          "what": "ESL and ESR"
+        }
+      ]
+    },
+    {
+      "format": "emi-component",
+      "version": 1,
+      "id": "generic-mlcc-10u-0805",
+      "kind": "capacitor",
+      "name": "10 \u00b5F 0805 (generic)",
+      "provenance": "generic",
+      "match": {
+        "value": "10u",
+        "package": "0805",
+        "mpn": null
+      },
+      "model": {
+        "type": "series_rlc",
+        "c_f": 1e-05,
+        "esl_h": 9e-10,
+        "esr_ohm": 0.015
+      },
+      "esl_includes_mount": false,
+      "valid_hz": [
+        100000.0,
+        500000000.0
+      ],
+      "sources": [
+        {
+          "doc": "typical for the package and value class",
+          "rev": "",
+          "what": "ESL and ESR"
+        }
+      ]
+    },
+    {
+      "format": "emi-component",
+      "version": 1,
+      "id": "generic-mlcc-10u-1206",
+      "kind": "capacitor",
+      "name": "10 \u00b5F 1206 (generic)",
+      "provenance": "generic",
+      "match": {
+        "value": "10u",
+        "package": "1206",
+        "mpn": null
+      },
+      "model": {
+        "type": "series_rlc",
+        "c_f": 1e-05,
+        "esl_h": 1.2e-09,
+        "esr_ohm": 0.01
+      },
+      "esl_includes_mount": false,
+      "valid_hz": [
+        100000.0,
+        500000000.0
+      ],
+      "sources": [
+        {
+          "doc": "typical for the package and value class",
+          "rev": "",
+          "what": "ESL and ESR"
+        }
+      ]
+    },
+    {
+      "format": "emi-component",
+      "version": 1,
+      "id": "generic-mlcc-family",
+      "kind": "capacitor",
+      "name": "MLCC (generic, by package)",
+      "provenance": "generic",
+      "match": {
+        "value": null,
+        "package": null,
+        "mpn": null
+      },
+      "model": {
+        "type": "mlcc_family",
+        "esl_h_by_package": {
+          "0201": 3e-10,
+          "0402": 4.5e-10,
+          "0603": 6.5e-10,
+          "0805": 9e-10,
+          "1206": 1.2e-09,
+          "1210": 1.3e-09
+        },
+        "esr_ohm_by_c": [
+          [
+            1e-12,
+            0.5
+          ],
+          [
+            1e-10,
+            0.3
+          ],
+          [
+            1e-09,
+            0.25
+          ],
+          [
+            1e-08,
+            0.12
+          ],
+          [
+            1e-07,
+            0.055
+          ],
+          [
+            1e-06,
+            0.028
+          ],
+          [
+            1e-05,
+            0.013
+          ],
+          [
+            0.0001,
+            0.006
+          ]
+        ]
+      },
+      "esl_includes_mount": false,
+      "valid_hz": [
+        100000.0,
+        3000000000.0
+      ],
+      "sources": [
+        {
+          "doc": "typical for the package and value class",
+          "rev": "",
+          "what": "ESL and ESR"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+{
+  "format": "emi-component-library",
+  "version": 1,
+  "_comment": "Named parts, each from its own datasheet. This is the list that grows: an entry here beats the generic family for the same value and package, because it describes a part somebody actually buys rather than a class average. Every entry MUST cite the datasheet it came from - parse() refuses a vendor entry with no source - and the citation is what lets a number be checked or corrected later. Add parts as their datasheets are read; do not copy figures from the generic family and relabel them.",
+  "components": []
+}

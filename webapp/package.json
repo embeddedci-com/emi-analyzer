@@ -1,0 +1,39 @@
+{
+  "name": "emi-analyzer-webapp",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "EMI Analyzer frontend. src/ is the analyzer every host mounts (embeddedci-server links it in by path); app/ is the shell of the local app; dev/ is a standalone harness for the renderer.",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit -p tsconfig.build.json && vite build",
+    "build:harness": "esbuild src/lib/BoardRenderer.ts --bundle --format=esm --target=es2022 --outfile=dev/public/bundle.js",
+    "dev": "vite --config vite.config.ts",
+    "build:app": "tsc --noEmit -p tsconfig.build.json && vite build --config vite.app.config.ts",
+    "dev:app": "vite --config vite.app.config.ts"
+  },
+  "devDependencies": {
+    "@mantine/core": "^8.3.18",
+    "@mantine/hooks": "^8.3.18",
+    "@tanstack/react-query": "^5.102.8",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.0.1",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "react-router": "^8.3.1",
+    "typescript": "^5.2.2",
+    "vite": "^8.1.0",
+    "vitest": "^5.0.0"
+  },
+  "peerDependencies": {
+    "@mantine/core": "^8.3.18",
+    "@mantine/hooks": "^8.3.18",
+    "@tanstack/react-query": "^5.91.3",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "react-router": "^8.3.0"
+  },
+  "license": "Apache-2.0"
+}

@@ -1,0 +1,288 @@
+[
+  {
+    "id": "plane-gap",
+    "title": "Reference plane gaps",
+    "about": "A trace crossing a break in the plane beneath it; the return current has to detour, and the loop that creates radiates.",
+    "category": "Return path",
+    "params": [
+      {
+        "key": "min_crossing_mm",
+        "default": 0.6
+      }
+    ]
+  },
+  {
+    "id": "return-via",
+    "title": "Missing return vias",
+    "about": "A signal changing layer with no nearby via joining the two reference planes, so the return current has no path across.",
+    "category": "Return path",
+    "params": [
+      {
+        "key": "max_distance_mm",
+        "default": 2.0
+      }
+    ]
+  },
+  {
+    "id": "via-stub",
+    "title": "Via stubs",
+    "about": "The unused length of a through via below the layer a signal leaves on, which resonates.",
+    "category": "Signal integrity",
+    "params": [
+      {
+        "key": "resonance_margin",
+        "default": 4.0
+      }
+    ]
+  },
+  {
+    "id": "radiator",
+    "title": "Long nets",
+    "about": "A net long enough against the wavelength to couple to free space efficiently.",
+    "category": "Radiation",
+    "params": [
+      {
+        "key": "wavelength_fraction",
+        "default": 0.05
+      }
+    ]
+  },
+  {
+    "id": "edge-proximity",
+    "title": "Copper near the board edge",
+    "about": "Traces or planes close to the edge, where fields are not contained.",
+    "category": "Radiation",
+    "params": [
+      {
+        "key": "min_clearance_mm",
+        "default": 1.0
+      }
+    ]
+  },
+  {
+    "id": "ddr-skew",
+    "title": "Length matching",
+    "about": "Members of a matched group whose delay differs from their reference by more than the budget. Measured in time, not millimetres: an inner-layer millimetre and an outer-layer one are about 25% apart.",
+    "category": "Signal integrity",
+    "params": [
+      {
+        "key": "intra_pair_ps",
+        "default": 2.0
+      },
+      {
+        "key": "byte_lane_ps",
+        "default": 10.0
+      },
+      {
+        "key": "address_command_ps",
+        "default": 25.0
+      },
+      {
+        "key": "lane_to_lane_ps",
+        "default": 0.0
+      },
+      {
+        "key": "min_group_size",
+        "default": 3
+      }
+    ]
+  },
+  {
+    "id": "impedance",
+    "title": "Impedance",
+    "about": "Computed characteristic impedance against a target, and discontinuities along a net where width or reference plane changes.",
+    "category": "Signal integrity",
+    "params": [
+      {
+        "key": "single_ended_ohm",
+        "default": 0.0
+      },
+      {
+        "key": "differential_ohm",
+        "default": 0.0
+      },
+      {
+        "key": "tolerance_pct",
+        "default": 10.0
+      },
+      {
+        "key": "model_uncertainty_pct",
+        "default": 8.0
+      },
+      {
+        "key": "discontinuity_pct",
+        "default": 20.0
+      }
+    ]
+  },
+  {
+    "id": "decoupling",
+    "title": "Decoupling capacitors",
+    "about": "IC supply pins far from a capacitor to ground, and decoupling capacitors whose ground pad has no via nearby. The loop through them sets the frequency above which they stop decoupling.",
+    "category": "Power integrity",
+    "params": [
+      {
+        "key": "max_distance_mm",
+        "default": 3.0
+      },
+      {
+        "key": "critical_distance_mm",
+        "default": 10.0
+      },
+      {
+        "key": "max_ground_via_mm",
+        "default": 1.0
+      }
+    ]
+  },
+  {
+    "id": "stitching",
+    "title": "Plane stitching",
+    "about": "Areas where two ground planes overlap with no via joining them within λ/20; between stitching points the planes form a cavity that resonates.",
+    "category": "Return path",
+    "params": [
+      {
+        "key": "max_spacing_mm",
+        "default": 0.0
+      }
+    ]
+  },
+  {
+    "id": "edge-stitching",
+    "title": "Edge stitching",
+    "about": "Stretches of board edge where a ground plane reaches the outline with no via fence; an unstitched plane edge radiates like a slot antenna.",
+    "category": "Return path",
+    "params": [
+      {
+        "key": "max_spacing_mm",
+        "default": 0.0
+      },
+      {
+        "key": "edge_band_mm",
+        "default": 2.0
+      }
+    ]
+  },
+  {
+    "id": "stackup",
+    "title": "Stackup",
+    "about": "Signal layers with no adjacent reference plane, and adjacent signal layers with no plane between them to stop broadside coupling.",
+    "category": "Return path",
+    "params": []
+  },
+  {
+    "id": "copper-island",
+    "title": "Floating copper",
+    "about": "Pour islands connected to nothing, which pick up and re-radiate with no path to ground.",
+    "category": "Radiation",
+    "params": [
+      {
+        "key": "min_area_mm2",
+        "default": 2.0
+      }
+    ]
+  },
+  {
+    "id": "crystal",
+    "title": "Crystals and oscillators",
+    "about": "Signals routed under a crystal, and crystals close to the board edge or to a connector, where a cable becomes their antenna.",
+    "category": "Radiation",
+    "params": [
+      {
+        "key": "min_edge_mm",
+        "default": 5.0
+      },
+      {
+        "key": "min_connector_mm",
+        "default": 10.0
+      },
+      {
+        "key": "keepout_margin_mm",
+        "default": 0.5
+      }
+    ]
+  },
+  {
+    "id": "esd-protection",
+    "title": "ESD protection at connectors",
+    "about": "Lines leaving the board through an edge connector with no clamp on them, clamps placed far from the connector or after the IC they protect, and clamps with no short path to ground.",
+    "category": "Immunity",
+    "params": [
+      {
+        "key": "edge_mm",
+        "default": 5.0
+      },
+      {
+        "key": "max_distance_mm",
+        "default": 15.0
+      },
+      {
+        "key": "max_ground_via_mm",
+        "default": 2.0
+      }
+    ]
+  },
+  {
+    "id": "connector-shield",
+    "title": "Shield and chassis ground",
+    "about": "Connector shells and plated mounting holes connected to nothing, and chassis nets with no path to the board's ground, so a discharge to the enclosure has to cross the circuit.",
+    "category": "Immunity",
+    "params": []
+  },
+  {
+    "id": "reset-filter",
+    "title": "Reset lines",
+    "about": "Reset inputs held only by a pull-up with no filter capacitor, or with the capacitor far from the pin, where a fast transient on the trace resets the board.",
+    "category": "Immunity",
+    "params": [
+      {
+        "key": "max_distance_mm",
+        "default": 10.0
+      }
+    ]
+  },
+  {
+    "id": "input-filter",
+    "title": "Power input filtering",
+    "about": "Power entering through a connector with no capacitor near it, so the loads' switching current flows out along the supply cable and a surge meets nothing on the way in.",
+    "category": "Conducted emissions",
+    "params": [
+      {
+        "key": "edge_mm",
+        "default": 5.0
+      },
+      {
+        "key": "max_distance_mm",
+        "default": 15.0
+      }
+    ]
+  },
+  {
+    "id": "switch-node",
+    "title": "Switching regulator nodes",
+    "about": "Switch nodes with more copper or track than the current needs. The node swings the full input voltage in nanoseconds, and its copper couples that into everything nearby.",
+    "category": "Conducted emissions",
+    "params": [
+      {
+        "key": "max_area_mm2",
+        "default": 30.0
+      },
+      {
+        "key": "max_length_mm",
+        "default": 15.0
+      }
+    ]
+  },
+  {
+    "id": "cable-resonance",
+    "title": "Cable resonance",
+    "about": "Cables assigned to connectors that are at their best as antennas at a frequency this board produces. A cable's resonances depend on the cable, not the layout, so this needs no solve — and it decides more about a radiated result than the board does.",
+    "category": "Radiated emissions",
+    "params": [
+      {
+        "key": "clock_hz",
+        "default": 0.0
+      }
+    ]
+  }
+]

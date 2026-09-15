@@ -1,0 +1,46 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+      - run: make test-go
+
+  webapp:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: webapp/package-lock.json
+      - run: cd webapp && npm ci && npm run typecheck && npm test && npm run build:app
+
+  worker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # The tests run inside the worker image, which is the only place ngspice, nec2c and
+      # openEMS are guaranteed to be the versions the worker is built against.
+      - run: docker build -t emi-worker-test worker
+      # Mounted read-only and copied, because the image runs as a non-root user and the tests
+      # read fixtures from server/ and the rule catalogue from webapp/.
+      - run: |
+          docker run --rm --user root --entrypoint sh -v "$PWD:/repo:ro" emi-worker-test -c '
+            pip install -q pytest &&
+            mkdir /tmp/repo && cp -r /repo/worker /repo/server /repo/webapp /tmp/repo/ &&
+            cd /tmp/repo/worker && python -m pytest -q -p no:cacheprovider'

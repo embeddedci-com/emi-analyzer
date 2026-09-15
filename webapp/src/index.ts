@@ -1,0 +1,16 @@
+/** Public surface of the EMI Analyzer frontend folder. */
+
+export { BoardCanvas } from './components/BoardCanvas'
+export { LayerRail } from './components/LayerRail'
+export { NetPicker } from './components/NetPicker'
+export { RuleFindings } from './components/RuleFindings'
+export { RunProgress } from './components/RunProgress'
+export { EmiAnalyzerPage } from './pages/EmiAnalyzerPage'
+export { EmiProjectPage } from './pages/EmiProjectPage'
+export { EmiLimitationsPage } from './pages/EmiLimitationsPage'
+export { emiRoutes, type EmiDeployment, type EmiRouteOptions } from './routes'
+export { DEFAULT_TOOLS, ToolsMenu, type ToolEntry } from './ToolsMenu'
+export { BoardRenderer, DEFAULT_LAYER_COLORS } from './lib/BoardRenderer'
+export { EmiApi, ApiError, RunTooLargeError, pollRun } from './lib/emiApi'
+export * from './lib/boardTypes'
+export * from './lib/estimate'

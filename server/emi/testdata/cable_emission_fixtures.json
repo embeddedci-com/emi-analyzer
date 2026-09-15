@@ -1,0 +1,201 @@
+{
+  "cases": [
+    {
+      "name": "plain-arithmetic",
+      "input": {
+        "transfer": {
+          "ref": "USB1",
+          "frequencies_hz": [
+            50000000.0,
+            100000000.0,
+            300000000.0,
+            700000000.0
+          ],
+          "h_real": [
+            0.02,
+            0.01,
+            0.004,
+            0.001
+          ],
+          "h_imag": [
+            0.0,
+            0.0,
+            0.003,
+            -0.001
+          ],
+          "usable": [
+            true,
+            true,
+            true,
+            true
+          ]
+        },
+        "antenna": {
+          "ref": "USB1",
+          "cable_id": "usb2-shielded",
+          "length_m": 1.0,
+          "distance_m": 3.0,
+          "frequencies_hz": [
+            50000000.0,
+            100000000.0,
+            300000000.0,
+            700000000.0
+          ],
+          "z_real": [
+            80.0,
+            300.0,
+            180.0,
+            70.0
+          ],
+          "z_imag": [
+            -900.0,
+            0.0,
+            120.0,
+            -40.0
+          ],
+          "e_per_amp": [
+            6.0,
+            25.0,
+            48.0,
+            62.0
+          ]
+        },
+        "source_volts": [
+          [
+            1.0,
+            0.0
+          ],
+          [
+            1.0,
+            0.0
+          ],
+          [
+            0.5,
+            0.0
+          ],
+          [
+            0.25,
+            0.0
+          ]
+        ],
+        "standard_id": "fcc-15b-radiated-3m"
+      },
+      "expected": {
+        "points": [
+          {
+            "frequency_hz": 50000000.0,
+            "current_dbua": 26.901569952839296,
+            "field_dbuv_per_m": 42.464594960512166,
+            "limit_dbuv_per_m": 40.0,
+            "margin_db": -2.4645949605121658
+          },
+          {
+            "frequency_hz": 100000000.0,
+            "current_dbua": 30.45757490560675,
+            "field_dbuv_per_m": 58.416375079047505,
+            "limit_dbuv_per_m": 43.5,
+            "margin_db": -14.916375079047505
+          },
+          {
+            "frequency_hz": 300000000.0,
+            "current_dbua": 21.25634164269951,
+            "field_dbuv_per_m": 54.881166390211256,
+            "limit_dbuv_per_m": 46.0,
+            "margin_db": -8.881166390211256
+          },
+          {
+            "frequency_hz": 700000000.0,
+            "current_dbua": 12.839966563652009,
+            "field_dbuv_per_m": 48.687800353617085,
+            "limit_dbuv_per_m": 46.0,
+            "margin_db": -2.687800353617085
+          }
+        ],
+        "undriven_hz": []
+      }
+    },
+    {
+      "name": "every-way-a-point-goes-missing",
+      "input": {
+        "transfer": {
+          "ref": "J3",
+          "frequencies_hz": [
+            40000000.0,
+            80000000.0,
+            160000000.0,
+            320000000.0
+          ],
+          "h_real": [
+            0.03,
+            0.02,
+            0.01,
+            0.005
+          ],
+          "h_imag": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "usable": [
+            false,
+            true,
+            true,
+            true
+          ]
+        },
+        "antenna": {
+          "ref": "J3",
+          "cable_id": "dc-pigtail",
+          "length_m": 1.0,
+          "distance_m": 3.0,
+          "frequencies_hz": [
+            40000000.0,
+            80000000.0,
+            320000000.0
+          ],
+          "z_real": [
+            50.0,
+            50.0,
+            0.0
+          ],
+          "z_imag": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "e_per_amp": [
+            10.0,
+            10.0,
+            10.0
+          ]
+        },
+        "source_volts": [
+          [
+            1.0,
+            0.0
+          ],
+          null,
+          [
+            1.0,
+            0.0
+          ],
+          [
+            1.0,
+            0.0
+          ]
+        ],
+        "standard_id": "fcc-15b-radiated-3m"
+      },
+      "expected": {
+        "points": [],
+        "undriven_hz": [
+          40000000.0,
+          80000000.0,
+          160000000.0,
+          320000000.0
+        ]
+      }
+    }
+  ]
+}

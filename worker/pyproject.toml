@@ -1,0 +1,56 @@
+[project]
+name = "emi-worker"
+version = "0.1.0"
+description = "EMI Analyzer worker — dials into an EMI Analyzer server (the local app or a hosted one) as agent_type=emi"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+dependencies = [
+    "httpx>=0.27",
+    "websockets>=13.0",
+    # Board ingest. numpy carries the geometry and the reference-plane rasteriser;
+    # mapbox_earcut is the polygon triangulator. Both ship manylinux wheels for x86_64 and
+    # aarch64, so the worker image needs no compiler.
+    "numpy>=1.26",
+    "mapbox_earcut>=1.0",
+    # Reading openEMS frequency-domain field dumps.
+    "h5py>=3.10",
+]
+
+# gerbonara (Gerber and Excellon parsing) is deliberately NOT listed above. It declares
+# flask, quart, hypercorn and rtree for a web preview feature this worker never uses, and
+# rtree needs a system library. Install it without its dependency tree:
+#
+#     pip install --no-deps "gerbonara>=1.5"
+#
+# The Dockerfile does exactly that. Its parser imports nothing beyond the standard library
+# in our usage, which is what makes this safe.
+#
+# Note the floor is 1.5, not 1.6: gerbonara 1.6 requires Python 3.12, and the worker image
+# is Debian bookworm (3.11) because that is where the openEMS package lives. Both versions
+# expose the same parser API.
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+[project.scripts]
+emi-worker = "emi_worker.__main__:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["emi_worker*"]
+
+# Limit tables are data, not code, and `packages.find` alone would leave them out of the
+# installed wheel -- so the worker would import cleanly and then fail at the first margin,
+# in the image only, never on a developer's machine.
+[tool.setuptools.package-data]
+"emi_worker.compliance" = ["limits/*.json"]
+"emi_worker.components" = ["library/*.json"]
+"emi_worker.cables" = ["*.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

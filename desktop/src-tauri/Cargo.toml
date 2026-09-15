@@ -1,0 +1,26 @@
+[package]
+name = "emi-analyzer"
+version = "0.0.0"
+description = "EMI Analyzer desktop app"
+license = "Apache-2.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "emi_analyzer_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-shell = "2"
+tauri-plugin-opener = "2"
+url = "2"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true

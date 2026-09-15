@@ -1,0 +1,158 @@
+{
+  "_comment": "Shared fixtures for the FDTD cost model. The Go, Python and TypeScript implementations must all reproduce these exactly. Regenerate with `make fixtures`, never by hand.",
+  "cases": [
+    {
+      "name": "whole-board-uniform",
+      "input": {
+        "roi_x_mm": 120,
+        "roi_y_mm": 100,
+        "roi_z_mm": 10,
+        "dx_um": 50,
+        "dy_um": 50,
+        "dz_um": 25,
+        "f_min_hz": 100000000.0,
+        "ports": 1
+      },
+      "expected": {
+        "cells": 1920000000,
+        "ram_bytes": 138240000000,
+        "timesteps": 623107,
+        "dt_seconds": 4.814583003866176e-14,
+        "sim_time_seconds": 3e-08,
+        "eta_seconds": 5981827.2
+      }
+    },
+    {
+      "name": "roi-20mm-graded",
+      "input": {
+        "roi_x_mm": 24,
+        "roi_y_mm": 24,
+        "roi_z_mm": 10,
+        "dx_um": 50,
+        "dy_um": 50,
+        "dz_um": 25,
+        "f_min_hz": 100000000.0,
+        "ports": 1,
+        "fill_factor": 0.13
+      },
+      "expected": {
+        "cells": 11980800,
+        "ram_bytes": 862617600,
+        "timesteps": 623107,
+        "dt_seconds": 4.814583003866176e-14,
+        "sim_time_seconds": 3e-08,
+        "eta_seconds": 37326.601728
+      }
+    },
+    {
+      "name": "roi-20mm-graded-4ports",
+      "input": {
+        "roi_x_mm": 24,
+        "roi_y_mm": 24,
+        "roi_z_mm": 10,
+        "dx_um": 50,
+        "dy_um": 50,
+        "dz_um": 25,
+        "f_min_hz": 100000000.0,
+        "ports": 4,
+        "fill_factor": 0.13
+      },
+      "expected": {
+        "cells": 11980800,
+        "ram_bytes": 862617600,
+        "timesteps": 623107,
+        "dt_seconds": 4.814583003866176e-14,
+        "sim_time_seconds": 3e-08,
+        "eta_seconds": 149306.406912
+      }
+    },
+    {
+      "name": "coarse-1ghz-floor",
+      "input": {
+        "roi_x_mm": 10,
+        "roi_y_mm": 10,
+        "roi_z_mm": 4,
+        "dx_um": 100,
+        "dy_um": 100,
+        "dz_um": 100,
+        "f_min_hz": 1000000000.0,
+        "ports": 1
+      },
+      "expected": {
+        "cells": 400000,
+        "ram_bytes": 28800000,
+        "timesteps": 15578,
+        "dt_seconds": 1.9258332015464704e-13,
+        "sim_time_seconds": 3e-09,
+        "eta_seconds": 31.156
+      }
+    },
+    {
+      "name": "vertical-mesh-dominates",
+      "input": {
+        "roi_x_mm": 20,
+        "roi_y_mm": 20,
+        "roi_z_mm": 5,
+        "dx_um": 200,
+        "dy_um": 200,
+        "dz_um": 20,
+        "f_min_hz": 300000000.0,
+        "ports": 1
+      },
+      "expected": {
+        "cells": 2500000,
+        "ram_bytes": 180000000,
+        "timesteps": 259628,
+        "dt_seconds": 3.851666403092941e-14,
+        "sim_time_seconds": 1e-08,
+        "eta_seconds": 3245.35
+      }
+    },
+    {
+      "name": "roi-20mm-measured-multiplier",
+      "input": {
+        "roi_x_mm": 20,
+        "roi_y_mm": 20,
+        "roi_z_mm": 11.6,
+        "dx_um": 50,
+        "dy_um": 50,
+        "dz_um": 25,
+        "f_min_hz": 100000000.0,
+        "ports": 1,
+        "fill_factor": 1.64
+      },
+      "expected": {
+        "cells": 121753600,
+        "ram_bytes": 8766259200,
+        "timesteps": 623107,
+        "dt_seconds": 4.814583003866176e-14,
+        "sim_time_seconds": 3e-08,
+        "eta_seconds": 379327.602176
+      }
+    },
+    {
+      "name": "non-integer-division",
+      "input": {
+        "roi_x_mm": 7.3,
+        "roi_y_mm": 4.1,
+        "roi_z_mm": 1.55,
+        "dx_um": 60,
+        "dy_um": 60,
+        "dz_um": 35,
+        "f_min_hz": 250000000.0,
+        "ports": 2,
+        "fill_factor": 0.5,
+        "periods": 5.0,
+        "throughput_mcells_per_s": 150.0
+      },
+      "expected": {
+        "cells": 189405,
+        "ram_bytes": 13637160,
+        "timesteps": 296718,
+        "dt_seconds": 6.740416205412646e-14,
+        "sim_time_seconds": 2e-08,
+        "eta_seconds": 749.3316372
+      }
+    }
+  ]
+}

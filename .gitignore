@@ -1,0 +1,47 @@
+# Local stack secrets and state
+deploy/.env
+worker/.env
+
+# Python
+.venv/
+__pycache__/
+*.egg-info/
+.pytest_cache/
+
+# Node
+node_modules/
+dist/
+
+# Dev harness artifacts: generated from real boards, and those boards are not ours to commit
+webapp/dev/public/
+webapp/dev/bundle.js
+webapp/public/*.kicad_pcb
+webapp/index.html
+
+# Board files dropped in for a one-off smoke run
+worker/tests/fixtures/*.kicad_pcb
+!worker/tests/fixtures/tiny.kicad_pcb
+
+# The gerber fixture is generated from tiny.kicad_pcb and IS committed, so the test suite
+# runs without KiCad installed. Regenerate with worker/scripts/make_gerber_fixture.py.
+!worker/tests/fixtures/gerber/
+
+# Gerber zips built for a browser test
+webapp/public/*.zip
+
+
+# The local app: build outputs
+bin/
+webapp/dist-app/
+server/cmd/emi-local/web/*
+!server/cmd/emi-local/web/.gitkeep
+desktop/node_modules/
+desktop/src-tauri/target/
+desktop/src-tauri/binaries/
+desktop/src-tauri/gen/
+
+# pip's build directory; never source
+worker/build/
+
+# Local editor/agent tooling
+.claude/

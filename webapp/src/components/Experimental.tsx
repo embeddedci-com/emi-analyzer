@@ -1,0 +1,72 @@
+/**
+ * The mark a feature carries when it works but has not been fully validated.
+ *
+ * The tool's whole claim is that a number comes with an honest account of how much to trust
+ * it, so "experimental" as a bare word would be the wrong kind of hedge: it warns without
+ * saying what about, and a user cannot act on it. Every use therefore has to supply `why` —
+ * the specific thing that is unproven, in the terms of the measurement that would settle it.
+ *
+ * This is not the same as an uncertainty figure. σ says how far a number might be off given
+ * that the model is right; this says the model itself has not been checked against the case
+ * in front of you. A feature can be experimental and precise, or validated and vague.
+ */
+
+import { Badge, Tooltip } from '@mantine/core'
+
+export interface ExperimentalProps {
+  /**
+   * What is unproven and why it matters, in a sentence or two. Written for someone deciding
+   * whether to act on the number, not for someone maintaining the code: name the measurement
+   * that would settle it, and which way the error is likely to run if it is known.
+   */
+  why: string
+  /** Overrides the label where "experimental" is not the right word (e.g. "provisional"). */
+  label?: string
+  size?: 'xs' | 'sm'
+  mb?: number
+}
+
+export function Experimental({ why, label = 'experimental', size = 'xs', mb }: ExperimentalProps) {
+  return (
+    <Tooltip label={why} withArrow multiline w={340} events={{ hover: true, focus: true, touch: true }}>
+      <Badge size={size} variant="light" color="yellow" tt="none" mb={mb} tabIndex={0}
+             style={{ cursor: 'help' }}>
+        {label}
+      </Badge>
+    </Tooltip>
+  )
+}
+
+/**
+ * The reasons in use, in one place.
+ *
+ * Kept together rather than inline at each call site so that the set of things the tool is
+ * unsure about can be read in one go — by someone deciding what to validate next, and by the
+ * limitations page, which has to list them without going out of date.
+ */
+export const EXPERIMENTAL: Record<string, string> = {
+  complianceEstimate:
+    'The whole chain behind this number is built and unit-tested, and it has not yet been run '
+    + 'end to end on a real board: no project has produced a margin from a real solve, real '
+    + 'cables and a real driver together. Individually the pieces are checked — the far-field '
+    + 'transform against a dipole to 0.02 dB, the combination and the budget against shared '
+    + 'fixtures — but the assembly is not. Read the ranking and the contributions before the '
+    + 'absolute margin.',
+
+  farField:
+    'The transform is proven on a fixture — a half-wave dipole comes back at 2.13 dBi against '
+    + 'a textbook 2.15, and the ground reflection matches image theory to 0.08 dB — but it has '
+    + 'never been run on a real board. The box placement and the 4:1 face sub-sampling are '
+    + 'untested outside that fixture. Separately, long solves are currently unstable at every '
+    + 'mesh preset measured, and a far-field run is always a long one because the band starts '
+    + 'at 30 MHz.',
+
+  cableEmissions:
+    'The composition behind this — open-circuit voltage at the connector divided by the ' +
+    'cable\'s antenna impedance — has been checked against a fully coupled simulation on a ' +
+    'synthetic board, where it agreed to 1.2 dB typical and 2.2 dB worst. It has not yet been ' +
+    'checked that way on a real board: those runs are numerically unstable at the record ' +
+    'length the 30 MHz floor needs, and that is unresolved. Treat the level as indicative and ' +
+    'the ranking between layouts as the useful part. The uncertainty budget carries a ' +
+    'deliberately conservative 4.5 dB for this term until real-board residuals replace it.',
+}

@@ -1,0 +1,117 @@
+{
+  "format": "emi-limits",
+  "version": 1,
+  "_comment": "Canonical limit tables. Read by the Python worker and imported directly by the webapp, so there is one copy and it cannot drift. Every value carries the clause it comes from; none is typed from memory (§15.2).",
+  "standards": [
+    {
+      "id": "fcc-15b-radiated-3m",
+      "name": "FCC Part 15 Class B, radiated",
+      "clause": "47 CFR 15.109(a)",
+      "scan": "radiated",
+      "class": "B",
+      "distance_m": 3,
+      "detector": "quasi-peak",
+      "unit": "dBuV/m",
+      "verified": "standard text",
+      "source": "law.cornell.edu/cfr/text/47/15.109, read 11 Sep 2026 (as amended 80 FR 33447, 12 Jun 2015)",
+      "segments": [
+        {"f_lo_hz": 30000000.0, "f_hi_hz": 88000000.0, "level_db": 40.0, "microvolts_per_m": 100.0},
+        {"f_lo_hz": 88000000.0, "f_hi_hz": 216000000.0, "level_db": 43.5, "microvolts_per_m": 150.0},
+        {"f_lo_hz": 216000000.0, "f_hi_hz": 960000000.0, "level_db": 46.0, "microvolts_per_m": 200.0},
+        {"f_lo_hz": 960000000.0, "f_hi_hz": 40000000000.0, "level_db": 54.0, "microvolts_per_m": 500.0}
+      ]
+    },
+    {
+      "id": "fcc-15a-radiated-10m",
+      "name": "FCC Part 15 Class A, radiated",
+      "clause": "47 CFR 15.109(b)",
+      "scan": "radiated",
+      "class": "A",
+      "distance_m": 10,
+      "detector": "quasi-peak",
+      "unit": "dBuV/m",
+      "verified": "standard text",
+      "source": "law.cornell.edu/cfr/text/47/15.109, read 11 Sep 2026",
+      "segments": [
+        {"f_lo_hz": 30000000.0, "f_hi_hz": 88000000.0, "level_db": 39.1, "microvolts_per_m": 90.0},
+        {"f_lo_hz": 88000000.0, "f_hi_hz": 216000000.0, "level_db": 43.5, "microvolts_per_m": 150.0},
+        {"f_lo_hz": 216000000.0, "f_hi_hz": 960000000.0, "level_db": 46.4, "microvolts_per_m": 210.0},
+        {"f_lo_hz": 960000000.0, "f_hi_hz": 40000000000.0, "level_db": 49.5, "microvolts_per_m": 300.0}
+      ]
+    },
+    {
+      "id": "fcc-15b-conducted-qp",
+      "name": "FCC Part 15 Class B, conducted, quasi-peak",
+      "clause": "47 CFR 15.107(a)",
+      "scan": "conducted",
+      "class": "B",
+      "detector": "quasi-peak",
+      "unit": "dBuV",
+      "verified": "standard text",
+      "source": "law.cornell.edu/cfr/text/47/15.107, read 11 Sep 2026",
+      "segments": [
+        {"f_lo_hz": 150000.0, "f_hi_hz": 500000.0, "level_db": 66.0, "level_db_hi": 56.0},
+        {"f_lo_hz": 500000.0, "f_hi_hz": 5000000.0, "level_db": 56.0},
+        {"f_lo_hz": 5000000.0, "f_hi_hz": 30000000.0, "level_db": 60.0}
+      ]
+    },
+    {
+      "id": "fcc-15b-conducted-avg",
+      "name": "FCC Part 15 Class B, conducted, average",
+      "clause": "47 CFR 15.107(a)",
+      "scan": "conducted",
+      "class": "B",
+      "detector": "average",
+      "unit": "dBuV",
+      "verified": "standard text",
+      "source": "law.cornell.edu/cfr/text/47/15.107, read 11 Sep 2026",
+      "segments": [
+        {"f_lo_hz": 150000.0, "f_hi_hz": 500000.0, "level_db": 56.0, "level_db_hi": 46.0},
+        {"f_lo_hz": 500000.0, "f_hi_hz": 5000000.0, "level_db": 46.0},
+        {"f_lo_hz": 5000000.0, "f_hi_hz": 30000000.0, "level_db": 50.0}
+      ]
+    },
+    {
+      "id": "fcc-15a-conducted-qp",
+      "name": "FCC Part 15 Class A, conducted, quasi-peak",
+      "clause": "47 CFR 15.107(b)",
+      "scan": "conducted",
+      "class": "A",
+      "detector": "quasi-peak",
+      "unit": "dBuV",
+      "verified": "standard text",
+      "source": "law.cornell.edu/cfr/text/47/15.107, read 11 Sep 2026",
+      "segments": [
+        {"f_lo_hz": 150000.0, "f_hi_hz": 500000.0, "level_db": 79.0},
+        {"f_lo_hz": 500000.0, "f_hi_hz": 30000000.0, "level_db": 73.0}
+      ]
+    },
+    {
+      "id": "fcc-15a-conducted-avg",
+      "name": "FCC Part 15 Class A, conducted, average",
+      "clause": "47 CFR 15.107(b)",
+      "scan": "conducted",
+      "class": "A",
+      "detector": "average",
+      "unit": "dBuV",
+      "verified": "standard text",
+      "source": "law.cornell.edu/cfr/text/47/15.107, read 11 Sep 2026",
+      "segments": [
+        {"f_lo_hz": 150000.0, "f_hi_hz": 500000.0, "level_db": 66.0},
+        {"f_lo_hz": 500000.0, "f_hi_hz": 30000000.0, "level_db": 60.0}
+      ]
+    }
+  ],
+  "scan_range": {
+    "clause": "47 CFR 15.33(b)",
+    "source": "law.cornell.edu/cfr/text/47/15.33, read 11 Sep 2026",
+    "_comment": "Upper frequency of the radiated measurement, chosen by the highest frequency generated or used in the device.",
+    "rules": [
+      {"highest_below_hz": 1705000.0, "scan_to_hz": 30000000.0},
+      {"highest_below_hz": 108000000.0, "scan_to_hz": 1000000000.0},
+      {"highest_below_hz": 500000000.0, "scan_to_hz": 2000000000.0},
+      {"highest_below_hz": 1000000000.0, "scan_to_hz": 5000000000.0}
+    ],
+    "above": {"harmonic": 5, "cap_hz": 40000000000.0}
+  }
+}

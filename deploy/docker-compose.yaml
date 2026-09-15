@@ -1,0 +1,107 @@
+# Postgres store integration stack for the EMI Analyzer.
+#
+# The emi package ships two kinds of storage: SQLite plus local files, which the desktop app
+# uses, and Postgres plus S3-compatible object storage with presigned URLs. This stack runs the
+# second kind for real -- Postgres with its constraints, MinIO with real presigned URLs, and a
+# worker reaching both over a network -- so it can be tested end to end. There are no accounts:
+# every request is a signed-out visitor with a private space (see cmd/emi-server/userauth.go).
+#
+# Presigned URL hosts
+# -------------------
+# Presigned URLs sign the path and query, never the Host header, so the origin can be
+# rewritten after signing. By default we do not rewrite: URLs point at http://minio:9000,
+# which is correct for the worker and for the smoke test, both of which run inside this
+# network. When a browser on the host needs to fetch results from a browser on the host, set
+# S3_PUBLIC_URL=http://localhost:9000 on the server and run the worker with
+# network_mode: host so both sides agree.
+
+name: emi-analyzer
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: emi
+      POSTGRES_PASSWORD: emi
+      POSTGRES_DB: emi
+    ports:
+      - "5433:5432"      # 5433 on the host, to stay clear of a local postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U emi -d emi"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"      # console: http://localhost:9001 (minioadmin / minioadmin)
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - miniodata:/data
+
+  server:
+    build:
+      context: ../server
+    environment:
+      ADDR: ":8090"
+      DATABASE_URL: postgres://emi:emi@postgres:5432/emi?sslmode=disable
+      S3_ENDPOINT: http://minio:9000
+      S3_BUCKET: emi
+      S3_ACCESS_KEY_ID: minioadmin
+      S3_SECRET_ACCESS_KEY: minioadmin
+      S3_PUBLIC_URL: ${S3_PUBLIC_URL:-}
+      # Comma-separated experimental features, e.g. full-wave. Off unless set.
+      EMI_EXPERIMENTAL: ${EMI_EXPERIMENTAL:-}
+      EMI_PEPPER: dev-pepper-not-for-production-use-0123456789
+      EMI_TOKEN_SECRET: dev-token-secret-not-for-production-0123456789
+    ports:
+      - "8090:8090"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: ../worker
+      args:
+        OPENEMS_SOURCE: ${OPENEMS_SOURCE:-apt}
+    environment:
+      EMBEDDEDCI_URL: http://server:8090
+      # Written to deploy/.env by `make key`. Left empty here rather than marked required,
+      # because compose interpolates every service even when you only start postgres --
+      # which would make issuing the key impossible. The worker fails with a clear message
+      # of its own if this is empty.
+      EMBEDDEDCI_API_KEY: ${EMI_WORKER_KEY:-}
+      EMI_WORKER_NAME: compose-worker
+      EMI_POLL_INTERVAL: "10"
+      EMI_MAX_CONCURRENT: "2"
+      EMI_LOG_LEVEL: ${EMI_LOG_LEVEL:-INFO}
+    depends_on:
+      server:
+        condition: service_started
+    # A solve is memory-bandwidth bound and will happily consume the whole machine.
+    # Capping it here also exercises the cgroup detection in config.py, which is what
+    # stops the worker advertising the host's RAM instead of its own limit.
+    deploy:
+      resources:
+        limits:
+          cpus: "4"
+          memory: 4g
+
+volumes:
+  pgdata:
+  miniodata:
