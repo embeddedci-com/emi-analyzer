@@ -1,7 +1,15 @@
 # Builds the desktop app for every platform and attaches the installers to a draft release.
 #
-# Triggered by a version tag. The version is taken from the tag (v1.2.3 -> 1.2.3) and stamped
-# into both halves: the Go sidecar, where it selects the worker image tag, and the Tauri bundle.
+#   push tag vX.Y.Z             build X.Y.Z and attach everything to a draft release for the tag
+#   run manually, tag given     the same, for a tag that already exists (e.g. to retry a release)
+#   run manually, no tag        a test build: installers are kept as workflow artifacts only
+#
+# The version (v1.2.3 -> 1.2.3) is stamped into both halves: the Go sidecar, where it selects
+# the worker image tag, and the Tauri bundle.
+#
+# The draft release is created once, before the platform jobs start, and they upload into it by
+# id. Letting each of the four jobs look the release up by tag creates four drafts: GitHub does
+# not return a draft release when it is asked for a tag.
 #
 # Installers are not code-signed. See README.md for what that means on each platform.
 name: release
@@ -11,15 +19,63 @@ on:
     tags: ["v*"]
   workflow_dispatch:
     inputs:
+      tag:
+        description: "Existing tag to build and release (e.g. v0.1.0). Leave empty for a test build."
+        required: false
       version:
-        description: "Version to build (no v prefix), for a test build without a tag"
-        required: true
+        description: "Version for a test build without a tag (no v prefix). Ignored when a tag is given."
+        required: false
 
 permissions:
   contents: write
 
 jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.v.outputs.tag }}
+      version: ${{ steps.v.outputs.version }}
+      release_id: ${{ steps.release.outputs.id }}
+    steps:
+      - name: Tag and version
+        id: v
+        run: |
+          tag="${{ inputs.tag }}"
+          if [ "${{ github.ref_type }}" = "tag" ]; then tag="${GITHUB_REF_NAME}"; fi
+          if [ -n "$tag" ]; then
+            version="${tag#v}"
+          else
+            version="${{ inputs.version }}"
+            [ -n "$version" ] || version="0.0.0-dev.${GITHUB_RUN_NUMBER}"
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=${tag:-<none, test build>} version=$version"
+
+      - name: Draft release
+        id: release
+        if: steps.v.outputs.tag != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ steps.v.outputs.tag }}
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          id=$(gh api "repos/$GH_REPO/releases" --paginate \
+                 --jq ".[] | select(.tag_name == \"$TAG\") | .id" | head -n1)
+          if [ -z "$id" ]; then
+            notes="Install instructions: https://github.com/$GH_REPO#readme
+
+          This release starts the worker image \`ghcr.io/${{ github.repository_owner }}/emi-worker:$VERSION\`."
+            id=$(gh api "repos/$GH_REPO/releases" -X POST \
+                   -f tag_name="$TAG" -f name="EMI Analyzer $VERSION" -f body="$notes" \
+                   -F draft=true -F prerelease=false --jq .id)
+          fi
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+          echo "release id $id for $TAG"
+
   desktop:
+    needs: prepare
     strategy:
       fail-fast: false
       matrix:
@@ -33,15 +89,11 @@ jobs:
     defaults:
       run:
         shell: bash
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+      RELEASE_ID: ${{ needs.prepare.outputs.release_id }}
     steps:
       - uses: actions/checkout@v4
-
-      - name: Version
-        id: version
-        run: |
-          v="${{ inputs.version }}"
-          [ -n "$v" ] || v="${GITHUB_REF_NAME#v}"
-          echo "version=$v" >> "$GITHUB_OUTPUT"
 
       - uses: actions/setup-go@v5
         with:
@@ -83,31 +135,50 @@ jobs:
         run: |
           mkdir -p desktop/src-tauri/binaries
           cd server && go build -trimpath \
-            -ldflags "-s -w -X main.version=${{ steps.version.outputs.version }}" \
+            -ldflags "-s -w -X main.version=${VERSION}" \
             -o ../desktop/src-tauri/binaries/emi-local-${{ matrix.target }}${{ matrix.ext }} ./cmd/emi-local
 
       - name: Install the Tauri CLI
         run: cd desktop && npm ci
 
       - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           projectPath: desktop
           tauriScript: npx tauri
-          args: --target ${{ matrix.target }} --config '{"version":"${{ steps.version.outputs.version }}"}'
-          tagName: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
-          releaseName: EMI Analyzer ${{ steps.version.outputs.version }}
-          releaseBody: |
-            Install instructions: see the README.
+          args: --target ${{ matrix.target }} --config '{"version":"${{ needs.prepare.outputs.version }}"}'
+          # Empty for a test build, which then uploads nothing.
+          releaseId: ${{ needs.prepare.outputs.release_id }}
 
-            This release starts the worker image `ghcr.io/${{ github.repository_owner }}/emi-worker:${{ steps.version.outputs.version }}`.
-          releaseDraft: true
-          prerelease: false
+      - name: Standalone emi-local binary
+        id: sidecar
+        run: |
+          f=emi-local-${VERSION}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
+          cp desktop/src-tauri/binaries/emi-local-${{ matrix.target }}${{ matrix.ext }} "$f"
+          echo "file=$f" >> "$GITHUB_OUTPUT"
 
-      - name: Keep the sidecar as a standalone download
-        if: github.ref_type == 'tag'
+      - name: Attach it to the release
+        if: env.RELEASE_ID != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FILE: ${{ steps.sidecar.outputs.file }}
         run: |
-          f=emi-local-${{ steps.version.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
-          cp desktop/src-tauri/binaries/emi-local-${{ matrix.target }}${{ matrix.ext }} "$f"
-          gh release upload "$GITHUB_REF_NAME" "$f" --clobber
+          gh api -X POST -H "Content-Type: application/octet-stream" \
+            "https://uploads.github.com/repos/${{ github.repository }}/releases/${RELEASE_ID}/assets?name=${FILE}" \
+            --input "$FILE" --jq .browser_download_url
+
+      - name: Keep a test build as workflow artifacts
+        if: env.RELEASE_ID == ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: emi-analyzer-${{ matrix.target }}
+          path: |
+            ${{ steps.sidecar.outputs.file }}
+            desktop/src-tauri/target/${{ matrix.target }}/release/bundle/**/*.dmg
+            desktop/src-tauri/target/${{ matrix.target }}/release/bundle/**/*.msi
+            desktop/src-tauri/target/${{ matrix.target }}/release/bundle/**/*-setup.exe
+            desktop/src-tauri/target/${{ matrix.target }}/release/bundle/**/*.deb
+            desktop/src-tauri/target/${{ matrix.target }}/release/bundle/**/*.AppImage
+            desktop/src-tauri/target/${{ matrix.target }}/release/bundle/**/*.rpm
+          if-no-files-found: warn

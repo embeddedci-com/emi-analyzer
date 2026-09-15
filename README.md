@@ -138,6 +138,7 @@ download the file for your computer:
 | Mac with an Intel processor | `EMI.Analyzer_<version>_x64.dmg` |
 | Windows | `EMI.Analyzer_<version>_x64-setup.exe` (or the `.msi`) |
 | Ubuntu / Debian | `EMI.Analyzer_<version>_amd64.deb` |
+| Fedora / RHEL | `EMI.Analyzer-<version>-1.x86_64.rpm` |
 | Other Linux | `EMI.Analyzer_<version>_amd64.AppImage` |
 
 The installers are **not code-signed** yet, so your operating system warns you the first time you
@@ -169,6 +170,14 @@ open the app. That is expected; here is how to get past it.
 
 ```bash
 sudo apt install ./EMI.Analyzer_*_amd64.deb
+```
+
+Start **EMI Analyzer** from your applications menu.
+
+### Fedora / RHEL (`.rpm`)
+
+```bash
+sudo dnf install ./EMI.Analyzer-*-1.x86_64.rpm
 ```
 
 Start **EMI Analyzer** from your applications menu.
