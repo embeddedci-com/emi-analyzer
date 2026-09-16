@@ -321,7 +321,7 @@ export function EmiAnalyzerPage({ api, deployment = 'hosted' }: EmiAnalyzerPageP
                   w={300}
                   withArrow
                   events={{ hover: true, focus: true, touch: true }}
-                  label="Experimental, and turned off on this server. Long openEMS solves are not yet numerically stable, so they are not offered until that is fixed. Everything else on this page works without them."
+                  label="Experimental, and turned off on this server. It runs, but nothing it produces has been checked against a real board yet, so it is not offered by default. Everything else on this page works without it."
                 >
                   <Badge
                     component="span"

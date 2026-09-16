@@ -46,13 +46,13 @@ const LIMITATIONS: Limitation[] = [
     what: 'Full-wave solving is experimental and off by default',
     kind: 'method',
     why:
-      'Long openEMS solves are not yet numerically stable: every run measured over a long ' +
-      'record has diverged, and the mesher does not yet enforce its own grading limit. The ' +
-      'worker detects a diverged run and refuses its numbers rather than reporting noise, but ' +
-      'until the cause is fixed full-wave solving, and everything built on it (hotspot maps, ' +
-      'the far field, cable emissions and the compliance estimate), is switched off unless a ' +
-      'server enables it with EMI_EXPERIMENTAL=full-wave. The geometric checks, the ESD ' +
-      'simulation and the cable budget do not use it.',
+      'Full-wave solving works — a board solves end to end and the field maps come back — but ' +
+      'none of it has been checked against a real board, and no run has been made at the ' +
+      'record length a radiated result needs (30 MHz means 100 ns of simulated time, millions ' +
+      'of timesteps). Until that is done, full-wave solving and everything built on it ' +
+      '(hotspot maps, the far field, cable emissions and the compliance estimate) is switched ' +
+      'off unless a server enables it with EMI_EXPERIMENTAL=full-wave. The geometric checks, ' +
+      'the ESD simulation and the cable budget do not use it.',
   },
   {
     what: 'Only comparisons between board versions are reliable',

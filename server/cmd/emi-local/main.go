@@ -73,7 +73,7 @@ func main() {
 		workerURL   = flag.String("worker-url", envOr("EMI_LOCAL_WORKER_URL", ""), "URL the worker container dials to reach this server (default: detected from the Docker engine)")
 		concurrent  = flag.Int("worker-concurrency", 1, "runs the worker takes at once; a solve is memory-bound, so more is rarely faster")
 		webDir      = flag.String("webapp", envOr("EMI_LOCAL_WEBAPP", ""), "serve the webapp from this directory instead of the embedded copy (development)")
-		experiment  = flag.String("experimental", envOr("EMI_EXPERIMENTAL", ""), `comma-separated experimental features to enable: "full-wave" (openEMS solves, far field, cable emissions, compliance; long solves are not yet stable)`)
+		experiment  = flag.String("experimental", envOr("EMI_EXPERIMENTAL", ""), `comma-separated experimental features to enable: "full-wave" (openEMS solves, far field, cable emissions, compliance; unverified on real boards)`)
 		issueKey    = flag.Bool("issue-key", false, "print a key for a worker you run yourself (with -worker=none), and exit")
 		showVersion = flag.Bool("version", false, "print the version and exit")
 	)
@@ -172,7 +172,7 @@ func run(logger *slog.Logger, o options) error {
 		return fmt.Errorf("unknown experimental feature %q (known: %s)", strings.Join(unknown, ","), emi.FeatureFullWave)
 	}
 	if features.FullWave {
-		logger.Warn("experimental full-wave solving is enabled: long solves are not yet numerically stable")
+		logger.Warn("experimental full-wave solving is enabled: it runs, but nothing it produces has been verified on a real board")
 	}
 
 	svc, err := emi.New(emi.Deps{

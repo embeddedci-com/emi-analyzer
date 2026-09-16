@@ -76,11 +76,20 @@ def _fill_gap(length: float, s_left: float, s_right: float,
     """Interior offsets within one gap, graded in from both ends.
 
     Cells grow geometrically from each end at ``ratio``, capped at ``max_res``, meeting
-    somewhere in the middle; the whole series is then scaled to fit the gap exactly.
+    somewhere in the middle; the series is then scaled to fit the gap exactly.
 
     Both halves matter. Growing from one end only leaves the far end abruptly meeting its
     neighbour, and stopping the series early to let the remainder be one final cell leaves
     a tail cell up to twice its neighbour — a worse discontinuity than the one being fixed.
+
+    **The direction of that final scaling is what decides whether the grading bound holds.**
+    A series that stops just short of the gap has to be stretched to fit, and stretching
+    multiplies the first cell too: measured, that put the first cell 1.5-2.7x its neighbour
+    where the bound is 1.4, which is most of why real boards came out with 2:1 and 4:1 jumps.
+    Taking one cell more than fits and shrinking instead keeps every cell at or below its
+    target. Shrinking is only allowed while the smallest cell stays at or above the neighbour
+    the series grew from, so this can never shorten the timestep; where it would, the old
+    stretched series is used and the gap is simply one the bound cannot be met in.
     """
     if length <= 0:
         return []
@@ -94,6 +103,8 @@ def _fill_gap(length: float, s_left: float, s_right: float,
     ls = min(s_left * ratio, max_res)
     rs = min(s_right * ratio, max_res)
     total = 0.0
+    under: list[float] | None = None
+    under_total = 0.0
 
     # Always extend whichever side currently has the smaller next cell, so the two series
     # meet where their sizes match rather than at an arbitrary midpoint.
@@ -101,6 +112,14 @@ def _fill_gap(length: float, s_left: float, s_right: float,
         take_left = ls <= rs
         nxt = ls if take_left else rs
         if total + nxt > length:
+            # Keep the series that fits, then take one cell more than fits as well, so the
+            # caller can choose between stretching the first and shrinking the second.
+            under, under_total = left + right[::-1], total
+            if take_left:
+                left.append(ls)
+            else:
+                right.append(rs)
+            total += nxt
             break
         total += nxt
         if take_left:
@@ -110,8 +129,20 @@ def _fill_gap(length: float, s_left: float, s_right: float,
             right.append(rs)
             rs = min(rs * ratio, max_res)
 
-    sizes = left + right[::-1]
-    if len(sizes) < 2:
+    over, over_total = left + right[::-1], total
+    if under is None:  # the series happened to fit exactly
+        under, under_total = over, over_total
+
+    # Shrinking is preferred, and only rejected when it would take a cell below the neighbour
+    # it grew from -- which is the one thing that would cost timesteps for the whole run.
+    smallest_neighbour = min(s_left, s_right)
+    sizes, total = under, under_total
+    if len(over) >= 2 and over_total > 0:
+        scale = length / over_total
+        if min(over) * scale >= smallest_neighbour - 1e-12:
+            sizes, total = over, over_total
+
+    if len(sizes) < 2 or total <= 0:
         return []
 
     scale = length / total
@@ -125,10 +156,21 @@ def _fill_gap(length: float, s_left: float, s_right: float,
 
 def _smooth_ratio(lines: np.ndarray, ratio: float, min_res: float,
                   max_passes: int = 12) -> np.ndarray:
-    """Catch any remaining cell-size jump, e.g. where PML padding meets the mesh.
+    """Grade every cell-size jump left over, wherever it is.
 
-    The gap filling above already grades each span, so this is a seam fixer rather than the
-    main mechanism, and it converges in a couple of passes.
+    The gap filling above grades the span between two required lines; this fixes what is left
+    where those spans meet each other, and where the PML padding meets the mesh.
+
+    **Both bounds here are local, not min_res, and that is the whole point.** Copper puts
+    required lines closer together than min_res -- a pad edge 40 um from a trace edge when
+    min_res is 600 um -- and the two rules that used to be written in terms of min_res both
+    misfired exactly there: a jump next to a cell smaller than 2 * min_res was left alone, and
+    the merge that follows an insert deleted the new lines again because they were closer
+    together than a quarter of min_res. Measured on the fixture board, that left ratios of
+    2.0-4.5 at every preset against a stated bound of 1.4.
+
+    Nothing here can shorten the timestep: _fill_gap grows from the smaller neighbour, so the
+    cells it inserts are never smaller than a cell the mesh already had.
     """
     lines = np.asarray(lines, dtype=np.float64)
     for _ in range(max_passes):
@@ -142,11 +184,11 @@ def _smooth_ratio(lines: np.ndarray, ratio: float, min_res: float,
             # Grade from the *small* neighbour on both sides. Passing the large cell as
             # its own reference makes _fill_gap decide the gap is already fine and return
             # nothing, which is how a 200:1 jump survived at the PML seam.
-            if b > a * ratio and b >= 2 * min_res:
+            if b > a * ratio:
                 inserts.extend(
                     lines[i + 1] + off for off in _fill_gap(b, a, a, b, ratio)
                 )
-            elif a > b * ratio and a >= 2 * min_res:
+            elif a > b * ratio:
                 inserts.extend(
                     lines[i] + off for off in _fill_gap(a, b, b, a, ratio)
                 )
@@ -155,12 +197,26 @@ def _smooth_ratio(lines: np.ndarray, ratio: float, min_res: float,
             return lines
         merged = merge_close(
             np.concatenate([lines, np.asarray(inserts, dtype=np.float64)]),
-            min_res * MERGE_FRACTION,
+            _merge_tolerance(lines, min_res),
         )
         if len(merged) <= len(lines):
             return merged
         lines = merged
     return lines
+
+
+def _merge_tolerance(lines: np.ndarray, min_res: float) -> float:
+    """How close two lines may be before they are treated as one.
+
+    A fraction of min_res is right for the lines a caller asks for, and wrong for the ones
+    grading produces: next to copper the cells are already far below min_res, so that
+    tolerance swallows the very lines that were inserted to grade the jump. Taking the
+    smallest existing cell into account keeps the tolerance below anything the mesh is
+    already resolving.
+    """
+    sizes = np.diff(np.asarray(lines, dtype=np.float64))
+    smallest = float(sizes.min()) if len(sizes) else min_res
+    return min(min_res, smallest) * MERGE_FRACTION
 
 
 def _pad_pml(lines: np.ndarray, count: int = PML_LINES) -> np.ndarray:
@@ -237,7 +293,9 @@ def build_axis(
         # sitting right where the absorbing boundary begins, which is the worst place for a
         # numerical reflection.
         lines = _smooth_ratio(_pad_pml(lines), ratio, min_res)
-    return merge_close(lines, min_res * MERGE_FRACTION)
+    # Same tolerance rule as the smoothing pass: a flat fraction of min_res would undo the
+    # grading it just did wherever copper forced cells below min_res.
+    return merge_close(lines, _merge_tolerance(lines, min_res))
 
 
 @dataclass
@@ -279,6 +337,21 @@ class Mesh:
     def max_cell_mm(self) -> float:
         return float(max(np.diff(self.x).max(), np.diff(self.y).max(), np.diff(self.z).max()))
 
+    @property
+    def max_ratio(self) -> float:
+        """Largest step in cell size between neighbouring cells, over all three axes.
+
+        Reported because a grid that violates its own grading bound is the leading suspect for
+        a diverging run, and until this was measured nobody could tell that it did.
+        """
+        worst = 1.0
+        for axis in (self.x, self.y, self.z):
+            d = np.diff(axis)
+            if len(d) < 2:
+                continue
+            worst = max(worst, float(np.maximum(d[1:] / d[:-1], d[:-1] / d[1:]).max()))
+        return worst
+
     def timestep_seconds(self) -> float:
         """Courant limit for a non-uniform grid, from the smallest cell in any axis."""
         d = self.min_cell_mm * 1e-3
@@ -290,6 +363,7 @@ class Mesh:
             "lines": [len(self.x), len(self.y), len(self.z)],
             "min_cell_um": round(self.min_cell_mm * 1000, 3),
             "max_cell_um": round(self.max_cell_mm * 1000, 1),
+            "max_cell_ratio": round(self.max_ratio, 3),
             "dt_seconds": self.timestep_seconds(),
         }
 

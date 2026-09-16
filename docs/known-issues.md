@@ -19,7 +19,7 @@ solver or a measurement — and passed. The gap between the two is most of this 
 | ESD transient simulation (ngspice) | ✅ | ⚠️ source, line and clamp models unit-checked; no bench comparison | on |
 | Cable budget, Tier A (`cable` run, nec2c) | ✅ | ✅ | on |
 | Limits library and Limits page | ✅ | ⚠️ FCC only; CISPR 32 from secondary sources | on |
-| **Full-wave solve (openEMS)** | ✅ | ❌ **long solves diverge — §2** | **off** (`full-wave`) |
+| **Full-wave solve (openEMS)** | ✅ | ⚠️ **solves end to end on the fixture board; nothing verified at radiated record length — §2** | **off** (`full-wave`) |
 | Drivers (re-weighting a solve) | ✅ | ⚠️ partly | off, with full-wave |
 | Components (MLCC models in a solve) | ✅ | ⚠️ partly | off, with full-wave |
 | Board far field (NF2FF) | ✅ | ⚠️ on a dipole fixture only | off, with full-wave |
@@ -29,7 +29,8 @@ solver or a measurement — and passed. The gap between the two is most of this 
 | Report export | ❌ | ❌ | — |
 
 Everything marked **off** is behind the `full-wave` experimental feature. It is refused by the
-server, not merely hidden. To try it anyway:
+server, not merely hidden. It is off because none of it has been verified on a real board, not
+because it is known to be broken — see §2. To try it:
 
 ```bash
 emi-local -experimental full-wave
@@ -39,35 +40,54 @@ or set `EMI_EXPERIMENTAL=full-wave` in the environment the desktop app is starte
 
 ---
 
-## 2. Long full-wave solves diverge
+## 2. Full-wave solving: what was wrong, and what is still unknown
 
-This is why full-wave solving is off by default.
+Every long FDTD run was refused with "the simulation went unstable". That is what full-wave
+solving is gated on, and it turned out to be two separate defects, one of which was the check
+itself.
 
-Every FDTD run measured over a long record (150,000 timesteps or more) has diverged: the energy
-in the simulation falls as the excitation passes, then turns around and grows without bound.
-It happened with and without a cable port, at every mesh preset tried, on compact regions as
-well as large ones. A short run is not evidence of a stable long one: configurations that were
-still stable at 25,000 steps blew up later.
+**The refusals were a false positive.** The worker watches the energy openEMS reports and fails
+a run whose energy climbs back after the excitation has passed. It decided the excitation had
+passed at the first sample lower than the one before it. Measured on a real run, the energy
+oscillates 3-5 dB the whole way up the excitation ramp: it dips at the sixth sample while still
+seven orders of magnitude below the peak. The floor was therefore set at 1.07e-19, and the
+legitimate climb to the 1.14e-13 peak was reported as a divergence "by a factor of 1.07e6" --
+the exact figure users were shown, on every long run, whatever the mesh. The excitation now
+counts as passed only once the energy has fallen 20 dB below its own peak, which is far more
+than the ripple and far less than the 50 dB decay a finished run ends with.
 
-**What the worker does about it.** It watches the energy and, when it climbs back above its own
-low point by more than a fixed factor, fails the run with "the simulation went unstable" instead
-of reporting its numbers. So a diverged solve fails; it does not return noise. But it can take
-many minutes to get there.
+With that corrected, the fixture board solves end to end: openEMS stops on its own
+end-criterion after 84,987 of a possible 358,695 timesteps, converged to -41.1 dB, and the
+field maps come back through the API. A run of this shape used to fail at about step 79,000.
 
-**Why it matters beyond one run.** A far-field or radiated-compliance run has to cover 30 MHz,
-and resolving 30 MHz needs `3 / f_min` = 100 ns of simulated time whatever the board is. Those
-runs are always long, so they are the ones this affects most.
+**The mesher really did violate its own grading bound**, which is what the divergence was
+attributed to. Its stated maximum step between neighbouring cells is 1.4; on a real board it
+produced 2.0, 2.6 and 4.5 at the three presets. Three rules were at fault: two were written in
+terms of the preset's minimum cell size, and copper puts grid lines far closer together than
+any preset, so both misfired where the mesh is finest; the third stretched a graded series to
+fit its gap, inflating the first cell by up to 2.7x. The same board now grades to 1.73, 1.56
+and 1.46. What remains is geometric: where two copper edges sit closer together than the cell
+beside them, closing the step would need a cell smaller than the mesh's smallest, which would
+cost timesteps for the whole run. Every mesh now reports `max_cell_ratio` in its summary.
 
-**What is known.**
+Grading properly costs cells: the fixture's mesh grew 35-50 % at the same presets, and the
+cost estimator's per-preset fill factors were calibrated against the old mesher, so they now
+under-predict by about that much. Recalibrating is quick --
+`worker/scripts/measure_fill_factor.py` with `EMI_TEST_BOARDS` -- and has not been done. The
+worker recomputes the cost authoritatively before it solves, so an underestimate delays a
+refusal rather than hiding it.
 
-- It is not caused by the cable's grid extension: a region with no cable diverges too.
-- It is not copper layers merging onto one grid plane.
-- **The leading suspect** is mesh grading: the mesher's stated maximum ratio between
-  neighbouring cells is 1.4, and every preset violates it, by as much as 5× next to fine copper
-  features. This has not yet been confirmed as the cause.
+**What is still unknown, and why the feature stays off by default.** One board, one region, one
+frequency, on a fixture designed to be small. None of this has been run at the record length a
+radiated result needs: 30 MHz means 100 ns of simulated time whatever the board is, which is
+millions of timesteps, and no run of that length has been measured since the fix. Neither has
+the far field on a real board, nor cable emissions, nor a compliance estimate from real inputs
+-- the three gates below that were blocked by the refusals and are now worth re-running.
 
-**What would close it:** enforce the grading bound in the mesher, then show long runs stay
-stable at every preset on several real boards.
+**The detector's own limit**, stated because it is now the only thing standing between a bad
+mesh and a plausible-looking number: it judges a rise only after the energy has fallen 20 dB,
+so a grid that blew up before decaying at all would not be reported. Every divergence on
+record has the other shape.
 
 ---
 
@@ -80,7 +100,7 @@ stable at every preset on several real boards.
 | Closed form vs solver | ✅ |
 | Wire over ground resonates within 5 % of transmission-line theory | ✅ open and shorted |
 | A choke never raises common-mode current; a bond never lengthens the first resonance | ✅ |
-| **Tier B against a fully coupled simulation on three real boards, ±6 dB below resonance** | ❌ **blocked by §2** |
+| **Tier B against a fully coupled simulation on three real boards, ±6 dB below resonance** | ❌ was blocked by §2; unblocked and not yet run |
 | No diode package is mistaken for a connector | ✅ |
 | `nec2c` and a second antenna solver agree within 1 dB | ❌ there is no second solver |
 
@@ -127,7 +147,12 @@ capacitor.
 
 ## 4. Gaps in what is built
 
-- **Mesh grading is not enforced** (§2).
+- **Mesh grading is enforced as far as geometry allows** (§2). Where two copper edges sit
+  closer together than the cell beside them, the step between those two cells stays: closing it
+  would mean a cell smaller than the mesh's smallest, which costs timesteps everywhere.
+- **The cost estimator is calibrated against the old mesher** and now under-predicts (§2).
+- **No solve has been run at radiated record length** since the divergence check was fixed
+  (§2). That is the run the far-field and compliance paths need.
 - **The far field has never run on a real board.** Box placement, face sub-sampling and artifact
   size are untested outside the fixture.
 - **The compliance chain has never been given real inputs.** Nothing yet assembles a real solve's

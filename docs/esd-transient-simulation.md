@@ -28,7 +28,7 @@ are an estimate and the difference between two layouts is not.
 | Clamp ground path | `esd-protection` measures pad edge to the nearest ground via | yes as a length; needs converting to inductance |
 | Part electrical models | none — parts are *recognised*, never *characterised* | **no** — §4 |
 | Circuit simulator | none; the worker image has openEMS only | **no** — add ngspice (Debian bookworm ships 39.3, BSD-3-Clause) |
-| Run kinds | server accepts `ingest` and `solve` (`server/emi/types.go`); workers advertise `kinds` (`worker/emi_worker/config.py`) | needs a third kind (§6) |
+| Run kinds | server accepted `ingest` and `solve` when this was written (`server/emi/types.go`); workers advertise `kinds` (`worker/emi_worker/config.py`) | needed a third kind (§6); there are five now |
 
 ---
 

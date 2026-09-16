@@ -34,8 +34,8 @@ including the ingest-only one.
 
 **Why a solve is relative by default.** openEMS solves a linear structure, so a Gaussian
 excitation already contains the response to every source inside its band. Attaching a driver
-afterwards is arithmetic on the recorded port spectra, not another run (§8 of the old design;
-M0 measured the re-weighting exact to 0.01 dB). That is why drivers are chosen *after* a run
+afterwards is arithmetic on the recorded port spectra, not another run; the early
+measurements found the re-weighting exact to 0.01 dB. That is why drivers are chosen *after* a run
 and cable ports *before* one: a gap port changes the mesh, a driver does not.
 
 ---
@@ -88,7 +88,7 @@ against the global peak finds nothing, because a diverging run's largest energy 
 
 ---
 
-## 3. Components (§12 as built)
+## 3. Components
 
 `components/` matches footprints against a library, resolves a series R-L-C, and places it.
 
@@ -105,7 +105,7 @@ against the global peak finds nothing, because a diverging run's largest energy 
 
 ---
 
-## 4. Drivers (Part II as built)
+## 4. Drivers
 
 `drivers/` turns a declared or measured source into a spectrum, and `driverApply` re-weights a
 finished solve with it.
@@ -182,7 +182,7 @@ the domain. It exists to certify Tier B on fixtures, and that certification is i
 
 ---
 
-## 6. The board's far field (§16.2 as built)
+## 6. The board's far field
 
 `openems/nf2ff.py`. Six E and six H frequency-domain face dumps, then the shipped `nf2ff` CLI.
 
@@ -209,7 +209,7 @@ the domain. It exists to certify Tier B on fixtures, and that certification is i
 
 ---
 
-## 7. Compliance (§16, §17 as built)
+## 7. Compliance
 
 `compliance/` plus `stages/compliance.py`.
 

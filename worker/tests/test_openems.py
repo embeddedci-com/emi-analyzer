@@ -25,6 +25,7 @@ import pytest
 from emi_worker.kicad import parse, parse_board
 from emi_worker.kicad.normalize import _board_extent
 from emi_worker.openems import csx, mesh as meshmod
+from emi_worker.openems.run import DIVERGENCE_RATIO, divergence_ratio
 from emi_worker.openems.model import (
     BAND_FILL,
     ModelError,
@@ -79,6 +80,124 @@ def test_grading_is_bounded():
     # lands a little above the target. openEMS's own guidance is 1.5, so anything up to
     # that is fine; what matters is that there is no 2:1 jump.
     assert ratio.max() <= 1.5
+
+
+# One real solve of the fixture board, as openEMS printed it: 63 progress samples, from the
+# first timestep to the point where openEMS stopped on its own energy end-criterion at -41 dB.
+# Both halves matter to the check below -- the ramp oscillates by 3-5 dB while rising seven
+# orders of magnitude, and the decay is what a healthy run ends with.
+REAL_RUN_ENERGY = [
+    5.13e-22, 8.67e-22, 1.35e-20, 6.39e-20, 1.63e-19, 2.24e-19, 1.07e-19, 2.09e-19, 2.49e-18,
+    9.87e-18, 2.1e-17, 2.44e-17, 1.09e-17, 1.72e-17, 1.55e-16, 5.09e-16, 9.09e-16, 9.01e-16,
+    3.8e-16, 5.04e-16, 3.28e-15, 8.88e-15, 1.33e-14, 1.13e-14, 4.71e-15, 5.37e-15, 2.4e-14,
+    5.27e-14, 6.62e-14, 4.91e-14, 2.11e-14, 2.13e-14, 6.21e-14, 1.09e-13, 1.14e-13, 7.59e-14,
+    3.55e-14, 3.21e-14, 5.96e-14, 8.04e-14, 7.15e-14, 4.4e-14, 2.3e-14, 1.88e-14, 2.26e-14,
+    2.3e-14, 1.74e-14, 1.04e-14, 5.99e-15, 4.37e-15, 3.7e-15, 2.85e-15, 1.86e-15, 1.08e-15,
+    6.4e-16, 4.13e-16, 2.72e-16, 1.68e-16, 9.57e-17, 5.25e-17, 2.92e-17, 1.64e-17, 9.05e-18,
+]
+
+
+def test_a_healthy_run_is_not_called_unstable():
+    """The regression test for "long solves always diverge", which they did not.
+
+    The detector took the first sample lower than the one before it as the moment the
+    excitation had passed. On this run that is sample 6, still seven orders of magnitude below
+    the peak, so the floor was set at 1.07e-19 and the legitimate climb to 1.14e-13 was
+    reported as a divergence by a factor of 1.07e6 -- the exact number users were shown. Every
+    long solve was refused this way, and the refusal was read as a property of the mesher.
+
+    openEMS ran this one to completion and stopped on its own -50 dB end-criterion.
+    """
+    ratio = divergence_ratio(REAL_RUN_ENERGY)
+    assert ratio < DIVERGENCE_RATIO, f"a healthy run scored {ratio:.3g}"
+    # Nothing in a decaying run climbs anywhere near the threshold; if this creeps up, the
+    # margin is going, even while the assertion above still passes.
+    assert ratio < 10
+
+
+def test_a_diverging_run_is_still_caught():
+    """The case the check exists for: a grid that pumps energy after the excitation.
+
+    Shaped like the real thing -- the excitation passes, the energy falls, and then the grid
+    starts feeding it. The recorded failures climbed by 1e44 from there; a thousandfold is
+    enough to be sure.
+    """
+    decayed = REAL_RUN_ENERGY[:56]
+    blow_up = decayed + [decayed[-1] * (10 ** k) for k in range(1, 12)]
+    assert divergence_ratio(blow_up) >= DIVERGENCE_RATIO
+
+
+def test_divergence_is_judged_after_a_real_decay_not_a_ripple():
+    """A 3-5 dB dip during the ramp is the excitation, not the end of it."""
+    ramp = [1e-20 * (1.8 ** k) for k in range(30)]
+    ramp[10] *= 0.4  # a dip deeper than the real run's, still on the way up
+    assert divergence_ratio(ramp + [ramp[-1] * 10 ** (-d / 10) for d in range(0, 60, 2)]) < 10
+
+
+def test_grading_holds_on_a_real_board(board, transform):
+    """The bound has to hold on a routed board, not only on tidy synthetic input.
+
+    This is the regression test for the mesher's own defect. Copper puts required lines far
+    closer together than any preset, and two rules written in terms of ``min_res`` misfired
+    exactly there: jumps beside a sub-min_res cell were skipped, and inserted grading lines
+    were merged away again. On this fixture the mesh came out with ratios of 2.0, 2.6 and 4.5
+    at the three presets, against a stated bound of 1.4, and nothing reported it.
+
+    What is asserted is the bound plus the one exception geometry forces: where two copper
+    edges are closer together than the cell beside them, closing the jump would mean a cell
+    smaller than the smallest one already in the mesh, which would cost timesteps for the
+    whole run. Those are counted, not waived.
+    """
+    from emi_worker.openems.model import _copper_features, COPPER_MARGIN_MM
+
+    roi = (4.0, 24.0, 30.0, 38.0)
+    copper_x, copper_y = _copper_features(board, transform, roi, COPPER_MARGIN_MM)
+    copper_x, copper_y = sorted(set(copper_x)), sorted(set(copper_y))
+    layer_z = [0.0, float(board.thickness_mm)]
+
+    for dx, dy, dz in [(150, 150, 50), (600, 600, 200), (1200, 1200, 400)]:
+        spec = meshmod.MeshSpec(roi=roi, f_max=1e9, dx_um=dx, dy_um=dy, dz_um=dz)
+        mesh = meshmod.build_mesh(spec, copper_x, copper_y, layer_z)
+
+        preset = f"{dx}/{dz} um"
+        assert mesh.max_ratio <= 1.8, f"{preset}: worst cell-size step {mesh.max_ratio:.2f}"
+
+        for name in ("x", "y", "z"):
+            axis = getattr(mesh, name)
+            sizes = np.diff(axis)
+            ratios = np.maximum(sizes[1:] / sizes[:-1], sizes[:-1] / sizes[1:])
+            over = np.flatnonzero(ratios > meshmod.MAX_CELL_RATIO * 1.05)
+            # Every remaining step must be one that cannot be closed without a cell smaller
+            # than the mesh's own smallest.
+            for i in over:
+                small = min(sizes[i], sizes[i + 1])
+                assert max(sizes[i], sizes[i + 1]) / 2 < small, (
+                    f"{preset} {name}: a {ratios[i]:.2f} step at {axis[i + 1]:.3f} mm could "
+                    f"have been graded"
+                )
+            assert len(over) <= 6, f"{preset} {name}: {len(over)} ungraded steps"
+
+
+def test_grading_never_shrinks_the_smallest_cell():
+    """Grading must not cost timesteps.
+
+    dt comes from the smallest cell anywhere in the grid, so an inserted line that undercuts
+    the finest copper spacing would slow every step of a run that may be hours long. The
+    filler grows from its neighbour for exactly this reason.
+    """
+    required = [0.0, 0.05, 0.09, 6.0, 12.0]
+    finest = min(b - a for a, b in zip(required, required[1:]))
+    lines = meshmod.build_axis(required, min_res=0.6, max_res=4.0)
+    assert np.diff(lines).min() >= finest - 1e-9
+
+
+def test_the_summary_reports_the_grading_it_achieved():
+    """A run that diverges should be able to say whether its own mesh was graded."""
+    spec = meshmod.MeshSpec(roi=(0.0, 0.0, 10.0, 8.0), f_max=1e9, dx_um=200, dy_um=200, dz_um=100)
+    mesh = meshmod.build_mesh(spec, [1.0, 1.04, 5.0], [2.0, 2.05, 6.0], [0.0, 1.6])
+    summary = mesh.summary()
+    assert summary["max_cell_ratio"] == round(mesh.max_ratio, 3)
+    assert summary["max_cell_ratio"] <= 1.8
 
 
 def test_pml_padding_is_smoothed_too():

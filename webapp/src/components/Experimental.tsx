@@ -65,16 +65,16 @@ export const EXPERIMENTAL: Record<string, string> = {
     'The transform is proven on a fixture — a half-wave dipole comes back at 2.13 dBi against '
     + 'a textbook 2.15, and the ground reflection matches image theory to 0.08 dB — but it has '
     + 'never been run on a real board. The box placement and the 4:1 face sub-sampling are '
-    + 'untested outside that fixture. Separately, long solves are currently unstable at every '
-    + 'mesh preset measured, and a far-field run is always a long one because the band starts '
-    + 'at 30 MHz.',
+    + 'untested outside that fixture. A far-field run is also always a long one, because the '
+    + 'band starts at 30 MHz and that needs 100 ns of simulated time whatever the board is; no '
+    + 'run of that length has been measured.',
 
   cableEmissions:
     'The composition behind this — open-circuit voltage at the connector divided by the ' +
     'cable\'s antenna impedance — has been checked against a fully coupled simulation on a ' +
     'synthetic board, where it agreed to 1.2 dB typical and 2.2 dB worst. It has not yet been ' +
-    'checked that way on a real board: those runs are numerically unstable at the record ' +
-    'length the 30 MHz floor needs, and that is unresolved. Treat the level as indicative and ' +
+    'checked that way on a real board: those runs need the record length the 30 MHz floor ' +
+    'implies, and none has been measured. Treat the level as indicative and ' +
     'the ranking between layouts as the useful part. The uncertainty budget carries a ' +
     'deliberately conservative 4.5 dB for this term until real-board residuals replace it.',
 }

@@ -65,6 +65,12 @@ _SIGNIFICANT_WARNINGS = (
 #: has passed, and far beyond the sampling noise of a progress line printed every few seconds.
 DIVERGENCE_RATIO = 1e3
 
+#: How far the energy must fall below its own peak before a rise counts as divergence rather
+#: than as the excitation still arriving. The ripple measured on the way up is 3-5 dB; a real
+#: run ends 50 dB down, which is openEMS's own end criterion. 20 dB sits between the two with
+#: room to spare, and it is the number that stops a healthy ramp being read as a blow-up.
+DECAY_MARGIN_DB = 20.0
+
 
 @dataclass
 class RunProgress:
@@ -246,29 +252,50 @@ def _terminate(proc: subprocess.Popen) -> None:
 
 
 def divergence_ratio(energies: list[float]) -> float:
-    """How far the energy ever climbed back above a low point. 1.0 for a healthy run.
+    """How far the energy climbed back after the run had really started to decay.
 
-    Measured as the largest rise from a **running** minimum, counted only once the series has
-    started to fall. Both halves of that matter:
+    1.0 for a healthy run. A diverging FDTD grid pumps energy, so its stored energy turns
+    around and grows without bound; that is what this has to catch, and nothing else.
 
-    * counting from the first sample would call every run unstable, because the energy at the
-      start of a solve is many orders below the peak by construction — that rise is the
-      excitation arriving, which is the one thing that is supposed to grow;
-    * comparing against the *global* peak finds nothing, because a diverging run's largest
-      energy is its last one. An earlier version did exactly this and scored 1.0 on the case
-      it existed to catch.
+    **Deciding when the excitation has passed is the whole difficulty, and getting it wrong
+    was worse than not checking at all.** The first version took the first sample lower than
+    the one before it. Measured on a real run, the energy oscillates by 3-5 dB the whole way
+    up the excitation ramp -- it dips at the sixth sample of a rise that continues for another
+    seven orders of magnitude -- so the floor was set at 1.07e-19 while the run was still
+    ramping, and the legitimate climb to its 1.14e-13 peak was then reported as a divergence
+    by a factor of 1.07e6. Every long solve was refused this way, which is where "long solves
+    always diverge" came from.
+
+    So the excitation counts as passed only once the energy has fallen ``DECAY_MARGIN_DB``
+    below the highest value seen so far -- far more than the ripple on the way up, and far
+    less than the decay a healthy run finishes with. After that point the measure is the
+    largest rise above a running minimum, which is what a pumping grid does and a ringing
+    structure does not.
+
+    Comparing against the global peak instead would find nothing at all: a diverging run's
+    largest energy is its last one.
+
+    The limit of this: a grid that blew up before its energy had fallen that far would not be
+    reported. Every divergence on record has the same shape -- the excitation passes, the
+    energy decays, and only then does the grid start feeding it -- so the gate is where the
+    evidence says it should be, and openEMS's own end-criterion stops a healthy run 50 dB
+    down, which is well past it.
     """
     if len(energies) < 3:
         return 1.0
-    # Where the excitation has passed: the first sample lower than the one before it.
-    start = next((k for k in range(1, len(energies)) if energies[k] < energies[k - 1]), None)
-    if start is None:
-        return 1.0
 
-    floor = float("inf")
+    decay_factor = 10.0 ** (DECAY_MARGIN_DB / 10.0)
+    peak = 0.0
+    floor: float | None = None
     worst = 1.0
-    for e in energies[start:]:
+    for e in energies:
         if e <= 0:
+            continue
+        peak = max(peak, e)
+        if floor is None:
+            # Still rising, or not yet clearly past the excitation.
+            if e * decay_factor <= peak:
+                floor = e
             continue
         floor = min(floor, e)
         worst = max(worst, e / floor)

@@ -17,11 +17,12 @@ type Features struct {
 	// FullWave enables openEMS full-wave solves and everything built on them: hotspot maps, the
 	// far field, cable emissions and the compliance estimate.
 	//
-	// Off by default because long solves are not stable. Every FDTD run measured over a long
-	// record (>=150,000 timesteps) has diverged, at every mesh preset, and the mesher does not
-	// enforce its own grading bound -- see docs/known-issues.md. The worker detects divergence
-	// and refuses to report the numbers, so a diverged run fails rather than lies; but a user
-	// can wait many minutes to learn that, and a radiated compliance run is always a long one.
+	// Off by default because none of it is verified, not because it is known to be broken. It
+	// does solve end to end: the runs that used to be refused as unstable were a false positive
+	// in the divergence check, which read the ripple on the excitation ramp as a blow-up. What
+	// has not been done is a run at the record length a radiated result needs, or any check of
+	// the far field, cable emissions or a compliance estimate against a real board. See
+	// docs/known-issues.md.
 	FullWave bool `json:"full_wave"`
 }
 
@@ -57,7 +58,7 @@ func (f Features) allows(k RunKind) bool {
 // refusal is what a user is told when they ask for a gated run kind.
 func (f Features) refusal(k RunKind) string {
 	return `"` + string(k) + `" runs need full-wave solving, which is experimental and turned off ` +
-		`on this server: long solves are not yet numerically stable. It can be enabled with ` +
+		`on this server: it has not been verified on real boards yet. It can be enabled with ` +
 		`EMI_EXPERIMENTAL=` + FeatureFullWave + `.`
 }
 

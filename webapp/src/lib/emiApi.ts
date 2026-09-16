@@ -87,7 +87,7 @@ export interface Identity {
  * a gated run is refused, not just hidden -- so the UI reads this only to avoid offering it.
  *
  * full_wave: openEMS solves and everything built on them (hotspot maps, far field, cable
- * emissions, the compliance estimate). Off by default: long solves are not yet stable.
+ * emissions, the compliance estimate). Off by default: nothing about it is verified yet.
  */
 export interface Features {
   full_wave: boolean

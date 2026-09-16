@@ -16,8 +16,9 @@ Your boards and results stay on your computer. Nothing is uploaded anywhere.
 The results are for comparing versions of your own board. They are not a pre-compliance test —
 see the limitations page in the app, and [known issues](docs/known-issues.md).
 
-> **Full-wave simulation (openEMS) is experimental and turned off.** Long solves are not yet
-> numerically stable. See [Experimental features](#experimental-features).
+> **Full-wave simulation (openEMS) is experimental and turned off.** It solves end to end, but
+> nothing about it has been verified on a real board yet. See
+> [Experimental features](#experimental-features).
 
 ---
 
@@ -354,7 +355,7 @@ run them, not just that the buttons are hidden.
 
 | Name | What it enables | Why it is off |
 |---|---|---|
-| `full-wave` | openEMS full-wave simulation of a board region, hotspot maps, the far field, cable emissions and the compliance estimate — the Solve, Drivers, Components, Results and Compliance tabs | Long simulations are not yet numerically stable. The worker detects a run that diverges and refuses its numbers, but such a run can take many minutes to fail. See [known issues](docs/known-issues.md). |
+| `full-wave` | openEMS full-wave simulation of a board region, hotspot maps, the far field, cable emissions and the compliance estimate — the Solve, Drivers, Components, Results and Compliance tabs | It runs, and a test board solves end to end. What has not been done is verifying any of it on a real board, or at the record length a radiated result needs. Treat anything it produces as unchecked. See [known issues](docs/known-issues.md). |
 
 To try it anyway, set `EMI_EXPERIMENTAL=full-wave` where the app is started:
 
