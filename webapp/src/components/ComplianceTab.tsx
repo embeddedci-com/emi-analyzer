@@ -180,7 +180,8 @@ export function ComplianceTab({
         <Alert color="yellow" variant="light" title="No result yet">
           <Text size="xs">
             The estimate ran but produced nothing to read. That is a worker failure rather
-            than a missing input — the Runs list will say which.
+            than a missing input — open Runs, at the top of this page, to see what the run
+            reported.
           </Text>
         </Alert>
       )}

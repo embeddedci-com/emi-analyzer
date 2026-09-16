@@ -8,8 +8,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  ActionIcon, Alert, Badge, Box, Button, Group, Loader, Menu, Modal, Paper, Stack, Tabs, Text,
-  TextInput, Title, Tooltip,
+  ActionIcon, Alert, Badge, Box, Button, Group, Loader, Menu, Modal, Paper, SegmentedControl,
+  Stack, Tabs, Text, TextInput, Title, Tooltip,
 } from '@mantine/core'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router'
@@ -33,6 +33,8 @@ import type { FieldOverlayData } from '../lib/overlay'
 import { placePortOnAnchor, type PortAnchor, type PortSpec } from '../lib/portPlacement'
 import { EmiApi, TERMINAL_STATUSES, type Run } from '../lib/emiApi'
 import type { EmiDeployment } from '../routes'
+
+type SolveView = 'setup' | 'result' | 'drivers' | 'parts'
 
 export interface EmiProjectPageProps {
   api: EmiApi
@@ -59,6 +61,9 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
   const [selectedSolveId, setSelectedSolveId] = useState<string | null>(null)
   // The line to open in the ESD tab, when arriving there from a finding.
   const [esdNet, setEsdNet] = useState<string | null>(null)
+  // Which part of the full-wave workflow is showing: setting one up, its result, or the
+  // libraries that feed it.
+  const [solveView, setSolveView] = useState<SolveView>('setup')
   // The panel is the whole right-hand side; on a small screen the board needs the room back.
   const [panelOpen, setPanelOpen] = useState(true)
   const [renaming, setRenaming] = useState<string | null>(null)
@@ -227,7 +232,8 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
     },
     onSuccess: (run) => {
       setSelectedSolveId(run.id)
-      setTab('results')
+      setTab('fullwave')
+      setSolveView('result')
       setPollMs(1500)
       qc.invalidateQueries({ queryKey: ['emi', 'runs', projectId] })
     },
@@ -535,12 +541,13 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
           <Box style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
           <Tabs value={tab} onChange={setTab}>
             {/*
-              The tabs scroll rather than grow. Four of them fit this panel, but turning on
-              full-wave adds five more, and `grow` wrapped them onto a second row with the last
-              one clipped by the panel edge. Scrolling keeps one row at any width.
+              The tabs scroll rather than grow, and their padding is tighter than Mantine's
+              default. Four fit comfortably; full-wave adds two more, and `grow` used to wrap
+              them onto a second row with the last one clipped by the panel edge. One row that
+              scrolls is legible at any width.
             */}
             <Tabs.List style={{ flexWrap: 'nowrap', overflowX: 'auto', overflowY: 'hidden' }}>
-              <Tabs.Tab value="findings" px={10}>
+              <Tabs.Tab value="findings" px={6}>
                 <Group gap={6} wrap="nowrap">
                   <span>Findings</span>
                   {rules.data && rules.data.summary.critical > 0 && (
@@ -550,18 +557,11 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
                   )}
                 </Group>
               </Tabs.Tab>
-              {fullWave && <Tabs.Tab value="solve" px={10}>Solve</Tabs.Tab>}
-              {fullWave && <Tabs.Tab value="drivers" px={10}>Drivers</Tabs.Tab>}
-              {fullWave && <Tabs.Tab value="components" px={10}>Components</Tabs.Tab>}
-              <Tabs.Tab value="cables" px={10}>Cables</Tabs.Tab>
-              {fullWave && (
-                <Tabs.Tab value="results" px={8} disabled={solves.length === 0}>
-                  Results
-                </Tabs.Tab>
-              )}
-              {fullWave && <Tabs.Tab value="compliance" px={10}>Compliance</Tabs.Tab>}
-              <Tabs.Tab value="esd" px={10}>ESD</Tabs.Tab>
-              <Tabs.Tab value="board" px={10}>Board</Tabs.Tab>
+              {fullWave && <Tabs.Tab value="fullwave" px={6}>Full-wave</Tabs.Tab>}
+              <Tabs.Tab value="cables" px={6}>Cables</Tabs.Tab>
+              {fullWave && <Tabs.Tab value="compliance" px={6}>Compliance</Tabs.Tab>}
+              <Tabs.Tab value="esd" px={6}>ESD</Tabs.Tab>
+              <Tabs.Tab value="board" px={6}>Board</Tabs.Tab>
             </Tabs.List>
 
             <Tabs.Panel value="findings" p="sm">
@@ -581,48 +581,97 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
               )}
             </Tabs.Panel>
 
+            {/*
+              Setting a solve up, the two libraries that feed it and the result it produces are
+              one task, so they share a tab and a switch rather than four tabs competing with
+              the rest of the panel for width.
+            */}
             {fullWave && (
-            <Tabs.Panel value="solve" p="sm">
-              {doc ? (
-                <SolveSetup
-                  doc={doc}
-                  roi={roi}
-                  onRoiChange={setRoi}
-                  ports={ports}
-                  onPortsChange={setPorts}
-                  pickingPad={pickingPad}
-                  onPickPad={(v) => { setPickingPad(v); setPickMiss(false) }}
-                  pickMiss={pickMiss}
-                  drawingRoi={drawingRoi}
-                  onDrawRoi={setDrawingRoi}
-                  workers={workers.data?.workers ?? []}
-                  cableAssignments={cableAssignments}
-                  onSubmit={(req) => startSolve.mutate(req)}
-                  submitting={startSolve.isPending}
-                  error={startSolve.error ? (startSolve.error as Error).message : null}
+            <Tabs.Panel value="fullwave" p="sm">
+              <Stack gap="sm">
+                <SegmentedControl
+                  size="xs"
+                  fullWidth
+                  value={solveView}
+                  onChange={(v) => setSolveView(v as SolveView)}
+                  data={[
+                    { label: 'Set up', value: 'setup' },
+                    { label: 'Result', value: 'result' },
+                    { label: 'Drivers', value: 'drivers' },
+                    { label: 'Parts', value: 'parts' },
+                  ]}
                 />
-              ) : (
-                <Text size="sm" c="dimmed">
-                  The board has to finish processing before it can be solved.
-                </Text>
-              )}
-            </Tabs.Panel>
-            )}
 
-            {fullWave && (
-            <Tabs.Panel value="drivers" p="sm">
-              <DriversPanel
-                api={api}
-                projectId={projectId}
-                nets={doc?.nets?.map((n) => n.name) ?? []}
-              />
-            </Tabs.Panel>
-            )}
+                {solveView === 'setup' && (
+                  <>
+                    {doc ? (
+                      <SolveSetup
+                        doc={doc}
+                        roi={roi}
+                        onRoiChange={setRoi}
+                        ports={ports}
+                        onPortsChange={setPorts}
+                        pickingPad={pickingPad}
+                        onPickPad={(v) => { setPickingPad(v); setPickMiss(false) }}
+                        pickMiss={pickMiss}
+                        drawingRoi={drawingRoi}
+                        onDrawRoi={setDrawingRoi}
+                        workers={workers.data?.workers ?? []}
+                        cableAssignments={cableAssignments}
+                        onSubmit={(req) => startSolve.mutate(req)}
+                        submitting={startSolve.isPending}
+                        error={startSolve.error ? (startSolve.error as Error).message : null}
+                      />
+                    ) : (
+                      <Text size="sm" c="dimmed">
+                        The board has to finish processing before it can be solved.
+                      </Text>
+                    )}
+                  </>
+                )}
 
-            {fullWave && (
-            <Tabs.Panel value="components" p="sm">
-              <ComponentsPanel api={api} deployment={deployment}
-                               signedIn={me.data ? !me.data.anonymous : false} />
+                {solveView === 'result' && (
+                  <>
+                    {!activeSolve ? (
+                      <Text size="sm" c="dimmed">No solve has been run yet.</Text>
+                    ) : activeSolve.status !== 'done' ? (
+                      <RunProgress run={activeSolve} energyHistory={energyRef.current} />
+                    ) : solveManifest.isLoading ? (
+                      <Loader size="sm" />
+                    ) : solveManifest.isError ? (
+                      <Alert color="red" variant="light">
+                        {(solveManifest.error as Error).message}
+                      </Alert>
+                    ) : solveManifest.data ? (
+                      <HotspotResults
+                        api={api}
+                        runId={activeSolve.id}
+                        projectId={projectId}
+                        manifest={solveManifest.data}
+                        onOverlayChange={setOverlay}
+                        onGateChange={setGateDb}
+                      />
+                    ) : null}
+                  </>
+                )}
+
+                {solveView === 'drivers' && (
+                  <>
+                    <DriversPanel
+                      api={api}
+                      projectId={projectId}
+                      nets={doc?.nets?.map((n) => n.name) ?? []}
+                    />
+                  </>
+                )}
+
+                {solveView === 'parts' && (
+                  <>
+                    <ComponentsPanel api={api} deployment={deployment}
+                                     signedIn={me.data ? !me.data.anonymous : false} />
+                  </>
+                )}
+              </Stack>
             </Tabs.Panel>
             )}
 
@@ -633,31 +682,6 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
                 assignments={cableAssignments} onAssignmentsChange={setCableAssignments}
               />
             </Tabs.Panel>
-
-            {fullWave && (
-            <Tabs.Panel value="results" p="sm">
-              {!activeSolve ? (
-                <Text size="sm" c="dimmed">No solve has been run yet.</Text>
-              ) : activeSolve.status !== 'done' ? (
-                <RunProgress run={activeSolve} energyHistory={energyRef.current} />
-              ) : solveManifest.isLoading ? (
-                <Loader size="sm" />
-              ) : solveManifest.isError ? (
-                <Alert color="red" variant="light">
-                  {(solveManifest.error as Error).message}
-                </Alert>
-              ) : solveManifest.data ? (
-                <HotspotResults
-                  api={api}
-                  runId={activeSolve.id}
-                  projectId={projectId}
-                  manifest={solveManifest.data}
-                  onOverlayChange={setOverlay}
-                  onGateChange={setGateDb}
-                />
-              ) : null}
-            </Tabs.Panel>
-            )}
 
             {fullWave && (
             <Tabs.Panel value="compliance" p="sm">
@@ -711,15 +735,18 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
                           ? `Analysed ${new Date(ingest.finished_at).toLocaleString()}`
                           : 'Analysed'}
                     </Text>
-                    <Button
-                      size="compact-xs"
-                      variant="light"
-                      onClick={() => reanalyse.mutate()}
-                      loading={reanalysing || reanalyse.isPending}
-                      disabled={!ingest?.board_id}
-                    >
-                      Re-analyse
-                    </Button>
+                    <Tooltip label="The board has not finished processing yet"
+                             disabled={!!ingest?.board_id} withArrow>
+                      <Button
+                        size="compact-xs"
+                        variant="light"
+                        onClick={() => reanalyse.mutate()}
+                        loading={reanalysing || reanalyse.isPending}
+                        disabled={!ingest?.board_id}
+                      >
+                        Re-analyse
+                      </Button>
+                    </Tooltip>
                   </Group>
                   <div>
                     <Group justify="space-between" align="flex-start" mb="xs" wrap="nowrap">
@@ -784,23 +811,27 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
 
       <Modal opened={renaming !== null} onClose={() => setRenaming(null)} title="Rename this board"
              size="sm" centered>
-        <Stack gap="sm">
-          <TextInput value={renaming ?? ''} onChange={(e) => setRenaming(e.currentTarget.value)}
-                     placeholder="Board name" data-autofocus
-                     onKeyDown={(e) => {
-                       if (e.key === 'Enter' && renaming?.trim()) rename.mutate(renaming.trim())
-                     }} />
-          {rename.isError && (
-            <Text size="xs" c="red">{(rename.error as Error).message}</Text>
-          )}
-          <Group justify="flex-end" gap="xs">
-            <Button size="xs" variant="default" onClick={() => setRenaming(null)}>Cancel</Button>
-            <Button size="xs" loading={rename.isPending} disabled={!renaming?.trim()}
-                    onClick={() => rename.mutate((renaming ?? '').trim())}>
-              Rename
-            </Button>
-          </Group>
-        </Stack>
+        {/* A real form, so Enter submits the way it does in every other dialog. A keydown
+            handler on the input looked equivalent and was not. */}
+        <form onSubmit={(e) => {
+          e.preventDefault()
+          if (renaming?.trim()) rename.mutate(renaming.trim())
+        }}>
+          <Stack gap="sm">
+            <TextInput value={renaming ?? ''} onChange={(e) => setRenaming(e.currentTarget.value)}
+                       placeholder="Board name" data-autofocus />
+            {rename.isError && (
+              <Text size="xs" c="red">{(rename.error as Error).message}</Text>
+            )}
+            <Group justify="flex-end" gap="xs">
+              <Button size="xs" variant="default" type="button"
+                      onClick={() => setRenaming(null)}>Cancel</Button>
+              <Button size="xs" type="submit" loading={rename.isPending} disabled={!renaming?.trim()}>
+                Rename
+              </Button>
+            </Group>
+          </Stack>
+        </form>
       </Modal>
 
       <Modal opened={confirmDelete} onClose={() => setConfirmDelete(false)} title="Delete this board"

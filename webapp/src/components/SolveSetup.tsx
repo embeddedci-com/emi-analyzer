@@ -11,6 +11,7 @@ import {
   ActionIcon, Alert, Badge, Button, Card, Chip, Divider, Group, NumberInput,
   Select, Stack, Switch, Table, Text, Tooltip,
 } from '@mantine/core'
+import { EXPERIMENTAL, Experimental } from './Experimental'
 import type { BoardDoc } from '../lib/boardTypes'
 import {
   estimate,
@@ -267,7 +268,12 @@ export function SolveSetup({
           <Switch
             size="xs"
             mt={4}
-            label="Record the board's far field"
+            label={
+              <Group gap={6} wrap="nowrap">
+                <span>Record the board&apos;s far field</span>
+                <Experimental why={EXPERIMENTAL.farField} />
+              </Group>
+            }
             checked={farField}
             onChange={(e) => setFarField(e.currentTarget.checked)}
             description="Adds the surface the board's own radiation at 3 m is computed from, so this solve can contribute to a compliance estimate rather than only to a hotspot map. It makes the run substantially longer: the radiated band starts at 30 MHz, and resolving that needs 100 ns of simulated time whatever the board's size."

@@ -138,7 +138,7 @@ capacitor.
   antenna.
 - **Spread-spectrum clocking is ignored**, which errs on the conservative side.
 - **Runs do not survive closing the app.** A run that was in progress is marked failed on the
-  next start; retry it.
+  next start; retry it from the Runs menu in the board's header.
 
 ---
 

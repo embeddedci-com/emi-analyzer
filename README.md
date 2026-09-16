@@ -231,6 +231,9 @@ running in the background.
    - **Cables** — say which cable plugs into which connector, and see its common-mode budget.
    - **Board** — stackup, nets and layer settings.
 4. Opening the same file again takes you to the existing project instead of creating a new one.
+5. The header has two more things: **Runs**, which lists what has been analysed and lets you
+   retry anything that failed, and a **⋯** menu to rename or delete the board. Deleting removes
+   its board file and every result from this computer.
 
 ---
 
@@ -294,7 +297,8 @@ ssh -L 7465:127.0.0.1:7465 your-server
 
 The folder holds `emi.db` (projects, runs and components, in SQLite), `blobs/` (your board files
 and results) and `secret.key` (signs this installation's download links and worker keys). Back up
-the folder to keep your projects; delete it to start over.
+the folder to keep your projects; delete it to start over. To remove one board and its results,
+use **⋯ → Delete this board** in the app.
 
 ---
 
