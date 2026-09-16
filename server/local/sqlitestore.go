@@ -245,6 +245,24 @@ func (s *SQLiteStore) ListProjects(ctx context.Context, orgID string, limit int)
 	return out, rows.Err()
 }
 
+func (s *SQLiteStore) RenameProject(ctx context.Context, id, name string) error {
+	return affected(s.db.ExecContext(ctx, `UPDATE emi_projects SET name = ? WHERE id = ?`, name, id))
+}
+
+// DeleteProject leans on the schema's ON DELETE CASCADE, which is why the connection turns
+// foreign_keys on: without that pragma SQLite would leave every board and run behind.
+func (s *SQLiteStore) DeleteProject(ctx context.Context, id string) error {
+	return affected(s.db.ExecContext(ctx, `DELETE FROM emi_projects WHERE id = ?`, id))
+}
+
+func (s *SQLiteStore) CountBoardsSharingInput(ctx context.Context, inputKey, exceptProjectID string) (int, error) {
+	var n int
+	err := s.db.QueryRowContext(ctx, `
+		SELECT count(*) FROM emi_boards WHERE s3_input_key = ? AND project_id <> ?`,
+		inputKey, exceptProjectID).Scan(&n)
+	return n, mapErr(err)
+}
+
 // ---- boards ----
 
 const boardCols = `id, project_id, ingest_run_id, s3_input_key, s3_board_key,

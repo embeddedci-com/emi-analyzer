@@ -9,9 +9,9 @@
  * desktop app's window.
  */
 
-import { StrictMode } from 'react'
+import { Component, StrictMode, useLayoutEffect, useRef, type ReactNode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { Anchor, AppShell, Group, MantineProvider } from '@mantine/core'
+import { Anchor, AppShell, Button, Code, Group, MantineProvider, Stack, Text, Title } from '@mantine/core'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BrowserRouter, Link, Navigate, Route, Routes } from 'react-router'
 import '@mantine/core/styles.css'
@@ -26,9 +26,69 @@ const api = new EmiApi({ baseUrl: '/api' })
 
 const qc = new QueryClient({ defaultOptions: { queries: { retry: 1 } } })
 
+const HEADER_HEIGHT = 52
+
+/**
+ * A blank window is the worst thing a desktop app can do: there is no address bar to retype
+ * and no console to look at. A render error is caught here and shown with a way out.
+ */
+class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state: { error: Error | null } = { error: null }
+
+  static getDerivedStateFromError(error: Error) {
+    return { error }
+  }
+
+  render() {
+    if (!this.state.error) return this.props.children
+    return (
+      <Stack gap="md" p="xl" maw={640}>
+        <Title order={3}>Something went wrong in the app</Title>
+        <Text size="sm">
+          Your boards and results are unaffected — they are files on this computer. Reloading
+          usually clears this.
+        </Text>
+        <Code block style={{ whiteSpace: 'pre-wrap' }}>{this.state.error.message}</Code>
+        <Group gap="xs">
+          <Button size="xs" onClick={() => window.location.reload()}>Reload</Button>
+          <Button size="xs" variant="default" component="a" href="/tools/emi">
+            Back to your boards
+          </Button>
+        </Group>
+        <Text size="xs" c="dimmed">
+          If it keeps happening, please report it at{' '}
+          <Anchor size="xs" href="https://github.com/embeddedci-com/emi-analyzer/issues"
+                  target="_blank" rel="noreferrer">
+            github.com/embeddedci-com/emi-analyzer/issues
+          </Anchor>
+          .
+        </Text>
+      </Stack>
+    )
+  }
+}
+
 function Shell() {
+  // The project page fills the window, so it has to know how much of the window is already
+  // taken. The banner appears and disappears (worker starting, image downloading), so this is
+  // measured rather than assumed -- with a fixed height the page overflowed on first run and
+  // the whole app scrolled.
+  const chromeRef = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    const el = chromeRef.current
+    if (!el) return
+    const apply = () => {
+      document.documentElement.style.setProperty(
+        '--emi-chrome-height', `${HEADER_HEIGHT + el.offsetHeight}px`)
+    }
+    apply()
+    const ro = new ResizeObserver(apply)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
   return (
-    <AppShell header={{ height: 52 }} padding={0}>
+    <AppShell header={{ height: HEADER_HEIGHT }} padding={0}>
       <AppShell.Header>
         <Group h="100%" px="md" justify="space-between" wrap="nowrap">
           <Anchor component={Link} to="/tools/emi" underline="never" c="inherit" fw={700}>
@@ -38,7 +98,9 @@ function Shell() {
         </Group>
       </AppShell.Header>
       <AppShell.Main>
-        <WorkerBanner />
+        <div ref={chromeRef}>
+          <WorkerBanner />
+        </div>
         <Routes>
           <Route path="/" element={<Navigate to="/tools/emi" replace />} />
           {/* The same prefix the hosted app mounts at, because the pages link to it. */}
@@ -54,9 +116,11 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <MantineProvider defaultColorScheme="auto">
       <QueryClientProvider client={qc}>
-        <BrowserRouter>
-          <Shell />
-        </BrowserRouter>
+        <ErrorBoundary>
+          <BrowserRouter>
+            <Shell />
+          </BrowserRouter>
+        </ErrorBoundary>
       </QueryClientProvider>
     </MantineProvider>
   </StrictMode>,

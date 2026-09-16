@@ -9,6 +9,7 @@ import { useMemo, useState } from 'react'
 import {
   Accordion, Alert, Anchor, Badge, Group, SegmentedControl, Stack, Text, ThemeIcon,
 } from '@mantine/core'
+import { Link } from 'react-router'
 import type { RuleFinding, RulesDoc } from '../lib/boardTypes'
 import catalogue from '../lib/ruleCatalogue.json'
 
@@ -158,8 +159,9 @@ export function RuleFindings({ rules, onFocus, onSelectNet, onSimulate }: RuleFi
 
       {rules.findings.length > 0 && (
         <Text size="xs" c="dimmed">
-          Modelled estimate from board geometry. See the limitations page before acting on
-          these.
+          Modelled estimate from board geometry. See{' '}
+          <Anchor component={Link} to="/tools/emi/limitations" size="xs">the limitations</Anchor>
+          {' '}before acting on these.
         </Text>
       )}
     </Stack>

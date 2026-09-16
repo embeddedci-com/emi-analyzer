@@ -14,7 +14,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   Accordion, Alert, Anchor, Badge, Button, FileButton, Group, List, Loader, SegmentedControl, Select,
-  Stack, Table, Text,
+  Stack, Table, Text, Tooltip,
 } from '@mantine/core'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router'
@@ -169,14 +169,16 @@ export function EsdSimulation({
           <Text size="xs" fw={500}>Contact discharge</Text>
           <SegmentedControl size="xs" fullWidth value={level} onChange={setLevel} data={LEVELS} />
         </Stack>
-        <Button
-          size="xs"
-          onClick={() => start.mutate()}
-          loading={start.isPending || !!active}
-          disabled={!boardId || !capable}
-        >
-          Simulate
-        </Button>
+        <Tooltip label="The board is still being processed" disabled={!!boardId} withArrow>
+          <Button
+            size="xs"
+            onClick={() => start.mutate()}
+            loading={start.isPending || !!active}
+            disabled={!boardId || !capable}
+          >
+            Simulate
+          </Button>
+        </Tooltip>
       </Group>
       {!capable && (
         <Text size="xs" c="dimmed">
@@ -250,7 +252,13 @@ function ResultView({
         </Alert>
       )}
       {lines.length === 0 && (
-        <Text size="sm" c="dimmed">{result.notes[result.notes.length - 1] ?? 'Nothing to simulate.'}</Text>
+        <Text size="sm" c="dimmed">
+          {/* The worker's note is the specific reason; the fallback covers a run that said
+              nothing, which used to show a two-word shrug. */}
+          {result.notes[result.notes.length - 1]
+            ?? 'No line on this board leaves it through an edge connector, so there is nothing '
+               + 'for a discharge to reach.'}
+        </Text>
       )}
 
       <Accordion variant="separated" value={open} onChange={onOpen} chevronPosition="left">

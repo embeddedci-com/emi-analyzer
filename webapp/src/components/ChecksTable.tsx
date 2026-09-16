@@ -49,7 +49,8 @@ export function ChecksTable() {
             stackup: what the board radiates and conducts out through its cables, and where ESD
             and fast transients get in. They say where to look. A solve on a selected region, or
             a near-field scan loaded onto the board, confirms what is actually radiating. Thresholds and
-            which checks run can be set per board in an <code>emi.rules.yaml</code>.
+            which checks run can be set per board in an <code>emi.rules.yaml</code> placed next
+            to the <code>.kicad_pcb</code> and uploaded with it in a zip.
           </Text>
         </div>
         <Table.ScrollContainer minWidth={560}>

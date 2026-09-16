@@ -75,13 +75,15 @@ const LIMITATIONS: Limitation[] = [
       'limit of the FDTD method, not of this implementation.',
   },
   {
-    what: 'Cable radiation is not modelled',
+    what: 'Cables are modelled separately from the board, and only as a budget',
     kind: 'hard',
     why:
       'Below about 300 MHz, most emission failures are caused by common-mode current on an ' +
-      'attached cable harness, which acts as the antenna. The model contains only the ' +
-      'board, so it cannot show this effect. A low result in this band does not mean that ' +
-      'the product will pass an emissions scan.',
+      'attached cable harness, which acts as the antenna. A full-wave solve contains only the ' +
+      'board and cannot show that. The Cables tab covers it separately: each declared cable is ' +
+      'modelled as a wire over a ground plane, and the result is a budget — how much ' +
+      'common-mode current that cable can carry before it reaches a limit — not a prediction ' +
+      'of what it does carry. A connector you do not declare is not modelled at all.',
   },
   {
     what: 'The useful frequency range is about 100 MHz to 3 GHz',
@@ -182,9 +184,11 @@ export function EmiLimitationsPage({ deployment = 'hosted' }: { deployment?: Emi
             EMI Analyzer limitations
           </Title>
           <Text c="dimmed" mt="xs">
-            The EMI Analyzer runs an electromagnetic field solver on the geometry of your
-            board. It gives more detail than a rule-based design checker, but it does not
-            replace measurements at a test house. This page describes what the results can
+            The EMI Analyzer works from the geometry of your board: it checks the layout,
+            simulates an ESD discharge, budgets each cable, and — where full-wave simulation is
+            enabled — runs an electromagnetic field solver over a region you choose. It gives
+            more detail than a rule-based design checker, but it does not replace measurements
+            at a test house. This page describes what the results can
             and cannot be used for.
           </Text>
         </div>

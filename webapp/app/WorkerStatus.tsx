@@ -8,7 +8,9 @@
  */
 
 import { useState } from 'react'
-import { Alert, Badge, Button, Code, Group, Loader, Modal, ScrollArea, Stack, Text } from '@mantine/core'
+import {
+  Alert, Anchor, Badge, Button, Code, Group, Loader, Modal, ScrollArea, Stack, Text,
+} from '@mantine/core'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 export type WorkerState =
@@ -22,6 +24,8 @@ export interface LocalStatus {
     mode: 'docker' | 'none'
     state: WorkerState
     message?: string
+    /** What docker actually printed. Kept out of the banner; shown with the log. */
+    detail?: string
     image?: string
     container?: string
   }
@@ -49,7 +53,8 @@ const LABEL: Record<WorkerState, { text: string; color: string }> = {
   pulling: { text: 'Downloading worker', color: 'blue' },
   starting: { text: 'Starting worker', color: 'blue' },
   running: { text: 'Worker running', color: 'green' },
-  error: { text: 'Worker stopped', color: 'red' },
+  // Not "stopped": it failed, and saying so is what sends the user to the reason.
+  error: { text: 'Worker problem', color: 'red' },
   stopped: { text: 'Worker stopped', color: 'gray' },
 }
 
@@ -94,6 +99,11 @@ function WorkerModal({ status, opened, onClose }: { status: LocalStatus; opened:
     <Modal opened={opened} onClose={onClose} title="Local worker" size="xl">
       <Stack gap="sm">
         <Text size="sm">{w.message}</Text>
+        {w.detail && (
+          <ScrollArea.Autosize mah={140} type="auto">
+            <Code block style={{ whiteSpace: 'pre-wrap', fontSize: 11 }}>{w.detail}</Code>
+          </ScrollArea.Autosize>
+        )}
         {w.image && (
           <Text size="xs" c="dimmed">
             Image <Code>{w.image}</Code>
@@ -110,11 +120,11 @@ function WorkerModal({ status, opened, onClose }: { status: LocalStatus; opened:
                 Restart worker
               </Button>
             </Group>
-            <ScrollArea h={320} type="auto">
+            <ScrollArea.Autosize mah="45vh" type="auto">
               <Code block style={{ whiteSpace: 'pre-wrap', fontSize: 11 }}>
                 {logs.data || 'No output yet.'}
               </Code>
-            </ScrollArea>
+            </ScrollArea.Autosize>
           </>
         )}
       </Stack>
@@ -149,8 +159,17 @@ export function WorkerBanner() {
       <Text size="sm">{w.message}</Text>
       {w.state === 'docker_missing' && (
         <Text size="sm" mt={4}>
-          Install Docker Desktop from docker.com (or Docker Engine on Linux), start it, and this
-          page picks it up on its own.
+          Install{' '}
+          <Anchor size="sm" href="https://docs.docker.com/get-started/get-docker/"
+                  target="_blank" rel="noreferrer">
+            Docker Desktop
+          </Anchor>
+          {' '}(or Docker Engine on Linux) and start it — this page picks it up on its own.
+        </Text>
+      )}
+      {(w.state === 'error' || w.state === 'stopped') && (
+        <Text size="sm" mt={4}>
+          Open the worker status at the top of the window to read the log, or to restart it.
         </Text>
       )}
     </Alert>

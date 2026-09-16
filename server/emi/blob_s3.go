@@ -152,6 +152,49 @@ func (b *S3Blob) ensureBucket(ctx context.Context) error {
 	return nil
 }
 
+var _ BlobDeleter = (*S3Blob)(nil)
+
+// Delete removes one object. S3 reports deleting something that is not there as success, which
+// is what the caller wants: it is tidying up after a project, not asserting the object existed.
+func (b *S3Blob) Delete(ctx context.Context, key string) error {
+	_, err := b.client.DeleteObject(ctx, &s3.DeleteObjectInput{
+		Bucket: aws.String(b.bucket), Key: aws.String(b.objectKey(key)),
+	})
+	return err
+}
+
+// DeletePrefix removes every object under a prefix, a page at a time.
+func (b *S3Blob) DeletePrefix(ctx context.Context, prefix string) error {
+	full := b.objectKey(prefix)
+	if strings.TrimSuffix(full, "/") == strings.TrimSuffix(b.prefix, "/") {
+		// The namespace itself is everything this service owns, including other projects.
+		return errors.New("emi: refusing to delete the whole key prefix")
+	}
+	pager := s3.NewListObjectsV2Paginator(b.client, &s3.ListObjectsV2Input{
+		Bucket: aws.String(b.bucket), Prefix: aws.String(full),
+	})
+	for pager.HasMorePages() {
+		page, err := pager.NextPage(ctx)
+		if err != nil {
+			return err
+		}
+		objs := make([]types.ObjectIdentifier, 0, len(page.Contents))
+		for _, o := range page.Contents {
+			objs = append(objs, types.ObjectIdentifier{Key: o.Key})
+		}
+		if len(objs) == 0 {
+			continue
+		}
+		if _, err := b.client.DeleteObjects(ctx, &s3.DeleteObjectsInput{
+			Bucket: aws.String(b.bucket),
+			Delete: &types.Delete{Objects: objs, Quiet: aws.Bool(true)},
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (b *S3Blob) PresignGet(ctx context.Context, key string, ttl time.Duration) (string, error) {
 	req, err := b.presign.PresignGetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(b.bucket), Key: aws.String(b.objectKey(key)),

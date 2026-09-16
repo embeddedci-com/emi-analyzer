@@ -128,3 +128,45 @@ func TestURLWithoutARequestUsesTheFallbackOrigin(t *testing.T) {
 		t.Fatalf("url = %q", u)
 	}
 }
+
+func TestDeleteAndDeletePrefix(t *testing.T) {
+	b, srv := newTestBlob(t)
+	ctx := WithOrigin(context.Background(), srv.URL)
+
+	put := func(key string) {
+		u, _ := b.PresignPut(ctx, key, "application/octet-stream", time.Minute)
+		if resp, _ := do(t, http.MethodPut, u, []byte("x"), "application/octet-stream"); resp.StatusCode != 200 {
+			t.Fatalf("put %s: %d", key, resp.StatusCode)
+		}
+	}
+	put("runs/r1/board.json")
+	put("runs/r1/nearfield/1.bin")
+	put("uploads/org/sha256/aa/board.kicad_pcb")
+
+	if err := b.DeletePrefix(ctx, "runs/r1/"); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"runs/r1/board.json", "runs/r1/nearfield/1.bin"} {
+		if _, _, err := b.Stat(ctx, key); !errors.Is(err, emi.ErrNotFound) {
+			t.Errorf("%s survived DeletePrefix: %v", key, err)
+		}
+	}
+	if _, _, err := b.Stat(ctx, "uploads/org/sha256/aa/board.kicad_pcb"); err != nil {
+		t.Errorf("an unrelated object was removed: %v", err)
+	}
+
+	if err := b.Delete(ctx, "uploads/org/sha256/aa/board.kicad_pcb"); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := b.Stat(ctx, "uploads/org/sha256/aa/board.kicad_pcb"); !errors.Is(err, emi.ErrNotFound) {
+		t.Errorf("Delete left the object: %v", err)
+	}
+	// Deleting what is already gone is not an error: the caller is tidying up.
+	if err := b.Delete(ctx, "uploads/org/sha256/aa/board.kicad_pcb"); err != nil {
+		t.Errorf("second delete: %v", err)
+	}
+	// The whole store is never a prefix worth accepting.
+	if err := b.DeletePrefix(ctx, "/"); err == nil {
+		t.Error("an empty prefix was accepted")
+	}
+}

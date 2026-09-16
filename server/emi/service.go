@@ -65,6 +65,8 @@ func (s *Service) Mount(mux *http.ServeMux, prefix string, userAuth func(http.Ha
 	handle("POST "+p+"/emi/projects", userAuth(s.handleCreateProject))
 	handle("GET "+p+"/emi/projects", userAuth(s.handleListProjects))
 	handle("GET "+p+"/emi/projects/{project_id}", userAuth(s.handleGetProject))
+	handle("PATCH "+p+"/emi/projects/{project_id}", userAuth(s.handleRenameProject))
+	handle("DELETE "+p+"/emi/projects/{project_id}", userAuth(s.handleDeleteProject))
 	handle("POST "+p+"/emi/projects/{project_id}/uploads", userAuth(s.handleCreateUpload))
 	handle("POST "+p+"/emi/projects/{project_id}/boards", userAuth(s.handleCreateBoard))
 	handle("GET "+p+"/emi/projects/{project_id}/boards", userAuth(s.handleListBoards))

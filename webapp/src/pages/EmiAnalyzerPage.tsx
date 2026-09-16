@@ -31,6 +31,8 @@ export function EmiAnalyzerPage({ api, deployment = 'hosted' }: EmiAnalyzerPageP
   const projects = useQuery({ queryKey: ['emi', 'projects'], queryFn: api.listProjects })
   const me = useQuery({ queryKey: ['emi', 'whoami'], queryFn: api.whoami, staleTime: 60_000 })
   const features = useQuery({ queryKey: ['emi', 'features'], queryFn: api.features, staleTime: 5 * 60_000 })
+  // Undecided until the server answers, so nothing promises a solver that may be off.
+  const fullWave = features.data?.full_wave === true
   const workers = useQuery({
     queryKey: ['emi', 'workers'],
     queryFn: api.listWorkers,
@@ -96,11 +98,25 @@ export function EmiAnalyzerPage({ api, deployment = 'hosted' }: EmiAnalyzerPageP
             <Text c="dimmed" size="sm" mt={4}>
               Upload a KiCad board to see its copper, its stackup and a set of geometric EMI and
               EMC checks: where it radiates, what it conducts out through its cables, and where
-              ESD and fast transients get in. Full-wave analysis of a selected region runs on{' '}
-              <Anchor href="https://www.openems.de/" target="_blank" rel="noreferrer" inherit>
-                openEMS
-              </Anchor>
-              , a real field solver, not an approximation.
+              ESD and fast transients get in. An ESD discharge is simulated in ngspice and each
+              cable gets a common-mode budget from an antenna model.
+              {fullWave ? (
+                <>
+                  {' '}Full-wave analysis of a selected region runs on{' '}
+                  <Anchor href="https://www.openems.de/" target="_blank" rel="noreferrer" inherit>
+                    openEMS
+                  </Anchor>
+                  , a real field solver, not an approximation.
+                </>
+              ) : (
+                <>
+                  {' '}Full-wave simulation with{' '}
+                  <Anchor href="https://www.openems.de/" target="_blank" rel="noreferrer" inherit>
+                    openEMS
+                  </Anchor>
+                  {' '}is experimental and switched off in this build.
+                </>
+              )}
             </Text>
           </div>
           {local && (
@@ -180,8 +196,14 @@ export function EmiAnalyzerPage({ api, deployment = 'hosted' }: EmiAnalyzerPageP
             )}
 
             {create.isError && (
-              <Alert color="red" variant="light" title="Upload failed">
-                {(create.error as Error).message}
+              <Alert color="red" variant="light" title="That board could not be opened">
+                <Text size="xs">
+                  {(create.error as Error).message}
+                </Text>
+                <Text size="xs" mt={4}>
+                  A KiCad board, a zipped KiCad project, or a zip of Gerbers with the drill file
+                  and an IPC-D-356 netlist. Anything else is refused before it is read.
+                </Text>
               </Alert>
             )}
 
@@ -204,13 +226,57 @@ export function EmiAnalyzerPage({ api, deployment = 'hosted' }: EmiAnalyzerPageP
           </Stack>
         </Card>
 
+        <div>
+          <Group justify="space-between" mb="xs">
+            <Text fw={500}>Your boards</Text>
+          </Group>
+
+          {projects.isLoading && <Loader size="sm" />}
+          {projects.isError && (
+            <Alert color="red" variant="light" title="Your boards could not be listed">
+              <Text size="xs">{(projects.error as Error).message}</Text>
+            </Alert>
+          )}
+          {projects.isSuccess && projects.data.length === 0 && (
+            <Text c="dimmed" size="sm">
+              No boards yet — choose a board file above to analyse one.
+            </Text>
+          )}
+
+          <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }} spacing="sm">
+            {projects.data?.map((p) => (
+              <Card
+                key={p.id}
+                withBorder
+                padding="sm"
+                component={Link}
+                to={`/tools/emi/${p.id}`}
+                style={{ textDecoration: 'none' }}
+              >
+                <Group justify="space-between" wrap="nowrap">
+                  <Text fw={500} truncate>
+                    {p.name}
+                  </Text>
+                  <Badge size="xs" variant="light">
+                    {p.source_kind}
+                  </Badge>
+                </Group>
+                <Text size="xs" c="dimmed" mt={4}>
+                  {new Date(p.created_at).toLocaleDateString()}
+                </Text>
+              </Card>
+            ))}
+          </SimpleGrid>
+        </div>
+
         <Card withBorder padding="md">
           <Title order={4} mb="xs">
             How the analysis works
           </Title>
           <Text size="sm" c="dimmed" mb="md">
-            Four stages, and only the full-wave solve is slow. Nothing here is a rule-of-thumb
-            estimate standing in for a solver.
+            {fullWave
+              ? 'Four stages, and only the full-wave solve is slow. Nothing here is a rule-of-thumb estimate standing in for a solver.'
+              : 'Three stages run in this build, and all of them are quick. The fourth, full-wave simulation, is experimental and switched off.'}
           </Text>
           <List type="ordered" size="sm" spacing="sm">
             <List.Item>
@@ -309,7 +375,7 @@ export function EmiAnalyzerPage({ api, deployment = 'hosted' }: EmiAnalyzerPageP
             <Anchor component={Link} to="/tools/emi/limitations" size="xs">
               the limitations page
             </Anchor>
-            . The published limits a prediction is measured against are on{' '}
+            . The published limits those results are read against are on{' '}
             <Anchor component={Link} to="/tools/emi/limits" size="xs">
               the emission limits page
             </Anchor>
@@ -319,48 +385,6 @@ export function EmiAnalyzerPage({ api, deployment = 'hosted' }: EmiAnalyzerPageP
 
         <ChecksTable />
 
-        <div>
-          <Group justify="space-between" mb="xs">
-            <Text fw={500}>Projects</Text>
-          </Group>
-
-          {projects.isLoading && <Loader size="sm" />}
-          {projects.isError && (
-            <Alert color="red" variant="light">
-              {(projects.error as Error).message}
-            </Alert>
-          )}
-          {projects.isSuccess && projects.data.length === 0 && (
-            <Text c="dimmed" size="sm">
-              Nothing here yet. Upload a board above to get started.
-            </Text>
-          )}
-
-          <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }} spacing="sm">
-            {projects.data?.map((p) => (
-              <Card
-                key={p.id}
-                withBorder
-                padding="sm"
-                component={Link}
-                to={`/tools/emi/${p.id}`}
-                style={{ textDecoration: 'none' }}
-              >
-                <Group justify="space-between" wrap="nowrap">
-                  <Text fw={500} truncate>
-                    {p.name}
-                  </Text>
-                  <Badge size="xs" variant="light">
-                    {p.source_kind}
-                  </Badge>
-                </Group>
-                <Text size="xs" c="dimmed" mt={4}>
-                  {new Date(p.created_at).toLocaleDateString()}
-                </Text>
-              </Card>
-            ))}
-          </SimpleGrid>
-        </div>
       </Stack>
     </Container>
   )

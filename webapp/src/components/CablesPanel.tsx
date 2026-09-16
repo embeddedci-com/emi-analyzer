@@ -11,15 +11,16 @@
  * when it is not.
  */
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import {
   Alert, Badge, Button, Card, Group, List, NumberInput, Select, Stack, Text, Title,
   Tooltip,
 } from '@mantine/core'
-import type { EmiApi, Run } from '../lib/emiApi'
+import { TERMINAL_STATUSES, type EmiApi, type Run } from '../lib/emiApi'
 import type { CableResult, CablesDoc } from '../lib/cableTypes'
 import { CableBudgetChart } from './CableBudgetChart'
+import { EXPERIMENTAL, Experimental } from './Experimental'
 import cableLibrary from '../../../worker/emi_worker/cables/library.json'
 
 interface LibraryCable {
@@ -40,6 +41,8 @@ interface Props {
   runId?: string
   /** Clock harmonics to mark on the chart, when a driver declares them. */
   harmonics?: number[]
+  /** Workers connected right now. With none, a run would sit in the queue saying nothing. */
+  workersOnline?: number
   /**
    * What each connector is cabled with. Owned by the page rather than by this panel, because
    * a solve needs it too: §7's gap port is part of the mesh, so "which connectors carry a
@@ -53,9 +56,19 @@ interface Props {
 export type Assignment = { type: string; length_m?: number }
 
 export function CablesPanel({
-  api, projectId, boardId, runId, harmonics = [], assignments, onAssignmentsChange,
+  api, projectId, boardId, runId, harmonics = [], workersOnline, assignments, onAssignmentsChange,
 }: Props) {
   const [startedRunId, setStartedRunId] = useState<string | undefined>(runId)
+
+  // The page finds the last finished run asynchronously, so it usually arrives after this
+  // panel is mounted. Without this the tab offered to start a run that had already been run.
+  useEffect(() => {
+    if (runId && !startedRunId) setStartedRunId(runId)
+  }, [runId, startedRunId])
+
+  // What the run on screen was started with, so an assignment changed afterwards can say so
+  // rather than being silently absent from the result.
+  const ranWith = useRef<string | null>(null)
 
   // Poll while the run is in flight. Without this the panel said "try again shortly" and the
   // only button on screen started a *second* run -- so the honest reading of the UI was that
@@ -68,12 +81,32 @@ export function CablesPanel({
     retryDelay: 1500,
   })
 
+  // The artifact alone cannot tell a slow run from a failed one: both are a 404. Watching the
+  // run itself is what turns "waiting for the result" -- which used to stay on screen forever
+  // -- into a reason and a retry.
+  const run = useQuery({
+    queryKey: ['emi', 'run', startedRunId],
+    queryFn: () => api.getRun(startedRunId!),
+    enabled: !!startedRunId && !doc.data,
+    refetchInterval: (q) =>
+      q.state.data && TERMINAL_STATUSES.includes(q.state.data.status) ? false : 1500,
+  })
+  const failed = run.data && (run.data.status === 'failed' || run.data.status === 'timed_out')
+
+  const retry = useMutation({
+    mutationFn: () => api.retryRun(startedRunId!),
+    onSuccess: () => { run.refetch(); doc.refetch() },
+  })
+
   const start = useMutation({
     mutationFn: (): Promise<Run> => {
       if (!boardId) throw new Error('this project has no ingested board')
       return api.createCableRun(projectId, boardId, assignments)
     },
-    onSuccess: (run) => setStartedRunId(run.id),
+    onSuccess: (started) => {
+      ranWith.current = JSON.stringify(assignments)
+      setStartedRunId(started.id)
+    },
   })
 
   // Connectors come from a previous run's report; before the first run there is nothing to
@@ -96,6 +129,10 @@ export function CablesPanel({
 
   const d = doc.data as CablesDoc | undefined
   const modelled = (d?.cables ?? []).filter((c) => c.cable_id)
+  // Connectors the *result* says are unassigned, minus any that have been assigned since.
+  const stillUnassigned = (d?.unassigned ?? []).filter((u) => !assignments[u.ref])
+  const changedSinceRun =
+    !!d && ranWith.current !== null && ranWith.current !== JSON.stringify(assignments)
 
   return (
     <Stack gap="sm">
@@ -106,22 +143,45 @@ export function CablesPanel({
             Below about 300 MHz a cable usually radiates more than the board. This runs in
             seconds and needs no solve.
           </Text>
+          <Experimental why={EXPERIMENTAL.cableBudget} label="budget, not a prediction" mb={0} />
         </Stack>
-        <Button size="xs" variant="light" loading={start.isPending}
-                disabled={!boardId}
-                onClick={() => start.mutate()}>
-          {startedRunId ? 'Run again' : 'Find connectors'}
-        </Button>
+        <Tooltip label="The board is still being processed" disabled={!!boardId} withArrow>
+          <Button size="xs" variant="light" loading={start.isPending}
+                  disabled={!boardId}
+                  onClick={() => start.mutate()}>
+            {startedRunId ? 'Run again' : 'Find connectors'}
+          </Button>
+        </Tooltip>
       </Group>
 
       {start.error && (
         <Alert color="red" variant="light">{(start.error as Error).message}</Alert>
       )}
-      {startedRunId && doc.isLoading && <Text size="sm" c="dimmed">Running…</Text>}
-      {startedRunId && doc.error && (
+      {startedRunId && !d && !failed && (
         <Text size="sm" c="dimmed">
-          Waiting for the result — a cable run takes a few seconds.
+          {workersOnline === 0
+            ? 'Waiting for a worker to pick this up — none is connected yet.'
+            : 'Running — a cable run takes a few seconds.'}
         </Text>
+      )}
+      {failed && (
+        <Alert color="red" variant="light" title="The cable run did not finish">
+          <Stack gap="xs" align="flex-start">
+            <Text size="xs">{run.data?.error || 'No reason was reported.'}</Text>
+            <Button size="compact-xs" variant="light" loading={retry.isPending}
+                    onClick={() => retry.mutate()}>
+              Try again
+            </Button>
+          </Stack>
+        </Alert>
+      )}
+      {changedSinceRun && (
+        <Alert color="blue" variant="light" title="Assignments have changed">
+          <Text size="xs">
+            The result below is from the previous set of cables. Press{' '}
+            <Text span fw={600}>Run again</Text> to bring it up to date.
+          </Text>
+        </Alert>
       )}
 
       {!startedRunId && (
@@ -205,12 +265,12 @@ export function CablesPanel({
         </Stack>
       )}
 
-      {d && d.unassigned.length > 0 && (
+      {stillUnassigned.length > 0 && (
         <Alert color="yellow" variant="light" title="Not every connector is decided">
           <Text size="xs">
-            {d.unassigned.map((u) => u.ref).join(', ')}{' '}
-            {d.unassigned.length === 1 ? 'has' : 'have'} no cable assigned, so{' '}
-            {d.unassigned.length === 1 ? 'it is' : 'they are'} not modelled at all — which is
+            {stillUnassigned.map((u) => u.ref).join(', ')}{' '}
+            {stillUnassigned.length === 1 ? 'has' : 'have'} no cable assigned, so{' '}
+            {stillUnassigned.length === 1 ? 'it is' : 'they are'} not modelled at all — which is
             not the same as carrying nothing. Assign a cable, or mark it{' '}
             <Text span fw={600}>never cabled</Text> if it is a debug header that never leaves
             the bench.

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="EMI Analyzer">
+  <rect width="64" height="64" rx="12" fill="#12342e"/>
+  <g fill="none" stroke="#50c896" stroke-width="3" stroke-linecap="round">
+    <path d="M12 24h12l5-6h13l5 6h5"/>
+    <path d="M12 44h14l5 6h12l5-6h4"/>
+  </g>
+  <path d="M12 34c4-10 8 10 12 0s8 10 12 0 8 10 12 0 8 10 12 0" fill="none" stroke="#ffc446"
+        stroke-width="3" stroke-linecap="round"/>
+</svg>

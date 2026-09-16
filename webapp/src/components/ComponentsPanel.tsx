@@ -22,11 +22,14 @@ import {
 } from '../lib/componentDocument'
 import { ComponentImpedancePreview } from './ComponentImpedancePreview'
 import { addUnsaved, readUnsaved, removeUnsaved } from '../lib/unsavedComponents'
+import type { EmiDeployment } from '../routes'
 
 interface Props {
   api: EmiApi
   /** From `me.anonymous`, which the header already reads. */
   signedIn: boolean
+  /** Where this copy runs. Locally there is one user and nobody to share a model with. */
+  deployment?: EmiDeployment
   /** Solve frequencies, marked on the preview so it is visible where the part still works. */
   frequencies?: number[]
 }
@@ -80,7 +83,8 @@ export function buildComponentDocument(f: FormState): Record<string, unknown> {
   }
 }
 
-export function ComponentsPanel({ api, signedIn, frequencies = [] }: Props) {
+export function ComponentsPanel({ api, signedIn, deployment = 'hosted', frequencies = [] }: Props) {
+  const local = deployment === 'local'
   const qc = useQueryClient()
   const [adding, setAdding] = useState(false)
   const [form, setForm] = useState<FormState>(EMPTY)
@@ -193,7 +197,9 @@ export function ComponentsPanel({ api, signedIn, frequencies = [] }: Props) {
             </Stack>
             <Group gap="xs" wrap="nowrap">
               <Tooltip
-                label="Members of your organisation can use it, read-only"
+                label={local
+                  ? 'Marks the model as shared. On this computer you are the only user, so it changes nothing.'
+                  : 'Members of your organisation can use it, read-only'}
                 withArrow
               >
                 <Switch
@@ -306,7 +312,7 @@ export function ComponentsPanel({ api, signedIn, frequencies = [] }: Props) {
               {signedIn ? (
                 <Button size="xs" disabled={!parsed.component} loading={create.isPending}
                         onClick={() => create.mutate()}>
-                  Save to my library
+                  {local ? 'Save to the library' : 'Save to my library'}
                 </Button>
               ) : (
                 <Button size="xs" disabled={!parsed.component} onClick={keepUnsaved}>

@@ -122,6 +122,38 @@ func (s *PGStore) ListProjects(ctx context.Context, orgID string, limit int) ([]
 	return out, rows.Err()
 }
 
+func (s *PGStore) RenameProject(ctx context.Context, id, name string) error {
+	tag, err := s.pool.Exec(ctx, `UPDATE emi.emi_projects SET name = $2 WHERE id = $1`, id, name)
+	if err != nil {
+		return mapErr(err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// DeleteProject relies on the ON DELETE CASCADE from boards, runs, artifacts and drivers, so
+// one statement removes the whole project rather than four that could half-succeed.
+func (s *PGStore) DeleteProject(ctx context.Context, id string) error {
+	tag, err := s.pool.Exec(ctx, `DELETE FROM emi.emi_projects WHERE id = $1`, id)
+	if err != nil {
+		return mapErr(err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (s *PGStore) CountBoardsSharingInput(ctx context.Context, inputKey, exceptProjectID string) (int, error) {
+	var n int
+	err := s.pool.QueryRow(ctx, `
+		SELECT count(*) FROM emi.emi_boards
+		WHERE s3_input_key = $1 AND project_id <> $2`, inputKey, exceptProjectID).Scan(&n)
+	return n, mapErr(err)
+}
+
 // ---- boards ----
 
 func (s *PGStore) CreateBoard(ctx context.Context, b *Board) error {

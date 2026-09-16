@@ -45,6 +45,14 @@ export function Experimental({ why, label = 'experimental', size = 'xs', mb }: E
  * limitations page, which has to list them without going out of date.
  */
 export const EXPERIMENTAL: Record<string, string> = {
+  cableBudget:
+    'The antenna model behind this is checked against transmission-line theory and against a '
+    + 'second solver, and the composition it feeds has been compared with a fully coupled '
+    + 'simulation on a synthetic board (1.2 dB typical, 2.2 dB worst) but not yet on a real '
+    + 'one. Read it as a budget -- how much common-mode current this cable can carry before it '
+    + 'reaches the limit -- and compare cables and layouts with it, rather than reading the '
+    + 'absolute level as a prediction of what a test house would measure.',
+
   complianceEstimate:
     'The whole chain behind this number is built and unit-tested, and it has not yet been run '
     + 'end to end on a real board: no project has produced a margin from a real solve, real '

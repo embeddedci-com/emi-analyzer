@@ -260,6 +260,12 @@ export class EmiApi {
 
   getProject = (id: string) => this.call<Project>('GET', `/emi/projects/${id}`)
 
+  renameProject = (id: string, name: string) =>
+    this.call<Project>('PATCH', `/emi/projects/${id}`, { name })
+
+  /** Removes the project, its board file and every result on it. */
+  deleteProject = (id: string) => this.call<void>('DELETE', `/emi/projects/${id}`)
+
   listBoards = (projectId: string) =>
     this.call<{ boards: Board[] }>('GET', `/emi/projects/${projectId}/boards`)
       .then((r) => r.boards ?? [])

@@ -3,7 +3,15 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- The app follows the system theme. Declaring it here paints the right background before
+       React runs, instead of flashing white on a dark desktop. -->
+  <meta name="color-scheme" content="light dark">
+  <link rel="icon" href="./icon.svg" type="image/svg+xml">
   <title>EMI Analyzer</title>
+  <style>
+    html { background: #ffffff; }
+    @media (prefers-color-scheme: dark) { html { background: #1a1b1e; } }
+  </style>
 </head>
 <body>
   <div id="root"></div>

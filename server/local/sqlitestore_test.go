@@ -297,3 +297,72 @@ func TestWorkersAndKeys(t *testing.T) {
 		t.Fatalf("workers after DeregisterAll = %+v", ws)
 	}
 }
+
+// Deleting a project takes its boards, runs and artifacts with it -- which only works because
+// the connection turns foreign keys on.
+func TestDeleteProjectCascades(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+	now := time.Now()
+	p, b, r := seed(t, s, "org", now)
+	if err := s.CreateArtifact(ctx, &emi.Artifact{ID: "a1", RunID: r.ID, Name: "board.json",
+		Key: "k", ContentType: "application/json", CreatedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.RenameProject(ctx, p.ID, "Rev B"); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := s.GetProject(ctx, p.ID); got.Name != "Rev B" {
+		t.Fatalf("name = %q", got.Name)
+	}
+
+	if err := s.DeleteProject(ctx, p.ID); err != nil {
+		t.Fatal(err)
+	}
+	for _, check := range []struct {
+		what string
+		err  error
+	}{
+		{"project", func() error { _, e := s.GetProject(ctx, p.ID); return e }()},
+		{"board", func() error { _, e := s.GetBoard(ctx, b.ID); return e }()},
+		{"run", func() error { _, e := s.GetRun(ctx, r.ID); return e }()},
+	} {
+		if !errors.Is(check.err, emi.ErrNotFound) {
+			t.Errorf("%s survived the delete: %v", check.what, check.err)
+		}
+	}
+	if arts, _ := s.ListArtifacts(ctx, r.ID); len(arts) != 0 {
+		t.Errorf("artifacts survived: %+v", arts)
+	}
+	if err := s.DeleteProject(ctx, p.ID); !errors.Is(err, emi.ErrNotFound) {
+		t.Errorf("deleting twice: %v, want ErrNotFound", err)
+	}
+}
+
+// An upload is content-addressed, so two projects can name the same object. Deleting one must
+// not take the other's board file away.
+func TestCountBoardsSharingInput(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+	now := time.Now()
+	p1, _, _ := seed(t, s, "a", now)
+	p2, _, _ := seed(t, s, "b", now.Add(time.Millisecond))
+
+	const key = "uploads/org/sha256/aa/board.kicad_pcb"
+	for i, pid := range []string{p1.ID, p2.ID} {
+		if err := s.CreateBoard(ctx, &emi.Board{ID: "shared" + string(rune('0'+i)),
+			ProjectID: pid, InputKey: key, CreatedAt: now}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// One other project holds the same bytes, so deleting p1 must leave the object alone.
+	n, err := s.CountBoardsSharingInput(ctx, key, p1.ID)
+	if err != nil || n != 1 {
+		t.Fatalf("shared count = %d, %v; want 1", n, err)
+	}
+	if n, _ := s.CountBoardsSharingInput(ctx, "uploads/nobody/else", p1.ID); n != 0 {
+		t.Fatalf("unshared count = %d, want 0", n)
+	}
+}

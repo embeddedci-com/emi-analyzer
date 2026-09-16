@@ -40,7 +40,7 @@ export function emiRoutes(api: EmiApi, options: EmiRouteOptions = {}) {
       <Route index element={<EmiAnalyzerPage api={api} deployment={deployment} />} />
       <Route path="limitations" element={<EmiLimitationsPage deployment={deployment} />} />
       <Route path="limits" element={<EmiLimitsPage />} />
-      <Route path=":projectId" element={<EmiProjectPage api={api} />} />
+      <Route path=":projectId" element={<EmiProjectPage api={api} deployment={deployment} />} />
     </>
   )
 }

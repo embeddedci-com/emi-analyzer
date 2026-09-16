@@ -54,6 +54,19 @@ type Blob interface {
 	Stat(ctx context.Context, key string) (sizeBytes int64, contentType string, err error)
 }
 
+// BlobDeleter is an optional half of Blob: storage that can also remove objects.
+//
+// Optional because the control plane's normal life never deletes anything -- results are
+// immutable and a run is kept for its history. It exists for the one thing a user can ask
+// for explicitly: deleting a project, which has to take its board file and results with it,
+// or "delete" would leave the design on disk.
+type BlobDeleter interface {
+	// Delete removes one object. A key that is already gone is not an error.
+	Delete(ctx context.Context, key string) error
+	// DeletePrefix removes every object under a prefix.
+	DeletePrefix(ctx context.Context, prefix string) error
+}
+
 // Deps is the wiring a host passes to Mount.
 type Deps struct {
 	Store Store
@@ -109,6 +122,15 @@ type Store interface {
 	CreateProject(ctx context.Context, p *Project) error
 	GetProject(ctx context.Context, id string) (*Project, error)
 	ListProjects(ctx context.Context, orgID string, limit int) ([]*Project, error)
+	RenameProject(ctx context.Context, id, name string) error
+	// DeleteProject removes the project and everything filed under it -- boards, runs and
+	// artifacts -- in one go. The rows go; removing the objects they name is the caller's job,
+	// because only it knows whether another project still refers to them.
+	DeleteProject(ctx context.Context, id string) error
+	// CountBoardsSharingInput answers "does any project other than this one use these bytes?".
+	// An upload is content-addressed, so two projects can name one object and deleting one
+	// project must not take the other's board away.
+	CountBoardsSharingInput(ctx context.Context, inputKey, exceptProjectID string) (int, error)
 
 	// Boards
 	CreateBoard(ctx context.Context, b *Board) error

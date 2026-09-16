@@ -310,6 +310,90 @@ func (s *Service) handleWhoami(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handleRenameProject changes a project's name. The name is the only thing about a project a
+// user can edit: everything else is a fact about the board they uploaded.
+func (s *Service) handleRenameProject(w http.ResponseWriter, r *http.Request) {
+	p, ok := s.project(w, r)
+	if !ok {
+		return
+	}
+	var body struct {
+		Name string `json:"name"`
+	}
+	if !decodeJSON(w, r, &body) {
+		return
+	}
+	name := strings.TrimSpace(body.Name)
+	if name == "" || len(name) > 200 {
+		writeErr(w, http.StatusBadRequest, "name must be between 1 and 200 characters")
+		return
+	}
+	if err := s.deps.Store.RenameProject(r.Context(), p.ID, name); err != nil {
+		writeStoreErr(w, err)
+		return
+	}
+	p.Name = name
+	writeJSON(w, http.StatusOK, p)
+}
+
+// handleDeleteProject removes a project, its boards, its runs and the objects they name.
+//
+// The objects matter as much as the rows. A board file is somebody's unreleased layout, and a
+// delete that left it in storage would be a lie -- which is why this collects the keys first,
+// deletes the rows, and then removes what nothing else refers to. An upload is
+// content-addressed, so the same bytes can belong to two projects; those are kept.
+func (s *Service) handleDeleteProject(w http.ResponseWriter, r *http.Request) {
+	p, ok := s.project(w, r)
+	if !ok {
+		return
+	}
+
+	runs, err := s.deps.Store.ListRuns(r.Context(), p.ID, 1000)
+	if err != nil {
+		writeStoreErr(w, err)
+		return
+	}
+	boards, err := s.deps.Store.ListBoards(r.Context(), p.ID)
+	if err != nil {
+		writeStoreErr(w, err)
+		return
+	}
+	// Asked before the rows go, while the other projects' boards are still comparable.
+	var orphaned []string
+	for _, b := range boards {
+		for _, key := range []string{b.InputKey, b.BoardKey} {
+			if key == "" {
+				continue
+			}
+			n, err := s.deps.Store.CountBoardsSharingInput(r.Context(), key, p.ID)
+			if err == nil && n == 0 {
+				orphaned = append(orphaned, key)
+			}
+		}
+	}
+
+	if err := s.deps.Store.DeleteProject(r.Context(), p.ID); err != nil {
+		writeStoreErr(w, err)
+		return
+	}
+
+	// Best effort, and after the rows: a storage error must not leave a project the user was
+	// told is gone, and an object nothing points at is recoverable from the logs.
+	if del, canDelete := s.deps.Blob.(BlobDeleter); canDelete {
+		for _, run := range runs {
+			if err := del.DeletePrefix(r.Context(), "runs/"+run.ID+"/"); err != nil {
+				s.deps.log().Warn("emi: could not delete a run's artifacts", "run", run.ID, "err", err)
+			}
+		}
+		for _, key := range orphaned {
+			if err := del.Delete(r.Context(), key); err != nil {
+				s.deps.log().Warn("emi: could not delete an uploaded file", "key", key, "err", err)
+			}
+		}
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (s *Service) handleListBoards(w http.ResponseWriter, r *http.Request) {
 	p, ok := s.project(w, r)
 	if !ok {

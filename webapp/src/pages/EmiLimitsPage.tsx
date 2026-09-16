@@ -129,16 +129,17 @@ export function EmiLimitsPage() {
         <Stack gap={4}>
           <Title order={2}>Emission limits</Title>
           <Text c="dimmed">
-            The published limits this tool measures a prediction against. Every number below is
-            read from the same file the analyzer uses, so there is no version of this page that
-            can disagree with a report.
+            The published limits this tool reads results against. Every number below comes from
+            the same file the analyzer uses, so there is no version of this page that can
+            disagree with a result.
           </Text>
         </Stack>
 
         <Alert color="gray" variant="light" title="This is reference material, not a test">
           <Text size="sm">
-            The analyzer estimates where a design sits against these limits and how confident
-            that estimate is. It is not a full pre-compliance test — see{' '}
+            Where a result can be compared with them — a cable's common-mode budget, or a
+            full-wave prediction where that is enabled — the analyzer shows the margin and how
+            confident it is. It is not a full pre-compliance test — see{' '}
             <Anchor component={Link} to="/tools/emi/limitations">
               what it cannot say
             </Anchor>

@@ -59,7 +59,36 @@ func NewFileBlob(dir string, secret []byte, basePath, fallback string) (*FileBlo
 	}, nil
 }
 
-var _ emi.Blob = (*FileBlob)(nil)
+var (
+	_ emi.Blob        = (*FileBlob)(nil)
+	_ emi.BlobDeleter = (*FileBlob)(nil)
+)
+
+// Delete removes one object and its content type. Missing is not an error: the caller is
+// deleting a project, and a half-uploaded board should not stop that.
+func (b *FileBlob) Delete(_ context.Context, key string) error {
+	for _, p := range []string{b.objectPath(key), b.metaPath(key)} {
+		if err := os.Remove(p); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return err
+		}
+	}
+	return nil
+}
+
+// DeletePrefix removes everything under a prefix, which for this store is a directory.
+func (b *FileBlob) DeletePrefix(_ context.Context, prefix string) error {
+	clean := cleanKey(prefix)
+	if clean == "" {
+		// Refusing an empty prefix is not paranoia: it would be the whole store.
+		return errors.New("local: refusing to delete the entire blob store")
+	}
+	for _, root := range []string{"objects", "meta"} {
+		if err := os.RemoveAll(filepath.Join(b.root, root, filepath.FromSlash(clean))); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
 type originKey struct{}
 
