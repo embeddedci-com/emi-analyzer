@@ -14,18 +14,32 @@
 //!
 //! The page the window shows is served over http://127.0.0.1 and is given no Tauri APIs.
 //! Links that leave 127.0.0.1 open in the system browser.
+//!
+//! ## Running with the window put away
+//!
+//! The KiCad plugin is a front end for this app: it needs the server, not the window. So the
+//! window can be put away without quitting -- closing it, or "Run in the background" on the
+//! page -- and the app carries on from the tray, serving the plugin. The page asks for that
+//! through the sidecar, which prints `EMI_LOCAL_HIDE_WINDOW` on stdout, rather than by being
+//! given a Tauri API of its own: the rule that the page gets none is worth more than the
+//! shortcut.
 
 use std::collections::VecDeque;
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::Duration;
 
+use tauri::menu::{Menu, MenuItem};
+use tauri::tray::{TrayIconBuilder, TrayIconEvent};
 use tauri::webview::NewWindowResponse;
 use tauri::{Manager, RunEvent, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
 
 const READY_PREFIX: &str = "EMI_LOCAL_READY ";
+/// Printed by the sidecar when the page has asked to carry on in the background.
+const HIDE_WINDOW_LINE: &str = "EMI_LOCAL_HIDE_WINDOW";
 const LOG_LINES: usize = 40;
+const TRAY_ID: &str = "emi-analyzer";
 
 #[derive(Default)]
 struct Sidecar {
@@ -57,6 +71,20 @@ pub fn run() {
                     NewWindowResponse::Deny
                 })
                 .build()?;
+
+            // Closing the window stops the analyzer being on screen, not the app: the KiCad
+            // plugin talks to the server behind it, and quitting would take that away in the
+            // middle of someone's work. The tray is how it comes back, and how it is quit.
+            {
+                let handle = app.handle().clone();
+                window.on_window_event(move |event| {
+                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                        api.prevent_close();
+                        hide_window(&handle);
+                    }
+                });
+            }
+            build_tray(app.handle())?;
 
             if let Err(err) = start_sidecar(app.handle(), window.clone()) {
                 show_failure(&window, &format!("The local server could not be started: {err}"), "");
@@ -91,6 +119,10 @@ fn start_sidecar(app: &tauri::AppHandle, window: tauri::WebviewWindow) -> Result
     let command = app.shell().sidecar("emi-local")?.args([
         "-open=false".to_string(),
         "-lifeline".to_string(),
+        // Tells the server there is a window of ours behind this page, which is what lets the
+        // page offer to put it away.
+        "-shell".to_string(),
+        "desktop".to_string(),
         "-data-dir".to_string(),
         data_dir.to_string_lossy().into_owned(),
     ]);
@@ -99,6 +131,7 @@ fn start_sidecar(app: &tauri::AppHandle, window: tauri::WebviewWindow) -> Result
     let state = app.state::<Sidecar>();
     *state.child.lock().unwrap() = Some(child);
     let exited = state.exited.clone();
+    let hide_handle = app.clone();
 
     tauri::async_runtime::spawn(async move {
         let mut ready = false;
@@ -107,6 +140,9 @@ fn start_sidecar(app: &tauri::AppHandle, window: tauri::WebviewWindow) -> Result
             match event {
                 CommandEvent::Stdout(line) => {
                     let line = String::from_utf8_lossy(&line).trim().to_string();
+                    if line == HIDE_WINDOW_LINE {
+                        hide_window(&hide_handle);
+                    }
                     if let Some(u) = line.strip_prefix(READY_PREFIX) {
                         match url::Url::parse(u.trim()) {
                             Ok(u) if !ready => {
@@ -149,6 +185,55 @@ fn start_sidecar(app: &tauri::AppHandle, window: tauri::WebviewWindow) -> Result
         }
     });
     Ok(())
+}
+
+/// The tray: what the app is, once its window is out of the way.
+fn build_tray(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> {
+    let open = MenuItem::with_id(app, "open", "Open EMI Analyzer", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+    let menu = Menu::with_items(app, &[&open, &quit])?;
+
+    let mut tray = TrayIconBuilder::with_id(TRAY_ID)
+        .tooltip("EMI Analyzer: running, ready for KiCad")
+        .menu(&menu)
+        // The menu is the whole point on Windows and Linux; on macOS a left click opens it
+        // too, so a plain click never looks like it did nothing.
+        .show_menu_on_left_click(true)
+        .on_menu_event(|app, event| match event.id.as_ref() {
+            "open" => show_window(app),
+            "quit" => app.exit(0),
+            _ => {}
+        })
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::DoubleClick { .. } = event {
+                show_window(tray.app_handle());
+            }
+        });
+    if let Some(icon) = app.default_window_icon().cloned() {
+        tray = tray.icon(icon);
+    }
+    tray.build(app)?;
+    Ok(())
+}
+
+/// Put the window away and carry on serving. On macOS the Dock icon goes with it, which is
+/// what "in the background" has to mean there: the app is in the menu bar, nowhere else.
+fn hide_window(app: &tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.hide();
+    }
+    #[cfg(target_os = "macos")]
+    let _ = app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+}
+
+fn show_window(app: &tauri::AppHandle) {
+    #[cfg(target_os = "macos")]
+    let _ = app.set_activation_policy(tauri::ActivationPolicy::Regular);
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+    }
 }
 
 fn remember(recent: &mut VecDeque<String>, line: String) {

@@ -1,0 +1,22 @@
+{
+  "$schema": "https://go.kicad.org/api/schemas/v1",
+  "identifier": "com.embeddedci.emi-analyzer",
+  "name": "EMI Analyzer",
+  "description": "EMI and EMC review of the board open in the PCB Editor: layout checks for the causes of radiated emissions, ESD and immunity checks, a cable budget and an ESD transient simulation. A front end for the EMI Analyzer desktop app, which does the work on this computer; nothing is uploaded.",
+  "runtime": {
+    "type": "python",
+    "min_version": "3.9"
+  },
+  "actions": [
+    {
+      "identifier": "analyze",
+      "name": "EMI Analyzer",
+      "description": "Check this board for the causes of EMI and EMC failures",
+      "show-button": true,
+      "scopes": ["pcb"],
+      "entrypoint": "analyze.py",
+      "icons-light": ["icons/emi-24.png", "icons/emi-48.png"],
+      "icons-dark": ["icons/emi-24-dark.png", "icons/emi-48-dark.png"]
+    }
+  ]
+}

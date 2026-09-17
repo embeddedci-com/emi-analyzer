@@ -29,12 +29,14 @@ see the limitations page in the app, and [known issues](docs/known-issues.md).
 3. [Step 2 — Install EMI Analyzer](#step-2--install-emi-analyzer)
 4. [Step 3 — First launch](#step-3--first-launch)
 5. [Step 4 — Analyse a board](#step-4--analyse-a-board)
-6. [Running without the desktop app](#running-without-the-desktop-app)
-7. [Where your data is](#where-your-data-is)
-8. [Updating and uninstalling](#updating-and-uninstalling)
-9. [Troubleshooting](#troubleshooting)
-10. [Experimental features](#experimental-features)
-11. [More documentation](#more-documentation)
+6. [Using it from KiCad](#using-it-from-kicad)
+7. [Running without the desktop app](#running-without-the-desktop-app)
+8. [Running in the background](#running-in-the-background)
+9. [Where your data is](#where-your-data-is)
+10. [Updating and uninstalling](#updating-and-uninstalling)
+11. [Troubleshooting](#troubleshooting)
+12. [Experimental features](#experimental-features)
+13. [More documentation](#more-documentation)
 
 ---
 
@@ -238,6 +240,28 @@ running in the background.
 
 ---
 
+## Using it from KiCad
+
+There is a KiCad plugin that puts all of this beside the PCB Editor: it hands the app the board
+you have open, unsaved edits and all, and clicking a finding selects that net on the board.
+
+Install the app first (the plugin is only a front end for it), then in KiCad open
+**Plugin and Content Manager → Manage repositories** and add
+
+```
+https://raw.githubusercontent.com/embeddedci-com/kicad-plugins/main/repository.json
+```
+
+then install **EMI Analyzer** from it. Details and troubleshooting:
+[kicad-plugin/README.md](kicad-plugin/README.md).
+
+**The app does not have to be on screen.** Press **Run in the background** in its header, or
+close its window, and it carries on serving the plugin from the menu bar (Windows: the
+notification area) with your boards, results and worker untouched. Open it again, or quit it,
+from that icon's menu. The plugin also starts the app by itself when it is not running.
+
+---
+
 ## Running without the desktop app
 
 The desktop app is a window around one program, `emi-local`, which also runs on its own and opens
@@ -283,8 +307,25 @@ ssh -L 7465:127.0.0.1:7465 your-server
 | `-worker-image` | `ghcr.io/embeddedci-com/emi-worker:<version>` | run a different worker image |
 | `-worker-concurrency` | `1` | how many runs the worker takes at once |
 | `-experimental` | none | enable [experimental features](#experimental-features) |
+| `-endpoint-file` | in your config folder | where it says it is listening, so the KiCad plugin can find it; empty writes none |
 | `-issue-key` | | print a key for a worker you run yourself, and exit |
 | `-version` | | print the version and exit |
+
+`emi-local` serves the [KiCad plugin](kicad-plugin/README.md) as well as the app does. Leave
+`emi-local -open=false` running and the plugin finds it.
+
+---
+
+## Running in the background
+
+EMI Analyzer keeps working with its window put away: closing the window does not quit it, and
+neither does **Run in the background** in the header. The server, your boards and the Docker
+worker all stay up, which is what the [KiCad plugin](kicad-plugin/README.md) needs when the
+PCB Editor is the front end.
+
+Its icon stays in the menu bar on macOS, the notification area on Windows and the system tray
+on Linux. That menu has **Open EMI Analyzer** and **Quit**. Quit is the only thing that stops
+the worker container.
 
 ---
 
@@ -389,6 +430,7 @@ memory as you can spare under Docker Desktop → *Settings* → *Resources*.
 | [docs/rules-file.md](docs/rules-file.md) | Tuning the checks for a board with a rules file |
 | [docs/emi-driver-format.md](docs/emi-driver-format.md) | The driver file format |
 | [docs/](docs/README.md) | Everything else: how the model works, and design notes |
+| [kicad-plugin/README.md](kicad-plugin/README.md) | The KiCad plugin: installing it, using it, and how it works |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Building from source, tests, and releasing |
 
 ## Security

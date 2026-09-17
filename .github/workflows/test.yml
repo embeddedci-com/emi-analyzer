@@ -44,3 +44,15 @@ jobs:
             pip install -q pytest &&
             mkdir /tmp/repo && cp -r /repo/worker /repo/server /repo/webapp /tmp/repo/ &&
             cd /tmp/repo/worker && python -m pytest -q -p no:cacheprovider'
+
+  # The KiCad plugin is plain Python and its tests stand in for KiCad and for the app, so
+  # they run here without either. The few that need PySide6 skip themselves.
+  kicad-plugin:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install pytest
+      - run: make plugin-test

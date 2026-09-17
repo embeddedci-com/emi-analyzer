@@ -18,7 +18,7 @@ import '@mantine/core/styles.css'
 
 import { EmiApi } from '../src/lib/emiApi'
 import { emiRoutes } from '../src/routes'
-import { WorkerStatus, WorkerBanner } from './WorkerStatus'
+import { BackgroundButton, WorkerStatus, WorkerBanner } from './WorkerStatus'
 
 // Same origin, no credentials: emi-local serves one fixed local identity, and only to
 // requests that reach it on the loopback interface.
@@ -94,7 +94,10 @@ function Shell() {
           <Anchor component={Link} to="/tools/emi" underline="never" c="inherit" fw={700}>
             EMI Analyzer
           </Anchor>
-          <WorkerStatus />
+          <Group gap="xs" wrap="nowrap">
+            <BackgroundButton />
+            <WorkerStatus />
+          </Group>
         </Group>
       </AppShell.Header>
       <AppShell.Main>

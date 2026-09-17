@@ -26,6 +26,11 @@ help:
 	@echo "  make worker-image  build the worker image as $(WORKER_IMAGE)"
 	@echo "  make worker-local  run a worker from source against emi-local (EMBEDDEDCI_API_KEY=...)"
 	@echo
+	@echo "The KiCad plugin (kicad-plugin/), a front end for the app:"
+	@echo "  make plugin-test     its Python tests (PLUGIN_PY= a Python with PySide6 + kicad-python)"
+	@echo "  make plugin-install  install a (dev) copy of this checkout into KiCad, beside any release"
+	@echo "  make pcm-release VERSION=x.y.z  package it for KiCad's Plugin and Content Manager"
+	@echo
 	@echo "Tests:"
 	@echo "  make test          go test + pytest"
 	@echo "  make fixtures      regenerate the shared cost-model fixtures"
@@ -182,6 +187,69 @@ driver-fixtures:
 	cd worker && .venv/bin/python -m pytest -q tests/test_driver_spectrum.py tests/test_driver_document.py tests/test_driver_resolve.py tests/test_driver_apply.py
 	cd webapp && npx vitest run src/lib/driverSpectrum.test.ts src/lib/driverDocument.test.ts src/lib/driverResolve.test.ts src/lib/driverApply.test.ts
 	@$(MAKE) --no-print-directory test
+
+# ---- the KiCad plugin ----
+#
+# kicad-plugin/ is the plugin folder exactly as KiCad loads it: plain Python, nothing built
+# into it. It talks to the app built above, so there is nothing to compile first.
+
+PLUGIN    := kicad-plugin
+PLUGIN_PY ?= python3
+
+ifeq ($(shell uname -s),Darwin)
+KICAD_PLUGINS ?= $(HOME)/Documents/KiCad/10.0/plugins
+else
+KICAD_PLUGINS ?= $(HOME)/.local/share/kicad/10.0/plugins
+endif
+
+.PHONY: plugin-test plugin-install plugin-uninstall plugin-icons
+plugin-test:
+	cd $(PLUGIN) && $(PLUGIN_PY) -m pytest -q tests
+
+# A development copy beside any released install: its own identifier (".dev"), its own
+# window and its own settings. Restart KiCad (or Preferences -> Plugins -> Reload) after the
+# first install; after that, changes apply on the next press.
+plugin-install:
+	$(PLUGIN_PY) $(PLUGIN)/scripts/dev_install.py --plugins "$(KICAD_PLUGINS)"
+
+plugin-uninstall:
+	$(PLUGIN_PY) $(PLUGIN)/scripts/dev_install.py --plugins "$(KICAD_PLUGINS)" --uninstall
+
+# The committed toolbar icons, redrawn (needs Pillow).
+plugin-icons:
+	$(PLUGIN_PY) $(PLUGIN)/scripts/make_icons.py
+
+# ---- the Plugin and Content Manager repository ----
+#
+# The index PCM reads is its own public repo, shared with the other EmbeddedCI plugins:
+# repository.json, packages.json and resources.zip on its main branch. The plugin's source
+# and the archive stay here; this target builds the archive into dist/pcm/ and updates a
+# checkout of that repo. Publishing is attaching the archive to a release here and
+# committing that checkout.
+#
+# Users add https://raw.githubusercontent.com/$(PCM_GITHUB)/main/repository.json under
+# Plugin and Content Manager -> Manage repositories.
+
+PCM_GITHUB  ?= embeddedci-com/kicad-plugins
+PCM_REPO    ?= ../kicad-plugins
+PCM_STATUS  ?= testing
+PCM_TAG      = kicad-plugin-v$(VERSION)
+PCM_ZIP      = emi-analyzer-kicad-plugin-$(VERSION).zip
+PCM_RAW_URL ?= https://raw.githubusercontent.com/$(PCM_GITHUB)/main
+PCM_DL_URL  ?= https://github.com/embeddedci-com/emi-analyzer/releases/download/$(PCM_TAG)/$(PCM_ZIP)
+
+.PHONY: pcm-release
+pcm-release:
+	@case "$(VERSION)" in [0-9]*.[0-9]*.[0-9]*) ;; *) \
+	  echo "usage: make pcm-release VERSION=0.1.0 [PCM_STATUS=stable] [PCM_REPO=../kicad-plugins]"; \
+	  echo "  (VERSION defaults to dev, which is not a version to release)"; exit 1;; esac
+	@$(MAKE) --no-print-directory plugin-test
+	$(PLUGIN_PY) $(PLUGIN)/scripts/pcm_release.py --version $(VERSION) --status $(PCM_STATUS) \
+	  --repo "$(PCM_REPO)" --download-url "$(PCM_DL_URL)" --repo-url "$(PCM_RAW_URL)"
+	@echo
+	@echo "next:"
+	@echo "  gh release create $(PCM_TAG) dist/pcm/$(PCM_ZIP) --title 'KiCad plugin $(VERSION)'"
+	@echo "  cd $(PCM_REPO) && git add -A && git commit -m 'emi-analyzer $(VERSION)' && git push"
 
 # ---- a worker from source ----
 #

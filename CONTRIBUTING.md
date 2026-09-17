@@ -19,6 +19,7 @@ webapp/        React + Mantine
   app/           the local app's shell around it
 worker/        Python: ingest, rule checks, ngspice, nec2c, openEMS. Published as a Docker image.
 desktop/       Tauri 2: a window around emi-local, which it runs as a sidecar
+kicad-plugin/  the KiCad plugin: a front end that hands the app the board open in pcbnew
 deploy/        Postgres + MinIO integration stack, and the end-to-end smoke test
 docs/          documentation
 ```
@@ -97,6 +98,15 @@ runs the Go tests and the worker's Python tests. The webapp's:
 cd webapp && npm test && npm run typecheck
 ```
 
+The KiCad plugin's:
+
+```bash
+make plugin-test
+```
+
+They stand in for KiCad and for the app, so they need neither; the handful that need PySide6
+skip themselves. `PLUGIN_PY=` a Python that has PySide6 and kicad-python runs those too.
+
 Tests that need `ngspice`, `nec2c` or openEMS skip where those are not installed. CI runs the
 worker tests inside the worker image, so they are covered there
 ([`.github/workflows/test.yml`](.github/workflows/test.yml)). A few tests also run against real
@@ -143,6 +153,19 @@ minutes; otherwise it checks that the solve is refused.
      **draft** GitHub release.
 4. Install the draft's builds on each platform and run through the README's steps.
 5. Publish the release.
+
+The KiCad plugin is versioned and released on its own, because it changes far less often than
+the app and its users install it through KiCad rather than by downloading anything:
+
+```bash
+make pcm-release VERSION=0.1.1
+```
+
+after bumping `kicad-plugin/emi_analyzer/__init__.py`. That builds the archive into `dist/pcm/`
+and updates a checkout of [embeddedci-com/kicad-plugins](https://github.com/embeddedci-com/kicad-plugins),
+the Plugin and Content Manager index every EmbeddedCI plugin is published from; it prints the two
+commands that publish it. The plugin needs an app that publishes where it is listening
+(`endpoint.json`, 0.2.0 and later), so it cannot be released ahead of one.
 
 A release build starts the worker image tagged with its own version, so the app and its worker
 always come from the same commit — which is why the image must exist before the release is

@@ -20,6 +20,11 @@ export type WorkerState =
 export interface LocalStatus {
   version: string
   data_dir: string
+  /**
+   * The program showing this page: 'desktop' for the app's own window, empty in a browser
+   * tab. Only the app has a window that can be put away, so only there is it offered.
+   */
+  shell?: string
   worker: {
     mode: 'docker' | 'none'
     state: WorkerState
@@ -56,6 +61,65 @@ const LABEL: Record<WorkerState, { text: string; color: string }> = {
   // Not "stopped": it failed, and saying so is what sends the user to the reason.
   error: { text: 'Worker problem', color: 'red' },
   stopped: { text: 'Worker stopped', color: 'gray' },
+}
+
+/**
+ * Keep serving, stop being on screen.
+ *
+ * The KiCad plugin is a front end for this app, so the useful state while working in KiCad
+ * is the app running with no window: the analysis, the boards and the worker are all still
+ * here. The window goes away, the tray icon stays, and the plugin never notices.
+ *
+ * The page cannot move the window itself. It asks the server, which tells the shell that
+ * started it; the page is deliberately given no desktop APIs.
+ */
+export function BackgroundButton() {
+  const status = useLocalStatus()
+  const [asked, setAsked] = useState(false)
+  const hide = useMutation({
+    mutationFn: () => getJSON<{ ok: boolean }>('/api/local/window/background', { method: 'POST' }),
+  })
+  if (status.data?.shell !== 'desktop') return null
+  return (
+    <>
+      <Button size="xs" variant="default" onClick={() => setAsked(true)}>
+        Run in the background
+      </Button>
+      <Modal opened={asked} onClose={() => setAsked(false)} title="Run in the background" size="md" centered>
+        <Stack gap="sm">
+          <Text size="sm">
+            The window closes and EMI Analyzer keeps running: your boards, your results and the
+            worker all stay as they are. This is the mode to use while you work in KiCad, where
+            the plugin is the front end.
+          </Text>
+          <Text size="sm">
+            Open it again from the EMI Analyzer icon in the {trayName()}. Quitting is in the same
+            menu. Closing this window does the same thing as this button.
+          </Text>
+          <Group justify="flex-end" gap="xs">
+            <Button size="xs" variant="default" onClick={() => setAsked(false)}>
+              Cancel
+            </Button>
+            <Button size="xs" loading={hide.isPending} onClick={() => hide.mutate()}>
+              Run in the background
+            </Button>
+          </Group>
+          {hide.isError && (
+            <Text size="xs" c="red">
+              {(hide.error as Error).message}
+            </Text>
+          )}
+        </Stack>
+      </Modal>
+    </>
+  )
+}
+
+function trayName() {
+  const ua = navigator.userAgent
+  if (ua.includes('Mac OS X')) return 'menu bar'
+  if (ua.includes('Windows')) return 'notification area'
+  return 'system tray'
 }
 
 export function WorkerStatus() {

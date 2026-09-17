@@ -32,6 +32,7 @@ import type { BoardDoc, RuleFinding, RulesDoc } from '../lib/boardTypes'
 import type { FieldOverlayData } from '../lib/overlay'
 import { placePortOnAnchor, type PortAnchor, type PortSpec } from '../lib/portPlacement'
 import { EmiApi, TERMINAL_STATUSES, type Run } from '../lib/emiApi'
+import { useKiCad } from '../lib/kicad'
 import type { EmiDeployment } from '../routes'
 
 type SolveView = 'setup' | 'result' | 'drivers' | 'parts'
@@ -49,6 +50,9 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
   const [focus, setFocus] = useState<{ x: number; y: number; zoom?: number } | null>(null)
   const [cursor, setCursor] = useState<{ x: number; y: number } | null>(null)
   const [glError, setGlError] = useState<string | null>(null)
+  // Only inside the KiCad plugin: the PCB Editor next door, and what it last said back.
+  const kicad = useKiCad()
+  const [kicadNote, setKicadNote] = useState<string | null>(null)
 
   // Solve setup
   const [tab, setTab] = useState<string | null>('findings')
@@ -159,6 +163,22 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
   }, [activeRun?.progress])
 
   const doc: BoardDoc | null = board.data?.doc ?? null
+
+  // Point the PCB Editor at a finding's net. It is next to this window, so saying nothing
+  // when it refuses would look like the click did not register.
+  const showInKiCad = useCallback(
+    (nets: string[]) => {
+      if (!kicad) return
+      setKicadNote(null)
+      kicad
+        .select(nets)
+        .then((n) =>
+          setKicadNote(n ? null : `Nothing to select: ${nets.join(', ')} has no copper on the board.`),
+        )
+        .catch((e: Error) => setKicadNote(`KiCad did not select it: ${e.message}`))
+    },
+    [kicad],
+  )
 
   // Same query key as the analyzer page, so the two share one answer rather than asking twice.
 
@@ -571,12 +591,19 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
                   <Text size="xs">{(rules.error as Error).message}</Text>
                 </Alert>
               )}
+              {kicadNote && (
+                <Alert color="yellow" variant="light" mb="xs" withCloseButton
+                       onClose={() => setKicadNote(null)}>
+                  <Text size="xs">{kicadNote}</Text>
+                </Alert>
+              )}
               {ingestDone && (
                 <RuleFindings
                   rules={(rules.data as RulesDoc | null) ?? null}
                   onFocus={onFocusFinding}
                   onSelectNet={setNet}
                   onSimulate={onSimulateFinding}
+                  onShowInKiCad={kicad ? showInKiCad : undefined}
                 />
               )}
             </Tabs.Panel>

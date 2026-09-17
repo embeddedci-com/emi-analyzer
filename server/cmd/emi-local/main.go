@@ -62,6 +62,15 @@ const autoKeyName = "local worker (automatic)"
 // waits for it and reads the URL from it.
 const ReadyPrefix = "EMI_LOCAL_READY "
 
+// HideWindowLine asks the desktop shell to put its window away and carry on serving from the
+// tray. Stdout, because that is the channel the shell already watches; this process cannot
+// touch the window itself, and the page that asks is deliberately given no Tauri APIs.
+const HideWindowLine = "EMI_LOCAL_HIDE_WINDOW"
+
+// shellDesktop is what the desktop app passes for -shell. Anything else means nobody is
+// holding a window for us, and the calls that move one are not offered.
+const shellDesktop = "desktop"
+
 func main() {
 	var (
 		addr        = flag.String("addr", envOr("EMI_LOCAL_ADDR", defaultAddr), "listen address; must be a loopback address")
@@ -74,6 +83,8 @@ func main() {
 		concurrent  = flag.Int("worker-concurrency", 1, "runs the worker takes at once; a solve is memory-bound, so more is rarely faster")
 		webDir      = flag.String("webapp", envOr("EMI_LOCAL_WEBAPP", ""), "serve the webapp from this directory instead of the embedded copy (development)")
 		experiment  = flag.String("experimental", envOr("EMI_EXPERIMENTAL", ""), `comma-separated experimental features to enable: "full-wave" (openEMS solves, far field, cable emissions, compliance; unverified on real boards)`)
+		shell       = flag.String("shell", "", `the program holding a window on this server: "desktop" for the app, empty when there is none`)
+		endpoint    = flag.String("endpoint-file", envOr("EMI_LOCAL_ENDPOINT_FILE", defaultEndpointFile()), "file left behind so other programs on this computer (the KiCad plugin) can find this app; empty to write none")
 		issueKey    = flag.Bool("issue-key", false, "print a key for a worker you run yourself (with -worker=none), and exit")
 		showVersion = flag.Bool("version", false, "print the version and exit")
 	)
@@ -98,6 +109,7 @@ func main() {
 		addr: *addr, dataDir: *dataDir, open: *open, lifeline: *lifeline,
 		workerMode: *workerMode, workerImage: *workerImage, workerURL: *workerURL,
 		concurrency: *concurrent, webDir: *webDir, experimental: *experiment,
+		endpointFile: *endpoint, shell: *shell,
 	}); err != nil {
 		logger.Error("emi-local failed", "err", err)
 		os.Exit(1)
@@ -113,6 +125,8 @@ type options struct {
 	concurrency    int
 	webDir         string
 	experimental   string
+	endpointFile   string
+	shell          string
 }
 
 func run(logger *slog.Logger, o options) error {
@@ -216,7 +230,20 @@ func run(logger *slog.Logger, o options) error {
 			"version":  version,
 			"data_dir": o.dataDir,
 			"worker":   worker.Status(),
+			// Which shell is showing this page, so it can offer to put that shell away. Empty
+			// in a browser tab, where there is no window of ours to move.
+			"shell": o.shell,
 		})
+	})
+	// Put the desktop app's window away and leave it serving from the tray, which is what the
+	// KiCad plugin needs from it. Refused when no window is ours to move.
+	mux.HandleFunc("POST /api/local/window/background", func(w http.ResponseWriter, r *http.Request) {
+		if o.shell != shellDesktop {
+			http.Error(w, "this server has no window to put away", http.StatusNotFound)
+			return
+		}
+		fmt.Println(HideWindowLine)
+		writeJSON(w, map[string]any{"ok": true})
 	})
 	mux.HandleFunc("GET /api/local/worker/logs", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
@@ -242,6 +269,16 @@ func run(logger *slog.Logger, o options) error {
 	}
 	serveErr := make(chan error, 1)
 	go func() { serveErr <- srv.Serve(ln) }()
+
+	// Published once the server answers, so a program that finds the file and asks it a
+	// question gets an answer rather than a refused connection.
+	forgetEndpoint, err := writeEndpoint(o.endpointFile, baseURL, o.dataDir)
+	if err != nil {
+		logger.Warn("could not publish where this app is listening; the KiCad plugin will not find it",
+			"file", o.endpointFile, "err", err)
+		forgetEndpoint = func() {}
+	}
+	defer forgetEndpoint()
 
 	logger.Info("emi-local ready", "url", baseURL, "data_dir", o.dataDir, "version", version)
 	// On stdout, alone on its line, for the desktop app to read.

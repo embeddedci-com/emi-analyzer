@@ -23,6 +23,11 @@ export interface RuleFindingsProps {
    * "the clamp is 19 mm away" is exactly the sentence a simulation turns into volts.
    */
   onSimulate?: (finding: RuleFinding) => void
+  /**
+   * Select a finding's net on the board in KiCad. Only supplied inside the KiCad plugin,
+   * where these pages sit beside the PCB Editor; everywhere else the buttons are absent.
+   */
+  onShowInKiCad?: (nets: string[]) => void
 }
 
 const SEVERITY_COLOR: Record<string, string> = {
@@ -41,7 +46,9 @@ const RULE_LABEL: Record<string, string> = Object.fromEntries(
   (catalogue as { id: string; title: string }[]).map((r) => [r.id, r.title]),
 )
 
-export function RuleFindings({ rules, onFocus, onSelectNet, onSimulate }: RuleFindingsProps) {
+export function RuleFindings({
+  rules, onFocus, onSelectNet, onSimulate, onShowInKiCad,
+}: RuleFindingsProps) {
   const [filter, setFilter] = useState('all')
 
   const grouped = useMemo(() => {
@@ -132,6 +139,7 @@ export function RuleFindings({ rules, onFocus, onSelectNet, onSimulate }: RuleFi
                       if (f.net) onSelectNet?.(f.net)
                     }}
                     onSimulate={onSimulate && SIMULATABLE.has(f.rule) && f.net ? () => onSimulate(f) : undefined}
+                    onShowInKiCad={onShowInKiCad && f.net ? () => onShowInKiCad([f.net!]) : undefined}
                   />
                 ))}
               </Stack>
@@ -169,11 +177,12 @@ export function RuleFindings({ rules, onFocus, onSelectNet, onSimulate }: RuleFi
 }
 
 function FindingRow({
-  finding, onClick, onSimulate,
+  finding, onClick, onSimulate, onShowInKiCad,
 }: {
   finding: RuleFinding
   onClick: () => void
   onSimulate?: () => void
+  onShowInKiCad?: () => void
 }) {
   // JSON from the worker carries absent coordinates as null, not undefined, so this has
   // to be a loose check. An info-severity finding ("41 nets exceed lambda/20") has no
@@ -221,7 +230,7 @@ function FindingRow({
         {finding.detail}
       </Text>
 
-      {(finding.layer || locatable || onSimulate) && (
+      {(finding.layer || locatable || onSimulate || onShowInKiCad) && (
         <Group gap={6} pl={20} wrap="nowrap" align="center">
           {finding.layer && (
             <Badge size="xs" variant="outline" color="gray" style={{ flex: 'none' }}>
@@ -233,12 +242,28 @@ function FindingRow({
               {finding.x!.toFixed(1)}, {finding.y!.toFixed(1)} mm — click to zoom
             </Text>
           )}
-          {onSimulate && (
+          {onShowInKiCad && (
             <Anchor
               size="xs"
               component="button"
               type="button"
               ml="auto"
+              style={{ whiteSpace: 'nowrap' }}
+              onClick={(e) => {
+                // The row zooms this viewer; this points the PCB Editor at the same net.
+                e.stopPropagation()
+                onShowInKiCad()
+              }}
+            >
+              Show in KiCad
+            </Anchor>
+          )}
+          {onSimulate && (
+            <Anchor
+              size="xs"
+              component="button"
+              type="button"
+              ml={onShowInKiCad ? undefined : 'auto'}
               style={{ whiteSpace: 'nowrap' }}
               onClick={(e) => {
                 // The row itself zooms; this opens the simulation instead of doing both.
