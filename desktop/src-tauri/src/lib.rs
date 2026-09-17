@@ -18,8 +18,8 @@
 //! ## Running with the window put away
 //!
 //! The KiCad plugin is a front end for this app: it needs the server, not the window. So the
-//! window can be put away without quitting -- closing it, or "Run in the background" on the
-//! page -- and the app carries on from the tray, serving the plugin. The page asks for that
+//! window can be put away without quitting -- closing it, or "Minimize to tray" on the page
+//! -- and the app carries on from the tray, serving the plugin. The page asks for that
 //! through the sidecar, which prints `EMI_LOCAL_HIDE_WINDOW` on stdout, rather than by being
 //! given a Tauri API of its own: the rule that the page gets none is worth more than the
 //! shortcut.

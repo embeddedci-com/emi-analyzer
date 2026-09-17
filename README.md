@@ -255,10 +255,10 @@ https://raw.githubusercontent.com/embeddedci-com/kicad-plugins/main/repository.j
 then install **EMI Analyzer** from it. Details and troubleshooting:
 [kicad-plugin/README.md](kicad-plugin/README.md).
 
-**The app does not have to be on screen.** Press **Run in the background** in its header, or
-close its window, and it carries on serving the plugin from the menu bar (Windows: the
-notification area) with your boards, results and worker untouched. Open it again, or quit it,
-from that icon's menu. The plugin also starts the app by itself when it is not running.
+**The app does not have to be on screen.** Press **Minimize to menu bar** in its header
+(**Minimize to tray** on Windows and Linux), or close its window, and it carries on serving the
+plugin with your boards, results and worker untouched. Open it again, or quit it, from that
+icon's menu. The plugin also starts the app by itself when it is not running.
 
 ---
 
@@ -319,9 +319,9 @@ ssh -L 7465:127.0.0.1:7465 your-server
 ## Running in the background
 
 EMI Analyzer keeps working with its window put away: closing the window does not quit it, and
-neither does **Run in the background** in the header. The server, your boards and the Docker
-worker all stay up, which is what the [KiCad plugin](kicad-plugin/README.md) needs when the
-PCB Editor is the front end.
+neither does **Minimize to menu bar** in the header, which reads **Minimize to tray** on Windows
+and Linux. The server, your boards and the Docker worker all stay up, which is what the
+[KiCad plugin](kicad-plugin/README.md) needs when the PCB Editor is the front end.
 
 Its icon stays in the menu bar on macOS, the notification area on Windows and the system tray
 on Linux. That menu has **Open EMI Analyzer** and **Quit**. Quit is the only thing that stops

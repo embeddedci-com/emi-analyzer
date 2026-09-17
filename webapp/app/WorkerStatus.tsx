@@ -9,9 +9,10 @@
 
 import { useState } from 'react'
 import {
-  Alert, Anchor, Badge, Button, Code, Group, Loader, Modal, ScrollArea, Stack, Text,
+  Alert, Anchor, Badge, Button, Code, Group, Loader, Modal, ScrollArea, Stack, Text, Tooltip,
 } from '@mantine/core'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useKiCad } from '../src/lib/kicad'
 
 export type WorkerState =
   | 'disabled' | 'docker_missing' | 'docker_not_running' | 'pulling' | 'starting'
@@ -63,6 +64,26 @@ const LABEL: Record<WorkerState, { text: string; color: string }> = {
   stopped: { text: 'Worker stopped', color: 'gray' },
 }
 
+/** That the window going away is not the app going away has been explained to this viewer. */
+const EXPLAINED_KEY = 'emi.background-explained'
+
+function explained(): boolean {
+  try {
+    return localStorage.getItem(EXPLAINED_KEY) === '1'
+  } catch {
+    // A private window, or storage the browser refuses: explaining twice is not a problem.
+    return false
+  }
+}
+
+function rememberExplained() {
+  try {
+    localStorage.setItem(EXPLAINED_KEY, '1')
+  } catch {
+    // Nothing is lost but the shortcut.
+  }
+}
+
 /**
  * Keep serving, stop being on screen.
  *
@@ -72,25 +93,49 @@ const LABEL: Record<WorkerState, { text: string; color: string }> = {
  *
  * The page cannot move the window itself. It asks the server, which tells the shell that
  * started it; the page is deliberately given no desktop APIs.
+ *
+ * Explained the first time and then done straight away: where the window went is the only
+ * surprising part of it, and once is enough for that.
  */
 export function BackgroundButton() {
   const status = useLocalStatus()
+  const kicad = useKiCad()
   const [asked, setAsked] = useState(false)
   const hide = useMutation({
     mutationFn: () => getJSON<{ ok: boolean }>('/api/local/window/background', { method: 'POST' }),
+    onSuccess: () => {
+      rememberExplained()
+      setAsked(false)
+    },
   })
-  if (status.data?.shell !== 'desktop') return null
+
+  // Only the desktop app has a window of ours to put away. Inside the KiCad plugin these same
+  // pages are in the plugin's own window, and hiding the app's would look like nothing
+  // happened, so the button is not there.
+  if (status.data?.shell !== 'desktop' || kicad) return null
+
   return (
     <>
-      <Button size="xs" variant="default" onClick={() => setAsked(true)}>
-        Run in the background
-      </Button>
-      <Modal opened={asked} onClose={() => setAsked(false)} title="Run in the background" size="md" centered>
+      <Tooltip
+        label={`EMI Analyzer keeps running in the ${trayName()}, ready for the KiCad plugin`}
+        withArrow
+      >
+        <Button
+          size="xs"
+          variant="default"
+          loading={hide.isPending && !asked}
+          onClick={() => (explained() ? hide.mutate() : setAsked(true))}
+        >
+          Minimize to {trayShort()}
+        </Button>
+      </Tooltip>
+      <Modal opened={asked} onClose={() => setAsked(false)}
+             title={`Minimize to the ${trayName()}`} size="md" centered>
         <Stack gap="sm">
           <Text size="sm">
-            The window closes and EMI Analyzer keeps running: your boards, your results and the
-            worker all stay as they are. This is the mode to use while you work in KiCad, where
-            the plugin is the front end.
+            The window goes away and EMI Analyzer keeps running: your boards, your results and
+            the worker all stay as they are. This is the mode to use while you work in KiCad,
+            where the plugin is the front end.
           </Text>
           <Text size="sm">
             Open it again from the EMI Analyzer icon in the {trayName()}. Quitting is in the same
@@ -101,7 +146,7 @@ export function BackgroundButton() {
               Cancel
             </Button>
             <Button size="xs" loading={hide.isPending} onClick={() => hide.mutate()}>
-              Run in the background
+              Minimize to {trayShort()}
             </Button>
           </Group>
           {hide.isError && (
@@ -115,11 +160,17 @@ export function BackgroundButton() {
   )
 }
 
+/** What the icon's home is called here, for prose. */
 function trayName() {
   const ua = navigator.userAgent
   if (ua.includes('Mac OS X')) return 'menu bar'
   if (ua.includes('Windows')) return 'notification area'
   return 'system tray'
+}
+
+/** The same place, short enough for a button. There is no tray on a Mac. */
+function trayShort() {
+  return navigator.userAgent.includes('Mac OS X') ? 'menu bar' : 'tray'
 }
 
 export function WorkerStatus() {

@@ -78,12 +78,13 @@ Install it, start it once so it can download its Docker worker, then press **Res
 
 ### Keep it out of the way
 
-While you work in KiCad the app only needs to be running, not on screen. Press **Run in the
-background** in its header, or just close its window: it keeps your boards, your results and
-the worker exactly as they are, and carries on answering the plugin. Its icon stays in the
-menu bar (Windows: the notification area), and that menu is how you open it again or quit.
+While you work in KiCad the app only needs to be running, not on screen. In the app's own
+window press **Minimize to menu bar** (**Minimize to tray** on Windows and Linux), or just
+close it: your boards, your results and the worker stay exactly as they are, and it carries on
+answering the plugin. Its icon stays there, and that menu is how you open it again or quit.
 
-The plugin does not mind which state it is in.
+The button is in the app's window, not in this one. The plugin's window is yours to close
+whenever you like, and it does not mind which state the app is in.
 
 ### Without the app
 
