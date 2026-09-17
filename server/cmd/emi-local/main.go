@@ -402,10 +402,17 @@ func defaultDataDir() string {
 	return filepath.Join(os.TempDir(), "emi-analyzer")
 }
 
+// defaultImage names the worker this build belongs with.
+//
+// A release runs the image tagged with its own version, so an app and its worker are always
+// from the same commit. Anything else -- a build from source, which is stamped "dev" -- runs
+// the "dev" tag, which the worker-image workflow pushes from main. Not "latest": that is the
+// newest *release*, and pairing today's source with the last release's worker is the kind of
+// mismatch this scheme exists to prevent.
 func defaultImage() string {
 	tag := strings.TrimPrefix(version, "v")
 	if tag == "" || tag == "dev" {
-		tag = "latest"
+		tag = "dev"
 	}
 	return "ghcr.io/embeddedci-com/emi-worker:" + tag
 }

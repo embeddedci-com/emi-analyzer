@@ -45,6 +45,11 @@ docker run --rm --name emi-worker \
   ghcr.io/embeddedci-com/emi-worker:latest
 ```
 
+Use the tag that matches the app you are feeding, which `emi-local -version` prints: `:0.2.0`
+for a release, `:dev` for a build from source. `:latest` is the newest release, which is only
+the right tag if that is what you are running: a worker and an app from different versions can
+disagree about what a run means.
+
 On Linux with Docker Engine (not Docker Desktop), use the host network instead, because the app
 only listens on `127.0.0.1`:
 

@@ -304,7 +304,7 @@ ssh -L 7465:127.0.0.1:7465 your-server
 | `-open=false` | opens | do not open a browser tab |
 | `-addr` | `127.0.0.1:7465` | listen address; loopback addresses only |
 | `-worker none` | `docker` | do not start a worker; [run your own](docs/running-a-worker.md) |
-| `-worker-image` | `ghcr.io/embeddedci-com/emi-worker:<version>` | run a different worker image |
+| `-worker-image` | `ghcr.io/embeddedci-com/emi-worker:<version>` | run a different worker image (`:dev` for a build from source) |
 | `-worker-concurrency` | `1` | how many runs the worker takes at once |
 | `-experimental` | none | enable [experimental features](#experimental-features) |
 | `-endpoint-file` | in your config folder | where it says it is listening, so the KiCad plugin can find it; empty writes none |

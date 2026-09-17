@@ -147,7 +147,9 @@ minutes; otherwise it checks that the solve is refused.
 
 3. Two workflows run:
    - [`worker-image`](.github/workflows/worker-image.yml) pushes
-     `ghcr.io/embeddedci-com/emi-worker:0.1.0` and `:latest`, for amd64 and arm64.
+     `ghcr.io/embeddedci-com/emi-worker:0.1.0` and `:latest`, for amd64 and arm64. Pushes to
+     `main` publish `:dev`, `:main` and `:sha-<short>` instead; `:dev` is what a build from
+     source starts, so it is the one to keep working.
    - [`release`](.github/workflows/release.yml) builds the installers for macOS (Apple Silicon and
      Intel), Windows and Linux, plus the standalone `emi-local` binaries, and attaches them to a
      **draft** GitHub release.
