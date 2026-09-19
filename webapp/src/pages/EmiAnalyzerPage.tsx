@@ -117,6 +117,15 @@ export function EmiAnalyzerPage({ api, deployment = 'hosted' }: EmiAnalyzerPageP
                   {' '}is experimental and switched off in this build.
                 </>
               )}
+              {!local && (
+                <>
+                  {' '}Prefer to work inside KiCad?{' '}
+                  <Anchor component={Link} to="/docs/kicad-plugins" inherit>
+                    Install it as a plugin
+                  </Anchor>
+                  .
+                </>
+              )}
             </Text>
           </div>
           {local && (
