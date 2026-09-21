@@ -57,16 +57,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # ---------------------------------------------------------------------------
 FROM base AS solver-build
 ARG OPENEMS_REF=master
+# Leave unset for a native build (defaults to nproc). Set to 1 when building linux/amd64
+# under QEMU emulation on an arm64 host (e.g. colima/lima on Apple Silicon) -- parallel
+# emulated GCC jobs there are prone to spurious SIGSEGV mid-compile (seen on
+# openEMS/Common/engine_interface_base.cpp), which looks like a compile error but isn't.
+ARG OPENEMS_NJOBS=
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential cmake git \
         libhdf5-dev libvtk9-dev libboost-all-dev libcgal-dev \
         libtinyxml-dev qtbase5-dev libvtk9-qt-dev \
         gerbv \
+        python3-setuptools-scm cython3 python3-numpy python3-h5py python3-matplotlib \
     && rm -rf /var/lib/apt/lists/*
 RUN git clone --recursive --depth 1 --branch "${OPENEMS_REF}" \
         https://github.com/thliebig/openEMS-Project.git /src/openEMS-Project \
     && cd /src/openEMS-Project \
-    && ./update_openEMS.sh /usr/local --python \
+    && ./update_openEMS.sh /usr/local --python ${OPENEMS_NJOBS:+--njobs="$OPENEMS_NJOBS"} \
     && rm -rf /src
 
 # ---------------------------------------------------------------------------
