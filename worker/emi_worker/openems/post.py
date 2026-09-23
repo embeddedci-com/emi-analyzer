@@ -11,7 +11,9 @@ openEMS's frequency-domain dump layout, verified against a real run:
     /FieldData/FD/f<N>_imag           same
     /Mesh/x, /Mesh/y, /Mesh/z         line coordinates, in **metres**
 
-The mesh in the file is the *dump box's* subgrid, not the whole simulation grid.
+The mesh in the file is the *dump box's* subgrid, not the whole simulation grid. A current
+openEMS build writes ``/FieldData/FD/f<N>`` instead, one complex dataset of shape
+(3, nx, ny, nz) with ``d_order = "NXYZ"``; ``read_fd_dump`` reads both.
 """
 
 from __future__ import annotations
@@ -85,8 +87,20 @@ def read_fd_dump(path: str) -> list[FieldGrid]:
         z_mm = np.asarray(f["Mesh/z"][:], dtype=np.float64) * 1000.0
 
         for i, freq in enumerate(freqs):
-            re = np.asarray(fd[f"f{i}_real"][:], dtype=np.float64)
-            im = np.asarray(fd[f"f{i}_imag"][:], dtype=np.float64)
+            if f"f{i}_real" in fd:
+                re = np.asarray(fd[f"f{i}_real"][:], dtype=np.float64)
+                im = np.asarray(fd[f"f{i}_imag"][:], dtype=np.float64)
+            else:
+                # A current openEMS (OPENEMS_SOURCE=build) writes one complex dataset per
+                # frequency, ordered (components, x, y, z) and saying so in ``d_order``. The
+                # first run on that build failed here, on "object 'f0_real' doesn't exist".
+                ds = fd[f"f{i}"]
+                order = ds.attrs.get("d_order", b"NXYZ")
+                order = order.decode() if isinstance(order, bytes) else str(order)
+                if order != "NXYZ":
+                    raise ValueError(f"{os.path.basename(path)} has an unknown order {order!r}")
+                c = np.asarray(ds[:]).transpose(0, 3, 2, 1)
+                re, im = c.real.astype(np.float64), c.imag.astype(np.float64)
             # (components, nz, ny, nx) -> magnitude of the complex vector, per cell.
             mag = np.sqrt((re ** 2 + im ** 2).sum(axis=0))
             if mag.ndim == 3:

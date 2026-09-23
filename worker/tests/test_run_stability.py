@@ -184,3 +184,41 @@ def test_the_excitation_length_and_the_closing_line_are_parsed(tmp_path, monkeyp
     r = runmod.run_openems("model.xml", str(tmp_path))
     assert (r.excitation_steps, r.final_timestep, r.max_timesteps) == (66_806, 50_995, 1_383_981)
     assert r.converged is False
+
+
+def _fake_openems(tmp_path, energies_db: list[tuple[int, float]]):
+    """An openEMS that prints its source length and progress, then waits for an ABORT file."""
+    lines = ["echo 'Excitation signal length is: 1000 timesteps (1e-10s)'",
+             "echo 'Max. number of timesteps: 9000 ( --> 9 * Excitation signal length)'"]
+    for step, db in energies_db:
+        lines.append(f"echo '[@ 1s] Timestep: {step} || Speed: 100 MC/s (1e-03 s/TS) || "
+                     f"Energy: ~1e-15 ({db:+.2f}dB)'")
+        lines.append("sleep 0.05")
+    lines.append("for i in $(seq 1 40); do [ -f ABORT ] && echo 'Time for 3000 iterations' "
+                 "&& exit 0; sleep 0.05; done")
+    lines.append("echo 'Max. number of timesteps was reached before the end-criteria!'")
+    fake = tmp_path / "openEMS"
+    fake.write_text("#!/bin/sh\n" + "\n".join(lines) + "\n")
+    fake.chmod(0o755)
+    return str(fake)
+
+
+def test_the_runner_stops_openems_only_after_its_source(tmp_path, monkeypatch):
+    """A -60 dB dip inside the source is ignored; -45 dB after it ends the run normally."""
+    from emi_worker.openems import run as runmod
+
+    monkeypatch.setattr(runmod, "OPENEMS_BIN", _fake_openems(
+        tmp_path, [(400, -60.0), (800, -0.0), (2000, -30.0), (3000, -45.0)]))
+    r = runmod.run_openems("model.xml", str(tmp_path), stop_below_db=-40.0)
+    assert r.stopped_on_energy_at == 3000
+    assert r.converged is True
+
+
+def test_without_the_runner_criterion_the_run_goes_to_its_cap(tmp_path, monkeypatch):
+    from emi_worker.openems import run as runmod
+
+    monkeypatch.setattr(runmod, "OPENEMS_BIN", _fake_openems(
+        tmp_path, [(400, -60.0), (2000, -30.0), (3000, -45.0)]))
+    r = runmod.run_openems("model.xml", str(tmp_path))
+    assert r.stopped_on_energy_at == 0
+    assert r.converged is False

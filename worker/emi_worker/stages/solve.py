@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 import time
 
@@ -271,6 +272,10 @@ def run_solve(ctx: StageContext) -> StageResult:
     workdir = os.path.join(ctx.rundir, "openems")
     os.makedirs(workdir, exist_ok=True)
     xml_path = os.path.join(workdir, "model.xml")
+    # The end criterion is enforced by run_openems, after the source, not by openEMS: openEMS
+    # checks its own while the pulse is still on and stopped a real board's solve on a dip
+    # between two lobes (research/verify_record_length.py).
+    built.doc.end_criteria = run.OPENEMS_NEVER_STOPS
     with open(xml_path, "w") as fh:
         fh.write(built.doc.to_string())
 
@@ -300,6 +305,7 @@ def run_solve(ctx: StageContext) -> StageResult:
             on_progress=on_progress,
             should_stop=ctx.should_stop,
             source_ends_at_step=built.source_ends_at_step or None,
+            stop_below_db=10.0 * math.log10(params.end_criteria),
         )
     except run.Stopped:
         from . import Stopped

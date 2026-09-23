@@ -557,8 +557,8 @@ def build_model(model: BoardModel, transform, params: SolveParams) -> BuiltModel
             copper_y.extend(port.required_lines())
             copper_x.extend(port.across_lines())
 
-    # Components, planned before meshing. A series R-L-C is three elements in three adjacent
-    # cells, so the gap needs four grid lines — which cannot be arranged after the fact.
+    # Components, planned before meshing. A capacitor's element spans three cells across its pad
+    # gap, so the gap needs four grid lines, which cannot be arranged after the fact.
     plan = _plan_components(model, transform, params, notes)
     copper_x.extend(plan.required_x())
     copper_y.extend(plan.required_y())

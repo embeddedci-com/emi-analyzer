@@ -189,3 +189,29 @@ def test_an_unconverged_run_marks_every_derived_number_unusable(solved):
         assert ports[0]["usable"] is converged
         assert all(u is converged for u in transfer["usable"])
         assert art.manifest["layers"], "the field maps are written either way"
+
+
+def test_a_dump_from_a_current_openems_reads_the_same(tmp_path: Path):
+    """The build writes one complex dataset per frequency, (3, x, y, z), and says so."""
+    import h5py
+
+    x, y = np.linspace(0, 1e-3, 4), np.linspace(0, 2e-3, 3)
+    field = np.arange(3 * 4 * 3, dtype=np.float32).reshape(3, 4, 3, 1)
+    old, new = tmp_path / "old.h5", tmp_path / "new.h5"
+    with h5py.File(old, "w") as f:
+        for k, v in (("x", x), ("y", y), ("z", [5e-4])):
+            f[f"Mesh/{k}"] = v
+        fd = f.create_group("FieldData/FD")
+        fd.attrs["frequency"] = [1e8]
+        fd["f0_real"] = field.transpose(0, 3, 2, 1)
+        fd["f0_imag"] = np.zeros_like(field.transpose(0, 3, 2, 1))
+    with h5py.File(new, "w") as f:
+        for k, v in (("x", x), ("y", y), ("z", [5e-4])):
+            f[f"Mesh/{k}"] = v
+        fd = f.create_group("FieldData/FD")
+        fd.attrs["frequency"] = [1e8]
+        fd["f0"] = field.astype(np.complex64)
+        fd["f0"].attrs["d_order"] = "NXYZ"
+    a, b = post.read_fd_dump(str(old))[0], post.read_fd_dump(str(new))[0]
+    assert b.magnitude.shape == (3, 4)
+    np.testing.assert_allclose(a.magnitude, b.magnitude)

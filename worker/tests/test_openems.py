@@ -522,9 +522,9 @@ def test_turning_component_modelling_on_changes_nothing_without_matches(board, t
     assert on == off
 
 
-def test_a_placed_component_adds_three_elements_and_is_reported(board, transform):
-    """Three, not one: the shipped CSXCAD wires R, C and L in parallel (K1), so a series
-    R-L-C has to be three single-value elements in adjacent cells."""
+def test_the_modelled_parts_list_names_a_placed_component(board, transform):
+    """What a result reports for a part it modelled. Placement itself is pinned by
+    test_a_capacitor_is_one_series_element_across_the_gap below."""
     from emi_worker.components.document import Resolved, SeriesRLC
     from emi_worker.components.place import Placement, PlacementPlan
 
@@ -533,18 +533,6 @@ def test_a_placed_component_adds_three_elements_and_is_reported(board, transform
         rlc=SeriesRLC(c_f=1e-7, esl_h=4.5e-10, esr_ohm=0.06), generic=True)
     placement = Placement(ref="C1", resolved=resolved, axis=0, lo=10.0, hi=10.3,
                           across_lo=30.0, across_hi=30.4, layer=board.copper_layers[0].name)
-
-    built = build_model(board, transform, _params())
-    doc = built.doc
-    z = 0.0
-    for element in csx.series_rlc(
-        "cap_C1", direction=placement.axis, resistance=0.06, inductance=4.5e-10,
-        capacitance=1e-7, cells=placement.cells(z),
-    ):
-        doc.add(element)
-    xml = doc.to_string()
-    assert xml.count('Name="cap_C1') == 3
-    assert 'Name="cap_C1_c"' in xml and 'Name="cap_C1_l"' in xml and 'Name="cap_C1_r"' in xml
 
     plan = PlacementPlan(placements=[placement])
     from emi_worker.components.place import modelled_parts

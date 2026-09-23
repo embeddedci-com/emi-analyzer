@@ -40,6 +40,9 @@ _CELLS_LINE = re.compile(r"FDTD simulation size:.*?-->\s*(?P<cells>[\d.]+)\s*FDT
 _EXCITATION_LINE = re.compile(r"Excitation signal length is:\s*(?P<n>\d+)\s*timesteps")
 _DONE_LINE = re.compile(r"Time for\s*(?P<n>\d+)\s*iterations")
 
+#: An end criterion openEMS cannot meet, for a run whose end ``run_openems`` decides instead.
+OPENEMS_NEVER_STOPS = 1e-30
+
 #: What openEMS prints when a run stops on its timestep cap rather than its end criterion.
 TIMESTEP_LIMIT_NEEDLE = "Max. number of timesteps was reached before the end-criteria"
 
@@ -113,6 +116,9 @@ class RunResult:
     log_text: str
     #: How long openEMS says its own excitation lasts, in its timesteps. 0 when not reported.
     excitation_steps: int = 0
+    #: The step at which the runner asked openEMS to stop because the energy had fallen past
+    #: ``stop_below_db`` after the source. 0 when it did not.
+    stopped_on_energy_at: int = 0
 
     @property
     def stopped_inside_the_source(self) -> bool:
@@ -175,6 +181,7 @@ def run_openems(
     should_stop: Callable[[], bool] | None = None,
     poll_interval: float = 0.25,
     source_ends_at_step: int | None = None,
+    stop_below_db: float | None = None,
 ) -> RunResult:
     """Run openEMS to completion, streaming progress.
 
@@ -184,6 +191,14 @@ def run_openems(
     ``source_ends_at_step`` is the timestep after which the excitation has finished. Given it,
     the divergence check also catches a run that grows from the start (see
     ``divergence_ratio``).
+
+    ``stop_below_db`` moves the end criterion out of openEMS and into this loop: once openEMS's
+    own excitation has finished and its energy is that far below its running maximum, an
+    ``ABORT`` file is written in ``workdir``, which openEMS polls for and treats as a normal
+    end, writing every dump. openEMS checks its own criterion while the source is still on,
+    and stopped a real board's 30 MHz-1 GHz solve on a dip between two lobes of the pulse
+    (``RunResult.stopped_inside_the_source``); a caller using this gives openEMS an
+    unreachable criterion of its own.
     """
     env = dict(os.environ)
     if threads and threads > 0:
@@ -222,6 +237,7 @@ def run_openems(
     energies: list[float] = []
     energy_steps: list[int] = []
     cancelled = False
+    aborted_at = 0
 
     assert proc.stdout is not None
     try:
@@ -272,6 +288,16 @@ def run_openems(
                     pass
                 if on_progress:
                     on_progress(last)
+                source_done = excitation_steps or source_ends_at_step or 0
+                if (stop_below_db is not None and not aborted_at and source_done
+                        and last.timestep > source_done and last.energy_db <= stop_below_db):
+                    aborted_at = last.timestep
+                    try:
+                        with open(os.path.join(workdir, "ABORT"), "w"):
+                            pass
+                    except OSError as exc:
+                        log.warning("could not ask openEMS to stop: %s", exc)
+                        aborted_at = 0
     finally:
         proc.stdout.close()
 
@@ -313,6 +339,7 @@ def run_openems(
         warnings=warnings,
         log_text=log_text,
         excitation_steps=excitation_steps,
+        stopped_on_energy_at=aborted_at,
     )
 
 

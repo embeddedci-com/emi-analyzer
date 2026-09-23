@@ -290,42 +290,6 @@ def series_rlc_element(
     )
 
 
-def series_rlc(
-    name: str,
-    direction: int,
-    *,
-    resistance: float,
-    inductance: float,
-    capacitance: float,
-    cells: Sequence[tuple[tuple[float, float, float], tuple[float, float, float]]],
-    caps: bool = True,
-) -> list["LumpedElement"]:
-    """Three single-value elements in adjacent cells: R, L and C. **Does not work.**
-
-    This was the capacitor model until September 2026, on the reasoning that the shipped
-    CSXCAD wires R, C and L in parallel, so three single-value elements in a row would be the
-    series circuit. It is not, on the solver that is shipped: openEMS 0.0.35 skips a lumped
-    element that has only L ("R or C not specified! skipping"), so the middle cell was an open
-    gap and every capacitor an open circuit (research/verify_lumped_rlc.py). Kept only so
-    research/verify_0402.py can show that; the solve uses ``series_rlc_element``.
-    """
-    if len(cells) != 3:
-        raise ValueError(
-            f"a series R-L-C needs exactly three adjacent cells, got {len(cells)}. Refine "
-            f"the mesh across the pad gap rather than approximating it with fewer"
-        )
-    values = (("r", resistance), ("l", inductance), ("c", capacitance))
-    out: list[LumpedElement] = []
-    for (suffix, value), (p1, p2) in zip(values, cells):
-        kwargs: dict = {"resistance": None, "capacitance": None, "inductance": None}
-        kwargs[{"r": "resistance", "l": "inductance", "c": "capacitance"}[suffix]] = value
-        out.append(LumpedElement(
-            name=f"{name}_{suffix}", direction=direction, caps=caps,
-            primitives=[Box(p1=p1, p2=p2, priority=PRIORITY_PORT)], **kwargs,
-        ))
-    return out
-
-
 @dataclass
 class ProbeBox(Property):
     """A voltage (Type 0) or current (Type 1) probe.
