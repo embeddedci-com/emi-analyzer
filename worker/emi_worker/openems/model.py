@@ -77,6 +77,9 @@ class SolveParams:
     #: Model matched components (§12). Off by default so that every existing caller, and
     #: every result already reported, keeps solving bare copper exactly as before.
     model_components: bool = False
+    #: Whether the solver models a series lumped R-L-C (``run.solver_has_series_rlc``). Without
+    #: it no capacitor can be modelled, and none is placed. The solve stage asks the binary.
+    solver_series_rlc: bool = False
     #: Components offered ahead of the built-in library, already in precedence order. The
     #: server knows who owns what; this does not need to.
     component_candidates: list = field(default_factory=list)
@@ -241,6 +244,15 @@ def _plan_components(model: BoardModel, transform, params: "SolveParams", notes:
     from emi_worker.components.place import PlacementPlan, plan_all
 
     if not params.model_components:
+        return PlacementPlan()
+    if not params.solver_series_rlc:
+        # The solver would skip the inductor and leave every capacitor an open gap, which is a
+        # model that looks like decoupling and is not. Bare copper is visibly incomplete.
+        notes.append(
+            "capacitors were left as bare copper: this worker's openEMS cannot model an "
+            "inductor, so a capacitor's series R-L-C would be an open circuit. A worker built "
+            "with a current openEMS can model them"
+        )
         return PlacementPlan()
 
     from emi_worker.components import match_part, resolve_part
@@ -956,12 +968,12 @@ def build_model(model: BoardModel, transform, params: SolveParams) -> BuiltModel
                 )
                 continue
             rlc = placement.resolved.rlc
-            for element in csx.series_rlc(
+            cells = placement.cells(z)
+            doc.add(csx.series_rlc_element(
                 f"cap_{placement.ref}", direction=placement.axis,
                 resistance=rlc.esr_ohm, inductance=rlc.esl_h, capacitance=rlc.c_f,
-                cells=placement.cells(z),
-            ):
-                doc.add(element)
+                box=(cells[0][0], cells[-1][1]),
+            ))
         modelled = modelled_parts(plan)
     for ref, why in plan.skipped:
         notes.append(f"{ref} matched a component but was not modelled: {why}")

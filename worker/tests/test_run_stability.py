@@ -15,6 +15,7 @@ from __future__ import annotations
 import pytest
 
 from emi_worker.openems.run import (
+    _SIGNIFICANT_WARNINGS,
     DIVERGENCE_RATIO,
     TIMESTEP_LIMIT_NEEDLE,
     RunResult,
@@ -143,3 +144,43 @@ def test_a_run_that_stopped_on_its_end_criterion_is_converged():
     r = _result("Time for 84987 iterations with 1.89e+06 cells : 402 sec")
     assert r.converged is True
     assert r.unconverged_reason() is None
+
+
+@pytest.mark.parametrize("line", [
+    "Operator::Calc_LumpedElements(): Warning: Lumped Element R or C not specified! skipping. "
+    " ID: 6 @ Property: cap_C1_l",
+    "Operator::Calc_LumpedElements(): Warning: Lumped Element capacity is too small for its "
+    "size! skipping.",
+])
+def test_a_skipped_lumped_element_is_surfaced(line):
+    """openEMS 0.0.35 drops an inductor-only element and carries on (research/verify_lumped_rlc.py)."""
+    assert any(needle in line for needle, _ in _SIGNIFICANT_WARNINGS)
+
+
+def test_a_run_that_stopped_inside_its_own_source_is_not_converged():
+    """openEMS 0.0.35 checks its end criterion while the pulse is still on (verify_record_length)."""
+    r = RunResult(returncode=0, cells=1, dt_seconds=8.3e-14, max_timesteps=1_383_981,
+                  final_timestep=50_995, final_energy_db=-53.2, elapsed_s=1.0, warnings=[],
+                  log_text="Time for 50995 iterations", excitation_steps=66_806)
+    assert r.stopped_inside_the_source and not r.converged
+    assert "66,806" in r.unconverged_reason()
+    after = RunResult(**{**r.__dict__, "final_timestep": 70_000})
+    assert after.converged and after.unconverged_reason() is None
+
+
+def test_the_excitation_length_and_the_closing_line_are_parsed(tmp_path, monkeypatch):
+    """Both come from openEMS's own log, so a fake binary that prints them is enough."""
+    from emi_worker.openems import run as runmod
+
+    fake = tmp_path / "openEMS"
+    fake.write_text("#!/bin/sh\n"
+                    "echo 'Excitation signal length is: 66806 timesteps (5.56271e-09s)'\n"
+                    "echo 'Max. number of timesteps: 1383981 ( --> 20.7 * Excitation signal length)'\n"
+                    "echo '[@ 8m19s] Timestep: 50995 || Speed: 132.4 MC/s (9.8e-03 s/TS) || "
+                    "Energy: ~7.01e-21 (-53.18dB)'\n"
+                    "echo 'Time for 50995 iterations with 1299456.00 cells : 499.52 sec'\n")
+    fake.chmod(0o755)
+    monkeypatch.setattr(runmod, "OPENEMS_BIN", str(fake))
+    r = runmod.run_openems("model.xml", str(tmp_path))
+    assert (r.excitation_steps, r.final_timestep, r.max_timesteps) == (66_806, 50_995, 1_383_981)
+    assert r.converged is False

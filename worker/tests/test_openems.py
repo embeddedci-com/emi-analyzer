@@ -701,3 +701,60 @@ def test_the_thirds_rule_can_be_turned_off(monkeypatch):
     monkeypatch.setattr(m, "THIRDS_RULE", False)
     y = _microstrip_model(_microstrip_board()).mesh.y
     assert np.min(np.abs(y - (10.0 - 0.1914))) < 1e-6
+
+
+# ---- capacitors need a solver that models an inductor (research/verify_lumped_rlc.py) ----
+
+def _cap_board():
+    return parse_board(parse("""(kicad_pcb
+  (version 20241229)
+  (general (thickness 0.27))
+  (layers (0 "F.Cu" signal) (2 "B.Cu" signal) (25 "Edge.Cuts" user))
+  (setup (stackup
+    (layer "F.Cu" (type "copper") (thickness 0.035))
+    (layer "dielectric 1" (type "core") (thickness 0.2) (material "FR4") (epsilon_r 4.4))
+    (layer "B.Cu" (type "copper") (thickness 0.035))))
+  (net 0 "") (net 1 "GND") (net 2 "VCC")
+  (gr_rect (start 0 0) (end 30 20) (layer "Edge.Cuts") (width 0.1))
+  (footprint "Capacitor_SMD:C_0402_1005Metric" (layer "F.Cu") (at 15 10 0)
+    (property "Reference" "C1" (at 0 -1.2 0) (layer "F.SilkS"))
+    (property "Value" "1n" (at 0 1.2 0) (layer "F.Fab"))
+    (pad "1" smd rect (at -0.48 0) (size 0.56 0.62) (layers "F.Cu" "F.Mask") (net 2 "VCC"))
+    (pad "2" smd rect (at 0.48 0) (size 0.56 0.62) (layers "F.Cu" "F.Mask") (net 1 "GND")))
+  (zone (net 1) (net_name "GND") (layer "B.Cu") (hatch edge 0.5) (min_thickness 0.25)
+    (polygon (pts (xy 0 0) (xy 30 0) (xy 30 20) (xy 0 20)))
+    (filled_polygon (layer "B.Cu") (pts (xy 0 0) (xy 30 0) (xy 30 20) (xy 0 20))))
+)"""))
+
+
+def _cap_model(series: bool):
+    board = _cap_board()
+    params = SolveParams(roi=(12.0, 7.0, 18.0, 13.0), frequencies_hz=[100e6, 1e9],
+                         ports=[Port("p1", 14.52, 10.0, "F.Cu", half_width_mm=0.2)],
+                         dx_um=150, dy_um=150, dz_um=100, air_mm=3.0,
+                         model_components=True, solver_series_rlc=series)
+    return build_model(board, _board_extent(board), params)
+
+
+def test_no_capacitor_is_placed_on_a_solver_without_an_inductor():
+    """openEMS 0.0.35 skips an L-only element, so the old three-cell model was an open gap."""
+    built = _cap_model(series=False)
+    assert built.modelled_parts == []
+    assert not [p for p in built.doc.properties if isinstance(p, csx.LumpedElement)
+                and p.name.startswith("cap_")]
+    assert any("bare copper" in n and "inductor" in n for n in built.notes)
+
+
+def test_a_capacitor_is_one_series_element_across_the_gap():
+    built = _cap_model(series=True)
+    assert [p["ref"] for p in built.modelled_parts] == ["C1"]
+    (el,) = [p for p in built.doc.properties if isinstance(p, csx.LumpedElement)
+             and p.name.startswith("cap_")]
+    a = el.to_xml().attrib
+    assert a["LEtype"] == "1" and a["Direction"] == "0"
+    assert float(a["C"]) == pytest.approx(1e-9)
+    assert float(a["L"]) == pytest.approx(0.45e-9)
+    assert float(a["R"]) > 0
+    box = el.primitives[0]
+    # It spans the gap between the pads' facing edges, 15 - 0.2 to 15 + 0.2 mm.
+    assert (box.p1[0], box.p2[0]) == (pytest.approx(14.8), pytest.approx(15.2))

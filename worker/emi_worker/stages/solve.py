@@ -211,6 +211,9 @@ def run_solve(ctx: StageContext) -> StageResult:
         raise StageError(f"the board file could not be read: {exc}") from exc
     transform = _board_extent(board)
 
+    if params.model_components:
+        params.solver_series_rlc = run.solver_has_series_rlc()
+
     ctx.progress("mesh", 10, "building the mesh")
     try:
         built = emmodel.build_model(board, transform, params)

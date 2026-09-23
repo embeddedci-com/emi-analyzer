@@ -17,8 +17,10 @@ import os
 import re
 import signal
 import subprocess
+import tempfile
 import time
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Callable
 
 log = logging.getLogger(__name__)
@@ -35,6 +37,8 @@ _PROGRESS = re.compile(
 _TIMESTEP_LINE = re.compile(r"FDTD timestep is:\s*(?P<dt>[\d.eE+-]+)\s*s")
 _MAXSTEPS_LINE = re.compile(r"Max\. number of timesteps:\s*(?P<n>\d+)")
 _CELLS_LINE = re.compile(r"FDTD simulation size:.*?-->\s*(?P<cells>[\d.]+)\s*FDTD cells")
+_EXCITATION_LINE = re.compile(r"Excitation signal length is:\s*(?P<n>\d+)\s*timesteps")
+_DONE_LINE = re.compile(r"Time for\s*(?P<n>\d+)\s*iterations")
 
 #: What openEMS prints when a run stops on its timestep cap rather than its end criterion.
 TIMESTEP_LIMIT_NEEDLE = "Max. number of timesteps was reached before the end-criteria"
@@ -52,6 +56,17 @@ _SIGNIFICANT_WARNINGS = (
      "settled; no level, impedance or transfer function from it is used"),
     ("Unknown Property found",
      "part of the model was not understood by the solver"),
+    # openEMS 0.0.35 models a lumped R or C and nothing else. An element with only L set is
+    # dropped with this warning, and its cell is left as whatever material is there: a series
+    # R-L-C built from three cells becomes R, an open gap and C, which is an open circuit.
+    # Measured with research/verify_lumped_rlc.py: a 10 nH element read as -j9921 ohm at
+    # 100 MHz, a 0.16 pF gap, instead of +j6.3.
+    ("R or C not specified",
+     "a lumped element was skipped by the solver, so part of the model is an open gap "
+     "instead of the component that was asked for"),
+    ("capacity is too small for its size",
+     "a lumped capacitor was skipped by the solver because it is smaller than the cell it "
+     "sits in, so part of the model is missing"),
 )
 
 #: How far the energy may climb back above its own low point before the run is called unstable.
@@ -96,16 +111,39 @@ class RunResult:
     elapsed_s: float
     warnings: list[str]
     log_text: str
+    #: How long openEMS says its own excitation lasts, in its timesteps. 0 when not reported.
+    excitation_steps: int = 0
+
+    @property
+    def stopped_inside_the_source(self) -> bool:
+        """openEMS stopped on its end criterion while its own excitation was still running.
+
+        openEMS 0.0.35 checks the end criterion at every progress report, source or no source,
+        against the energy's running maximum. A wideband pulse is barely one cycle of its
+        carrier, and in a small region energy leaves as fast as it arrives, so between two lobes
+        the energy can fall 50 dB and the run stops: measured on a real board
+        (research/verify_record_length.py), a 30 MHz-1 GHz solve stopped at "-53 dB" after
+        50,995 of the 66,806 steps its pulse lasts, 4.2 ns into a record that needs 100 ns.
+        That is not a settled run, whatever the energy says.
+        """
+        return 0 < self.final_timestep < self.excitation_steps
 
     @property
     def converged(self) -> bool:
-        """Whether the run reached its energy cutoff rather than its timestep cap."""
-        return TIMESTEP_LIMIT_NEEDLE not in self.log_text
+        """Whether the run reached its energy cutoff, after its source, not its timestep cap."""
+        return TIMESTEP_LIMIT_NEEDLE not in self.log_text and not self.stopped_inside_the_source
 
     def unconverged_reason(self) -> str | None:
         """Why nothing derived from this run may be used, in the user's words. None if it may."""
         if self.converged:
             return None
+        if self.stopped_inside_the_source:
+            return (
+                f"openEMS stopped at timestep {self.final_timestep:,}, before its own source "
+                f"had finished ({self.excitation_steps:,} timesteps), because the energy dipped "
+                f"between two lobes of the pulse. The record is cut short, so no level, "
+                f"impedance or transfer function from this run is used"
+            )
         return (
             f"the run reached its limit of {self.max_timesteps:,} timesteps with its energy "
             f"only {abs(self.final_energy_db):.1f} dB down, before the fields settled. A "
@@ -115,7 +153,13 @@ class RunResult:
 
 
 class OpenEMSError(RuntimeError):
-    """openEMS failed. The message is written for the user."""
+    """openEMS failed. The message is written for the user.
+
+    ``log_text`` is the solver's output when there was any, so a refused run can still be
+    looked at.
+    """
+
+    log_text: str = ""
 
 
 class Stopped(RuntimeError):
@@ -172,6 +216,8 @@ def run_openems(
     cells = 0
     dt = 0.0
     max_steps = 0
+    excitation_steps = 0
+    done_steps = 0
     last = RunProgress(0, 0, 0.0, 0.0, 0.0)
     energies: list[float] = []
     energy_steps: list[int] = []
@@ -199,6 +245,14 @@ def run_openems(
             m = _MAXSTEPS_LINE.search(line)
             if m:
                 max_steps = int(m.group("n"))
+                continue
+            m = _EXCITATION_LINE.search(line)
+            if m:
+                excitation_steps = int(m.group("n"))
+                continue
+            m = _DONE_LINE.search(line)
+            if m:
+                done_steps = int(m.group("n"))
                 continue
 
             m = _PROGRESS.search(line)
@@ -232,12 +286,14 @@ def run_openems(
 
     rise = divergence_ratio(energies, energy_steps, source_ends_at_step)
     if rise >= DIVERGENCE_RATIO:
-        raise OpenEMSError(
+        err = OpenEMSError(
             f"the simulation went unstable: after the excitation passed, its energy climbed "
             f"back by a factor of {rise:.3g} instead of decaying. Every number in this run is "
             f"noise, so it is refused rather than reported. This is a property of the mesh "
             f"rather than of the board — try a finer preset, or a smaller region."
         )
+        err.log_text = log_text
+        raise err
 
     if returncode != 0:
         tail = "\n".join(lines[-15:])
@@ -250,11 +306,13 @@ def run_openems(
         cells=cells,
         dt_seconds=dt,
         max_timesteps=max_steps,
-        final_timestep=last.timestep,
+        # The closing line is exact; the last progress line can be seconds stale.
+        final_timestep=done_steps or last.timestep,
         final_energy_db=last.energy_db,
         elapsed_s=elapsed,
         warnings=warnings,
         log_text=log_text,
+        excitation_steps=excitation_steps,
     )
 
 
@@ -301,13 +359,19 @@ def divergence_ratio(
     Comparing against the global peak instead would find nothing at all: a diverging run's
     largest energy is its last one.
 
-    **A run that grows from the start never decays 20 dB**, so on the energy alone the floor
-    never arms and nothing is reported: the fields grow, openEMS prints "- 0.0 dB" to the end,
-    and the result is published. Every divergence on record had the other shape, but that is
-    no reason to be blind to this one. So when the caller knows when the source stops
-    (``steps`` and ``source_ends_at_step``), the floor also arms at the first sample after
-    that, decayed or not. Once the excitation has finished nothing feeds a passive structure,
-    so its energy can only ring down, and a thousandfold climb from there is the grid.
+    **When the caller knows when the source stops, that replaces the 20 dB gate** (``steps``
+    and ``source_ends_at_step``): the floor arms at the first sample after it, decayed or not,
+    and never before. Both halves were measured:
+
+    * A run that grows from the start never decays 20 dB, so on the energy alone the floor
+      never arms and nothing is reported: the fields grow, openEMS prints "- 0.0 dB" to the
+      end, and the result is published. Once the excitation has finished nothing feeds a
+      passive structure, so its energy can only ring down, and a thousandfold climb from there
+      is the grid.
+    * The 20 dB gate is not safe while the source is on. A 30 MHz-1 GHz pulse is barely one
+      cycle of its carrier, and on a real board (research/verify_record_length.py) its energy
+      fell more than 20 dB between two lobes and then rose 2,070x on the next, at step 46,624
+      of a pulse that lasts 66,806. The gate called that a divergence and refused the run.
 
     openEMS's end criterion stops a healthy run 40 dB down, well past the 20 dB gate.
     """
@@ -327,9 +391,52 @@ def divergence_ratio(
         peak = max(peak, e)
         if floor is None:
             # Still rising, or not yet clearly past the excitation.
-            if e * decay_factor <= peak or (quiet_from is not None and steps[k] > quiet_from):
+            if quiet_from is not None:
+                if steps[k] > quiet_from:
+                    floor = e
+            elif e * decay_factor <= peak:
                 floor = e
             continue
         floor = min(floor, e)
         worst = max(worst, e / floor)
     return worst
+
+
+@lru_cache(maxsize=1)
+def solver_has_series_rlc() -> bool:
+    """Whether the installed openEMS models a series lumped R-L-C (``LEtype``).
+
+    Asked of the binary rather than assumed from a version: it is given a one-cell inductor
+    and one timestep, and a solver that cannot model it says "R or C not specified" while
+    setting up. openEMS 0.0.35, the Debian package, cannot; a current build can. A
+    second or so, once per worker process.
+    """
+    from . import csx
+
+    lines = [float(v) for v in range(12)]
+    doc = csx.CSXDocument(
+        excitation=csx.Excitation(type=0, f0=1e9, fc=1e9),
+        x_lines=lines, y_lines=lines, z_lines=lines, f_max=2e9, max_timesteps=1,
+        boundaries=csx.Boundaries(*(["PEC"] * 6)),
+    )
+    probe_box = csx.Box(p1=(5.0, 5.0, 5.0), p2=(5.0, 5.0, 6.0), priority=csx.PRIORITY_PORT)
+    doc.add(csx.ExcitationProperty(name="exc", excite=(0.0, 0.0, 1.0), primitives=[probe_box]))
+    # Inductance alone. With R and C set as well, 0.0.35 ignores LEtype and L without a word
+    # and builds R parallel to C, which is why the question is asked this way.
+    doc.add(csx.LumpedElement(
+        name="probe", direction=2, resistance=None, inductance=1e-9, le_type=csx.LE_SERIES,
+        primitives=[csx.Box(p1=(3.0, 3.0, 3.0), p2=(4.0, 4.0, 4.0), priority=csx.PRIORITY_PORT)]))
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "probe.xml")
+            with open(path, "w") as fh:
+                fh.write(doc.to_string())
+            out = subprocess.run([OPENEMS_BIN, path], cwd=tmp, capture_output=True, text=True,
+                                 timeout=60)
+    except (OSError, subprocess.SubprocessError) as exc:
+        log.warning("could not ask openEMS about lumped elements: %s", exc)
+        return False
+    text = out.stdout + out.stderr
+    ok = out.returncode == 0 and "R or C not specified" not in text
+    log.info("openEMS %s a series lumped R-L-C", "models" if ok else "does not model")
+    return ok
