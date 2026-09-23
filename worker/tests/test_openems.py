@@ -106,7 +106,7 @@ def test_a_healthy_run_is_not_called_unstable():
     reported as a divergence by a factor of 1.07e6 -- the exact number users were shown. Every
     long solve was refused this way, and the refusal was read as a property of the mesher.
 
-    openEMS ran this one to completion and stopped on its own -50 dB end-criterion.
+    openEMS ran this one to completion and stopped on its own -40 dB end-criterion.
     """
     ratio = divergence_ratio(REAL_RUN_ENERGY)
     assert ratio < DIVERGENCE_RATIO, f"a healthy run scored {ratio:.3g}"
@@ -552,9 +552,9 @@ def test_turning_component_modelling_on_changes_nothing_without_matches(board, t
     assert on == off
 
 
-def test_a_placed_component_adds_three_elements_and_is_reported(board, transform):
-    """Three, not one: the shipped CSXCAD wires R, C and L in parallel (K1), so a series
-    R-L-C has to be three single-value elements in adjacent cells."""
+def test_the_modelled_parts_list_names_a_placed_component(board, transform):
+    """What a result reports for a part it modelled. Placement itself is pinned by
+    test_a_capacitor_is_one_series_element_across_the_gap below."""
     from emi_worker.components.document import Resolved, SeriesRLC
     from emi_worker.components.place import Placement, PlacementPlan
 
@@ -563,18 +563,6 @@ def test_a_placed_component_adds_three_elements_and_is_reported(board, transform
         rlc=SeriesRLC(c_f=1e-7, esl_h=4.5e-10, esr_ohm=0.06), generic=True)
     placement = Placement(ref="C1", resolved=resolved, axis=0, lo=10.0, hi=10.3,
                           across_lo=30.0, across_hi=30.4, layer=board.copper_layers[0].name)
-
-    built = build_model(board, transform, _params())
-    doc = built.doc
-    z = 0.0
-    for element in csx.series_rlc(
-        "cap_C1", direction=placement.axis, resistance=0.06, inductance=4.5e-10,
-        capacitance=1e-7, cells=placement.cells(z),
-    ):
-        doc.add(element)
-    xml = doc.to_string()
-    assert xml.count('Name="cap_C1') == 3
-    assert 'Name="cap_C1_c"' in xml and 'Name="cap_C1_l"' in xml and 'Name="cap_C1_r"' in xml
 
     plan = PlacementPlan(placements=[placement])
     from emi_worker.components.place import modelled_parts
@@ -621,3 +609,170 @@ def test_far_field_frequencies_outside_the_band_are_dropped_and_said(board, tran
         far_field=True, far_field_frequencies_hz=[30e6, 600e6, 2e9]))
     assert built.far_field["frequencies_hz"] == [600e6]
     assert any("were dropped" in n for n in built.notes)
+
+
+# ---- what the microstrip check found (research/verify_microstrip.py) ------------------
+
+def _microstrip_board(w: float = 0.3828, zone=((0, 0), (30, 0), (30, 20), (0, 20))):
+    pts = " ".join(f"(xy {x} {y})" for x, y in zone)
+    return parse_board(parse(f"""(kicad_pcb
+  (version 20241229)
+  (general (thickness 0.27))
+  (layers (0 "F.Cu" signal) (2 "B.Cu" signal) (25 "Edge.Cuts" user))
+  (setup (stackup
+    (layer "F.Cu" (type "copper") (thickness 0.035))
+    (layer "dielectric 1" (type "core") (thickness 0.2) (material "FR4") (epsilon_r 4.4)
+           (loss_tangent 0))
+    (layer "B.Cu" (type "copper") (thickness 0.035))))
+  (net 0 "") (net 1 "GND") (net 2 "SIG")
+  (gr_rect (start 0 0) (end 30 20) (layer "Edge.Cuts") (width 0.1))
+  (segment (start 5 10) (end 25 10) (width {w}) (layer "F.Cu") (net 2))
+  (zone (net 1) (net_name "GND") (layer "B.Cu") (hatch edge 0.5) (min_thickness 0.25)
+    (polygon (pts {pts})) (filled_polygon (layer "B.Cu") (pts {pts})))
+)"""))
+
+
+def _microstrip_model(board, dx=150, dz=100):
+    params = SolveParams(
+        roi=(2.0, 4.0, 28.0, 16.0), frequencies_hz=[0.5e9, 3e9],
+        ports=[Port("p1", 5.0, 10.0, "F.Cu", half_width_mm=0.19),
+               Port("p2", 25.0, 10.0, "F.Cu", half_width_mm=0.19, excited=False)],
+        dx_um=dx, dy_um=dx, dz_um=dz, air_mm=3.0,
+    )
+    return build_model(board, _board_extent(board), params)
+
+
+def test_a_plane_larger_than_the_region_is_kept():
+    """A ground plane drawn as one rectangle over the board has no vertex near the region.
+
+    The region filter asked whether any vertex was inside, so this plane was dropped and the
+    microstrip over it solved with no ground at all: -j9000 ohm at 0.5 GHz.
+    """
+    built = _microstrip_model(_microstrip_board())
+    names = [p.name for p in built.doc.properties if isinstance(p, csx.Metal)]
+    assert "cu_B_Cu" in names
+
+
+def test_a_track_crossing_the_region_with_both_ends_outside_is_kept():
+    board = _microstrip_board()
+    params = SolveParams(roi=(12.0, 6.0, 18.0, 14.0), frequencies_hz=[1e9],
+                         ports=[Port("p1", 15.0, 10.0, "F.Cu", half_width_mm=0.19)],
+                         dx_um=150, dy_um=150, dz_um=100, air_mm=3.0)
+    built = build_model(board, _board_extent(board), params)
+    top = next(p for p in built.doc.properties if getattr(p, "name", "") == "cu_F_Cu")
+    assert top.primitives
+
+
+def test_copper_sheets_sit_on_the_dielectric_and_the_slab_reaches_them():
+    """Half a copper thickness of air either side of every dielectric, before.
+
+    At the fine preset the grid resolved it, and a 50 ohm microstrip came out at 56 ohm with
+    an effective permittivity of 2.2 instead of 3.3.
+    """
+    from emi_worker.openems.model import _stack
+
+    sheets, slabs = _stack(_microstrip_board())
+    assert sheets["F.Cu"] - sheets["B.Cu"] == pytest.approx(0.2)
+    (_, lo, hi), = slabs
+    assert (lo, hi) == (pytest.approx(sheets["B.Cu"]), pytest.approx(sheets["F.Cu"]))
+
+
+def test_an_inner_sheet_goes_to_its_thinner_dielectric():
+    """The prepreg under an outer layer keeps its thickness; the core takes the copper."""
+    from emi_worker.kicad.board import StackupLayer
+    from emi_worker.openems.model import _stack
+
+    board = _microstrip_board()
+    board.stackup = [
+        StackupLayer("F.Cu", "copper", 0.035), StackupLayer("prepreg", "prepreg", 0.2, "", 4.4),
+        StackupLayer("In1.Cu", "copper", 0.035), StackupLayer("core", "core", 1.0, "", 4.6),
+        StackupLayer("In2.Cu", "copper", 0.035), StackupLayer("prepreg2", "prepreg", 0.2, "", 4.4),
+        StackupLayer("B.Cu", "copper", 0.035),
+    ]
+    sheets, slabs = _stack(board)
+    assert sheets["F.Cu"] - sheets["In1.Cu"] == pytest.approx(0.2)
+    assert sheets["In2.Cu"] - sheets["B.Cu"] == pytest.approx(0.2)
+    assert sheets["In1.Cu"] - sheets["In2.Cu"] == pytest.approx(1.07)
+    spans = {s.name: (lo, hi) for s, lo, hi in slabs}
+    assert spans["core"] == (pytest.approx(sheets["In2.Cu"]), pytest.approx(sheets["In1.Cu"]))
+
+
+def test_a_straight_trace_gets_the_thirds_rule_and_no_line_on_its_edge():
+    """A line on a zero-thickness strip's edge makes it act half a cell wider per side.
+
+    The microstrip check measured 40 ohm for a 50 ohm line on every preset; with lines a third
+    of a cell inside and two thirds outside it measured 49.6-50.2.
+    """
+    board = _microstrip_board()
+    for dx in (150, 75, 50):
+        y = _microstrip_model(board, dx=dx).mesh.y
+        d = dx / 1000.0
+        for edge, inward in ((10.0 - 0.1914, 1.0), (10.0 + 0.1914, -1.0)):
+            assert np.min(np.abs(y - edge)) > d / 4, f"a line sits on the edge at dx {dx}"
+            assert np.min(np.abs(y - (edge + inward * d / 3))) < 1e-6
+            assert np.min(np.abs(y - (edge - inward * 2 * d / 3))) < 1e-6
+
+
+def test_the_thirds_rule_can_be_turned_off(monkeypatch):
+    from emi_worker.openems import model as m
+
+    monkeypatch.setattr(m, "THIRDS_RULE", False)
+    y = _microstrip_model(_microstrip_board()).mesh.y
+    assert np.min(np.abs(y - (10.0 - 0.1914))) < 1e-6
+
+
+# ---- capacitors need a solver that models an inductor (research/verify_lumped_rlc.py) ----
+
+def _cap_board():
+    return parse_board(parse("""(kicad_pcb
+  (version 20241229)
+  (general (thickness 0.27))
+  (layers (0 "F.Cu" signal) (2 "B.Cu" signal) (25 "Edge.Cuts" user))
+  (setup (stackup
+    (layer "F.Cu" (type "copper") (thickness 0.035))
+    (layer "dielectric 1" (type "core") (thickness 0.2) (material "FR4") (epsilon_r 4.4))
+    (layer "B.Cu" (type "copper") (thickness 0.035))))
+  (net 0 "") (net 1 "GND") (net 2 "VCC")
+  (gr_rect (start 0 0) (end 30 20) (layer "Edge.Cuts") (width 0.1))
+  (footprint "Capacitor_SMD:C_0402_1005Metric" (layer "F.Cu") (at 15 10 0)
+    (property "Reference" "C1" (at 0 -1.2 0) (layer "F.SilkS"))
+    (property "Value" "1n" (at 0 1.2 0) (layer "F.Fab"))
+    (pad "1" smd rect (at -0.48 0) (size 0.56 0.62) (layers "F.Cu" "F.Mask") (net 2 "VCC"))
+    (pad "2" smd rect (at 0.48 0) (size 0.56 0.62) (layers "F.Cu" "F.Mask") (net 1 "GND")))
+  (zone (net 1) (net_name "GND") (layer "B.Cu") (hatch edge 0.5) (min_thickness 0.25)
+    (polygon (pts (xy 0 0) (xy 30 0) (xy 30 20) (xy 0 20)))
+    (filled_polygon (layer "B.Cu") (pts (xy 0 0) (xy 30 0) (xy 30 20) (xy 0 20))))
+)"""))
+
+
+def _cap_model(series: bool):
+    board = _cap_board()
+    params = SolveParams(roi=(12.0, 7.0, 18.0, 13.0), frequencies_hz=[100e6, 1e9],
+                         ports=[Port("p1", 14.52, 10.0, "F.Cu", half_width_mm=0.2)],
+                         dx_um=150, dy_um=150, dz_um=100, air_mm=3.0,
+                         model_components=True, solver_series_rlc=series)
+    return build_model(board, _board_extent(board), params)
+
+
+def test_no_capacitor_is_placed_on_a_solver_without_an_inductor():
+    """openEMS 0.0.35 skips an L-only element, so the old three-cell model was an open gap."""
+    built = _cap_model(series=False)
+    assert built.modelled_parts == []
+    assert not [p for p in built.doc.properties if isinstance(p, csx.LumpedElement)
+                and p.name.startswith("cap_")]
+    assert any("bare copper" in n and "inductor" in n for n in built.notes)
+
+
+def test_a_capacitor_is_one_series_element_across_the_gap():
+    built = _cap_model(series=True)
+    assert [p["ref"] for p in built.modelled_parts] == ["C1"]
+    (el,) = [p for p in built.doc.properties if isinstance(p, csx.LumpedElement)
+             and p.name.startswith("cap_")]
+    a = el.to_xml().attrib
+    assert a["LEtype"] == "1" and a["Direction"] == "0"
+    assert float(a["C"]) == pytest.approx(1e-9)
+    assert float(a["L"]) == pytest.approx(0.45e-9)
+    assert float(a["R"]) > 0
+    box = el.primitives[0]
+    # It spans the gap between the pads' facing edges, 15 - 0.2 to 15 + 0.2 mm.
+    assert (box.p1[0], box.p2[0]) == (pytest.approx(14.8), pytest.approx(15.2))

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 import time
 
@@ -211,6 +212,9 @@ def run_solve(ctx: StageContext) -> StageResult:
         raise StageError(f"the board file could not be read: {exc}") from exc
     transform = _board_extent(board)
 
+    if params.model_components:
+        params.solver_series_rlc = run.solver_has_series_rlc()
+
     ctx.progress("mesh", 10, "building the mesh")
     try:
         built = emmodel.build_model(board, transform, params)
@@ -268,6 +272,10 @@ def run_solve(ctx: StageContext) -> StageResult:
     workdir = os.path.join(ctx.rundir, "openems")
     os.makedirs(workdir, exist_ok=True)
     xml_path = os.path.join(workdir, "model.xml")
+    # The end criterion is enforced by run_openems, after the source, not by openEMS: openEMS
+    # checks its own while the pulse is still on and stopped a real board's solve on a dip
+    # between two lobes (research/verify_record_length.py).
+    built.doc.end_criteria = run.OPENEMS_NEVER_STOPS
     with open(xml_path, "w") as fh:
         fh.write(built.doc.to_string())
 
@@ -296,6 +304,7 @@ def run_solve(ctx: StageContext) -> StageResult:
             threads=ctx.cores,
             on_progress=on_progress,
             should_stop=ctx.should_stop,
+            stop_below_db=10.0 * math.log10(params.end_criteria),
             excitation_s=emmodel.excitation_seconds(built.doc.excitation.fc),
         )
     except run.Stopped:
@@ -305,6 +314,13 @@ def run_solve(ctx: StageContext) -> StageResult:
         raise StageError(str(exc)) from exc
 
     ctx.progress("post", 92, "reading field data")
+
+    # A run that stopped on its timestep cap is published, because its field maps still show
+    # where the current is, but nothing derived from it is usable: every transfer function,
+    # impedance and far-field level is marked so, and the compliance estimate refuses it.
+    # Publishing it with only a flag and a log line, as this did, left every consumer to
+    # notice on its own, and none did.
+    unusable = result.unconverged_reason()
 
     try:
         artifacts = post.build_artifacts(
@@ -321,6 +337,7 @@ def run_solve(ctx: StageContext) -> StageResult:
                 "dt_seconds": result.dt_seconds,
                 "final_energy_db": result.final_energy_db,
                 "converged": result.converged,
+                "unusable_reason": unusable,
                 "elapsed_seconds": round(result.elapsed_s, 1),
                 "mesh": mesh_summary,
                 "roi_mm": list(params.roi),
@@ -369,7 +386,8 @@ def run_solve(ctx: StageContext) -> StageResult:
         "layers": list(built.dump_names),
         "warnings": result.warnings + built.notes,
     }
-    if not result.converged:
+    if unusable:
+        summary["unusable_reason"] = unusable
         log.warning("run did not converge: energy only fell to %.1f dB", result.final_energy_db)
 
     return StageResult(summary=summary, artifacts=uploaded, estimate=est)
@@ -515,7 +533,8 @@ def _add_far_field(ctx, params, built, artifacts, workdir: str) -> None:
         artifacts.files["manifest.json"] = json.dumps(artifacts.manifest, indent=2).encode()
         return
 
-    doc = far_field_document(field, source, excited, meta)
+    converged = (artifacts.manifest.get("run") or {}).get("converged") is not False
+    doc = far_field_document(field, source, excited, meta, converged=converged)
     artifacts.files["farfield.json"] = json.dumps(doc, separators=(",", ":")).encode()
     artifacts.manifest["far_field"] = {
         "format_version": FAR_FIELD_FORMAT_VERSION,
@@ -589,12 +608,13 @@ def check_against_nf2ff(workdir: str, freqs: list[float], surface, meta: dict) -
             )
 
 
-def far_field_document(field: dict, source: dict, excited: list, meta: dict) -> dict:
+def far_field_document(field: dict, source: dict, excited: list, meta: dict,
+                       converged: bool = True) -> dict:
     """``farfield.json``: the scan's reading per volt of the solve's own source.
 
     A frequency where the source delivered nothing has no transfer function, only a ratio of two
     small numbers, and is marked unusable rather than published -- the same rule as the cable
-    transfer function.
+    transfer function. So is every frequency of a run that did not converge.
     """
     import numpy as np
 
@@ -610,7 +630,9 @@ def far_field_document(field: dict, source: dict, excited: list, meta: dict) -> 
     # against |Z| = 25.5 kOhm at 30 MHz. The dipoles, whose records are complete, stay above
     # -0.5 % of |Z| everywhere, so the line is drawn well clear of them.
     passive = [bool(not np.isfinite(z) or z.real >= -PASSIVE_TOLERANCE * abs(z)) for z in z_in]
-    usable = [bool(m > 0 and np.isfinite(z)) and ok for m, z, ok in zip(mags, z_in, passive)]
+    # And none of a run that did not converge: its transform is of fields still ringing.
+    usable = [bool(converged and m > 0 and np.isfinite(z)) and ok
+              for m, z, ok in zip(mags, z_in, passive)]
     e_per_volt = [
         float(e / m) if ok else 0.0 for e, m, ok in zip(field["e_max_v_per_m"], mags, usable)
     ]

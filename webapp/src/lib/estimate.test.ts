@@ -13,7 +13,9 @@ import {
   estimate,
   EstimateError,
   formatDuration,
+  IN_PLANE_MIN_CELL_FRACTION,
   MAX_FILL_FACTOR,
+  MESH_MULTIPLIER_FLOOR,
 } from './estimate'
 
 interface FixtureCase {
@@ -30,6 +32,11 @@ interface FixtureCase {
 }
 
 describe('cost model matches the shared fixtures', () => {
+  it('shares its constants with the worker', () => {
+    expect(IN_PLANE_MIN_CELL_FRACTION).toBe(fixtures.in_plane_min_cell_fraction)
+    expect(MESH_MULTIPLIER_FLOOR).toEqual(fixtures.mesh_multiplier_floor)
+  })
+
   for (const c of fixtures.cases as FixtureCase[]) {
     it(c.name, () => {
       const got = estimate(c.input as never)
@@ -89,7 +96,8 @@ describe('cost model properties', () => {
     })
     expect(e.cells).toBe(1_920_000_000)
     expect(e.ram_bytes / 1e9).toBeCloseTo(138.24, 1)
-    expect(e.eta_seconds / 86400).toBeCloseTo(69.2, 0)
+    // 69 days while dt came from the 25 um vertical cell; the mesher's 12.5 um in plane doubles it.
+    expect(e.eta_seconds / 86400).toBeCloseTo(138.5, 0)
   })
 
   it.each([

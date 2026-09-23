@@ -17,7 +17,8 @@ func TestEstimateMatchesSharedFixtures(t *testing.T) {
 		t.Fatalf("read fixtures: %v", err)
 	}
 	var doc struct {
-		Cases []struct {
+		InPlaneMinCellFraction float64 `json:"in_plane_min_cell_fraction"`
+		Cases                  []struct {
 			Name     string        `json:"name"`
 			Input    EstimateInput `json:"input"`
 			Expected Estimate      `json:"expected"`
@@ -28,6 +29,10 @@ func TestEstimateMatchesSharedFixtures(t *testing.T) {
 	}
 	if len(doc.Cases) == 0 {
 		t.Fatal("fixture file has no cases")
+	}
+	if doc.InPlaneMinCellFraction != InPlaneMinCellFraction {
+		t.Errorf("in_plane_min_cell_fraction = %v in the fixtures, %v here",
+			doc.InPlaneMinCellFraction, InPlaneMinCellFraction)
 	}
 
 	for _, c := range doc.Cases {
