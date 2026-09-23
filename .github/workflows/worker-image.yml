@@ -103,7 +103,9 @@ jobs:
           labels: |
             org.opencontainers.image.title=EMI Analyzer worker
             org.opencontainers.image.description=Board ingest, EMI/EMC rule checks, ngspice ESD transients and openEMS solves for the EMI Analyzer
-            org.opencontainers.image.licenses=Apache-2.0
+            # The worker's code is Apache-2.0; the image also carries GPL programs it runs as
+            # separate processes. worker/NOTICE, inside the image too, lists them.
+            org.opencontainers.image.licenses=Apache-2.0 AND GPL-3.0-or-later AND GPL-2.0-or-later
 
       - uses: docker/build-push-action@v6
         with:

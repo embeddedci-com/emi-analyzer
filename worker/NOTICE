@@ -1,0 +1,62 @@
+EMI Analyzer worker image
+Copyright EmbeddedCI contributors
+
+The worker's own code (the emi_worker package) is licensed under the Apache License 2.0.
+See LICENSE at https://github.com/embeddedci-com/emi-analyzer.
+
+The image also contains third-party programs, each under its own licence. The worker runs
+them as separate programs and does not link them, so their licences do not extend to the
+worker's code, and the Apache License does not extend to them.
+
+Programs the worker runs
+------------------------
+
+  openEMS, CSXCAD and nf2ff
+    Debian package openems (with libopenems0, libcsxcad0, libnf2ff0)
+    License: GPL-3.0-or-later (openEMS, nf2ff), LGPL-3.0-or-later (CSXCAD)
+    Upstream: https://github.com/thliebig/openEMS-Project
+    Used by the experimental full-wave solve.
+
+  nec2c
+    Debian package nec2c
+    License: GPL-2.0-or-later
+    Used by the cable budget and the cable-resonance check.
+
+  ngspice
+    Debian package ngspice
+    License: BSD-3-Clause
+    Used by the ESD transient simulation.
+
+Python packages
+---------------
+
+  gerbonara (Apache-2.0), numpy (BSD-3-Clause), h5py (BSD-3-Clause), httpx (BSD-3-Clause),
+  httpcore (BSD-3-Clause), websockets (BSD-3-Clause), mapbox_earcut (ISC), PyYAML (MIT),
+  anyio (MIT), h11 (MIT), idna (BSD-3-Clause), certifi (MPL-2.0), and their dependencies.
+  The exact list is in /usr/share/doc/emi-worker/python-packages.txt.
+
+The base system
+---------------
+
+The image is built on Debian 12 (bookworm). Every Debian package in it carries its licence
+and copyright notice in /usr/share/doc/<package>/copyright. The exact package versions are in
+/usr/share/doc/emi-worker/debian-packages.txt.
+
+Source code
+-----------
+
+The complete corresponding source for every Debian package in the image, at the exact
+version installed, is published by Debian:
+
+  https://sources.debian.org/src/<package>/<version>/
+  https://snapshot.debian.org/package/<package>/<version>/
+
+or, on any Debian system with source repositories enabled:
+
+  apt-get source <package>=<version>
+
+This is also a written offer, valid for three years from the date of the image you received:
+on request we will provide the complete corresponding source for any GPL or LGPL program in
+the image, on a medium customarily used for software interchange, for no more than the cost
+of providing it. Ask by opening an issue at
+https://github.com/embeddedci-com/emi-analyzer/issues.

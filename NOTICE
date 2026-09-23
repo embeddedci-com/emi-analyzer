@@ -1,0 +1,10 @@
+EMI Analyzer
+Copyright EmbeddedCI contributors
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+The worker Docker image (ghcr.io/embeddedci-com/emi-worker) also contains third-party
+programs under their own licences, among them openEMS (GPL-3.0-or-later), nec2c
+(GPL-2.0-or-later) and ngspice (BSD-3-Clause). The worker runs them as separate programs. See
+worker/NOTICE, which is also inside the image at /usr/share/doc/emi-worker/NOTICE, for the
+full list and for where their source code is.

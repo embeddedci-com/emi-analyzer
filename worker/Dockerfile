@@ -10,10 +10,12 @@
 # on a modest machine, with a solver-capable worker elsewhere.
 #
 # On openEMS versions: Debian bookworm ships openems 0.0.35 (a 2019 git snapshot), and
-# trixie dropped the package entirely. 0.0.35 is fine for P0/P1 and for first light in P2,
-# but Antmicro's gerber2ems pins a much newer commit, so P2 will likely need
-# OPENEMS_SOURCE=build. The build path is kept working here so that switch is a flag, not
-# a rewrite.
+# trixie dropped the package entirely. The released image uses 0.0.35. OPENEMS_SOURCE=build
+# compiles a current openEMS instead, so moving to a newer one is a flag, not a rewrite.
+#
+# Licences: the worker is Apache-2.0; openEMS (GPL-3+), nec2c (GPL-2+) and the rest of the
+# image keep their own. NOTICE, copied into the image below, lists them and says where their
+# source is.
 ARG OPENEMS_SOURCE=apt
 
 FROM debian:bookworm-slim AS base
@@ -48,7 +50,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 FROM base AS solver-apt
 RUN apt-get update && apt-get install -y --no-install-recommends \
         openems \
-        gerbv \
     && rm -rf /var/lib/apt/lists/*
 
 # ---------------------------------------------------------------------------
@@ -66,7 +67,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential cmake git \
         libhdf5-dev libvtk9-dev libboost-all-dev libcgal-dev \
         libtinyxml-dev qtbase5-dev libvtk9-qt-dev \
-        gerbv \
         python3-setuptools-scm cython3 python3-numpy python3-h5py python3-matplotlib \
     && rm -rf /var/lib/apt/lists/*
 RUN git clone --recursive --depth 1 --branch "${OPENEMS_REF}" \
@@ -77,7 +77,7 @@ RUN git clone --recursive --depth 1 --branch "${OPENEMS_REF}" \
 
 # ---------------------------------------------------------------------------
 # No solver at all. Board ingest and the geometric checks are pure Python (numpy,
-# mapbox_earcut, gerbonara), and nothing on that path shells out, so this stage needs
+# mapbox_earcut, gerbonara); ngspice and nec2c are already in `base`, so this stage needs
 # nothing beyond `base`. The result is small enough for a 1 vCPU
 # machine, and capabilities detection reports kinds=["ingest"] without being told to.
 # Selected with: docker build --build-arg OPENEMS_SOURCE=none
@@ -109,6 +109,12 @@ RUN /opt/venv/bin/pip install --no-deps "gerbonara>=1.5"
 
 COPY emi_worker /app/emi_worker
 RUN /opt/venv/bin/pip install --no-deps /app
+
+# What is in the image and under which licence: NOTICE, plus the exact Debian and Python
+# package versions it points to, so the matching source can be found.
+COPY NOTICE /usr/share/doc/emi-worker/NOTICE
+RUN dpkg-query -W -f='${Package} ${Version}\n' > /usr/share/doc/emi-worker/debian-packages.txt \
+    && /opt/venv/bin/pip list --format=freeze > /usr/share/doc/emi-worker/python-packages.txt
 
 ENV PATH="/opt/venv/bin:${PATH}" \
     EMI_WORKDIR=/var/lib/emi-worker

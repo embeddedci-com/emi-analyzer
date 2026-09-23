@@ -25,7 +25,7 @@ RAM_SAFETY_FRACTION = 0.6
 
 #: Tools the worker looks for at startup. Their presence is advertised so the server can
 #: tell a user "no connected worker has openEMS" instead of failing the run an hour in.
-KNOWN_TOOLS = ("openEMS", "nf2ff", "nec2c", "ngspice", "kicad-cli", "gerbv", "AppCSXCAD")
+KNOWN_TOOLS = ("openEMS", "nf2ff", "nec2c", "ngspice", "kicad-cli", "AppCSXCAD")
 
 
 @dataclass
