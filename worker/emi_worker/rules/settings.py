@@ -19,9 +19,10 @@ provenance costs an hour.
 from __future__ import annotations
 
 import fnmatch
-import json
 from dataclasses import dataclass, field, replace
 from typing import Any
+
+import yaml
 
 #: Bumped when a threshold changes meaning. A silently reinterpreted number is worse than a
 #: rejected file, because nobody goes looking for it.
@@ -433,21 +434,14 @@ def _apply(s: Settings, source: str, doc: dict) -> None:
 
 
 def parse_document(text: str) -> dict | None:
-    """Read a settings document. YAML if PyYAML is present, otherwise JSON.
-
-    The worker image does not carry PyYAML today, and adding a dependency to read a config
-    file that is usually a dozen lines is not obviously worth it -- so JSON always works and
-    YAML works when available.
-    """
+    """Read a settings document: YAML, which also reads JSON."""
     text = text.strip()
     if not text:
         return None
-    try:
-        import yaml  # type: ignore
-        return yaml.safe_load(text)
-    except ImportError:
-        pass
-    return json.loads(text)
+    doc = yaml.safe_load(text)
+    if doc is not None and not isinstance(doc, dict):
+        raise ValueError(f"expected a mapping of settings at the top level, found a {type(doc).__name__}")
+    return doc
 
 
 def catalogue() -> list[dict]:

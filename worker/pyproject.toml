@@ -14,6 +14,8 @@ dependencies = [
     "mapbox_earcut>=1.0",
     # Reading openEMS frequency-domain field dumps.
     "h5py>=3.10",
+    # emi.rules.yaml, the rules file a board carries (docs/rules-file.md).
+    "pyyaml>=6.0",
 ]
 
 # gerbonara (Gerber and Excellon parsing) is deliberately NOT listed above. It declares

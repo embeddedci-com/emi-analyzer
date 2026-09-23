@@ -264,3 +264,21 @@ def test_a_severity_override_reaches_rules_that_predate_settings():
     ctx = RuleContext(model=model, transform=_board_extent(model), max_frequency_hz=1e9, settings=cfg)
     sev = {f["severity"] for f in run_rules(ctx).as_dict()["findings"] if f["rule"] == "return-via"}
     assert sev == {"info"}
+
+
+def test_the_rules_file_in_the_docs_is_read_as_written():
+    """The documented example is YAML. It once fell back to JSON in the image, failed, and the
+    board was checked with built-in defaults while the user believed their rules applied."""
+    import pathlib
+    import re
+
+    doc = (pathlib.Path(__file__).parents[2] / "docs" / "rules-file.md").read_text()
+    example = re.search(r"```yaml\n(.*?)```", doc, re.S).group(1)
+    s = settings.load(("file", settings.parse_document(example)))
+    assert not [w for w in s.warnings if "could not" in w]
+    assert s.rules or s.groups or s.suppressions
+
+
+def test_a_rules_file_that_is_not_a_mapping_is_an_error_not_a_default():
+    with pytest.raises(ValueError, match="mapping"):
+        settings.parse_document("- just\n- a list\n")

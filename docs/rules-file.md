@@ -4,7 +4,8 @@ Rules that should be reviewed alongside the design belong with the design. Put t
 next to your `.kicad_pcb` and upload the project as a zip; the analyzer reads it and every
 finding says which setting it used.
 
-JSON works too — the worker reads YAML when PyYAML is available and JSON always.
+JSON works too, because YAML reads JSON. A file that cannot be read is reported on the board,
+and the checks then run with their built-in defaults.
 
 ```yaml
 version: 1
