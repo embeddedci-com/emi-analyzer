@@ -32,6 +32,10 @@ SETTINGS_VERSION = 1
 #: Where a value came from, most general first. Later sources win.
 SOURCES = ("default", "project", "file", "run")
 
+#: What a rule's severity may be overridden to. Anything else used to be stored as given and
+#: sorted after info, so a typo quietly demoted every finding of that rule.
+SEVERITIES = ("critical", "warning", "info")
+
 
 @dataclass(frozen=True)
 class Value:
@@ -52,6 +56,11 @@ class RuleSetting:
     severity: str = ""
     params: dict[str, Value] = field(default_factory=dict)
     source: str = "default"
+    #: Where ``enabled`` and ``severity`` were last set. ``source`` is the last layer that
+    #: mentioned the rule at all, which is not the same thing: a file that only sets a
+    #: parameter did not switch the rule on.
+    enabled_source: str = "default"
+    severity_source: str = "default"
 
     def get(self, key: str, default: Any = None) -> Any:
         v = self.params.get(key)
@@ -67,7 +76,7 @@ class RuleSetting:
         if v is None:
             return ""
         where = {"default": "built-in default", "project": "project settings",
-                 "file": "emi.rules.yaml", "run": "this run"}.get(v.source, v.source)
+                 "file": "emi.rules.yaml", "run": "app settings"}.get(v.source, v.source)
         return f"{v.value}{(' ' + unit) if unit else ''}, from {where}"
 
 
@@ -360,7 +369,7 @@ def load(*layers: tuple[str, dict | None]) -> Settings:
         try:
             _apply(s, source, doc)
         except Exception as exc:  # noqa: BLE001
-            s.warnings.append(f"{source} settings ignored: {exc}")
+            s.warnings.append(f"{_label(source)} ignored: {exc}")
     return s
 
 
@@ -405,13 +414,20 @@ def _param_default(key: str) -> Any:
     return None
 
 
+def _label(source: str) -> str:
+    """A source as a user names it. These warnings are shown on the board, where "file:" and
+    "run:" meant nothing to anyone who had not read this module."""
+    return {"project": "Project settings", "file": "Rules file",
+            "run": "App settings"}.get(source, source)
+
+
 def _section(s: Settings, source: str, doc: dict, key: str, kind: type) -> Any:
     """One section of a document, or an empty one with a warning when it has the wrong shape."""
     val = doc.get(key)
     if val is None:
         return kind()
     if not isinstance(val, kind):
-        s.warnings.append(f"{source}: {key} should be a {'mapping' if kind is dict else 'list'}; ignored")
+        s.warnings.append(f"{_label(source)}: {key} should be a {'mapping' if kind is dict else 'list'}; ignored")
         return kind()
     return val
 
@@ -428,49 +444,56 @@ def _apply(s: Settings, source: str, doc: dict) -> None:
 
     for key, val in _section(s, source, doc, "board", dict).items():
         if key not in BOARD_DEFAULTS:
-            s.warnings.append(f"{source}: unknown board setting {key!r}")
+            s.warnings.append(f"{_label(source)}: unknown board setting {key!r}")
             continue
         try:
             val = check_value(key, val, BOARD_DEFAULTS[key], positive=key in _POSITIVE)
         except ValueError as exc:
-            s.warnings.append(f"{source}: {exc}; ignored")
+            s.warnings.append(f"{_label(source)}: {exc}; ignored")
             continue
         s.board[key] = Value(val, source)
 
     for rule_id, spec in _section(s, source, doc, "rules", dict).items():
         if rule_id not in RULE_CATALOGUE:
-            s.warnings.append(f"{source}: unknown rule {rule_id!r}")
+            s.warnings.append(f"{_label(source)}: unknown rule {rule_id!r}")
             continue
         rs = s.rules.setdefault(rule_id, _default_rule(rule_id))
         if isinstance(spec, bool):
             spec = {"enabled": spec}
         if not isinstance(spec, dict):
-            s.warnings.append(f"{source}: rule {rule_id} should be true, false or a mapping; ignored")
+            s.warnings.append(f"{_label(source)}: rule {rule_id} should be true, false or a mapping; ignored")
             continue
         if "enabled" in spec:
             rs.enabled = bool(spec["enabled"])
+            rs.enabled_source = source
         if spec.get("severity"):
-            rs.severity = str(spec["severity"])
+            if str(spec["severity"]) not in SEVERITIES:
+                s.warnings.append(
+                    f"{_label(source)}: {rule_id}.severity must be one of {', '.join(SEVERITIES)}, "
+                    f"not {spec['severity']!r}; ignored")
+            else:
+                rs.severity = str(spec["severity"])
+                rs.severity_source = source
         known = RULE_CATALOGUE[rule_id].get("params", {})
         params = spec.get("params") or {}
         if not isinstance(params, dict):
-            s.warnings.append(f"{source}: {rule_id}.params should be a mapping; ignored")
+            s.warnings.append(f"{_label(source)}: {rule_id}.params should be a mapping; ignored")
             params = {}
         for key, val in params.items():
             if key not in known:
-                s.warnings.append(f"{source}: unknown parameter {rule_id}.{key}")
+                s.warnings.append(f"{_label(source)}: unknown parameter {rule_id}.{key}")
                 continue
             try:
                 val = check_value(f"{rule_id}.{key}", val, known[key])
             except ValueError as exc:
-                s.warnings.append(f"{source}: {exc}; ignored")
+                s.warnings.append(f"{_label(source)}: {exc}; ignored")
                 continue
             rs.params[key] = Value(val, source)
         rs.source = source
 
     for g in _section(s, source, doc, "groups", list):
         if not isinstance(g, dict):
-            s.warnings.append(f"{source}: a net group is not a mapping; ignored")
+            s.warnings.append(f"{_label(source)}: a net group is not a mapping; ignored")
             continue
         params: dict[str, Value] = {}
         raw = g.get("params") or {}
@@ -478,7 +501,7 @@ def _apply(s: Settings, source: str, doc: dict) -> None:
             try:
                 params[k] = Value(check_value(f"group {g.get('match', '*')}: {k}", v, _param_default(k)), source)
             except ValueError as exc:
-                s.warnings.append(f"{source}: {exc}; ignored")
+                s.warnings.append(f"{_label(source)}: {exc}; ignored")
         s.groups.append(NetGroupSetting(
             match=str(g.get("match", "*")),
             netclass=str(g.get("netclass", "") or ""),
@@ -491,12 +514,12 @@ def _apply(s: Settings, source: str, doc: dict) -> None:
         if solver:
             if solver not in ("nec2c", "builtin"):
                 s.warnings.append(
-                    f"{source}: unknown antenna solver {solver!r}; keeping {s.cable_solver}")
+                    f"{_label(source)}: unknown antenna solver {solver!r}; keeping {s.cable_solver}")
             else:
                 s.cable_solver = solver
         connectors = cables.get("connectors") or {}
         if not isinstance(connectors, dict):
-            s.warnings.append(f"{source}: cables.connectors should be a mapping; ignored")
+            s.warnings.append(f"{_label(source)}: cables.connectors should be a mapping; ignored")
             connectors = {}
         for ref, spec in connectors.items():
             # Two spellings, because both read naturally: a bare cable id, or a block with a
@@ -508,15 +531,15 @@ def _apply(s: Settings, source: str, doc: dict) -> None:
                 s.cables[str(ref)] = dict(spec)
             else:
                 s.warnings.append(
-                    f"{source}: cable assignment for {ref} is neither a name nor a block")
+                    f"{_label(source)}: cable assignment for {ref} is neither a name nor a block")
 
     for sup in _section(s, source, doc, "suppress", list):
         if not isinstance(sup, dict):
-            s.warnings.append(f"{source}: a suppression is not a mapping; ignored")
+            s.warnings.append(f"{_label(source)}: a suppression is not a mapping; ignored")
             continue
         if not sup.get("reason"):
             # A suppression without a reason is a mystery to whoever finds it later.
-            s.warnings.append(f"{source}: suppression for {sup.get('rule', '*')} has no reason")
+            s.warnings.append(f"{_label(source)}: suppression for {sup.get('rule', '*')} has no reason")
         s.suppressions.append(Suppression(
             rule=str(sup.get("rule", "*")), net=str(sup.get("net", "*")),
             reason=str(sup.get("reason", "")),
@@ -532,6 +555,35 @@ def parse_document(text: str) -> dict | None:
     if doc is not None and not isinstance(doc, dict):
         raise ValueError(f"expected a mapping of settings at the top level, found a {type(doc).__name__}")
     return doc
+
+
+def snapshot(s: Settings) -> dict:
+    """The effective settings as plain data, every value with the layer it came from.
+
+    Written into rules.json so the app can show what a check ran with and where that came
+    from, and export an equivalent emi.rules.yaml without re-deriving the merge.
+    """
+    return {
+        "board": {k: {"value": v.value, "source": v.source} for k, v in s.board.items()},
+        "rules": {
+            rid: {
+                "enabled": rs.enabled,
+                "enabled_source": rs.enabled_source,
+                "severity": rs.severity,
+                "severity_source": rs.severity_source,
+                "params": {k: {"value": v.value, "source": v.source} for k, v in rs.params.items()},
+            }
+            for rid, rs in s.rules.items()
+        },
+        "groups": [
+            {**({"match": g.match} if not g.netclass else {"netclass": g.netclass}),
+             "params": {k: v.value for k, v in g.params.items()}}
+            for g in s.groups
+        ],
+        "suppress": [{"rule": x.rule, "net": x.net, "reason": x.reason} for x in s.suppressions],
+        "cables": s.cables,
+        "cable_solver": s.cable_solver,
+    }
 
 
 def catalogue() -> list[dict]:

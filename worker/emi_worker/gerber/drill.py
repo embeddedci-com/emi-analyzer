@@ -167,7 +167,7 @@ def parse_holes(text: str) -> tuple[list[Hole], list[str]]:
             ))
 
     if skipped:
-        warnings.append(f"{skipped} drill coordinates had no active tool and were skipped")
+        warnings.append(f"{skipped} drill holes had no tool size and were skipped.")
     log.info("drill: %d holes (%d plated), %d tools",
              len(holes), sum(1 for h in holes if h.plated), len(tools))
     return holes, warnings
@@ -204,5 +204,5 @@ def parse_drill(text: str, layers: list[str]) -> tuple[list[Via], list[str]]:
     holes, warnings = parse_holes(text)
     vias = holes_to_vias(holes, layers)
     if not vias:
-        warnings.append("the drill file contained no plated holes")
+        warnings.append("The drill file has no plated holes, so the board has no vias.")
     return vias, warnings

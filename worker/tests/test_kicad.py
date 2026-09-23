@@ -113,7 +113,7 @@ def test_solder_mask_is_not_treated_as_dielectric():
 def test_missing_stackup_is_synthesised_and_flagged():
     tree = parse('(kicad_pcb (version 1) (layers (0 "F.Cu" signal) (2 "B.Cu" signal)))')
     m = parse_board(tree)
-    assert any("no stackup" in w for w in m.warnings)
+    assert any("No stackup" in w for w in m.warnings)
     assert all(not s.from_file for s in m.stackup)
 
 
