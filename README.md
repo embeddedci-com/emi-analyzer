@@ -9,7 +9,7 @@ get:
   ngspice;
 - **a cable budget** — how much common-mode current each connector's cable can carry before it
   radiates past a limit, with nec2c;
-- **the FCC Part 15 and CISPR 32 limit tables** the results are compared against.
+- **the FCC Part 15 limit tables** the results are compared against. CISPR 32 is not included yet.
 
 Your boards and results stay on your computer. Nothing is uploaded anywhere.
 
@@ -437,11 +437,13 @@ memory as you can spare under Docker Desktop → *Settings* → *Resources*.
 
 The app has no sign-in, so it protects itself by where it listens and who may call it. It binds
 only to loopback addresses; answers only requests addressed to `localhost` or `127.0.0.1`, which
-stops web pages reaching it through DNS rebinding; refuses changes requested by other websites;
-serves files only on links signed with a per-installation secret that expire after 15 minutes; and
-gives the worker a key that is revoked when the app stops.
+stops web pages reaching it through DNS rebinding; refuses changes requested by any other origin,
+including other ports on this computer, and changes not sent as JSON; cannot be framed by other
+sites; serves files only on links signed with a per-installation secret that expire after 15
+minutes; and gives the worker a key that is revoked when the app stops.
 
 ## License
 
 [Apache License 2.0](LICENSE). The worker image also contains third-party programs under their own
-licences — notably openEMS and nec2c (GPL) and ngspice (BSD) — which it runs as separate programs.
+licences, notably openEMS (GPL-3.0), nec2c (GPL-2.0) and ngspice (BSD), which it runs as separate
+programs. [worker/NOTICE](worker/NOTICE) lists them and says where their source code is.

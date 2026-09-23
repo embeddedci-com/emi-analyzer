@@ -17,8 +17,8 @@ solver or a measurement — and passed. The gap between the two is most of this 
 | Geometric EMI/EMC rule checks and findings | ✅ | ✅ | on |
 | Run-cost estimator | ✅ | ✅ | on |
 | ESD transient simulation (ngspice) | ✅ | ⚠️ source, line and clamp models unit-checked; no bench comparison | on |
-| Cable budget, Tier A (`cable` run, nec2c) | ✅ | ✅ | on |
-| Limits library and Limits page | ✅ | ⚠️ FCC only; CISPR 32 from secondary sources | on |
+| Cable budget, Tier A (`cable` run, nec2c) | ✅ | ⚠️ the solver matches transmission-line theory; the product setup (fed against the board, scanned 3 m out) has no second-solver comparison — §3 | on |
+| Limits library and Limits page | ✅ | ⚠️ FCC Part 15 only; there is no CISPR 32 table | on |
 | **Full-wave solve (openEMS)** | ✅ | ⚠️ **solves end to end on the fixture board; nothing verified at radiated record length — §2** | **off** (`full-wave`) |
 | Drivers (re-weighting a solve) | ✅ | ⚠️ partly | off, with full-wave |
 | Components (MLCC models in a solve) | ✅ | ⚠️ partly | off, with full-wave |
@@ -157,7 +157,8 @@ capacitor.
   size are untested outside the fixture.
 - **The compliance chain has never been given real inputs.** Nothing yet assembles a real solve's
   far field and cable transfer functions into the paths the compliance run combines.
-- **CISPR 32 limits come from cross-checked secondary sources**, not the standard itself.
+- **There is no CISPR 32 table.** Only FCC Part 15 limits exist. When CISPR 32 is added its values
+  will come from cross-checked secondary sources, not the standard itself.
 - **Capacitance is nominal**: no DC-bias or temperature derating.
 - **Shielding and enclosures are not modelled.** A shielded and an unshielded cable are the same
   antenna.

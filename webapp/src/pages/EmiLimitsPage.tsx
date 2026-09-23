@@ -246,9 +246,9 @@ export function EmiLimitsPage() {
         </Card>
 
         <Text size="xs" c="dimmed">
-          CISPR 32 / EN 55032 tables are not published here. That standard is sold rather than
-          freely published, so the analyzer carries its limit values and clause numbers from
-          cross-checked public sources and does not reproduce its text.
+          CISPR 32 / EN 55032 limits are not included yet. That standard is sold rather than
+          freely published; when it is added, its limit values will come from cross-checked
+          public sources, without reproducing its text.
         </Text>
       </Stack>
     </Container>

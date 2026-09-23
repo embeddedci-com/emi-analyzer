@@ -62,7 +62,9 @@ How the model works is in [`implementation.md`](implementation.md); what is miss
     rules, which are US law and free online.
   - **Its limit values are facts and widely reproduced.** The table ships from at least two
     independent public sources that agree, both cited, with `"verified": "secondary sources"`.
-    **This is the decision, not a placeholder**: the tables ship this way.
+    **This is the decision, not a placeholder**: the tables will ship this way.
+  - **Not built yet.** Only the FCC tables exist (`compliance/limits/fcc.json`); nothing
+    compares a result with a CISPR 32 limit today.
   - **Upgrade path.** The label becomes `"standard text"` if a copy is ever bought.
   - **The one thing to avoid** is a limit typed from memory.
 - **Intentional radiators** (Part 15 Subpart C: Wi-Fi, BLE, the ESP32-C3 on BenchPod) are out of
@@ -98,7 +100,7 @@ See the table at the top:
 - the conducted common-mode term included;
 - relaxed wording, with a clear "not a full pre-compliance test";
 - **CISPR 32 / EN 55032 limits come from public secondary sources,** cross-checked between at
-  least two that agree and labelled `"verified": "secondary sources"`. Buying a copy is
+  least two that agree and labelled `"verified": "secondary sources"` (not built yet). Buying a copy is
   not a prerequisite for shipping the tables; the label becomes `"standard text"` if one is ever
   bought, and no limit is ever typed from memory.
 

@@ -46,8 +46,8 @@ export function Experimental({ why, label = 'experimental', size = 'xs', mb }: E
  */
 export const EXPERIMENTAL: Record<string, string> = {
   cableBudget:
-    'The antenna model behind this is checked against transmission-line theory and against a '
-    + 'second solver, and the composition it feeds has been compared with a fully coupled '
+    'The antenna model behind this is checked against transmission-line theory, but not yet '
+    + 'against a second solver, and the composition it feeds has been compared with a fully coupled '
     + 'simulation on a synthetic board (1.2 dB typical, 2.2 dB worst) but not yet on a real '
     + 'one. Read it as a budget -- how much common-mode current this cable can carry before it '
     + 'reaches the limit -- and compare cables and layouts with it, rather than reading the '
