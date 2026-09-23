@@ -33,6 +33,33 @@ export interface CableTransfer {
   usable?: boolean[]
 }
 
+/**
+ * `cable_ports.json` as `worker/emi_worker/openems/post.py` writes it: one entry per gap port,
+ * with the transfer function nested under `transfer` beside the port's own metadata.
+ */
+export interface CablePortsJson {
+  ports?: {
+    ref: string
+    anchor_mm?: number[]
+    driven_by?: string
+    transfer: Omit<CableTransfer, 'ref'>
+  }[]
+}
+
+/** Flattens each port's nested `transfer` into the `CableTransfer` the composition takes. */
+export function parseCablePorts(json: unknown): CableTransfer[] {
+  const ports = (json as CablePortsJson | null)?.ports ?? []
+  return ports
+    .filter((p) => p && typeof p.ref === 'string' && p.transfer)
+    .map((p) => ({
+      ref: p.ref,
+      frequencies_hz: p.transfer.frequencies_hz,
+      h_real: p.transfer.h_real,
+      h_imag: p.transfer.h_imag,
+      usable: p.transfer.usable,
+    }))
+}
+
 /** The antenna solver's terms, as `cable_antenna.json` writes them. */
 export interface CableAntenna {
   ref: string

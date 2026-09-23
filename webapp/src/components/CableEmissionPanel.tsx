@@ -23,15 +23,12 @@ import type { EmiApi } from '../lib/emiApi'
 import { parseDriverDocument, sigmaDb, weakestSource } from '../lib/driverDocument'
 import { resolveDriver } from '../lib/driverResolve'
 import {
-  composeEmission, sourceVolts, type CableAntenna, type CableTransfer,
+  composeEmission, parseCablePorts, sourceVolts, type CableAntenna, type CableTransfer,
 } from '../lib/cableEmission'
 import { CableEmissionChart } from './CableEmissionChart'
 import { EXPERIMENTAL, Experimental } from './Experimental'
 import type { SolveManifest } from './HotspotResults'
 
-interface CablePortsJson {
-  cables: CableTransfer[]
-}
 interface CableAntennaJson {
   cables: CableAntenna[]
 }
@@ -69,7 +66,7 @@ export function CableEmissionPanel({ api, runId, projectId, manifest }: CableEmi
     Promise.all([get('cable_ports.json'), get('cable_antenna.json')])
       .then(([ports, antenna]) => {
         if (cancelled) return
-        const transfers = (ports as CablePortsJson).cables ?? []
+        const transfers = parseCablePorts(ports)
         setData({ transfers, antennas: (antenna as CableAntennaJson).cables ?? [] })
         setRef((r) => r ?? transfers[0]?.ref ?? null)
       })

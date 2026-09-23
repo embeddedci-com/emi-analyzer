@@ -9,7 +9,7 @@
 import { describe, expect, it } from 'vitest'
 import fixtures from '../../../server/emi/testdata/cable_emission_fixtures.json'
 import {
-  composeEmission, currentDbua, fieldDbuv, marginDb, worstPoint,
+  composeEmission, currentDbua, fieldDbuv, marginDb, parseCablePorts, worstPoint,
   type CableAntenna, type CableTransfer,
 } from './cableEmission'
 import type { Complex } from './driverSpectrum'
@@ -91,5 +91,44 @@ describe('cable emission', () => {
     const em = composeEmission(transfer, antenna, volts, standardId)
     expect(em.points).toHaveLength(0)
     expect([...em.undriven.values()].filter((m) => /antenna solver/.test(m))).toHaveLength(1)
+  })
+})
+
+describe('reading cable_ports.json', () => {
+  // Byte for byte the shape worker/emi_worker/openems/post.py writes: the transfer function is
+  // nested under each port, not at the top level. Reading it any other way yields no cables and
+  // the chart silently never renders.
+  const written = JSON.parse(
+    '{"ports":[{"ref":"J1","anchor_mm":[12.5,3.0],"driven_by":"p1","transfer":' +
+      '{"frequencies_hz":[1e8,2e8],"h_real":[0.01,0.02],"h_imag":[-0.005,0.0],' +
+      '"usable":[true,false]}},' +
+      '{"ref":"J2","anchor_mm":[40.0,3.0],"driven_by":"p1","transfer":' +
+      '{"frequencies_hz":[1e8,2e8],"h_real":[0.03,0.04],"h_imag":[0.001,0.002],' +
+      '"usable":[true,true]}}]}',
+  )
+
+  it('flattens each port into a CableTransfer and keeps its ref', () => {
+    expect(parseCablePorts(written)).toEqual([
+      { ref: 'J1', frequencies_hz: [1e8, 2e8], h_real: [0.01, 0.02], h_imag: [-0.005, 0.0],
+        usable: [true, false] },
+      { ref: 'J2', frequencies_hz: [1e8, 2e8], h_real: [0.03, 0.04], h_imag: [0.001, 0.002],
+        usable: [true, true] },
+    ])
+  })
+
+  it('feeds composeEmission without further conversion', () => {
+    const [t] = parseCablePorts(written)
+    const antenna: CableAntenna = {
+      ref: 'J1', cable_id: 'usb2-shielded', length_m: 1, distance_m: 3,
+      frequencies_hz: [1e8, 2e8], z_real: [100, 100], z_imag: [0, 0], e_per_amp: [1, 1],
+    }
+    const em = composeEmission(t, antenna, [{ re: 1, im: 0 }, { re: 1, im: 0 }])
+    expect(em.points.map((p) => p.frequency_hz)).toEqual([1e8])
+    expect(em.undriven.has(2e8)).toBe(true)
+  })
+
+  it('reads nothing from a missing or empty file', () => {
+    expect(parseCablePorts(null)).toEqual([])
+    expect(parseCablePorts({})).toEqual([])
   })
 })
