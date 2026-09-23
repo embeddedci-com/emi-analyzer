@@ -30,6 +30,11 @@ from .stackup import BoardElectrics
 #: is the tolerance the Gerber net reconstruction settled on for the same reason.
 JOIN_TOLERANCE_MM = 0.08
 
+#: How many pads' shortest-path searches a plane net keeps. A search on a big ground net is
+#: a dictionary per graph node, and the checks that ask about planes ask from a handful of
+#: pads, not from all of them.
+SEARCH_CACHE = 8
+
 
 @dataclass(frozen=True)
 class PathRun:
@@ -73,6 +78,13 @@ class NetTopology:
     total_copper_mm: float = 0.0
     vias: int = 0
     _paths: dict[tuple[str, str], Path] = field(default_factory=dict)
+    #: Ground and power nets find paths on demand instead of up front (see build()). These
+    #: hold what that needs: the graph, where each pad joins it, and recent searches.
+    _lazy: bool = field(default=False, repr=False)
+    _graph: "_Graph | None" = field(default=None, repr=False)
+    _anchors: dict[str, list[int]] = field(default_factory=dict, repr=False)
+    _searches: dict[str, tuple[dict[int, float], dict[int, int]]] = field(
+        default_factory=dict, repr=False)
 
     @property
     def kind(self) -> str:
@@ -83,15 +95,42 @@ class NetTopology:
         return "point-to-point" if n == 2 else "branched"
 
     def path(self, a: str, b: str) -> Path | None:
-        return self._paths.get((a, b)) or self._paths.get((b, a))
+        found = self._paths.get((a, b)) or self._paths.get((b, a))
+        if found is not None or not self._lazy:
+            return found
+        if a not in self._anchors or b not in self._anchors or a == b:
+            return None
+        dist, prev = self._search(a)
+        best = min((n for n in self._anchors[b] if n in dist), key=lambda n: dist[n], default=None)
+        if best is None:
+            return None
+        found = self._paths[(a, b)] = _trace(self._graph, prev, best, a, b)
+        return found
 
     def paths_from(self, driver: str) -> list[Path]:
+        if self._lazy:
+            return [p for b in self.pads if b != driver and (p := self.path(driver, b))]
         return [p for (a, b), p in self._paths.items() if a == driver or b == driver]
 
     def longest_path(self) -> Path | None:
-        if not self._paths:
+        """The longest pad-to-pad path, or None on a plane net.
+
+        On a ground or power net that would be every pair of pads searched to find the two
+        furthest apart through a pour, which says nothing about any signal and cost minutes
+        on a real board. Nothing that matches lengths asks about plane nets.
+        """
+        if not self._paths or self._lazy:
             return None
         return max(self._paths.values(), key=lambda p: p.length_mm)
+
+    def _search(self, source: str) -> tuple[dict[int, float], dict[int, int]]:
+        hit = self._searches.pop(source, None)
+        if hit is None:
+            hit = _dijkstra(self._graph, self._anchors[source])
+        self._searches[source] = hit  # most recent last
+        while len(self._searches) > SEARCH_CACHE:
+            self._searches.pop(next(iter(self._searches)))
+        return hit
 
 
 class _Graph:
@@ -171,6 +210,9 @@ def build(model: BoardModel, nets: list[str] | None = None) -> dict[str, NetTopo
     about a few dozen of them, and building paths for all four hundred on a dense board is
     work nobody reads.
     """
+    # Imported here: the rules package imports this module, so a top-level import is a cycle.
+    from .rules.model import classify_net
+
     wanted = set(nets) if nets is not None else None
     by_net: dict[str, _Graph] = defaultdict(_Graph)
     pads_by_net: dict[str, list[tuple[str, float, float, list[str]]]] = defaultdict(list)
@@ -233,14 +275,22 @@ def build(model: BoardModel, nets: list[str] | None = None) -> dict[str, NetTopo
     # and without it every decoupling capacitor looks unrouted. The pour is treated as one
     # node: the path through a plane is short, wide and not what length matching is about,
     # so its length is taken as zero rather than modelled.
+    #
+    # Pours are indexed by (net, layer) with their bounding boxes, so a pad is only tested
+    # against pours that could contain it. Testing every pad against every pour was a
+    # point-in-polygon per pair, on outlines thousands of vertices long.
     zone_nodes: dict[str, dict[tuple[str, int], int]] = defaultdict(dict)
+    pours: dict[tuple[str, str], list[tuple[int, tuple[float, float, float, float]]]] = defaultdict(list)
     for zi, zone in enumerate(model.zones):
-        if not zone.net or (wanted is not None and zone.net not in wanted):
+        if not zone.net or (wanted is not None and zone.net not in wanted) or not zone.ring:
             continue
         g = by_net[zone.net]
         zone_nodes[zone.net][(zone.layer, zi)] = g.node(
             *_ring_centroid(zone.ring), f"zone:{zone.layer}"
         )
+        xs = [p[0] for p in zone.ring]
+        ys = [p[1] for p in zone.ring]
+        pours[(zone.net, zone.layer)].append((zi, (min(xs), min(ys), max(xs), max(ys))))
 
     for pad in model.pads:
         if not pad.net or (wanted is not None and pad.net not in wanted):
@@ -252,17 +302,20 @@ def build(model: BoardModel, nets: list[str] | None = None) -> dict[str, NetTopo
         pads_by_net[pad.net].append((key, pad.x, pad.y, layers or model.copper_layer_names[:1]))
 
         # Join the pad to any same-net pour it sits inside.
-        for zi, zone in enumerate(model.zones):
-            if zone.net != pad.net or zone.layer not in (layers or ()):
-                continue
-            node = zone_nodes.get(pad.net, {}).get((zone.layer, zi))
-            if node is not None and _point_in_ring(pad.x, pad.y, zone.ring):
-                by_net[pad.net].connect(
-                    by_net[pad.net].node(pad.x, pad.y, zone.layer), node, 0.0, zone.layer
-                )
+        for layer in layers:
+            for zi, (x0, y0, x1, y1) in pours.get((pad.net, layer), ()):
+                if not (x0 <= pad.x <= x1 and y0 <= pad.y <= y1):
+                    continue
+                zone = model.zones[zi]
+                node = zone_nodes[pad.net][(zone.layer, zi)]
+                if _point_in_ring(pad.x, pad.y, zone.ring):
+                    by_net[pad.net].connect(
+                        by_net[pad.net].node(pad.x, pad.y, zone.layer), node, 0.0, zone.layer
+                    )
 
     for net, g in by_net.items():
-        out[net] = _finish(net, g, pads_by_net.get(net, []))
+        out[net] = _finish(net, g, pads_by_net.get(net, []),
+                           lazy=classify_net(net) in ("ground", "power"))
     # A net with pads but no copper at all is still worth reporting -- it is unrouted.
     for net, pads in pads_by_net.items():
         if net not in out:
@@ -290,7 +343,8 @@ def _point_in_ring(x: float, y: float, ring: list[tuple[float, float]]) -> bool:
     return inside
 
 
-def _finish(net: str, g: _Graph, pads: list[tuple[str, float, float, list[str]]]) -> NetTopology:
+def _finish(net: str, g: _Graph, pads: list[tuple[str, float, float, list[str]]],
+            lazy: bool = False) -> NetTopology:
     topo = NetTopology(net=net)
     topo.total_copper_mm = sum(w for edges in g.edges.values() for _, w, _, _ in edges) / 2
     topo.vias = sum(1 for edges in g.edges.values() for _, _, _, v in edges if v) // 2
@@ -319,8 +373,15 @@ def _finish(net: str, g: _Graph, pads: list[tuple[str, float, float, list[str]]]
         else:
             topo.unreachable.append(key)
 
-    # One Dijkstra per pad. Nets have a handful of pads, so this is cheap; doing it per pair
-    # would not be.
+    if lazy:
+        # A ground or power net reaches hundreds or thousands of pads, and storing a path
+        # for every pair of them is quadratic in time and memory: 2000 GND pads took a
+        # minute and a gigabyte, for paths nothing reads. Paths are found when asked for.
+        topo._lazy, topo._graph, topo._anchors = True, g, anchors
+        return topo
+
+    # One Dijkstra per pad. Signal nets have a handful of pads, so this is cheap; doing it
+    # per pair would not be.
     keys = topo.pads
     for i, a in enumerate(keys):
         dist, prev = _dijkstra(g, anchors[a])
