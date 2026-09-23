@@ -30,9 +30,26 @@ run to 30 MHz needs `3 / f_min` of record whatever the cable is doing. The whole
 share the grid, coarsening it moves both sides together — so the study preset is a knob here
 in a way it would never be in a product run. `DX_UM` sets it.
 
-    docker run --rm -v "$PWD/worker:/spike" -v <pcb>:/boards:ro -v <out>:/spike/spike_out \\
-        -e SETUPS=<folder:ref:cable,...> -w /spike -e PYTHONPATH=/spike \\
-        --entrypoint python3 ghcr.io/embeddedci-com/emi-worker:dev research/spike_m3_cable_test4.py
+**Air around the cable** (``AIR_MM``, September 2026). The grid used to stop 5 mm above and
+below the copper and at the edge of the strip, so Tier C's cable ran 5-15 mm from the absorbing
+boundary for its whole length, while nec2c's Z_ant is a wire in free space: the two tiers were
+then different antennas, and B against C measured the boundary as much as the coupling.
+``AIR_MM`` pads every side with air (no copper) the way the far-field box does, with the box
+itself left out. ``AIR_MM=0`` is the old domain.
+
+**The record** (``MAX_NS``). Every run is a fixed ``MAX_NS`` long, with openEMS's own end
+criterion off (``solve`` says why), and every transform
+is repeated on the first 80 % of the record: a result that moves by more than a few tenths of
+a dB between the two was cut short, and says so in its ``record_db``. Stability is judged from
+the energy instead: a run whose energy has not fallen 30 dB by the end of its record is
+refused.
+
+    docker run --rm --cpus 3 -m 6g -v "$PWD/worker:/spike" -v <pcb>:/boards:ro \\
+        -v <out>:/spike/spike_out -e SETUPS=<folder:ref:cable,...> -e AIR_MM=80 \\
+        -w /spike -e PYTHONPATH=/spike --entrypoint python3 emi-worker:phase1 \\
+        research/spike_m3_cable_test4.py
+
+Board names go in ``SETUPS`` and in the output; neither belongs in anything committed.
 """
 
 from __future__ import annotations
@@ -65,7 +82,14 @@ F_MAX = float(os.environ.get("F_MAX", "600e6"))
 ROI_MM = float(os.environ.get("ROI_MM", "30"))
 #: How far back from the connector the excitation sits.
 DRIVER_SETBACK_MM = float(os.environ.get("SETBACK_MM", "15"))
-THREADS = int(os.environ.get("THREADS", "8"))
+THREADS = int(os.environ.get("THREADS", "3"))
+#: Air on every side of the domain, in mm; see the docstring. 0 is the old 5 mm.
+AIR_MM = float(os.environ.get("AIR_MM", "80"))
+#: Effectively off: see solve(). The record is MAX_NS long instead.
+END_CRITERIA = float(os.environ.get("END_CRITERIA", "1e-12"))
+#: Length of every record, in ns. 40 ns is four times the excitation; the 80 % check says
+#: whether it was enough.
+MAX_NS = float(os.environ.get("MAX_NS", "40"))
 #: Height of the cable above the reference ground, for nec2c. The standard test setup.
 HEIGHT_M = float(os.environ.get("HEIGHT_M", "1.0"))
 
@@ -155,6 +179,47 @@ def region(board, transform, anchor, length_m: float) -> tuple[float, float, flo
     return (x0, y0, x1, y1)
 
 
+#: Cell growth along the cable, and the largest cell there: λ/20 at F_MAX.
+REGRADE_RATIO = 1.3
+REGRADE_BEYOND_MM = 25.0
+
+
+def regrade_along_cable(built, anchor) -> float:
+    """Re-grade the grid along the exit axis past the stub, and return the worst cell ratio.
+
+    The mesher filled the cable's air at about 2.4 mm cells and then stepped to 11.5 mm where
+    the region met its padding, a 4.8:1 jump on the axis the cable runs along, against a stated
+    bound of 1.4. The first run of this study diverged on exactly that grid (the energy climbed
+    back 2,290x after the pulse). Past the stub, where there is no copper to resolve, the lines
+    are replaced by a series growing 1.3x per cell to λ/20 of F_MAX, reaching as far as the
+    old grid did, then eight PML lines. B and C share the result, so it is still one grid.
+    """
+    axis = 0 if abs(anchor.nx) >= abs(anchor.ny) else 1
+    sign = 1.0 if (anchor.nx if axis == 0 else anchor.ny) > 0 else -1.0
+    attr = "x_lines" if axis == 0 else "y_lines"
+    lines = np.asarray(getattr(built.doc, attr), dtype=float)
+    origin = anchor.x_mm if axis == 0 else anchor.y_mm
+    # Keep everything up to 15 mm past the stub (gap + 10 mm stub), where the cable starts.
+    cut = origin + sign * (built.cable_ports[0]["gap_mm"] + 10.0 + 15.0)
+    keep = lines[lines <= cut] if sign > 0 else lines[lines >= cut][::-1]
+    outer = lines[-1 - 8] if sign > 0 else lines[8]           # the last non-PML line
+    grown = list(keep)
+    step = abs(grown[-1] - grown[-2])
+    beyond = C / F_MAX / 20 * 1e3
+    while sign * (outer - grown[-1]) > 0:
+        step = min(step * REGRADE_RATIO, beyond)
+        grown.append(grown[-1] + sign * step)
+    for _ in range(8):
+        step *= 1.2
+        grown.append(grown[-1] + sign * step)
+    from emi_worker.openems.mesh import _smooth_ratio
+
+    new = _smooth_ratio(np.asarray(sorted(grown)), 1.4, DX_UM / 1000.0)
+    setattr(built.doc, attr, new.tolist())
+    d = np.diff(new)
+    return float(np.max(np.maximum(d[1:] / d[:-1], d[:-1] / d[1:])))
+
+
 def add_cable(built, anchor, length_m: float) -> None:
     """Turn the Tier B document into Tier C: bond the gap, and run the cable out.
 
@@ -196,21 +261,92 @@ def add_cable(built, anchor, length_m: float) -> None:
             prop.resistance = GAP_SHORT_OHM
 
 
+def _pad_with_air() -> None:
+    """Give every side AIR_MM of air, as the far-field box does, without the box."""
+    if AIR_MM <= 0:
+        return
+    from emi_worker.openems import model as model_mod
+    from emi_worker.openems import nf2ff as nf2ff_mod
+
+    model_mod.far_field_pad_mm = lambda clearance, cell: AIR_MM
+    model_mod.far_field_clearance_mm = lambda f_top: 1.0
+    nf2ff_mod.add_dumps = lambda *a, **k: None
+
+
+def _record_steps(doc) -> int:
+    """Timesteps for MAX_NS of record, from the Courant limit of the finished grid."""
+    d = [float(np.diff(np.asarray(v)).min()) * 1e-3
+         for v in (doc.x_lines, doc.y_lines, doc.z_lines)]
+    dt = 0.95 / (C * math.sqrt(sum(1.0 / x ** 2 for x in d)))
+    return int(math.ceil(MAX_NS * 1e-9 / dt))
+
+
+def _probe_decay_db(wd: Path) -> float:
+    """How far below its own peak the last tenth of the loudest-ending probe is, in dB.
+
+    Reported, not gated: the 1 MOhm gap bleeds off its charge over ~100 ns, so a gap probe can
+    end 10 dB below peak in a run whose energy is 60 dB down.
+    """
+    worst = -300.0
+    for f in wd.iterdir():
+        if f.suffix or f.name in ("et", "ht") or not f.is_file() or f.name.endswith(".xml"):
+            continue
+        try:
+            v = np.abs(post.read_probe(str(f)).values)
+        except (OSError, ValueError):
+            continue
+        if v.size < 20 or v.max() == 0:
+            continue
+        worst = max(worst, 20 * math.log10(v[-v.size // 10:].max() / v.max() + 1e-300))
+    return worst
+
+
 def solve(tag: str, built, freqs: np.ndarray) -> dict:
+    """Run one tier, or reuse a finished run of the same model.
+
+    openEMS's own end criterion is off (a fixed MAX_NS record instead): this study's 30-600 MHz
+    pulse is several lobes and about 9 ns long, a board strip with a 10 mm stub empties between
+    them, and the first run was stopped at 9 ns, inside the excitation. The worker's divergence
+    check was refusing the same run for the same reason; it now waits for the excitation to end
+    (``excitation_s``). Stability is judged on the energy at the end of the record as well.
+    """
     problems = built.doc.validate()
     if problems:
         raise SystemExit(f"{tag}: " + "; ".join(problems))
     wd = OUT / f"test4_{tag}"
     wd.mkdir(parents=True, exist_ok=True)
-    (wd / "model.xml").write_text(built.doc.to_string())
+    xml = built.doc.to_string()
+    done = wd / "run.json"
+    if done.exists() and (wd / "model.xml").exists() and (wd / "model.xml").read_text() == xml:
+        info = json.loads(done.read_text())
+        print(f"    {tag}: reusing {info['steps']:,} steps", flush=True)
+        return {"wd": wd, "steps": info["steps"]}
+    (wd / "model.xml").write_text(xml)
     t0 = time.time()
     r = run.run_openems(str(wd / "model.xml"), str(wd), threads=THREADS,
                         excitation_s=excitation_seconds(built.doc.excitation.fc))
+    tail = _probe_decay_db(wd)
     print(f"    {tag}: {r.final_timestep:,} steps, {time.time()-t0:.0f}s, "
-          f"energy {r.final_energy_db:.1f} dB", flush=True)
+          f"energy {r.final_energy_db:.1f} dB, loudest probe ends {tail:.0f} dB down",
+          flush=True)
     for w in r.warnings:
         print(f"      warning: {w}")
-    return {"wd": wd, "result": r}
+    done.write_text(json.dumps({"steps": r.final_timestep, "seconds": time.time() - t0,
+                                "energy_db": r.final_energy_db, "warnings": r.warnings,
+                                "probe_tail_db": tail}))
+    # Judged on the energy. A probe alone is not evidence: the 1 MOhm gap holds the charge the
+    # pulse's DC content leaves on it and bleeds it off over ~100 ns, so its voltage can end
+    # 10 dB below peak in a run whose energy is 60 dB down. A cable still ringing is a short
+    # record, which the 80 % check prices.
+    if r.final_energy_db > -30.0:
+        raise SystemExit(f"{tag}: the energy is only {-r.final_energy_db:.0f} dB down at the "
+                         f"end of the record: this run is not decaying")
+    return {"wd": wd, "steps": r.final_timestep, "probe_tail_db": tail}
+
+
+def _head(trace, fraction: float = 0.8):
+    n = int(fraction * len(trace.time_s))
+    return post.ProbeTrace(trace.time_s[:n], trace.values[:n])
 
 
 def antenna(length_m: float, freqs: np.ndarray, gap_mm: float, board_span_m: float
@@ -257,11 +393,13 @@ def first_resonance_hz(z: np.ndarray, freqs: np.ndarray) -> float:
 
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
+    _pad_with_air()
     print(f"cable test 4 — {DX_UM:.0f}/{DZ_UM:.0f} um preset, "
           f"{F_MIN/1e6:.0f}-{F_MAX/1e6:.0f} MHz, {len(FREQS)} points\n")
 
     out: dict = {"preset_um": [DX_UM, DZ_UM], "frequencies_hz": FREQS.tolist(),
-                 "roi_mm": ROI_MM, "height_m": HEIGHT_M, "cases": []}
+                 "roi_mm": ROI_MM, "height_m": HEIGHT_M, "air_mm": AIR_MM,
+                 "end_criteria": END_CRITERIA, "cases": []}
 
     only = os.environ.get("ONLY")
     for name, ref, cable_id in SETUPS:
@@ -285,44 +423,55 @@ def main() -> None:
                 # stops at -40 dB of energy leaves the lowest frequency with a fraction of a
                 # period in it -- the first smoke run covered 1.7 periods of 200 MHz. M0 hit
                 # this too and re-ran its whole study with a fixed step count.
-                end_criteria=1e-12,
+                end_criteria=END_CRITERIA,
                 max_timesteps=int(os.environ.get("MAX_STEPS", "0")),
+                far_field=AIR_MM > 0,
             )
             tag = f"{name}_{ref}_{length_m:g}m"
             b = build_model(board, transform, params)
+            if b.cable_ports:
+                worst = regrade_along_cable(b, anchor)
+                b.doc.max_timesteps = _record_steps(b.doc)
+                print(f"  re-graded along the cable: worst cell ratio {worst:.2f}; "
+                      f"{b.doc.max_timesteps:,} steps for {MAX_NS:g} ns", flush=True)
             if not b.cable_ports:
                 print(f"  {tag}: no gap port — {'; '.join(b.notes)}")
                 continue
             m = b.mesh
-            cells = (len(m.x) - 1) * (len(m.y) - 1) * (len(m.z) - 1)
+            cells = b.doc.cell_count()
             print(f"  {tag}: {cells/1e6:.1f} M cells, domain "
                   f"{roi[2]-roi[0]:.0f} x {roi[3]-roi[1]:.0f} mm", flush=True)
 
             rb = solve(f"{tag}_B", b, FREQS)
             c = build_model(board, transform, params)
+            regrade_along_cable(c, anchor)
+            c.doc.max_timesteps = b.doc.max_timesteps
             add_cable(c, anchor, length_m)
             rc = solve(f"{tag}_C", c, FREQS)
 
             probe = b.cable_ports[0]["probe"]
-            h = post.cable_transfer(
-                post.read_probe(str(rb["wd"] / probe)),
-                post.read_probe(str(rb["wd"] / "drv_ut")),
-                post.read_probe(str(rb["wd"] / "drv_it")),
-                FREQS.tolist(),
-            )
-            v_port = post._dft(post.read_probe(str(rb["wd"] / "drv_ut")), FREQS)
-            i_port = post._dft(post.read_probe(str(rb["wd"] / "drv_it")), FREQS)
-            v_src = v_port + i_port * 50.0
+            gap_tr = post.read_probe(str(rb["wd"] / probe))
+            u_tr = post.read_probe(str(rb["wd"] / "drv_ut"))
+            i_tr = post.read_probe(str(rb["wd"] / "drv_it"))
+
+            def pred_from(gap, u, i):
+                hh = post.cable_transfer(gap, u, i, FREQS.tolist())
+                vs = post._dft(u, FREQS) + post._dft(i, FREQS) * 50.0
+                return (np.asarray(hh["h_real"]) + 1j * np.asarray(hh["h_imag"])) * vs
 
             bx0, by0, bx1, by1 = board_extent(board, transform)
             arm_m = ((bx1 - bx0) if abs(anchor.nx) >= abs(anchor.ny)
                      else (by1 - by0)) / 1000.0
             z_ant, e_per_amp = antenna(length_m, FREQS, b.cable_ports[0]["gap_mm"], arm_m)
-            h_c = np.asarray(h["h_real"]) + 1j * np.asarray(h["h_imag"])
-            pred = h_c * v_src / z_ant
-
-            meas = post._dft(post.read_probe(str(rc["wd"] / "cable_it")), FREQS)
+            pred = pred_from(gap_tr, u_tr, i_tr) / z_ant
+            c_tr = post.read_probe(str(rc["wd"] / "cable_it"))
+            meas = post._dft(c_tr, FREQS)
             err = 20.0 * np.log10(np.abs(pred) / np.abs(meas))
+            # The same on 80 % of each record: how far the result still depends on its tail.
+            pred_s = pred_from(_head(gap_tr), _head(u_tr), _head(i_tr)) / z_ant
+            meas_s = post._dft(_head(c_tr), FREQS)
+            record_db = float(max(np.max(np.abs(20 * np.log10(np.abs(pred_s) / np.abs(pred)))),
+                                  np.max(np.abs(20 * np.log10(np.abs(meas_s) / np.abs(meas))))))
 
             f_res = first_resonance_hz(z_ant, FREQS)
             below = FREQS < f_res
@@ -340,7 +489,8 @@ def main() -> None:
                   f"90th {np.percentile(lo, 90):.2f} dB, worst {lo.max():.2f} dB  "
                   f"{'PASS' if lo.max() <= 6.0 else 'FAIL'} (gate 6 dB)")
             print(f"    whole band:      median {np.median(np.abs(err)):.2f} dB, "
-                  f"worst {np.abs(err).max():.2f} dB\n", flush=True)
+                  f"worst {np.abs(err).max():.2f} dB; record check {record_db:.3f} dB\n",
+                  flush=True)
 
             out["cases"].append({
                 "board": name, "ref": ref, "cable_id": cable_id, "length_m": length_m,
@@ -350,8 +500,11 @@ def main() -> None:
                 "e_per_amp": e_per_amp.tolist(),
                 "i_pred_abs": np.abs(pred).tolist(), "i_meas_abs": np.abs(meas).tolist(),
                 "error_db": err.tolist(),
-                "steps_b": rb["result"].final_timestep,
-                "steps_c": rc["result"].final_timestep,
+                "steps_b": rb["steps"],
+                "steps_c": rc["steps"],
+                "record_db": record_db,
+                "below_resonance_worst_db": float(lo.max()),
+                "below_resonance_median_db": float(np.median(lo)),
             })
             (OUT / "m3_cable_test4.json").write_text(json.dumps(out, indent=2))
 

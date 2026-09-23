@@ -197,8 +197,8 @@
         "volts_abs": [
           1.275162645890847,
           0.44055785885922594,
-          0.19580349282632264,
-          0.11013946471480648
+          0.22549826482185373,
+          0.1268427739622927
         ],
         "undriven_hz": [],
         "magnitude_only": false
@@ -213,10 +213,84 @@
         "offset_db": [
           112.56888654936566,
           103.33763396116703,
-          96.29398359893977,
-          91.29643413460778
+          97.52043899341686,
+          92.52288952908486
         ],
         "complete": true
+      }
+    },
+    {
+      "name": "waveform-join-on-a-null",
+      "document": {
+        "format": "emi-driver",
+        "version": 1,
+        "name": "captured square",
+        "kind": "waveform",
+        "role": "signal",
+        "waveform": {
+          "sample_interval_s": 5e-10,
+          "samples_v": [
+            0.0,
+            1.65,
+            3.3,
+            3.3,
+            3.3,
+            3.3,
+            3.3,
+            3.3,
+            3.3,
+            3.3,
+            3.3,
+            1.65,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "bandwidth_hz": 410000000.0,
+          "period_s": {
+            "value": 1e-08,
+            "source": "benchpod"
+          },
+          "source_impedance_ohm": {
+            "value": 33,
+            "source": "datasheet"
+          },
+          "rise_s": {
+            "value": 1e-09,
+            "source": "datasheet"
+          }
+        }
+      },
+      "expected": {
+        "kind": "waveform",
+        "role": "signal",
+        "driver_name": "captured square",
+        "weakest_source": "datasheet",
+        "sigma_db": 3.0
+      },
+      "resolve": {
+        "frequencies_hz": [
+          100000000.0,
+          300000000.0,
+          400000000.0,
+          500000000.0,
+          700000000.0
+        ],
+        "volts_abs": [
+          1.4612063686381713,
+          0.42505421529694903,
+          2.1497777278914597e-16,
+          0.1623587506717348,
+          0.08283609728149734
+        ],
+        "undriven_hz": [],
+        "magnitude_only": false
       }
     },
     {

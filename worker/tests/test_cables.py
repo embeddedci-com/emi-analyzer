@@ -253,33 +253,84 @@ def test_cable_2_the_far_end_moves_the_resonance():
 # ---- cable test 3: chokes and bonds -----------------------------------------------------
 
 @needs_nec
-def test_cable_3_a_choke_never_raises_the_current():
+def test_a_choke_lowers_the_feed_current():
     from emi_worker.cables.nec import run
 
     plain = run(Deck(length_m=1.0, frequency_hz=100e6, far_end="open"))
-    choked = run(Deck(length_m=1.0, frequency_hz=100e6, far_end="open", choke_ohm=220.0))
+    choked = run(Deck(length_m=1.0, frequency_hz=100e6, far_end="open", choke_z=220.0))
     assert abs(1.0 / choked.z_in) <= abs(1.0 / plain.z_in) * 1.001
 
 
-@needs_nec
-def test_cable_3_a_bond_never_lengthens_the_first_resonance():
-    """A ground strap is an inductance to ground that SHORTENS the antenna. If a bond ever
-    moved a resonance down, the model would have it the wrong way round."""
-    from emi_worker.cables.nec import run
+def test_a_bond_is_a_strap_from_the_junction_to_the_plane():
+    """The bond has to be where a bond is: a wire from the board side of the feed down to the
+    ground, carrying the inductance in its top segment.
 
-    def resonance(bond_nh):
-        freqs = [80e6 + 4e6 * k for k in range(45)]
-        xs = [run(Deck(length_m=1.0, frequency_hz=f, far_end="open",
-                       bond_nh=bond_nh)).z_in.imag for f in freqs]
-        for k in range(len(xs) - 1):
-            if xs[k] < 0 <= xs[k + 1]:
-                return freqs[k] - xs[k] * (freqs[k + 1] - freqs[k]) / (xs[k + 1] - xs[k])
-        return None
+    It used to be ``LD 4 2 1 1``, a series reactance on segment 1 of the board arm, which is
+    the arm's open far end. A series element in a wire whose end carries no current moves
+    nothing, so every test of which way a bond moves the resonance passed without measuring
+    anything.
+    """
+    text = Deck(length_m=1.0, frequency_hz=100e6, far_end="open", bond_nh=10.0).to_text()
+    strap = [l for l in text.splitlines() if l.startswith("GW 4 ")]
+    assert len(strap) == 1
+    x1, y1, z1, x2, y2, z2 = (float(v) for v in strap[0].split()[3:9])
+    assert (x1, y1, z1) == (0.0, 0.0, nec.TABLE_HEIGHT_M)     # the junction, at the feed
+    assert (x2, y2, z2) == (0.0, 0.0, 0.0)                     # the plane
+    assert "LD 4 4 1 1 0.0 " in text
+    assert "LD 4 2" not in text
+    # Declared before the ground card, or NEC ignores it.
+    lines = [l.split()[0] for l in text.splitlines() if l[:2] in ("GW", "GE")]
+    assert lines.index("GE") == len(lines) - 1
 
-    plain = resonance(None)
-    bonded = resonance(20.0)
-    assert plain is not None and bonded is not None
-    assert bonded >= plain * 0.999
+
+def test_no_bond_means_no_strap_and_zero_means_a_bare_one():
+    assert "GW 4" not in Deck(length_m=1.0, frequency_hz=100e6).to_text()
+    bare = Deck(length_m=1.0, frequency_hz=100e6, bond_nh=0.0).to_text()
+    assert "GW 4" in bare and "LD 4 4" not in bare
+    # Nothing to reach in free space.
+    assert "GW 4" not in Deck(length_m=1.0, frequency_hz=100e6, bond_nh=10.0,
+                              ground=False).to_text()
+
+
+def test_a_choke_curve_is_r_plus_jx_and_is_written_as_both():
+    from emi_worker.cables.library import Choke
+
+    ferrite = Choke(impedance=((10e6, 20.0, 150.0), (100e6, 400.0, 250.0),
+                               (1e9, 300.0, -200.0)))
+    assert ferrite.z_at(100e6) == complex(400.0, 250.0)
+    # Halfway in log frequency is halfway in R and X.
+    mid = ferrite.z_at(math.sqrt(100e6 * 1e9))
+    assert mid.real == pytest.approx(350.0) and mid.imag == pytest.approx(25.0)
+    # Held, not extrapolated, outside the curve.
+    assert ferrite.z_at(1e6) == complex(20.0, 150.0)
+    assert ferrite.z_at(2e9) == complex(300.0, -200.0)
+    text = Deck(length_m=1.0, frequency_hz=1e9, choke_z=ferrite.z_at(1e9)).to_text()
+    assert "LD 4 1 1 1 300.000000 -200.000000" in text
+
+
+def test_a_one_number_choke_is_the_documented_simplification():
+    from emi_worker.cables.library import Choke
+
+    c = Choke(z_ohm_at_100mhz=100.0)
+    assert not c.from_curve
+    assert c.z_at(100e6) == complex(100.0, 0.0)
+    assert c.z_at(1e9) == complex(1000.0, 0.0)
+
+
+def test_a_choke_curve_is_parsed_and_checked():
+    cable = parse(_doc(cm_choke={"impedance": [
+        {"f_hz": 1e9, "r_ohm": 300, "x_ohm": -200},
+        {"f_hz": 1e8, "r_ohm": 400, "x_ohm": 250},
+    ]}))
+    assert cable.cm_choke.from_curve
+    assert cable.cm_choke.impedance[0][0] == 1e8          # sorted
+    with pytest.raises(CableError, match="at least two points"):
+        parse(_doc(cm_choke={"impedance": [{"f_hz": 1e8, "r_ohm": 1, "x_ohm": 1}]}))
+    with pytest.raises(CableError, match="negative resistance"):
+        parse(_doc(cm_choke={"impedance": [{"f_hz": 1e8, "r_ohm": -1, "x_ohm": 1},
+                                           {"f_hz": 1e9, "r_ohm": 1, "x_ohm": 1}]}))
+    with pytest.raises(CableError, match="impedance curve or a positive"):
+        parse(_doc(cm_choke={}))
 
 
 # ---- the solver budget ------------------------------------------------------------------
@@ -306,8 +357,15 @@ def test_a_longer_cable_resonates_lower_and_allows_less():
     freqs = [30e6 * 1.12 ** k for k in range(34)]
     short = solver_budget(get("debug-leads"), freqs)          # 0.2 m
     long = solver_budget(get("ethernet-utp"), freqs)          # 2.0 m
-    assert long.radiation_peaks()[0] < short.radiation_peaks()[0]
-    assert long.tightest().max_current_a < short.tightest().max_current_a
+    first_short = short.radiation_peaks()[0]
+    assert long.radiation_peaks()[0] < first_short
+    # Well below the short cable's own first peak (half of it) the long one is the better
+    # antenna everywhere, so it may carry less. Nearer the peak the short one catches up. Comparing the two tightest points instead compares different
+    # limits: the short cable's is at its 717 MHz resonance under the 46 dBuV/m line, and the
+    # two came out within 0.4 dB of each other.
+    for s, g in zip(short.points, long.points):
+        if s.frequency_hz < first_short / 2:
+            assert g.max_current_a < s.max_current_a, f"{s.frequency_hz / 1e6:.0f} MHz"
 
 
 @needs_nec
@@ -550,10 +608,15 @@ def test_peak_positions_do_not_move_with_the_grid():
 
     A finer grid still resolves MORE peaks above a few hundred megahertz, which is the real
     physics rather than instability: they are genuinely every 150 MHz up there.
+
+    Held below 400 MHz. Segmented finely enough to agree with openEMS (nec.MAX_SEGMENT_M), this
+    cable's resonances above about 500 MHz are 80 MHz apart, closer than a 48-point grid's
+    steps there (44 MHz at 550 MHz), so which of them a coarse grid lands on is sampling: 547
+    on 48 points, 470 and 630 on 64, 455 and 552 on 96.
     """
     coarse, fine = _peaks(48), _peaks(64)
     assert coarse and fine
-    for f in coarse:
+    for f in (f for f in coarse if f < 400e6):
         assert any(abs(g - f) <= f * 0.1 for g in fine), f"{f / 1e6:.0f} MHz moved on a finer grid"
 
 
@@ -741,13 +804,18 @@ def test_cable_3_a_choke_never_raises_the_current():
     UI relies on: a what-if that offered a choke and showed a *worse* number would be either a
     sign error or a units error, and both are easy to make in a term that is added to an
     impedance.
+
+    Resistive chokes only. A reactive one can raise the current where its reactance cancels
+    the cable's own, which is real (a choke's capacitive side can tune a cable), so a datasheet
+    curve is checked for what it is in ``test_a_choke_curve_is_r_plus_jx_and_is_written_as_both``
+    rather than held to a monotonicity it does not have.
     """
     ring = ObservationRing(distance_m=3.0)
     for f in (50e6, 150e6, 400e6):
         currents = []
         for choke in (None, 100.0, 1000.0):
             deck = Deck(length_m=1.0, frequency_hz=f, height_m=1.0, far_end="open",
-                        choke_ohm=choke, ring=ring)
+                        choke_z=choke, ring=ring)
             z = nec_run(deck).z_in
             currents.append(abs(1.0 / z) if z != 0 else 0.0)
         assert currents[0] >= currents[1] >= currents[2] - 1e-18, (
@@ -755,32 +823,56 @@ def test_cable_3_a_choke_never_raises_the_current():
         )
 
 
+def _series_resonance(length_m: float, far_end: str, bond_nh: float | None) -> float | None:
+    """The lowest reactance zero going inductive: where the structure is series resonant."""
+    freqs = np.geomspace(15e6, 400e6, 120)
+    xs = [nec_run(Deck(length_m=length_m, frequency_hz=float(f), far_end=far_end,
+                       bond_nh=bond_nh)).z_in.imag for f in freqs]
+    for k in range(len(xs) - 1):
+        if xs[k] < 0 <= xs[k + 1]:
+            t = -xs[k] / (xs[k + 1] - xs[k])
+            return float(freqs[k] * (freqs[k + 1] / freqs[k]) ** t)
+    return None
+
+
 @needs_nec
-def test_cable_3_a_bond_never_lengthens_the_first_resonance():
-    """A ground strap at the board end SHORTENS the antenna, so its resonance moves up.
+@pytest.mark.parametrize("length_m", [1.0, 2.0])
+def test_cable_3_a_bond_turns_the_cable_into_a_line_over_the_plane(length_m):
+    """What a bond does to the first resonance, and why "a bond never lengthens it" was wrong.
 
-    The sign here is the whole point: a bond is an inductance to ground, and it is easy to add
-    it as though it were a series element in the cable — which would lower the resonance and
-    make the tool recommend a change that moves a harmonic onto a peak instead of off one.
+    Unbonded, the board floats and the cable is a dipole against it. Bonded, the board is tied
+    to the plane at the connector and the source drives the cable against the plane: a
+    transmission line, whose resonance cable test 2 already checks. So the bond moves the
+    resonance to where transmission-line theory puts it, with the strap as the line's feed
+    drop. Which way that is depends on the far end:
+
+    * **open**: from a dipole's half wave to a line's quarter wave. **Down**, by 2-3x. The old
+      statement, "a bond never lengthens the first resonance", is false here, and a correct
+      model is what shows it. The old deck passed it because its bond moved nothing.
+    * **grounded**: from a quarter wave with the board end open to a half wave with both ends
+      on the plane. **Up**, by about 1.5x.
+
+    Each direction is asserted with the size of the move, so a bond that does nothing fails.
     """
-    ring = ObservationRing(distance_m=3.0)
-    freqs = np.geomspace(40e6, 400e6, 80)
+    for far_end, tl_end, direction in (("open", "open", -1), ("ground", "ground", +1)):
+        floating = _series_resonance(length_m, far_end, None)
+        bonded = _series_resonance(length_m, far_end, 0.0)
+        assert floating is not None and bonded is not None
+        assert direction * (bonded - floating) > 0.25 * floating, (
+            f"{far_end}: a bond moved the resonance {floating/1e6:.1f} -> {bonded/1e6:.1f} MHz"
+        )
+        predicted = transmission_line_resonance_hz(length_m, nec.TABLE_HEIGHT_M, tl_end)
+        assert bonded == pytest.approx(predicted, rel=0.08), (
+            f"{far_end}: bonded {bonded/1e6:.1f} MHz against a line's {predicted/1e6:.1f} MHz")
 
-    def first_peak(bond_nh):
-        best_f, best_e = 0.0, -1.0
-        for f in freqs:
-            deck = Deck(length_m=1.0, frequency_hz=float(f), height_m=1.0, far_end="open",
-                        bond_nh=bond_nh, ring=ring)
-            e = nec_run(deck).e_per_amp()
-            if e > best_e:
-                best_f, best_e = float(f), e
-        return best_f
 
-    unbonded = first_peak(None)
-    bonded = first_peak(10.0)
-    assert bonded >= unbonded * 0.99, (
-        f"a 10 nH bond moved the peak down, {unbonded/1e6:.0f} -> {bonded/1e6:.0f} MHz"
-    )
+@needs_nec
+def test_cable_3_more_bond_inductance_is_a_longer_line():
+    """An inductance in series with the strap lowers the resonance it sets, monotonically.
+    A load with the wrong sign, or on a segment that carries no current, fails this."""
+    res = [_series_resonance(1.0, "ground", nh) for nh in (0.0, 100.0, 1000.0)]
+    assert all(r is not None for r in res)
+    assert res[0] > res[1] > res[2]
 
 
 # ---- the stage itself -------------------------------------------------------------------
@@ -935,6 +1027,23 @@ def test_the_longest_cable_is_segmented_finely_at_the_top_of_the_grid():
     assert MAX_LENGTH_M / nec.segments_for(MAX_LENGTH_M, 1.2e9) <= lam / 10
     board = nec.Deck(length_m=1, frequency_hz=1.2e9).board_span_m
     assert board / nec.segments_for(board, 1.2e9) <= lam / 10
+
+
+@pytest.mark.parametrize("frequency_hz", [30e6, 100e6, 1.2e9])
+def test_every_arm_is_segmented_alike_at_every_frequency(frequency_hz):
+    """At 30 MHz λ/20 alone made a 1 m cable nine 111 mm segments against the board arm's
+    11 mm ones, a 10:1 step at the feed, and that deck read up to 1.7 dB off openEMS on the
+    same wire. No segment is now longer than 12.5 mm, so the arms meet at the same length."""
+    deck = Deck(length_m=1.0, frequency_hz=frequency_hz, far_end="ground", bond_nh=0.0)
+    lengths = []
+    for line in deck.to_text().splitlines():
+        if line.startswith("GW "):
+            v = line.split()
+            a = np.array([float(x) for x in v[3:6]])
+            b = np.array([float(x) for x in v[6:9]])
+            lengths.append(float(np.linalg.norm(b - a)) / int(v[2]))
+    assert max(lengths) <= nec.MAX_SEGMENT_M + 1e-12
+    assert max(lengths) / min(lengths) < 1.5
 
 
 def test_a_cable_longer_than_the_model_supports_is_refused():

@@ -7,7 +7,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { fmtHz, hasMargin, type ComplianceDoc } from './complianceTypes'
+import { driverProvenance, fmtHz, hasMargin, type ComplianceDoc } from './complianceTypes'
 
 const base: ComplianceDoc = {
   format: 'emi-compliance',
@@ -53,5 +53,33 @@ describe('fmtHz', () => {
   it('keeps a decimal place where one megahertz matters', () => {
     expect(fmtHz(1.5e6)).toBe('1.5 MHz')
     expect(fmtHz(300e6)).toBe('300 MHz')
+  })
+})
+
+describe('driverProvenance', () => {
+  const inputs = (driver: unknown) =>
+    ({
+      driver, connectors: [], modelled_cables: {}, excited_ports: [], far_field_ports: [],
+      covered_hz: {}, required_hz: null, declared: {},
+    }) as unknown as ComplianceDoc['inputs']
+
+  it('says an assumed driver is assumed, with its sigma, even without a margin', () => {
+    const d: ComplianceDoc = {
+      ...base, complete: false, margin_db: undefined,
+      inputs: inputs({
+        id: 'd', name: 'clk', kind: 'trapezoid', net: null,
+        weakest_source: 'assumed', sigma_db: 6, assumed: ['source_impedance_ohm'],
+      }),
+    }
+    expect(driverProvenance(d)).toEqual({
+      name: 'clk', source: 'assumed', sigmaDb: 6, assumed: ['source_impedance_ohm'],
+    })
+  })
+
+  it('is null for a result from before provenance was recorded', () => {
+    const d: ComplianceDoc = {
+      ...base, inputs: inputs({ id: 'd', name: 'clk', kind: 'trapezoid', net: null }),
+    }
+    expect(driverProvenance(d)).toBeNull()
   })
 })

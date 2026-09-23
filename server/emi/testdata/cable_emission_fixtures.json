@@ -1,34 +1,45 @@
 {
   "cases": [
     {
-      "name": "plain-arithmetic",
+      "name": "harmonics-between-grid-points",
       "input": {
-        "transfer": {
+        "port": {
           "ref": "USB1",
-          "frequencies_hz": [
-            50000000.0,
-            100000000.0,
-            300000000.0,
-            700000000.0
-          ],
-          "h_real": [
-            0.02,
-            0.01,
-            0.004,
-            0.001
-          ],
-          "h_imag": [
-            0.0,
-            0.0,
-            0.003,
-            -0.001
-          ],
-          "usable": [
-            true,
-            true,
-            true,
-            true
-          ]
+          "driven_by": "p1",
+          "transfer": {
+            "frequencies_hz": [
+              30000000.0,
+              60000000.0,
+              120000000.0,
+              250000000.0,
+              480000000.0,
+              960000000.0
+            ],
+            "h_real": [
+              0.02,
+              0.015,
+              0.01,
+              0.006,
+              0.003,
+              0.001
+            ],
+            "h_imag": [
+              0.0,
+              0.005,
+              0.004,
+              -0.002,
+              0.001,
+              0.0
+            ],
+            "usable": [
+              true,
+              true,
+              true,
+              true,
+              true,
+              true
+            ]
+          }
         },
         "antenna": {
           "ref": "USB1",
@@ -36,79 +47,851 @@
           "length_m": 1.0,
           "distance_m": 3.0,
           "frequencies_hz": [
-            50000000.0,
-            100000000.0,
-            300000000.0,
-            700000000.0
+            30000000.0,
+            60000000.0,
+            120000000.0,
+            250000000.0,
+            480000000.0,
+            960000000.0
           ],
           "z_real": [
-            80.0,
+            40.0,
+            120.0,
             300.0,
             180.0,
-            70.0
+            90.0,
+            200.0
           ],
           "z_imag": [
             -900.0,
-            0.0,
+            -150.0,
+            60.0,
             120.0,
-            -40.0
+            -40.0,
+            10.0
           ],
           "e_per_amp": [
-            6.0,
+            4.0,
+            12.0,
             25.0,
-            48.0,
+            40.0,
+            55.0,
             62.0
           ]
         },
-        "source_volts": [
-          [
-            1.0,
-            0.0
+        "spectrum": {
+          "frequencies_hz": [
+            30000000.0,
+            60000000.0,
+            120000000.0,
+            250000000.0,
+            480000000.0,
+            960000000.0
           ],
-          [
-            1.0,
-            0.0
-          ],
-          [
+          "v_real": [
+            0.48,
             0.5,
-            0.0
+            0.52,
+            0.55,
+            0.6,
+            0.7000000000000001
           ],
-          [
-            0.25,
+          "v_imag": [
+            -0.3,
+            -0.12,
+            0.05,
+            0.2,
+            0.45,
+            0.9
+          ],
+          "i_real": [
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01
+          ],
+          "i_imag": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
             0.0
           ]
-        ],
+        },
+        "z_s": 50.0,
+        "driver": {
+          "format": "emi-driver",
+          "version": 1,
+          "name": "25 MHz clock",
+          "kind": "trapezoid",
+          "role": "signal",
+          "trapezoid": {
+            "amplitude_v": {
+              "value": 3.3,
+              "source": "scope"
+            },
+            "period_s": {
+              "value": 4e-08,
+              "source": "scope"
+            },
+            "pulse_width_s": {
+              "value": 2e-08,
+              "source": "scope"
+            },
+            "rise_s": {
+              "value": 1.2e-09,
+              "source": "datasheet"
+            },
+            "fall_s": {
+              "value": 1.2e-09,
+              "source": "datasheet"
+            },
+            "source_impedance_ohm": {
+              "value": 50.0,
+              "source": "assumed"
+            }
+          }
+        },
         "standard_id": "fcc-15b-radiated-3m"
       },
       "expected": {
+        "covered_hz": [
+          30000000.0,
+          960000000.0
+        ],
+        "band_hz": [
+          30000000.0,
+          960000000.0
+        ],
+        "line": true,
         "points": [
           {
             "frequency_hz": 50000000.0,
-            "current_dbua": 26.901569952839296,
-            "field_dbuv_per_m": 42.464594960512166,
-            "limit_dbuv_per_m": 40.0,
-            "margin_db": -2.4645949605121658
+            "current_a": 0.0,
+            "field_v_per_m": 0.0
+          },
+          {
+            "frequency_hz": 75000000.0,
+            "current_a": 3.481575413058088e-05,
+            "field_v_per_m": 0.000529144704150491
           },
           {
             "frequency_hz": 100000000.0,
-            "current_dbua": 30.45757490560675,
-            "field_dbuv_per_m": 58.416375079047505,
-            "limit_dbuv_per_m": 43.5,
-            "margin_db": -14.916375079047505
+            "current_a": 0.0,
+            "field_v_per_m": 0.0
+          },
+          {
+            "frequency_hz": 125000000.0,
+            "current_a": 9.973303902275135e-06,
+            "field_v_per_m": 0.00025593626848487703
+          },
+          {
+            "frequency_hz": 150000000.0,
+            "current_a": 0.0,
+            "field_v_per_m": 0.0
+          },
+          {
+            "frequency_hz": 175000000.0,
+            "current_a": 6.332534413406432e-06,
+            "field_v_per_m": 0.00020157873468353975
+          },
+          {
+            "frequency_hz": 200000000.0,
+            "current_a": 0.0,
+            "field_v_per_m": 0.0
+          },
+          {
+            "frequency_hz": 225000000.0,
+            "current_a": 4.399329556623566e-06,
+            "field_v_per_m": 0.00016449218726696414
+          },
+          {
+            "frequency_hz": 250000000.0,
+            "current_a": 0.0,
+            "field_v_per_m": 0.0
+          },
+          {
+            "frequency_hz": 275000000.0,
+            "current_a": 3.3236662903702342e-06,
+            "field_v_per_m": 0.0001392786625215293
           },
           {
             "frequency_hz": 300000000.0,
-            "current_dbua": 21.25634164269951,
-            "field_dbuv_per_m": 54.881166390211256,
-            "limit_dbuv_per_m": 46.0,
-            "margin_db": -8.881166390211256
+            "current_a": 0.0,
+            "field_v_per_m": 0.0
+          },
+          {
+            "frequency_hz": 325000000.0,
+            "current_a": 2.7236081380586415e-06,
+            "field_v_per_m": 0.00012383110932367202
+          },
+          {
+            "frequency_hz": 350000000.0,
+            "current_a": 0.0,
+            "field_v_per_m": 0.0
+          },
+          {
+            "frequency_hz": 375000000.0,
+            "current_a": 2.2618273263520404e-06,
+            "field_v_per_m": 0.00011027678765208564
+          },
+          {
+            "frequency_hz": 400000000.0,
+            "current_a": 0.0,
+            "field_v_per_m": 0.0
+          },
+          {
+            "frequency_hz": 425000000.0,
+            "current_a": 1.8288188498429151e-06,
+            "field_v_per_m": 9.478329628203519e-05
+          },
+          {
+            "frequency_hz": 450000000.0,
+            "current_a": 0.0,
+            "field_v_per_m": 0.0
+          },
+          {
+            "frequency_hz": 475000000.0,
+            "current_a": 1.3789492076823953e-06,
+            "field_v_per_m": 7.54554975047059e-05
+          },
+          {
+            "frequency_hz": 500000000.0,
+            "current_a": 0.0,
+            "field_v_per_m": 0.0
+          },
+          {
+            "frequency_hz": 525000000.0,
+            "current_a": 8.164031071815296e-07,
+            "field_v_per_m": 4.560304103583376e-05
+          },
+          {
+            "frequency_hz": 550000000.0,
+            "current_a": 0.0,
+            "field_v_per_m": 0.0
+          },
+          {
+            "frequency_hz": 575000000.0,
+            "current_a": 4.7445858262084896e-07,
+            "field_v_per_m": 2.692253712636633e-05
+          },
+          {
+            "frequency_hz": 600000000.0,
+            "current_a": 0.0,
+            "field_v_per_m": 0.0
+          },
+          {
+            "frequency_hz": 625000000.0,
+            "current_a": 2.723788340863929e-07,
+            "field_v_per_m": 1.5680135908927174e-05
+          },
+          {
+            "frequency_hz": 650000000.0,
+            "current_a": 0.0,
+            "field_v_per_m": 0.0
+          },
+          {
+            "frequency_hz": 675000000.0,
+            "current_a": 1.5052575111188308e-07,
+            "field_v_per_m": 8.78140722155692e-06
           },
           {
             "frequency_hz": 700000000.0,
-            "current_dbua": 12.839966563652009,
-            "field_dbuv_per_m": 48.687800353617085,
-            "limit_dbuv_per_m": 46.0,
-            "margin_db": -2.687800353617085
+            "current_a": 0.0,
+            "field_v_per_m": 0.0
+          },
+          {
+            "frequency_hz": 725000000.0,
+            "current_a": 7.616824956977492e-08,
+            "field_v_per_m": 4.498742552815714e-06
+          },
+          {
+            "frequency_hz": 750000000.0,
+            "current_a": 0.0,
+            "field_v_per_m": 0.0
+          },
+          {
+            "frequency_hz": 775000000.0,
+            "current_a": 3.07348683882316e-08,
+            "field_v_per_m": 1.836345985826601e-06
+          },
+          {
+            "frequency_hz": 800000000.0,
+            "current_a": 0.0,
+            "field_v_per_m": 0.0
+          },
+          {
+            "frequency_hz": 825000000.0,
+            "current_a": 3.32341315025334e-09,
+            "field_v_per_m": 2.007245014944287e-07
+          },
+          {
+            "frequency_hz": 850000000.0,
+            "current_a": 0.0,
+            "field_v_per_m": 0.0
+          },
+          {
+            "frequency_hz": 875000000.0,
+            "current_a": 1.2669656276095742e-08,
+            "field_v_per_m": 7.730321764844802e-07
+          },
+          {
+            "frequency_hz": 900000000.0,
+            "current_a": 0.0,
+            "field_v_per_m": 0.0
+          },
+          {
+            "frequency_hz": 925000000.0,
+            "current_a": 2.1355561729994757e-08,
+            "field_v_per_m": 1.315572907012596e-06
+          },
+          {
+            "frequency_hz": 950000000.0,
+            "current_a": 0.0,
+            "field_v_per_m": 0.0
+          }
+        ],
+        "undriven_hz": []
+      }
+    },
+    {
+      "name": "driver-source-impedance-replaces-the-ports",
+      "input": {
+        "port": {
+          "ref": "USB1",
+          "driven_by": "p1",
+          "transfer": {
+            "frequencies_hz": [
+              30000000.0,
+              60000000.0,
+              120000000.0,
+              250000000.0,
+              480000000.0,
+              960000000.0
+            ],
+            "h_real": [
+              0.02,
+              0.015,
+              0.01,
+              0.006,
+              0.003,
+              0.001
+            ],
+            "h_imag": [
+              0.0,
+              0.005,
+              0.004,
+              -0.002,
+              0.001,
+              0.0
+            ],
+            "usable": [
+              true,
+              true,
+              true,
+              true,
+              true,
+              true
+            ]
+          }
+        },
+        "antenna": {
+          "ref": "USB1",
+          "cable_id": "usb2-shielded",
+          "length_m": 1.0,
+          "distance_m": 3.0,
+          "frequencies_hz": [
+            30000000.0,
+            60000000.0,
+            120000000.0,
+            250000000.0,
+            480000000.0,
+            960000000.0
+          ],
+          "z_real": [
+            40.0,
+            120.0,
+            300.0,
+            180.0,
+            90.0,
+            200.0
+          ],
+          "z_imag": [
+            -900.0,
+            -150.0,
+            60.0,
+            120.0,
+            -40.0,
+            10.0
+          ],
+          "e_per_amp": [
+            4.0,
+            12.0,
+            25.0,
+            40.0,
+            55.0,
+            62.0
+          ]
+        },
+        "spectrum": {
+          "frequencies_hz": [
+            30000000.0,
+            60000000.0,
+            120000000.0,
+            250000000.0,
+            480000000.0,
+            960000000.0
+          ],
+          "v_real": [
+            0.48,
+            0.5,
+            0.52,
+            0.55,
+            0.6,
+            0.7000000000000001
+          ],
+          "v_imag": [
+            -0.3,
+            -0.12,
+            0.05,
+            0.2,
+            0.45,
+            0.9
+          ],
+          "i_real": [
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01
+          ],
+          "i_imag": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "z_s": 50.0,
+        "driver": {
+          "format": "emi-driver",
+          "version": 1,
+          "name": "25 MHz clock",
+          "kind": "trapezoid",
+          "role": "signal",
+          "trapezoid": {
+            "amplitude_v": {
+              "value": 3.3,
+              "source": "scope"
+            },
+            "period_s": {
+              "value": 4e-08,
+              "source": "scope"
+            },
+            "pulse_width_s": {
+              "value": 2e-08,
+              "source": "scope"
+            },
+            "rise_s": {
+              "value": 1.2e-09,
+              "source": "datasheet"
+            },
+            "fall_s": {
+              "value": 1.2e-09,
+              "source": "datasheet"
+            },
+            "source_impedance_ohm": {
+              "value": 10.0,
+              "source": "assumed"
+            }
+          }
+        },
+        "standard_id": "fcc-15b-radiated-3m"
+      },
+      "expected": {
+        "covered_hz": [
+          30000000.0,
+          960000000.0
+        ],
+        "band_hz": [
+          30000000.0,
+          960000000.0
+        ],
+        "line": true,
+        "points": [
+          {
+            "frequency_hz": 50000000.0,
+            "current_a": 0.0,
+            "field_v_per_m": 0.0
+          },
+          {
+            "frequency_hz": 75000000.0,
+            "current_a": 5.756872118420197e-05,
+            "field_v_per_m": 0.0008749540172269252
+          },
+          {
+            "frequency_hz": 100000000.0,
+            "current_a": 0.0,
+            "field_v_per_m": 0.0
+          },
+          {
+            "frequency_hz": 125000000.0,
+            "current_a": 1.6345303440653247e-05,
+            "field_v_per_m": 0.0004194553791647216
+          },
+          {
+            "frequency_hz": 150000000.0,
+            "current_a": 0.0,
+            "field_v_per_m": 0.0
+          },
+          {
+            "frequency_hz": 175000000.0,
+            "current_a": 1.0194387538988472e-05,
+            "field_v_per_m": 0.00032451015767595635
+          },
+          {
+            "frequency_hz": 200000000.0,
+            "current_a": 0.0,
+            "field_v_per_m": 0.0
+          },
+          {
+            "frequency_hz": 225000000.0,
+            "current_a": 6.966478377007975e-06,
+            "field_v_per_m": 0.0002604786140780826
+          },
+          {
+            "frequency_hz": 250000000.0,
+            "current_a": 0.0,
+            "field_v_per_m": 0.0
+          },
+          {
+            "frequency_hz": 275000000.0,
+            "current_a": 5.154825050723608e-06,
+            "field_v_per_m": 0.00021601360542044154
+          },
+          {
+            "frequency_hz": 300000000.0,
+            "current_a": 0.0,
+            "field_v_per_m": 0.0
+          },
+          {
+            "frequency_hz": 325000000.0,
+            "current_a": 4.122052630945105e-06,
+            "field_v_per_m": 0.00018741255133138503
+          },
+          {
+            "frequency_hz": 350000000.0,
+            "current_a": 0.0,
+            "field_v_per_m": 0.0
+          },
+          {
+            "frequency_hz": 375000000.0,
+            "current_a": 3.3505103057273937e-06,
+            "field_v_per_m": 0.00016335619841800265
+          },
+          {
+            "frequency_hz": 400000000.0,
+            "current_a": 0.0,
+            "field_v_per_m": 0.0
+          },
+          {
+            "frequency_hz": 425000000.0,
+            "current_a": 2.658912928079227e-06,
+            "field_v_per_m": 0.000137805082155575
+          },
+          {
+            "frequency_hz": 450000000.0,
+            "current_a": 0.0,
+            "field_v_per_m": 0.0
+          },
+          {
+            "frequency_hz": 475000000.0,
+            "current_a": 1.9723846562470767e-06,
+            "field_v_per_m": 0.00010792802568696929
+          },
+          {
+            "frequency_hz": 500000000.0,
+            "current_a": 0.0,
+            "field_v_per_m": 0.0
+          },
+          {
+            "frequency_hz": 525000000.0,
+            "current_a": 1.140867276802011e-06,
+            "field_v_per_m": 6.372711811454884e-05
+          },
+          {
+            "frequency_hz": 550000000.0,
+            "current_a": 0.0,
+            "field_v_per_m": 0.0
+          },
+          {
+            "frequency_hz": 575000000.0,
+            "current_a": 6.492801067198243e-07,
+            "field_v_per_m": 3.684255785197684e-05
+          },
+          {
+            "frequency_hz": 600000000.0,
+            "current_a": 0.0,
+            "field_v_per_m": 0.0
+          },
+          {
+            "frequency_hz": 625000000.0,
+            "current_a": 3.6606356633291815e-07,
+            "field_v_per_m": 2.107332051207088e-05
+          },
+          {
+            "frequency_hz": 650000000.0,
+            "current_a": 0.0,
+            "field_v_per_m": 0.0
+          },
+          {
+            "frequency_hz": 675000000.0,
+            "current_a": 1.991477859452978e-07,
+            "field_v_per_m": 1.1617931103079231e-05
+          },
+          {
+            "frequency_hz": 700000000.0,
+            "current_a": 0.0,
+            "field_v_per_m": 0.0
+          },
+          {
+            "frequency_hz": 725000000.0,
+            "current_a": 9.93973915824305e-08,
+            "field_v_per_m": 5.87073062170264e-06
+          },
+          {
+            "frequency_hz": 750000000.0,
+            "current_a": 0.0,
+            "field_v_per_m": 0.0
+          },
+          {
+            "frequency_hz": 775000000.0,
+            "current_a": 3.962593405016174e-08,
+            "field_v_per_m": 2.3675691077794446e-06
+          },
+          {
+            "frequency_hz": 800000000.0,
+            "current_a": 0.0,
+            "field_v_per_m": 0.0
+          },
+          {
+            "frequency_hz": 825000000.0,
+            "current_a": 4.239106248108078e-09,
+            "field_v_per_m": 2.560297049942615e-07
+          },
+          {
+            "frequency_hz": 850000000.0,
+            "current_a": 0.0,
+            "field_v_per_m": 0.0
+          },
+          {
+            "frequency_hz": 875000000.0,
+            "current_a": 1.600654379890518e-08,
+            "field_v_per_m": 9.76630551075601e-07
+          },
+          {
+            "frequency_hz": 900000000.0,
+            "current_a": 0.0,
+            "field_v_per_m": 0.0
+          },
+          {
+            "frequency_hz": 925000000.0,
+            "current_a": 2.6749244708369093e-08,
+            "field_v_per_m": 1.6478415349737125e-06
+          },
+          {
+            "frequency_hz": 950000000.0,
+            "current_a": 0.0,
+            "field_v_per_m": 0.0
+          }
+        ],
+        "undriven_hz": []
+      }
+    },
+    {
+      "name": "uploaded-spectrum-on-the-grid",
+      "input": {
+        "port": {
+          "ref": "J2",
+          "driven_by": "p1",
+          "transfer": {
+            "frequencies_hz": [
+              30000000.0,
+              60000000.0,
+              120000000.0,
+              250000000.0,
+              480000000.0,
+              960000000.0
+            ],
+            "h_real": [
+              0.02,
+              0.015,
+              0.01,
+              0.006,
+              0.003,
+              0.001
+            ],
+            "h_imag": [
+              0.0,
+              0.005,
+              0.004,
+              -0.002,
+              0.001,
+              0.0
+            ],
+            "usable": [
+              true,
+              true,
+              true,
+              true,
+              true,
+              true
+            ]
+          }
+        },
+        "antenna": {
+          "ref": "J2",
+          "cable_id": "usb2-shielded",
+          "length_m": 1.0,
+          "distance_m": 3.0,
+          "frequencies_hz": [
+            30000000.0,
+            60000000.0,
+            120000000.0,
+            250000000.0,
+            480000000.0,
+            960000000.0
+          ],
+          "z_real": [
+            40.0,
+            120.0,
+            300.0,
+            180.0,
+            90.0,
+            200.0
+          ],
+          "z_imag": [
+            -900.0,
+            -150.0,
+            60.0,
+            120.0,
+            -40.0,
+            10.0
+          ],
+          "e_per_amp": [
+            4.0,
+            12.0,
+            25.0,
+            40.0,
+            55.0,
+            62.0
+          ]
+        },
+        "spectrum": {
+          "frequencies_hz": [
+            30000000.0,
+            60000000.0,
+            120000000.0,
+            250000000.0,
+            480000000.0,
+            960000000.0
+          ],
+          "v_real": [
+            0.48,
+            0.5,
+            0.52,
+            0.55,
+            0.6,
+            0.7000000000000001
+          ],
+          "v_imag": [
+            -0.3,
+            -0.12,
+            0.05,
+            0.2,
+            0.45,
+            0.9
+          ],
+          "i_real": [
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01
+          ],
+          "i_imag": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "z_s": 50.0,
+        "driver": {
+          "format": "emi-driver",
+          "version": 1,
+          "name": "analyser trace",
+          "kind": "spectrum",
+          "role": "signal",
+          "spectrum": {
+            "rbw_hz": 120000,
+            "points": [
+              {
+                "frequency_hz": 50000000.0,
+                "level_dbuv": 100.0
+              },
+              {
+                "frequency_hz": 500000000.0,
+                "level_dbuv": 80.0
+              }
+            ],
+            "source_impedance_ohm": {
+              "value": 50,
+              "source": "assumed"
+            }
+          }
+        },
+        "standard_id": "fcc-15b-radiated-3m"
+      },
+      "expected": {
+        "covered_hz": [
+          30000000.0,
+          960000000.0
+        ],
+        "band_hz": [
+          30000000.0,
+          960000000.0
+        ],
+        "line": false,
+        "points": [
+          {
+            "frequency_hz": 60000000.0,
+            "current_a": 6.859233310066591e-06,
+            "field_v_per_m": 8.23107997207991e-05
+          },
+          {
+            "frequency_hz": 120000000.0,
+            "current_a": 1.4668301514685863e-06,
+            "field_v_per_m": 3.667075378671465e-05
+          },
+          {
+            "frequency_hz": 250000000.0,
+            "current_a": 5.847053462046864e-07,
+            "field_v_per_m": 2.3388213848187456e-05
+          },
+          {
+            "frequency_hz": 480000000.0,
+            "current_a": 3.34459009931216e-07,
+            "field_v_per_m": 1.8395245546216887e-05
           }
         ],
         "undriven_hz": []
@@ -117,83 +900,225 @@
     {
       "name": "every-way-a-point-goes-missing",
       "input": {
-        "transfer": {
+        "port": {
           "ref": "J3",
-          "frequencies_hz": [
-            40000000.0,
-            80000000.0,
-            160000000.0,
-            320000000.0
-          ],
-          "h_real": [
-            0.03,
-            0.02,
-            0.01,
-            0.005
-          ],
-          "h_imag": [
-            0.0,
-            0.0,
-            0.0,
-            0.0
-          ],
-          "usable": [
-            false,
-            true,
-            true,
-            true
-          ]
+          "driven_by": "p1",
+          "transfer": {
+            "frequencies_hz": [
+              30000000.0,
+              60000000.0,
+              120000000.0,
+              250000000.0,
+              480000000.0,
+              960000000.0
+            ],
+            "h_real": [
+              0.02,
+              0.015,
+              0.01,
+              0.006,
+              0.003,
+              0.001
+            ],
+            "h_imag": [
+              0.0,
+              0.005,
+              0.004,
+              -0.002,
+              0.001,
+              0.0
+            ],
+            "usable": [
+              true,
+              true,
+              false,
+              true,
+              true,
+              true
+            ]
+          }
         },
         "antenna": {
           "ref": "J3",
-          "cable_id": "dc-pigtail",
+          "cable_id": "usb2-shielded",
           "length_m": 1.0,
           "distance_m": 3.0,
           "frequencies_hz": [
-            40000000.0,
-            80000000.0,
-            320000000.0
+            30000000.0,
+            60000000.0,
+            120000000.0,
+            250000000.0,
+            480000000.0
           ],
           "z_real": [
-            50.0,
-            50.0,
-            0.0
+            40.0,
+            120.0,
+            300.0,
+            180.0,
+            90.0
           ],
           "z_imag": [
-            0.0,
-            0.0,
-            0.0
+            -900.0,
+            -150.0,
+            60.0,
+            120.0,
+            -40.0
           ],
           "e_per_amp": [
-            10.0,
-            10.0,
-            10.0
+            4.0,
+            12.0,
+            25.0,
+            40.0,
+            55.0
           ]
         },
-        "source_volts": [
-          [
-            1.0,
-            0.0
+        "spectrum": {
+          "frequencies_hz": [
+            30000000.0,
+            60000000.0,
+            120000000.0,
+            250000000.0,
+            480000000.0,
+            960000000.0
           ],
-          null,
-          [
-            1.0,
-            0.0
+          "v_real": [
+            0.48,
+            0.5,
+            0.52,
+            0.55,
+            0.6,
+            0.7000000000000001
           ],
-          [
-            1.0,
+          "v_imag": [
+            -0.3,
+            -0.12,
+            0.05,
+            0.2,
+            0.45,
+            0.9
+          ],
+          "i_real": [
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01
+          ],
+          "i_imag": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
             0.0
           ]
-        ],
+        },
+        "z_s": 50.0,
+        "driver": {
+          "format": "emi-driver",
+          "version": 1,
+          "name": "slow capture",
+          "kind": "waveform",
+          "role": "signal",
+          "waveform": {
+            "sample_interval_s": 2e-09,
+            "samples_v": [
+              0.0,
+              3.3,
+              3.3,
+              3.3,
+              3.3,
+              3.3,
+              3.3,
+              3.3,
+              3.3,
+              3.3,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            "bandwidth_hz": 200000000.0,
+            "period_s": {
+              "value": 4e-08,
+              "source": "benchpod"
+            },
+            "source_impedance_ohm": {
+              "value": 50,
+              "source": "assumed"
+            }
+          }
+        },
         "standard_id": "fcc-15b-radiated-3m"
       },
       "expected": {
-        "points": [],
+        "covered_hz": [
+          30000000.0,
+          480000000.0
+        ],
+        "band_hz": [
+          30000000.0,
+          480000000.0
+        ],
+        "line": true,
+        "points": [
+          {
+            "frequency_hz": 50000000.0,
+            "current_a": 1.0516035521737733e-05,
+            "field_v_per_m": 9.452223557709711e-05
+          },
+          {
+            "frequency_hz": 75000000.0,
+            "current_a": 2.9697587061747885e-05,
+            "field_v_per_m": 0.0004513566146185859
+          },
+          {
+            "frequency_hz": 100000000.0,
+            "current_a": 9.204579069709804e-06,
+            "field_v_per_m": 0.00018971401693089186
+          },
+          {
+            "frequency_hz": 125000000.0,
+            "current_a": 6.220881961398127e-06,
+            "field_v_per_m": 0.00015964111105868482
+          },
+          {
+            "frequency_hz": 150000000.0,
+            "current_a": 5.491448211246358e-06,
+            "field_v_per_m": 0.0001583740714844607
+          },
+          {
+            "frequency_hz": 175000000.0,
+            "current_a": 2.4342535987211344e-06,
+            "field_v_per_m": 7.748773686728418e-05
+          },
+          {
+            "frequency_hz": 200000000.0,
+            "current_a": 4.078225486259233e-06,
+            "field_v_per_m": 0.00014140802115941646
+          }
+        ],
         "undriven_hz": [
-          40000000.0,
-          80000000.0,
-          160000000.0,
-          320000000.0
+          120000000.0,
+          225000000.0,
+          250000000.0,
+          275000000.0,
+          300000000.0,
+          325000000.0,
+          350000000.0,
+          375000000.0,
+          400000000.0,
+          425000000.0,
+          450000000.0,
+          475000000.0
         ]
       }
     }

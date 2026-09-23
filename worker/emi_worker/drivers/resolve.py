@@ -167,34 +167,54 @@ def _resolve_waveform(driver: Driver, frequencies: list[float]) -> Resolved:
                 volts[i] = complex(envelope_v(envelope_trap, f), 0.0)
 
         if envelope_trap is not None:
-            _match_envelope_at_join(volts, frequencies, bandwidth, envelope_trap)
+            scale = join_scale(times, values, period, bandwidth, envelope_trap)
+            for i, f in enumerate(frequencies):
+                if f > bandwidth and volts[i] is not None:
+                    volts[i] = volts[i] * scale
 
     return Resolved(list(frequencies), volts, undriven,
                     scale_v=max(values) - min(values))
 
 
-def _match_envelope_at_join(
-    volts: list[complex | None], frequencies: list[float], bandwidth: float,
-    envelope_trap: Trapezoid,
-) -> None:
-    """Scale the envelope so it meets the transform at the bandwidth.
+#: How many of the capture's own harmonics the envelope is matched against at the join.
+JOIN_HARMONICS = 32
 
-    §9.3 asks the waveform to "continue above that with the envelope"; an unscaled envelope
-    would step at the join by whatever the ratio happens to be, and a step in a source
-    spectrum becomes a step in every result that reads it.
+
+def join_scale(times: list[float], values: list[float], period_s: float, bandwidth_hz: float,
+               envelope_trap: Trapezoid) -> float:
+    """How much to scale the rise-time envelope so it meets the capture at its bandwidth.
+
+    §9.3 continues a waveform above its bandwidth "with the envelope". The envelope bounds a
+    line spectrum from above and touches it at the tops of its lobes, so the scale is the
+    largest ratio of transform to envelope over the top octave below the bandwidth.
+
+    It used to be the ratio at the single highest *requested* frequency below the join. Two
+    things were wrong with that. The highest harmonic below the join can sit on a null (every
+    even harmonic of a square wave does), and then the envelope was scaled to nothing and
+    every harmonic above the bandwidth came out a null. And it depended on which frequencies
+    the caller asked for, so the same harmonic had a different level in the Cables tab and in
+    the compliance estimate. This reads the capture's own harmonics, whatever was asked.
+
+    Harmonics are sampled with an odd stride, so the two parities alternate and a square
+    wave's nulls cannot fill the sample.
     """
-    below = [(f, v) for f, v in zip(frequencies, volts)
-             if v is not None and f <= bandwidth]
-    if not below:
-        return
-    f_join, v_join = max(below, key=lambda p: p[0])
-    predicted = envelope_v(envelope_trap, f_join)
-    if predicted <= 0:
-        return
-    scale = abs(v_join) / predicted
-    for i, f in enumerate(frequencies):
-        if f > bandwidth and volts[i] is not None:
-            volts[i] = volts[i] * scale
+    n_hi = math.floor(bandwidth_hz * period_s * (1 + 1e-12))
+    if n_hi < 1:
+        return 1.0
+    n_lo = max(1, math.ceil(n_hi / 2))
+    count = n_hi - n_lo + 1
+    stride = max(1, math.ceil(count / JOIN_HARMONICS))
+    if stride % 2 == 0:
+        stride += 1
+    best = 0.0
+    for n in range(n_hi, n_lo - 1, -stride):
+        line = 2.0 * RMS_PER_PEAK * abs(piecewise_linear_series(times, values, period_s, n))
+        bound = envelope_v(envelope_trap, n / period_s)
+        if bound > 0:
+            best = max(best, line / bound)
+    # A capture with nothing at all in its top octave has nothing to match against; the
+    # unscaled envelope from its own amplitude and rise time is then the better guess.
+    return best if best > 0 else 1.0
 
 
 def _resolve_spectrum(driver: Driver, frequencies: list[float]) -> Resolved:

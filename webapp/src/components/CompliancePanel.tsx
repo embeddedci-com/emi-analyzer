@@ -22,7 +22,7 @@ import { useState } from 'react'
 import {
   Alert, Badge, Card, Collapse, Group, List, Progress, Stack, Table, Text, Title, Tooltip,
 } from '@mantine/core'
-import { fmtHz, hasMargin, type ComplianceDoc } from '../lib/complianceTypes'
+import { driverProvenance, fmtHz, hasMargin, type ComplianceDoc } from '../lib/complianceTypes'
 import { ComplianceSpectrum } from './ComplianceSpectrum'
 import { EXPERIMENTAL, Experimental } from './Experimental'
 
@@ -37,6 +37,7 @@ export function CompliancePanel({ doc }: { doc: ComplianceDoc }) {
   const scored = hasMargin(doc)
   const margin = doc.margin_db ?? 0
   const anyCable = doc.paths.some((p) => p.kind === 'cable')
+  const provenance = driverProvenance(doc)
 
   return (
     <Stack gap="md">
@@ -52,6 +53,25 @@ export function CompliancePanel({ doc }: { doc: ComplianceDoc }) {
             {doc.distance_m ? ` at ${doc.distance_m} m` : ''} · experimental estimate, not a
             pre-compliance test
           </Text>
+          {provenance && (
+            <Group gap={6} mt={4}>
+              <Text size="xs" c="dimmed">Driver: {provenance.name}</Text>
+              <Tooltip
+                multiline w={300} withArrow
+                label={
+                  provenance.assumed.length > 0
+                    ? `Assumed: ${provenance.assumed.join(', ')}. The least certain value sets ` +
+                      `this driver's term in σ.`
+                    : "The least certain value sets this driver's term in σ."
+                }
+              >
+                <Badge size="xs" variant="dot" tt="none" style={{ cursor: 'help' }}
+                       color={provenance.source === 'assumed' ? 'orange' : 'gray'}>
+                  {provenance.source} ±{provenance.sigmaDb} dB
+                </Badge>
+              </Tooltip>
+            </Group>
+          )}
         </Stack>
         {scored && (
           <Stack gap={0} align="flex-end">

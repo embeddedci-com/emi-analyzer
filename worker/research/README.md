@@ -21,6 +21,7 @@ they are not maintained, not tested, and may no longer run against the current w
 | `ff_fixture_explore.py`, `ff_fixture_decompose.py` | Why did the fixture board's far field rise 20 dB/decade? |
 | `ff_real_board.py` | What does the far field cost, and does it run, on a real board? |
 | `ff_explore.py` | Which knob moves a short dipole's far field? |
+| `verify_cable_tier_a.py` | Does nec2c's product deck agree with openEMS on the same wire? |
 
 The `ff_` scripts share `ff_harness.py` and are written up in
 [docs/verification/far-field.md](../../docs/verification/far-field.md). Unlike the spikes they
