@@ -22,6 +22,9 @@ import { anchorNear, type PortAnchor } from '../lib/portPlacement'
  */
 export type CanvasMode = 'pan' | 'roi' | 'pick-pad'
 
+/** How far, in CSS pixels, a press may wander and still count as a click. */
+const CLICK_SLOP_PX = 4
+
 export interface BoardCanvasProps {
   doc: BoardDoc | null
   geometry: ArrayBuffer | null
@@ -71,7 +74,8 @@ export function BoardCanvas({
   const rendererRef = useRef<BoardRenderer | null>(null)
   const dirtyRef = useRef(true)
   const rafRef = useRef(0)
-  const dragRef = useRef<{ id: number; x: number; y: number } | null>(null)
+  // x0/y0 is where the press started, to tell a click from a pan on release.
+  const dragRef = useRef<{ id: number; x: number; y: number; x0: number; y0: number } | null>(null)
   const roiDragRef = useRef<{ id: number; x0: number; y0: number } | null>(null)
   // Props the pointer handlers read. Kept in a ref so the handlers never need to be
   // recreated, which would otherwise re-register listeners on every render.
@@ -230,7 +234,7 @@ export function BoardCanvas({
       if (p) roiDragRef.current = { id: e.pointerId, x0: p.x, y0: p.y }
       return
     }
-    dragRef.current = { id: e.pointerId, x: e.clientX, y: e.clientY }
+    dragRef.current = { id: e.pointerId, x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY }
   }
 
   const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -238,7 +242,12 @@ export function BoardCanvas({
 
     const { mode, onPadPick, doc: currentDoc } = propsRef.current
 
-    if (mode === 'pick-pad' && currentDoc && onPadPick) {
+    // A pan in pick mode ends with a release too; only a press that stayed put is a pick.
+    const drag = dragRef.current
+    const panned = !!drag && drag.id === e.pointerId &&
+      Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) > CLICK_SLOP_PX
+
+    if (mode === 'pick-pad' && currentDoc && onPadPick && !panned) {
       const renderer = rendererRef.current
       const p = boardPointFromEvent(e)
       if (p && renderer) {
