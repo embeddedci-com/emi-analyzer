@@ -24,6 +24,7 @@ help:
 	@echo "  make desktop       build the desktop app installer for this machine (needs Rust)"
 	@echo "  make desktop-dev   run the desktop app in development mode"
 	@echo "  make worker-image  build the worker image as $(WORKER_IMAGE)"
+	@echo "  make worker-lock   re-pin the Python packages in the worker image"
 	@echo "  make worker-local  run a worker from source against emi-local (EMBEDDEDCI_API_KEY=...)"
 	@echo
 	@echo "The KiCad plugin (kicad-plugin/), a front end for the app:"
@@ -66,6 +67,25 @@ run-local: local
 
 worker-image:
 	docker build -t $(WORKER_IMAGE) worker
+
+# Rewrites worker/requirements.lock: the worker's dependencies installed fresh in the image's
+# own base, then frozen. Run it after changing pyproject.toml, then rebuild and test the image.
+WORKER_BASE := $(shell sed -n 's/^FROM \(debian:[^ ]*\) AS base$$/\1/p' worker/Dockerfile)
+
+.PHONY: worker-lock
+worker-lock:
+	@test -n "$(WORKER_BASE)" || { echo "no base image found in worker/Dockerfile"; exit 1; }
+	{ sed -n '/^#/p' worker/requirements.lock; \
+	  docker run --rm -v "$$PWD/worker/pyproject.toml:/w/pyproject.toml:ro" $(WORKER_BASE) sh -ec ' \
+	    apt-get update -qq >/dev/null; \
+	    apt-get install -y -qq --no-install-recommends python3 python3-venv >/dev/null; \
+	    python3 -m venv /v; /v/bin/pip install -q --upgrade pip setuptools wheel; \
+	    cp -r /w /b; mkdir /b/emi_worker; touch /b/emi_worker/__init__.py; \
+	    /v/bin/pip install -q /b; /v/bin/pip install -q --no-deps "gerbonara==$(GERBONARA)"; \
+	    /v/bin/pip freeze --all --exclude emi-worker'; \
+	} > worker/requirements.lock.new
+	mv worker/requirements.lock.new worker/requirements.lock
+	@echo "wrote worker/requirements.lock; now: make worker-image, and run the worker tests in it"
 
 # Tauri looks for the sidecar as binaries/emi-local-<rust target triple>.
 RUST_TARGET ?= $(shell rustc -vV 2>/dev/null | sed -n 's/^host: //p')
@@ -157,9 +177,15 @@ test-go:
 	@! (cd server && go list -deps ./emi | grep -q 'emi-analyzer/server/local\\|modernc.org/sqlite') || \
 		{ echo "server/emi depends on the local package or SQLite"; exit 1; }
 
+# gerbonara the way the image installs it: no dependency tree, the version from the lock.
+# Without it the Gerber tests skip themselves, and a dev machine reports green having tested
+# none of the Gerber ingest.
+GERBONARA := $(shell sed -n 's/^gerbonara==//p' worker/requirements.lock)
+
 test-py:
 	@cd worker && \
 	if [ ! -d .venv ]; then python3 -m venv .venv && .venv/bin/pip install -q -e '.[dev]'; fi && \
+	.venv/bin/pip install -q --no-deps "gerbonara==$(GERBONARA)" && \
 	.venv/bin/python -m pytest -q
 
 # Regenerating rewrites server/emi/testdata/estimate_fixtures.json, which BOTH the Go and
@@ -169,9 +195,6 @@ test-py:
 fixtures:
 	cd worker && python3 scripts/gen_fixtures.py
 
-# Rewrites server/emi/testdata/driver_fixtures.json, which the Python and TypeScript halves
-# of the driver spectrum both assert against. A change here changes every absolute level the
-# tool reports, so run the suites afterwards.
 # Rewrites server/emi/testdata/component_fixtures.json, which the Python and TypeScript
 # halves of the component library both assert against.
 .PHONY: component-fixtures
@@ -180,6 +203,9 @@ component-fixtures:
 	cd worker && .venv/bin/python -m pytest -q tests/test_component_document.py
 	cd webapp && npx vitest run src/lib/componentDocument.test.ts
 
+# Rewrites server/emi/testdata/driver_fixtures.json, which the Python and TypeScript halves
+# of the driver spectrum both assert against. A change here changes every absolute level the
+# tool reports, so run the suites afterwards.
 .PHONY: driver-fixtures
 driver-fixtures:
 	cd worker && python3 scripts/gen_driver_fixtures.py
@@ -262,6 +288,6 @@ EMBEDDEDCI_URL ?= http://127.0.0.1:7465
 worker-local:
 	@test -n "$(EMBEDDEDCI_API_KEY)" || { echo "set EMBEDDEDCI_API_KEY"; exit 1; }
 	cd worker && \
-	if [ ! -d .venv ]; then python3 -m venv .venv && .venv/bin/pip install -q -e . && .venv/bin/pip install -q --no-deps "gerbonara>=1.5"; fi && \
+	if [ ! -d .venv ]; then python3 -m venv .venv && .venv/bin/pip install -q -e . && .venv/bin/pip install -q --no-deps "gerbonara==$(GERBONARA)"; fi && \
 	EMBEDDEDCI_URL="$(EMBEDDEDCI_URL)" EMBEDDEDCI_API_KEY="$(EMBEDDEDCI_API_KEY)" \
 	EMI_WORKDIR=/tmp/emi-worker .venv/bin/python -m emi_worker

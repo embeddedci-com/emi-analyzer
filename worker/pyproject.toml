@@ -22,10 +22,10 @@ dependencies = [
 # flask, quart, hypercorn and rtree for a web preview feature this worker never uses, and
 # rtree needs a system library. Install it without its dependency tree:
 #
-#     pip install --no-deps "gerbonara>=1.5"
+#     pip install --no-deps "gerbonara==1.5.0"
 #
-# The Dockerfile does exactly that. Its parser imports nothing beyond the standard library
-# in our usage, which is what makes this safe.
+# The Dockerfile does exactly that, with the version from requirements.lock. Its parser
+# imports nothing beyond the standard library in our usage, which is what makes this safe.
 #
 # Note the floor is 1.5, not 1.6: gerbonara 1.6 requires Python 3.12, and the worker image
 # is Debian bookworm (3.11) because that is where the openEMS package lives. Both versions
@@ -40,7 +40,8 @@ dev = [
 emi-worker = "emi_worker.__main__:main"
 
 [build-system]
-requires = ["setuptools>=68"]
+# 77 is the first setuptools that reads `license` as an SPDX expression; older ones reject it.
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
