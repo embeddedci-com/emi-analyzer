@@ -3,12 +3,11 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "EMI Analyzer frontend. src/ is the analyzer every host mounts (embeddedci-server links it in by path); app/ is the shell of the local app; dev/ is a standalone harness for the renderer.",
+  "description": "EMI Analyzer frontend. src/ is the analyzer every host mounts; app/ is the shell of the local app; dev/ is a standalone harness for development.",
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "build": "tsc --noEmit -p tsconfig.build.json && vite build",
-    "build:harness": "esbuild src/lib/BoardRenderer.ts --bundle --format=esm --target=es2022 --outfile=dev/public/bundle.js",
     "dev": "vite --config vite.config.ts",
     "build:app": "tsc --noEmit -p tsconfig.build.json && vite build --config vite.app.config.ts",
     "dev:app": "vite --config vite.app.config.ts"

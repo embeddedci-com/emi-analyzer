@@ -1,10 +1,10 @@
 /**
- * Standalone harness for the EMI Analyzer frontend.
+ * Standalone harness for the EMI Analyzer frontend, against `emi-server`.
  *
- * Mounts exactly the same components, routes and API client that embeddedci-server will,
- * so what is verified here is the real thing rather than a mock of it. The only difference
- * is the shell around them: this file provides the Mantine and react-query providers that
- * the host app already has.
+ * Mounts exactly the same components, routes and API client that any hosted copy does, so
+ * what is verified here is the real thing rather than a mock of it. The only difference is
+ * the shell around them: this file provides the Mantine and react-query providers that a
+ * host app already has.
  */
 
 import { StrictMode } from 'react'
@@ -30,7 +30,7 @@ function Shell() {
       <AppShell.Header>
         <Group h="100%" px="md" gap="lg">
           <Title order={5} component={Link} to="/tools/emi" style={{ textDecoration: 'none' }}>
-            EmbeddedCI
+            EMI Analyzer
           </Title>
           <ToolsMenu triggerStyle={{ fontSize: 14, cursor: 'pointer' }} />
         </Group>
@@ -38,8 +38,8 @@ function Shell() {
       <AppShell.Main>
         <Routes>
           <Route path="/" element={<Navigate to="/tools/emi" replace />} />
-          {/* The fragment's paths are relative, so the prefix is supplied here -- the same
-              prefix embeddedci-server mounts it at. */}
+          {/* The fragment's paths are relative, so the prefix is supplied here: the one
+              emi-server serves the built webapp under by default. */}
           <Route path="/tools/emi">{emiRoutes(api)}</Route>
         </Routes>
       </AppShell.Main>
