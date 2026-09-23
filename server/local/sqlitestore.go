@@ -9,7 +9,6 @@ package local
 import (
 	"context"
 	"database/sql"
-	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -20,9 +19,6 @@ import (
 
 	"github.com/embeddedci-com/emi-analyzer/server/emi"
 )
-
-//go:embed schema.sql
-var schemaSQL string
 
 // SQLiteStore implements emi.Store over a single SQLite file.
 //
@@ -35,7 +31,8 @@ type SQLiteStore struct {
 
 var _ emi.Store = (*SQLiteStore)(nil)
 
-// OpenSQLite opens (creating if needed) the database at path and applies the schema.
+// OpenSQLite opens (creating if needed) the database at path and migrates it to the newest
+// schema (see migrate.go).
 func OpenSQLite(ctx context.Context, path string) (*SQLiteStore, error) {
 	q := url.Values{}
 	q.Add("_pragma", "foreign_keys(1)")
@@ -52,9 +49,9 @@ func OpenSQLite(ctx context.Context, path string) (*SQLiteStore, error) {
 		db.Close()
 		return nil, fmt.Errorf("local: open %s: %w", path, err)
 	}
-	if _, err := db.ExecContext(ctx, schemaSQL); err != nil {
+	if err := migrate(ctx, db); err != nil {
 		db.Close()
-		return nil, fmt.Errorf("local: apply schema: %w", err)
+		return nil, err
 	}
 	return &SQLiteStore{db: db}, nil
 }
