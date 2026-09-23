@@ -20,6 +20,7 @@ solver or a measurement — and passed. The gap between the two is most of this 
 | Cable budget, Tier A (`cable` run, nec2c) | ✅ | ✅ against openEMS on the product setup: 7 of 9 configurations within 1 dB below resonance, all within 2 dB at the peaks; the wire radius, not the solver, is the larger uncertainty — §3 | on |
 | Limits library and Limits page | ✅ | ⚠️ FCC Part 15 only; there is no CISPR 32 table | on |
 | **Full-wave solve (openEMS)** | ✅ | ⚠️ **a 50 ohm microstrip within 1 % of theory on every preset; solves end to end on the fixture board; long records on whole boards are out of scope — §2** | **off** (`full-wave`) |
+| Small-part solve (one net cut out over its planes, `small-part-solve`) | ✅ | ⚠️ a 50 ohm microstrip within 0.5 % of theory and S21 within 0.06 dB; stripline, via, convergence and real-board checks not done or failing ([verification/small-part-solve.md](verification/small-part-solve.md)) | **off** (`small-part-solve`, or with full-wave) |
 | Drivers (re-weighting a solve) | ✅ | ⚠️ every check in §3 passes; nothing against a measured source | off, with full-wave |
 | Components (MLCC models in a solve) | ✅ | ❌ the shipped openEMS 0.0.35 cannot model an inductor, so no capacitor is placed; on a current openEMS build a 100 pF 0402 resonates within 1.6 % but only with a -70 dB record (§3) | off, with full-wave |
 | Board far field (NF2FF) | ✅ | ⚠️ matches nec2c on dipoles over the ground plane as the product runs it, 30 MHz up (§3); no board checked against a measurement | off, with full-wave |
@@ -28,8 +29,9 @@ solver or a measurement — and passed. The gap between the two is most of this 
 | Conducted emissions scan | ❌ | ❌ | — |
 | Report export | ❌ | ❌ | — |
 
-Everything marked **off** is behind the `full-wave` experimental feature. It is refused by the
-server, not merely hidden. It is off because none of it has been verified on a real board, not
+Everything marked **off** is behind the `full-wave` experimental feature, except small-part
+solves, which also have their own, `small-part-solve`. It is refused by the server, not merely
+hidden. It is off because none of it has been verified on a real board, not
 because it is known to be broken — see §2. To try it:
 
 ```bash
@@ -120,6 +122,19 @@ after the energy has fallen 20 dB.
 | The closed form is a conservative bound | ⚠️ for an open far end only; 4-26 dB low for grounded and equipment far ends |
 
 Numbers, method and what is still open: [`verification/cables-and-drivers.md`](verification/cables-and-drivers.md).
+
+### Small-part solves
+
+| Check | Status |
+|---|---|
+| 50 ohm microstrip Z0 and delay within 5 % of Hammerstad-Jensen | ✅ Z0 -0.4 to +0.3 %, delay -0.4 to -0.7 % (eps_eff reads 0.7-1.4 % low) |
+| Matched microstrip S21 within 0.5 dB to 1 GHz | ✅ 0.06 dB |
+| 50 ohm stripline within 5 % of Cohn | ❌ not run validly; script fixed, not re-run |
+| Via inductance within 10 % of a closed form | ❌ first setup 57-59 % high; the parallel-plate version not run |
+| Convergence over 3 coupon margins and 2 presets | ❌ not run |
+| Real-board coupons converge and agree across presets | ❌ one of three compared, presets disagree (hotspot 4.6 dB, S21 2.4 dB) |
+
+Details and the full list: [`verification/small-part-solve.md`](verification/small-part-solve.md).
 
 ### Drivers
 

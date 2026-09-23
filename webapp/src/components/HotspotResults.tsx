@@ -126,6 +126,11 @@ export interface HotspotResultsProps {
   manifest: SolveManifest
   onOverlayChange: (overlay: FieldOverlayData | null) => void
   onGateChange: (gateDb: number) => void
+  /**
+   * A small-part solve: no driver, no cables, and its ports are drawn by `PortNetwork` rather
+   * than by the table here. Its maps are the same maps.
+   */
+  smallPart?: boolean
 }
 
 /** The layer with the loudest field at the first frequency: the one worth opening on. */
@@ -144,7 +149,7 @@ function loudestLayer(m: SolveManifest): string {
 }
 
 export function HotspotResults({
-  api, runId, projectId, manifest, onOverlayChange, onGateChange,
+  api, runId, projectId, manifest, onOverlayChange, onGateChange, smallPart = false,
 }: HotspotResultsProps) {
   const layers = manifest.layers.map((l) => l.layer)
   // Open on the loudest layer, not the first in the stackup. The first is often shielded by a
@@ -265,7 +270,7 @@ export function HotspotResults({
 
   return (
     <Stack gap="md">
-      <Experimental why={EXPERIMENTAL.hotspotMap} mb={0} />
+      <Experimental why={smallPart ? EXPERIMENTAL.smallPart : EXPERIMENTAL.hotspotMap} mb={0} />
       {state === 'unusable' && (
         <Alert color="red" variant="light" title="This run stopped before its fields settled">
           {typeof manifest.run?.unusable_reason === 'string'
@@ -300,14 +305,16 @@ export function HotspotResults({
           size="xs" fullWidth value={layer} onChange={setLayer}
           data={layers.map((l) => ({ value: l, label: l }))}
         />
-        <DriverAttach
-          api={api}
-          runId={runId}
-          projectId={projectId}
-          manifest={manifest}
-          frequencyHz={freq}
-          peakDb={perLayerPeak.find((p) => p.layer === layer)?.peak ?? null}
-        />
+        {!smallPart && (
+          <DriverAttach
+            api={api}
+            runId={runId}
+            projectId={projectId}
+            manifest={manifest}
+            frequencyHz={freq}
+            peakDb={perLayerPeak.find((p) => p.layer === layer)?.peak ?? null}
+          />
+        )}
 
         <Table verticalSpacing={2} fz="xs" mt={6}>
           <Table.Tbody>
@@ -341,7 +348,9 @@ export function HotspotResults({
         that is a prediction against a limit, and mixing it into the relative-dB controls
         invites reading one as the other.
       */}
-      <CableEmissionPanel api={api} runId={runId} projectId={projectId} manifest={manifest} />
+      {!smallPart && (
+        <CableEmissionPanel api={api} runId={runId} projectId={projectId} manifest={manifest} />
+      )}
 
       {showOverlay && quality?.belowNoise && (
         <Text size="xs" c="dimmed">
@@ -422,7 +431,7 @@ export function HotspotResults({
         </Alert>
       )}
 
-      {sparams && (
+      {sparams && !smallPart && (
         <div>
           <Text size="xs" fw={600} tt="uppercase" c="dimmed" mb={4}>
             Port impedance

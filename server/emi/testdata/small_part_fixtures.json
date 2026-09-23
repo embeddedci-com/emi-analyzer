@@ -1,0 +1,14 @@
+{
+  "_comment": "The small-part solve's constants, which the worker (stages/small_part.py, openems/coupon.py) and the browser (webapp/src/lib/smallPart.ts) each hold. Written by hand; both test suites read it.",
+  "constants": {
+    "min_margin_mm": 3.0,
+    "margin_heights": 5.0,
+    "max_side_mm": 60.0,
+    "port_half_width_mm": 0.2,
+    "max_cells": 3000000,
+    "max_cell_steps": 1.5e11,
+    "min_record_s": 1e-8,
+    "end_criteria_db": -50,
+    "band_hz": [100000000.0, 2000000000.0]
+  }
+}

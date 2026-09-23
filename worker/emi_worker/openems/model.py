@@ -56,6 +56,11 @@ class Port:
     resistance: float = 50.0
     #: Only one port is excited per simulation pass; the rest are passive loads.
     excited: bool = True
+    #: The copper layer the port returns to. Empty means the nearest other copper layer, which
+    #: is the plane on a board that has one where the port is; a coupon (``coupon.py``) names
+    #: the layer it found a pour on, because the nearest layer may be a signal layer with
+    #: nothing under the pad.
+    reference_layer: str = ""
 
 
 @dataclass
@@ -95,6 +100,9 @@ class SolveParams:
     #: radiated band, which is what §16.2 asks for -- the dump frequencies alone are the user's
     #: clock harmonics and say nothing about the band between them.
     far_field_frequencies_hz: list[float] = field(default_factory=list)
+    #: In-plane copper lines closer than this fraction of dx are merged (mesh.MERGE_FRACTION when
+    #: 0). A small-part solve raises it to a half: see stages/small_part.py.
+    merge_fraction: float = 0.0
 
     def resolved_f_max(self) -> float:
         if self.f_max > 0:
@@ -598,6 +606,7 @@ def build_model(model: BoardModel, transform, params: SolveParams) -> BuiltModel
         air_above_mm=params.air_mm,
         air_below_mm=params.air_mm,
         max_epsilon_r=max_er,
+        **({"merge_fraction": params.merge_fraction} if params.merge_fraction > 0 else {}),
     )
 
     # §16.2's box needs air on every side. Without far field the mesh stops at the region in
@@ -615,7 +624,7 @@ def build_model(model: BoardModel, transform, params: SolveParams) -> BuiltModel
                  roi[2] + pad + COPPER_MARGIN_MM, roi[3] + pad + COPPER_MARGIN_MM),
             f_max=f_max, dx_um=params.dx_um, dy_um=params.dy_um, dz_um=params.dz_um,
             air_above_mm=max(params.air_mm, pad), air_below_mm=max(params.air_mm, pad),
-            max_epsilon_r=max_er,
+            max_epsilon_r=max_er, merge_fraction=spec.merge_fraction,
         )
     mesh = build_mesh(spec, copper_x, copper_y, list(layer_z.values()))
     if ff_clearance is not None:
@@ -814,6 +823,12 @@ def build_model(model: BoardModel, transform, params: SolveParams) -> BuiltModel
         if not others:
             raise ModelError("a port needs at least two copper layers to sit between")
         bottom_layer = min(others, key=lambda n: abs(layer_z[n] - top_z))
+        if port.reference_layer:
+            if port.reference_layer not in others:
+                raise ModelError(
+                    f"port {port.name!r} returns to {port.reference_layer!r}, which is not "
+                    f"another copper layer of this board")
+            bottom_layer = port.reference_layer
         bottom_z = layer_z[bottom_layer]
 
         hw = port.half_width_mm

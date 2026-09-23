@@ -1,6 +1,7 @@
 package emi
 
 import (
+	"encoding/json"
 	"net/http"
 	"strings"
 )
@@ -26,39 +27,128 @@ type Features struct {
 	// the far field, solve-based cable emissions or a compliance estimate against a real board.
 	// See docs/known-issues.md.
 	FullWave bool `json:"full_wave"`
+
+	// SmallPartSolve enables one kind of solve on its own: a small part of a board (a net cut
+	// out over its planes, or a small drawn region) with no far field, no cable ports and no
+	// component models, a band that keeps the record short, and a cell and timestep budget the
+	// worker enforces. Its outputs are the near-field map and the port impedance and
+	// S-parameters. It is the part of full-wave solving meant to be checked against closed
+	// forms, for convergence and on real-board coupons, which is why it has its own switch.
+	// FullWave implies it. docs/verification/small-part-solve.md has what was checked and what
+	// is still to do.
+	//
+	// Off by default until that list is done; see SmallPartSolveByDefault.
+	SmallPartSolve bool `json:"small_part_solve"`
 }
+
+// SmallPartSolveByDefault turns small-part solving on without EMI_EXPERIMENTAL. Flipping it is
+// the whole change needed to ship it; it is false while the verification is unfinished.
+const SmallPartSolveByDefault = false
 
 // FeatureFullWave is the EMI_EXPERIMENTAL name for Features.FullWave.
 const FeatureFullWave = "full-wave"
 
+// FeatureSmallPartSolve is the EMI_EXPERIMENTAL name for Features.SmallPartSolve.
+const FeatureSmallPartSolve = "small-part-solve"
+
+// KnownFeatures lists every EMI_EXPERIMENTAL name, for a host's error message.
+var KnownFeatures = []string{FeatureFullWave, FeatureSmallPartSolve}
+
+// SmallPartMode is the solve params' "mode" for a small-part solve.
+const SmallPartMode = "small_part"
+
 // ParseExperimental reads a comma-separated list such as "full-wave". Unknown names are returned
 // so a host can warn about a typo instead of silently running without the feature it asked for.
 func ParseExperimental(list string) (Features, []string) {
-	var f Features
+	f := Features{SmallPartSolve: SmallPartSolveByDefault}
 	var unknown []string
 	for _, name := range strings.Split(list, ",") {
 		switch name = strings.ToLower(strings.TrimSpace(name)); name {
 		case "":
 		case FeatureFullWave:
 			f.FullWave = true
+		case FeatureSmallPartSolve:
+			f.SmallPartSolve = true
 		default:
 			unknown = append(unknown, name)
 		}
 	}
+	// Full-wave is the superset: a small-part solve is a solve with less switched on.
+	if f.FullWave {
+		f.SmallPartSolve = true
+	}
 	return f, unknown
 }
 
-// allows reports whether runs of this kind may be created or handed to a worker.
-func (f Features) allows(k RunKind) bool {
+// smallPartParams is what the gate reads from a solve's params. Only these fields: the rest is
+// the worker's to validate.
+type smallPartParams struct {
+	Mode            string          `json:"mode"`
+	FarField        bool            `json:"far_field"`
+	CablePorts      json.RawMessage `json:"cable_ports"`
+	ModelComponents bool            `json:"model_components"`
+}
+
+func readSmallPart(params json.RawMessage) (smallPartParams, bool) {
+	var p smallPartParams
+	if len(params) == 0 || json.Unmarshal(params, &p) != nil {
+		return p, false
+	}
+	return p, p.Mode == SmallPartMode
+}
+
+// smallPartProblem is why a small-part solve's params ask for more than the mode does, or "".
+func smallPartProblem(params json.RawMessage) string {
+	p, ok := readSmallPart(params)
+	if !ok {
+		return ""
+	}
+	var what string
+	switch {
+	case p.FarField:
+		what = "a far field"
+	case len(p.CablePorts) > 0 && string(p.CablePorts) != "null" && string(p.CablePorts) != "{}":
+		what = "cable ports"
+	case p.ModelComponents:
+		what = "component models"
+	default:
+		return ""
+	}
+	return "a small-part solve has no " + what + ". That needs a full-wave solve (" +
+		FeatureFullWave + ")."
+}
+
+// allows reports whether a run of this kind, with these params, may be created or handed to a
+// worker. The params matter only for a solve: a small-part one needs SmallPartSolve, any other
+// needs FullWave.
+func (f Features) allows(k RunKind, params json.RawMessage) bool {
 	switch k {
-	case RunKindSolve, RunKindCompliance:
+	case RunKindCompliance:
 		return f.FullWave
+	case RunKindSolve:
+		if f.FullWave {
+			return true
+		}
+		_, small := readSmallPart(params)
+		return f.SmallPartSolve && small && smallPartProblem(params) == ""
 	}
 	return true
 }
 
-// refusal is what a user is told when they ask for a gated run kind.
-func (f Features) refusal(k RunKind) string {
+// refusal is what a user is told when they ask for a gated run.
+func (f Features) refusal(k RunKind, params json.RawMessage) string {
+	if k == RunKindSolve && f.SmallPartSolve {
+		if why := smallPartProblem(params); why != "" {
+			return why
+		}
+		return `only small-part solves are turned on on this server. A solve of a whole region, ` +
+			`with a far field or cable emissions, needs full-wave solving, which is experimental ` +
+			`and can be enabled with EMI_EXPERIMENTAL=` + FeatureFullWave + `.`
+	}
+	if _, small := readSmallPart(params); k == RunKindSolve && small {
+		return `small-part solves are experimental and turned off on this server. They can be ` +
+			`enabled with EMI_EXPERIMENTAL=` + FeatureSmallPartSolve + `.`
+	}
 	return `"` + string(k) + `" runs need full-wave solving, which is experimental and turned off ` +
 		`on this server: it has not been verified on real boards yet. It can be enabled with ` +
 		`EMI_EXPERIMENTAL=` + FeatureFullWave + `.`

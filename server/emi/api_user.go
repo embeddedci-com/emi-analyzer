@@ -632,8 +632,16 @@ func (s *Service) handleCreateRun(w http.ResponseWriter, r *http.Request) {
 			`kind must be "ingest", "solve", "transient", "cable" or "compliance"`)
 		return
 	}
-	if !s.deps.Features.allows(body.Kind) {
-		writeErr(w, http.StatusForbidden, s.deps.Features.refusal(body.Kind))
+	// A small-part solve that asks for what the mode leaves out is malformed whoever is
+	// allowed to run it, so it is refused as a bad request rather than as a gated feature.
+	if body.Kind == RunKindSolve {
+		if why := smallPartProblem(body.Params); why != "" {
+			writeErr(w, http.StatusBadRequest, why)
+			return
+		}
+	}
+	if !s.deps.Features.allows(body.Kind, body.Params) {
+		writeErr(w, http.StatusForbidden, s.deps.Features.refusal(body.Kind, body.Params))
 		return
 	}
 	if body.Kind == RunKindTransient {
@@ -771,8 +779,8 @@ func (s *Service) handleRetryRun(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusConflict, "only failed or timed-out runs can be retried")
 		return
 	}
-	if !s.deps.Features.allows(run.Kind) {
-		writeErr(w, http.StatusForbidden, s.deps.Features.refusal(run.Kind))
+	if !s.deps.Features.allows(run.Kind, run.Params) {
+		writeErr(w, http.StatusForbidden, s.deps.Features.refusal(run.Kind, run.Params))
 		return
 	}
 	if err := s.deps.Store.RetryRun(r.Context(), run.ID, s.deps.now()); err != nil {
