@@ -10,6 +10,7 @@ import {
   Accordion, Alert, Anchor, Badge, Group, SegmentedControl, Stack, Text, ThemeIcon,
 } from '@mantine/core'
 import { Link } from 'react-router'
+import { useEmiBase } from '../host'
 import type { RuleFinding, RulesDoc } from '../lib/boardTypes'
 import catalogue from '../lib/ruleCatalogue.json'
 
@@ -49,6 +50,7 @@ const RULE_LABEL: Record<string, string> = Object.fromEntries(
 export function RuleFindings({
   rules, onFocus, onSelectNet, onSimulate, onShowInKiCad,
 }: RuleFindingsProps) {
+  const base = useEmiBase()
   const [filter, setFilter] = useState('all')
 
   const grouped = useMemo(() => {
@@ -168,7 +170,7 @@ export function RuleFindings({
       {rules.findings.length > 0 && (
         <Text size="xs" c="dimmed">
           Modelled estimate from board geometry. See{' '}
-          <Anchor component={Link} to="/tools/emi/limitations" size="xs">the limitations</Anchor>
+          <Anchor component={Link} to={`${base}/limitations`} size="xs">the limitations</Anchor>
           {' '}before acting on these.
         </Text>
       )}

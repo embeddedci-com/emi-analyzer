@@ -6,8 +6,7 @@
  * reads here and a limit a report is measured against are the same bytes, and there is no
  * version of this page that can drift from the tool.
  *
- * Statically prerendered for search engines (embeddedci-server's scripts/prerender.mjs), so
- * keep it free of API calls.
+ * Keep it free of API calls: a host may prerender it statically for search engines.
  */
 
 import {
@@ -23,6 +22,7 @@ import {
   Title,
 } from '@mantine/core'
 import { Link } from 'react-router'
+import { useEmiBase } from '../host'
 import { limitLine, SCAN_RANGE, STANDARDS, type Standard } from '../lib/limits'
 
 const MHZ = (hz: number) => {
@@ -118,6 +118,7 @@ function StandardCard({ std }: { std: Standard }) {
 }
 
 export function EmiLimitsPage() {
+  const base = useEmiBase()
   const radiated = STANDARDS.filter((s) => s.scan === 'radiated')
   const conducted = STANDARDS.filter((s) => s.scan === 'conducted')
   // One worked example of the band-edge rule, taken from the live table rather than typed.
@@ -140,7 +141,7 @@ export function EmiLimitsPage() {
             Where a result can be compared with them — a cable's common-mode budget, or a
             full-wave prediction where that is enabled — the analyzer shows the margin and how
             confident it is. It is not a full pre-compliance test — see{' '}
-            <Anchor component={Link} to="/tools/emi/limitations">
+            <Anchor component={Link} to={`${base}/limitations`}>
               what it cannot say
             </Anchor>
             . Only a laboratory measurement decides compliance.
