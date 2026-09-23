@@ -16,6 +16,15 @@ they are not maintained, not tested, and may no longer run against the current w
 | `spike_m0_nf2ff.py` | Does nf2ff give a dipole's far field, and does Mirror do the ground? |
 | `spike_m0_nf2ff_size.py` | How big is an NF2FF recording at 60 frequencies? |
 | `spike_m3_cable_test4.py` | Tier B against Tier C on real boards |
+| `ff_verify_dipole.py` | Does the board far field match nec2c on dipoles over ground? |
+| `ff_verify_slope.py` | Does a loop and a short dipole rise per volt as theory says? |
+| `ff_fixture_explore.py`, `ff_fixture_decompose.py` | Why did the fixture board's far field rise 20 dB/decade? |
+| `ff_real_board.py` | What does the far field cost, and does it run, on a real board? |
+| `ff_explore.py` | Which knob moves a short dipole's far field? |
+
+The `ff_` scripts share `ff_harness.py` and are written up in
+[docs/verification/far-field.md](../../docs/verification/far-field.md). Unlike the spikes they
+run against the current worker.
 
 ## Running one
 
