@@ -33,6 +33,13 @@ COPPER_SUFFIX = ".Cu"
 #: ever exported.
 DIELECTRIC_TYPES = frozenset({"core", "prepreg", "dielectric"})
 
+#: Shown when zones were saved without a fill. Ingest also carries it into the rules notes,
+#: since the checks it affects are the ones that go quiet.
+ZONES_UNFILLED_NOTE = (
+    "{n} zone{s} not filled, so plane checks skip them. Refill zones in KiCad (B) and save "
+    "before exporting."
+)
+
 
 @dataclass
 class StackupLayer:
@@ -163,14 +170,26 @@ def _at(node: Node) -> tuple[float, float, float]:
     return x, y, a
 
 
+def _name(v) -> str:
+    """An atom that is conceptually a name. KiCad 5 leaves pad numbers unquoted, so the
+    tokeniser reads pad 1 as the number 1.0, and "U1.1.0" is not a pin anyone has."""
+    if isinstance(v, float):
+        return str(int(v)) if v.is_integer() else str(v)
+    return str(v)
+
+
 def _layer_list(node: Node) -> list[str]:
     out: list[str] = []
     for c in children(node, "layers"):
         for v in c[1:]:
-            if isinstance(v, str):
+            if v == "F&B.Cu":
+                # KiCad's name for "both outer layers and no inner ones". Left as written it
+                # matched no copper layer, so the pad was never drawn.
+                out.extend(("F.Cu", "B.Cu"))
+            elif isinstance(v, str):
                 out.append(v)
             elif isinstance(v, float):
-                out.append(str(int(v)) if v.is_integer() else str(v))
+                out.append(_name(v))
     if not out:
         single = text(node, "layer", default="")
         if single:
@@ -346,27 +365,33 @@ def _pad_ring(pad: Node, px: float, py: float, angle: float,
     return g.rect(px, py, max(w, 0.1), max(h, 0.1), angle)
 
 
+def _footprints(root: Node) -> list[Node]:
+    """Every placed part. KiCad 5 called them ``module``; reading only ``footprint`` gave a
+    KiCad 5 board zero pads, so every part-based check ran on nothing and said nothing."""
+    return [*children(root, "footprint"), *children(root, "module")]
+
+
 def _parse_footprints(root: Node, nets: _NetResolver, warnings: list[str]) -> list[Pad]:
     pads: list[Pad] = []
-    for fp in children(root, "footprint"):
+    for fp in _footprints(root):
         fx, fy, frot = _at(fp)
         ref = ""
         value = ""
         footprint = str(fp[1]) if len(fp) > 1 and isinstance(fp[1], str) else ""
         for prop in children(fp, "property"):
             if len(prop) > 2 and prop[1] == "Reference" and not ref:
-                ref = str(prop[2])
+                ref = _name(prop[2])
             elif len(prop) > 2 and prop[1] == "Value" and not value:
-                value = str(prop[2])
-        # KiCad 6 and earlier kept both as fp_text rather than property.
+                value = _name(prop[2])
+        # KiCad 7 and earlier kept both as fp_text rather than property.
         for t in children(fp, "fp_text"):
             if len(t) > 2 and t[1] == "reference" and not ref:
-                ref = str(t[2])
+                ref = _name(t[2])
             elif len(t) > 2 and t[1] == "value" and not value:
-                value = str(t[2])
+                value = _name(t[2])
 
         for pad in children(fp, "pad"):
-            number_str = str(pad[1]) if len(pad) > 1 else ""
+            number_str = _name(pad[1]) if len(pad) > 1 else ""
             pad_type = str(pad[2]) if len(pad) > 2 and isinstance(pad[2], str) else "smd"
             ox, oy, prot = _at(pad)
 
@@ -402,47 +427,123 @@ def _parse_footprints(root: Node, nets: _NetResolver, warnings: list[str]) -> li
     return pads
 
 
+def _xy(node: Node, name: str) -> tuple[float, float] | None:
+    vs = values(node, name)
+    if len(vs) >= 2 and isinstance(vs[0], float) and isinstance(vs[1], float):
+        return float(vs[0]), float(vs[1])
+    return None
+
+
+def _legacy_arc(center: tuple[float, float], start: tuple[float, float],
+                angle_deg: float) -> list[tuple[float, float]]:
+    """A KiCad 5 arc: ``(start <centre>) (end <start point>) (angle <sweep>)``.
+
+    Same keywords as the three-point form KiCad 6 introduced, different meanings, so a
+    KiCad 5 arc with no ``mid`` was dropped and the outline had a gap at every rounded
+    corner. A positive sweep turns from +X toward +Y in the file's own Y-down frame, which
+    is what KiCad 10 produces when it upgrades one of these files.
+    """
+    r = math.dist(center, start)
+    if r <= 0:
+        return [start]
+    a0 = math.atan2(start[1] - center[1], start[0] - center[0])
+    sweep = math.radians(angle_deg)
+    n = max(2, int(abs(angle_deg) / 5) + 1)
+    return [
+        (center[0] + r * math.cos(a0 + sweep * i / n), center[1] + r * math.sin(a0 + sweep * i / n))
+        for i in range(n + 1)
+    ]
+
+
+def _bezier(pts: list[tuple[float, float]], n: int = 24) -> list[tuple[float, float]]:
+    """A cubic Bezier (``gr_curve``), sampled. Was ignored, leaving a gap in the outline."""
+    if len(pts) != 4:
+        return pts
+    (x0, y0), (x1, y1), (x2, y2), (x3, y3) = pts
+    out = []
+    for i in range(n + 1):
+        t = i / n
+        u = 1 - t
+        out.append((
+            u * u * u * x0 + 3 * u * u * t * x1 + 3 * u * t * t * x2 + t * t * t * x3,
+            u * u * u * y0 + 3 * u * u * t * y1 + 3 * u * t * t * y2 + t * t * t * y3,
+        ))
+    return out
+
+
+def _edge_shape(node: Node, kind: str) -> list[tuple[float, float]] | None:
+    """One Edge.Cuts graphic as a polyline, in the coordinates it is written in.
+
+    ``kind`` is the name without its ``gr_`` or ``fp_`` prefix: the board and a footprint
+    use the same shapes, and a footprint's are only ever offset and rotated.
+    """
+    if kind == "line":
+        s, e = _xy(node, "start"), _xy(node, "end")
+        return [s, e] if s and e else None
+    if kind == "rect":
+        s, e = _xy(node, "start"), _xy(node, "end")
+        if not (s and e):
+            return None
+        (x0, y0), (x1, y1) = s, e
+        return [(x0, y0), (x1, y0), (x1, y1), (x0, y1), (x0, y0)]
+    if kind == "arc":
+        s, m, e = _xy(node, "start"), _xy(node, "mid"), _xy(node, "end")
+        if s and m and e:
+            return g.arc_polyline(s, m, e)
+        angle = value(node, "angle")
+        if s and e and isinstance(angle, float):
+            return _legacy_arc(s, e, angle)
+        return None
+    if kind == "circle":
+        c, e = _xy(node, "center"), _xy(node, "end")
+        if not (c and e):
+            return None
+        ring = g.circle(c[0], c[1], math.dist(c, e))
+        return ring + [ring[0]]
+    if kind == "poly":
+        pts = points(node)
+        return pts + [pts[0]] if len(pts) >= 3 else None
+    if kind == "curve":
+        pts = points(node)
+        return _bezier(pts) if len(pts) == 4 else None
+    return None
+
+
 def _parse_outline(root: Node, warnings: list[str]) -> list[list[tuple[float, float]]]:
-    """Collect Edge.Cuts graphics as polylines."""
+    """Collect Edge.Cuts graphics as polylines, from the board and from its footprints.
+
+    A footprint can carry its own Edge.Cuts: a slot for a connector, a cut-out for a
+    display. Those were skipped, so the board looked solid where it has a hole.
+    """
     out: list[list[tuple[float, float]]] = []
 
     for node in root:
         if not isinstance(node, list):
             continue
         kind = sym(node)
-        if not kind.startswith("gr_"):
+        if not kind.startswith("gr_") or text(node, "layer", default="") != "Edge.Cuts":
             continue
-        if text(node, "layer", default="") != "Edge.Cuts":
-            continue
+        shape = _edge_shape(node, kind[3:])
+        if shape:
+            out.append(shape)
 
-        if kind == "gr_line":
-            s, e = values(node, "start"), values(node, "end")
-            if len(s) >= 2 and len(e) >= 2:
-                out.append([(float(s[0]), float(s[1])), (float(e[0]), float(e[1]))])
-        elif kind == "gr_rect":
-            s, e = values(node, "start"), values(node, "end")
-            if len(s) >= 2 and len(e) >= 2:
-                x0, y0, x1, y1 = float(s[0]), float(s[1]), float(e[0]), float(e[1])
-                out.append([(x0, y0), (x1, y0), (x1, y1), (x0, y1), (x0, y0)])
-        elif kind == "gr_arc":
-            s, m, e = values(node, "start"), values(node, "mid"), values(node, "end")
-            if len(s) >= 2 and len(m) >= 2 and len(e) >= 2:
-                out.append(g.arc_polyline(
-                    (float(s[0]), float(s[1])),
-                    (float(m[0]), float(m[1])),
-                    (float(e[0]), float(e[1])),
-                ))
-        elif kind == "gr_circle":
-            c, e = values(node, "center"), values(node, "end")
-            if len(c) >= 2 and len(e) >= 2:
-                cx, cy = float(c[0]), float(c[1])
-                r = math.dist((cx, cy), (float(e[0]), float(e[1])))
-                ring = g.circle(cx, cy, r)
-                out.append(ring + [ring[0]])
-        elif kind == "gr_poly":
-            pts = points(node)
-            if len(pts) >= 3:
-                out.append(pts + [pts[0]])
+    for fp in _footprints(root):
+        fx, fy, frot = _at(fp)
+        for node in fp:
+            if not isinstance(node, list):
+                continue
+            kind = sym(node)
+            if not kind.startswith("fp_") or text(node, "layer", default="") != "Edge.Cuts":
+                continue
+            shape = _edge_shape(node, kind[3:])
+            if not shape:
+                continue
+            # Footprint graphics are stored in the footprint's own frame, before rotation.
+            placed = []
+            for x, y in shape:
+                rx, ry = g.rotate(x, y, frot)
+                placed.append((fx + rx, fy + ry))
+            out.append(placed)
 
     if not out:
         warnings.append(
@@ -523,16 +624,34 @@ def parse_board(root: Node) -> BoardModel:
 
     model.pads = _parse_footprints(root, nets, warnings)
 
+    unfilled = 0
     for zone in children(root, "zone"):
         # A keepout zone has no copper; including it would invent a plane that is not there.
         if child(zone, "keepout") is not None:
             continue
         net = nets.resolve(zone)
-        for filled in children(zone, "filled_polygon"):
-            layer = text(filled, "layer", default="")
+        fills = list(children(zone, "filled_polygon"))
+        for filled in fills:
+            # KiCad 5 wrote no layer on the fill; it is the zone's own single layer.
+            layer = text(filled, "layer", default="") or text(zone, "layer", default="")
             pts = points(filled)
             if len(pts) >= 3:
                 model.zones.append(ZonePolygon(layer=layer, net=net, ring=pts))
+        fill = child(zone, "fill")
+        filled_flag = fill is not None and len(fill) > 1 and fill[1] == "yes"
+        if not fills and not filled_flag and child(zone, "polygon") is not None:
+            unfilled += 1
+
+    if unfilled:
+        # Only the fill is copper. A zone saved before it was ever filled has an outline and
+        # nothing else, and without this note every plane check silently switched off: no
+        # plane, so no reference-plane findings, and nothing saying why.
+        #
+        # The outline is deliberately NOT used as a stand-in. It covers every clearance,
+        # anti-pad and split the fill would cut, so the plane checks would see solid copper
+        # under traces that actually cross gaps, and pass boards they should flag. Missing
+        # checks with a note beat checks that are quietly optimistic.
+        warnings.append(ZONES_UNFILLED_NOTE.format(n=unfilled, s="" if unfilled == 1 else "s"))
 
     model.outline = _parse_outline(root, warnings)
     model.nets = nets.order
