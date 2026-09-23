@@ -42,7 +42,19 @@ def test_an_app_that_answers_is_the_app(endpoint_file, monkeypatch):
 
 @pytest.mark.parametrize(
     "url",
-    ["http://192.168.1.10:7465", "https://example.com", "file:///etc/passwd", "", 7465],
+    [
+        "http://192.168.1.10:7465",
+        "https://example.com",
+        "file:///etc/passwd",
+        "",
+        7465,
+        # All of these start with "http://127.0.0.1" and none of them is this computer.
+        "http://127.0.0.1.example.com:7465",
+        "http://127.0.0.1@example.com",
+        "http://127.0.0.1:7465@example.com",
+        "http://127.0.0.10:7465",
+        "http://127.0.0.1:notaport",
+    ],
 )
 def test_the_file_can_only_ever_point_at_this_computer(endpoint_file, monkeypatch, url):
     """This file decides where a board is sent, and a file is easier to write than a server."""

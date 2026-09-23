@@ -21,6 +21,7 @@ import subprocess
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
@@ -42,7 +43,7 @@ PER_CANDIDATE_S = 20.0
 
 #: Where to get the app. The window offers this as a button, so keep it a page a person can
 #: act on rather than a file.
-INSTALL_URL = "https://github.com/embeddedci-com/emi-analyzer#install"
+INSTALL_URL = "https://github.com/embeddedci-com/emi-analyzer#readme"
 
 NOT_INSTALLED = (
     "EMI Analyzer is not installed on this computer, or it is somewhere this plugin does not "
@@ -84,13 +85,27 @@ def endpoint_file() -> Path:
     return config_dir() / "emi-analyzer" / "endpoint.json"
 
 
+def _is_loopback(url: str) -> bool:
+    """http://127.0.0.1[:port] and nothing else.
+
+    Parsed, not prefix-matched: "http://127.0.0.1.example.com" and "http://127.0.0.1@example.com"
+    both start with the loopback address and point somewhere else entirely.
+    """
+    try:
+        u = urllib.parse.urlsplit(url)
+        u.port  # raises on a port that is not a number
+    except ValueError:
+        return False
+    return u.scheme == "http" and u.hostname == "127.0.0.1" and "@" not in u.netloc
+
+
 def _read_endpoint() -> Optional[Endpoint]:
     try:
         data = json.loads(endpoint_file().read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
     url = data.get("url")
-    if not isinstance(url, str) or not url.startswith("http://127.0.0.1"):
+    if not isinstance(url, str) or not _is_loopback(url):
         # Only ever a loopback address: this file is the one thing that decides where a board
         # is sent, and a file is easier to write than a process is to run.
         return None
