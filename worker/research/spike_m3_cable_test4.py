@@ -172,6 +172,47 @@ def region(board, transform, anchor, length_m: float) -> tuple[float, float, flo
     return (x0, y0, x1, y1)
 
 
+#: Cell growth along the cable, and the largest cell there: λ/20 at F_MAX.
+REGRADE_RATIO = 1.3
+REGRADE_BEYOND_MM = 25.0
+
+
+def regrade_along_cable(built, anchor) -> float:
+    """Re-grade the grid along the exit axis past the stub, and return the worst cell ratio.
+
+    The mesher filled the cable's air at about 2.4 mm cells and then stepped to 11.5 mm where
+    the region met its padding, a 4.8:1 jump on the axis the cable runs along, against a stated
+    bound of 1.4. The first run of this study diverged on exactly that grid (the energy climbed
+    back 2,290x after the pulse). Past the stub, where there is no copper to resolve, the lines
+    are replaced by a series growing 1.3x per cell to λ/20 of F_MAX, reaching as far as the
+    old grid did, then eight PML lines. B and C share the result, so it is still one grid.
+    """
+    axis = 0 if abs(anchor.nx) >= abs(anchor.ny) else 1
+    sign = 1.0 if (anchor.nx if axis == 0 else anchor.ny) > 0 else -1.0
+    attr = "x_lines" if axis == 0 else "y_lines"
+    lines = np.asarray(getattr(built.doc, attr), dtype=float)
+    origin = anchor.x_mm if axis == 0 else anchor.y_mm
+    # Keep everything up to 15 mm past the stub (gap + 10 mm stub), where the cable starts.
+    cut = origin + sign * (built.cable_ports[0]["gap_mm"] + 10.0 + 15.0)
+    keep = lines[lines <= cut] if sign > 0 else lines[lines >= cut][::-1]
+    outer = lines[-1 - 8] if sign > 0 else lines[8]           # the last non-PML line
+    grown = list(keep)
+    step = abs(grown[-1] - grown[-2])
+    beyond = C / F_MAX / 20 * 1e3
+    while sign * (outer - grown[-1]) > 0:
+        step = min(step * REGRADE_RATIO, beyond)
+        grown.append(grown[-1] + sign * step)
+    for _ in range(8):
+        step *= 1.2
+        grown.append(grown[-1] + sign * step)
+    from emi_worker.openems.mesh import _smooth_ratio
+
+    new = _smooth_ratio(np.asarray(sorted(grown)), 1.4, DX_UM / 1000.0)
+    setattr(built.doc, attr, new.tolist())
+    d = np.diff(new)
+    return float(np.max(np.maximum(d[1:] / d[:-1], d[:-1] / d[1:])))
+
+
 def add_cable(built, anchor, length_m: float) -> None:
     """Turn the Tier B document into Tier C: bond the gap, and run the cable out.
 
@@ -336,16 +377,20 @@ def main() -> None:
             )
             tag = f"{name}_{ref}_{length_m:g}m"
             b = build_model(board, transform, params)
+            if b.cable_ports:
+                worst = regrade_along_cable(b, anchor)
+                print(f"  re-graded along the cable: worst cell ratio {worst:.2f}", flush=True)
             if not b.cable_ports:
                 print(f"  {tag}: no gap port — {'; '.join(b.notes)}")
                 continue
             m = b.mesh
-            cells = (len(m.x) - 1) * (len(m.y) - 1) * (len(m.z) - 1)
+            cells = b.doc.cell_count()
             print(f"  {tag}: {cells/1e6:.1f} M cells, domain "
                   f"{roi[2]-roi[0]:.0f} x {roi[3]-roi[1]:.0f} mm", flush=True)
 
             rb = solve(f"{tag}_B", b, FREQS)
             c = build_model(board, transform, params)
+            regrade_along_cable(c, anchor)
             add_cable(c, anchor, length_m)
             rc = solve(f"{tag}_C", c, FREQS)
 
