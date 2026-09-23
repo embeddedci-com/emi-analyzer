@@ -719,6 +719,7 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
                 solveRunId={activeSolve?.status === 'done' ? activeSolve.id : undefined}
                 solveManifest={solveManifest.data}
                 cableAssignments={cableAssignments}
+                runId={(runs.data ?? []).find((r) => r.kind === 'compliance')?.id}
                 findings={
                   ((rules.data as RulesDoc | null)?.findings ?? []) as unknown as
                     Record<string, unknown>[]

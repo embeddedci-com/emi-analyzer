@@ -44,11 +44,13 @@ export function CompliancePanel({ doc }: { doc: ComplianceDoc }) {
         <Stack gap={0}>
           <Group gap="xs">
             <Title order={5}>Compliance outlook</Title>
+            <Experimental why={EXPERIMENTAL.complianceEstimate} />
             {anyCable && <Experimental why={EXPERIMENTAL.cableEmissions} />}
           </Group>
           <Text size="xs" c="dimmed">
             {doc.standard}
-            {doc.distance_m ? ` at ${doc.distance_m} m` : ''} · estimated, not a pre-compliance test
+            {doc.distance_m ? ` at ${doc.distance_m} m` : ''} · experimental estimate, not a
+            pre-compliance test
           </Text>
         </Stack>
         {scored && (
@@ -91,6 +93,12 @@ export function CompliancePanel({ doc }: { doc: ComplianceDoc }) {
       )}
 
       {doc.spectrum.length > 1 && <ComplianceSpectrum doc={doc} />}
+
+      {doc.notes && doc.notes.length > 0 && (
+        <List size="xs" spacing={2} c="dimmed">
+          {doc.notes.map((n) => <List.Item key={n}>{n}</List.Item>)}
+        </List>
+      )}
 
       {scored && (
         <>
