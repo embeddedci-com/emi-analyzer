@@ -17,8 +17,9 @@ comment:
   output file agrees with the bad input and confirms nothing.
 * **A box placed close to the structure reads the reactive near field,** where the six faces
   very nearly cancel. M0's first attempt put them 0.064 λ out and got a pattern oscillating on
-  a 7° scale, which no box that size can produce. The faces belong just inside the absorbing
-  boundary, as far out as the domain allows.
+  a 7° scale, which no box that size can produce. The box is placed a stated clearance from
+  the copper (``model.far_field_clearance_mm``) and the grid is grown to hold it, with the
+  absorbing layer still clear of every face.
 * **A dump with no frequencies writes every timestep.** `DumpBox` already refuses that; this
   never builds one without them.
 
@@ -53,13 +54,9 @@ FACES: tuple[tuple[str, int, int], ...] = (
     ("zn", 2, -1), ("zp", 2, +1),
 )
 
-#: How far inside the absorbing boundary the faces sit, as a fraction of the air margin.
-#:
-#: Not on the boundary itself: the outermost cells are inside the PML, where the fields are
-#: being absorbed rather than propagating, and a face there samples the absorber. Not close to
-#: the board either, for the reason in the module docstring. 0.8 of the way out is the far side
-#: of the air margin with a cell or two to spare.
-FACE_FRACTION = 0.8
+#: Grid lines that must lie between a face and the edge of the grid. openEMS's PML_8 absorbs
+#: over the outermost eight, and a face among them samples the absorber, not the field.
+MIN_LINES_OUTSIDE = 10
 
 #: Record every Nth grid line on each face.
 #:
@@ -111,27 +108,35 @@ class Faces:
         return ((self.x0 + self.x1) / 2, (self.y0 + self.y1) / 2, (self.z0 + self.z1) / 2)
 
 
-def plan_faces(mesh, roi: tuple[float, float, float, float]) -> Faces:
-    """Put the box as far out as the grid allows without entering the absorbing boundary.
+def plan_faces(mesh, copper: tuple[float, float, float, float, float, float],
+               clearance_mm: float) -> Faces:
+    """Put the box ``clearance_mm`` outside the copper on every side.
 
-    Measured from the mesh rather than from the region, because the mesh is what actually
-    exists: a cable port extends the domain on one side only, and a box placed symmetrically
-    around the region would sit outside the grid on that side and inside the structure on the
-    other.
+    ``copper`` is ``(x0, y0, x1, y1, z0, z1)`` in model mm: everything that carries current,
+    including a cable stub that extends the domain on one side.
+
+    The box used to be placed "0.8 of the way from the region to the boundary". In x and y the
+    grid ended *at* the region unless a cable stub extended it, so the side faces landed on the
+    outermost grid lines, inside the absorbing layer; and vertically 0.8 of the default 5 mm
+    air put them 4 mm from the copper. Placing the box from the copper and checking the grid
+    has room outside it turns both into refusals rather than quiet errors.
     """
-    def span(lines: np.ndarray, lo: float, hi: float) -> tuple[float, float]:
-        out_lo, out_hi = float(lines.min()), float(lines.max())
-        return (lo - (lo - out_lo) * FACE_FRACTION, hi + (out_hi - hi) * FACE_FRACTION)
+    x0, y0, x1, y1, z0, z1 = copper
+    faces = Faces(x0=x0 - clearance_mm, y0=y0 - clearance_mm, z0=z0 - clearance_mm,
+                  x1=x1 + clearance_mm, y1=y1 + clearance_mm, z1=z1 + clearance_mm)
 
-    x0, x1 = span(mesh.x, roi[0], roi[2])
-    y0, y1 = span(mesh.y, roi[1], roi[3])
-    z_lo, z_hi = float(mesh.z.min()), float(mesh.z.max())
-    # Vertically there is no region to work from: the board is a plane, so the faces go the
-    # same fraction of the way to each boundary from the copper.
-    mid = (z_lo + z_hi) / 2
-    z0 = mid - (mid - z_lo) * FACE_FRACTION
-    z1 = mid + (z_hi - mid) * FACE_FRACTION
-    return Faces(x0=x0, y0=y0, z0=z0, x1=x1, y1=y1, z1=z1)
+    for axis, lines, lo, hi in ((0, mesh.x, faces.x0, faces.x1), (1, mesh.y, faces.y0, faces.y1),
+                                (2, mesh.z, faces.z0, faces.z1)):
+        lines = np.asarray(lines)
+        below = int(np.sum(lines < lo))
+        above = int(np.sum(lines > hi))
+        if min(below, above) < MIN_LINES_OUTSIDE:
+            raise NF2FFError(
+                f"the far-field box does not fit inside the grid along {'xyz'[axis]}: it needs "
+                f"{MIN_LINES_OUTSIDE} grid lines outside each face so the absorbing boundary "
+                f"stays clear of it, and has {min(below, above)}"
+            )
+    return faces
 
 
 def add_dumps(doc: csx.CSXDocument, faces: Faces, frequencies: list[float]) -> list[str]:
@@ -158,6 +163,7 @@ def write_job(
     centre_mm: tuple[float, float, float] = (0.0, 0.0, 0.0),
     radius_m: float = 3.0,
     mirror_z_m: float | None = None,
+    lower_face_z_m: float | None = None,
     theta_deg: np.ndarray = THETA_DEG,
     phi_deg: np.ndarray = PHI_DEG,
 ) -> str:
@@ -168,9 +174,31 @@ def write_job(
     hand somewhere else.
 
     ``mirror_z_m`` puts a PEC image plane there, which is the ground plane every radiated
-    standard specifies. When it is set the lower face is dropped: the mirror replaces it, and
-    leaving both in counts the structure twice.
+    standard specifies.
+
+    **The lower face is kept unless the mirror lies on it.** The job used to drop it whenever a
+    mirror was set, on the reasoning that the image replaces it. That is true only for the case
+    M0 measured, where the mirror sat exactly on the lower face (openEMS's own symmetry-plane
+    use). The solve puts the plane 0.8 m below a board whose box ends a few centimetres down,
+    so dropping the face left the surface open: surface equivalence no longer held, and the
+    far field was computed from five sixths of the currents that carry it. The image of a
+    closed box is a second closed box, and both are needed.
+
+    ``lower_face_z_m`` is where that face is, in metres. With it, a mirror on the face drops
+    the face (the M0 case), and a mirror *above* it is refused: the box would then reach
+    through the ground plane, which is not a configuration images describe.
     """
+    drop_lower = False
+    if mirror_z_m is not None and lower_face_z_m is not None:
+        # A micrometre: the mesh writes positions in millimetres to a handful of places.
+        if abs(mirror_z_m - lower_face_z_m) <= 1e-6:
+            drop_lower = True
+        elif mirror_z_m > lower_face_z_m:
+            raise NF2FFError(
+                f"the ground plane at {mirror_z_m:g} m is above the bottom of the far-field box "
+                f"at {lower_face_z_m:g} m, so the box reaches through it"
+            )
+
     wd = Path(workdir)
     root = ET.Element("nf2ff", {
         "Eps_r": "1", "Mue_r": "1", "Verbose": "0",
@@ -181,7 +209,7 @@ def write_job(
         "Radius": repr(float(radius_m)),
     })
     for name, _axis, _sign in FACES:
-        if mirror_z_m is not None and name == "zn":
+        if drop_lower and name == "zn":
             continue
         e_path = wd / f"nf2ff_E_{name}.h5"
         h_path = wd / f"nf2ff_H_{name}.h5"

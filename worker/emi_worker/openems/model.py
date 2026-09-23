@@ -464,7 +464,31 @@ def build_model(model: BoardModel, transform, params: SolveParams) -> BuiltModel
         air_below_mm=params.air_mm,
         max_epsilon_r=max_er,
     )
+
+    # §16.2's box needs air on every side. Without far field the mesh stops at the region in
+    # x and y, which is fine for a hotspot map -- and was fatal for the far field: the side
+    # faces were planned "0.8 of the way to the boundary" from a region that *was* the
+    # boundary, so they sat on the outermost grid lines, inside the absorbing layer, sampling
+    # the absorber. Vertically the default 5 mm put the faces 4 mm from the copper.
+    ff_clearance = None
+    if params.far_field:
+        ff_clearance = far_field_clearance_mm(f_max)
+        pad = far_field_pad_mm(ff_clearance, max_cell_for_frequency(f_max, max_er))
+        plain_cells = build_mesh(spec, copper_x, copper_y, list(layer_z.values())).cells
+        spec = MeshSpec(
+            roi=(roi[0] - pad - COPPER_MARGIN_MM, roi[1] - pad - COPPER_MARGIN_MM,
+                 roi[2] + pad + COPPER_MARGIN_MM, roi[3] + pad + COPPER_MARGIN_MM),
+            f_max=f_max, dx_um=params.dx_um, dy_um=params.dy_um, dz_um=params.dz_um,
+            air_above_mm=max(params.air_mm, pad), air_below_mm=max(params.air_mm, pad),
+            max_epsilon_r=max_er,
+        )
     mesh = build_mesh(spec, copper_x, copper_y, list(layer_z.values()))
+    if ff_clearance is not None:
+        notes.append(
+            f"the far field needs its box {ff_clearance:.0f} mm from the copper, so the grid "
+            f"was given {pad:.0f} mm of air on every side: {mesh.cells:,} cells instead of "
+            f"{plain_cells:,} ({mesh.cells / max(plain_cells, 1):.1f}x)"
+        )
 
     coarse = max_cell_for_frequency(f_max, max_er)
     if mesh.max_cell_mm > coarse * 1.05:
@@ -818,21 +842,50 @@ def build_model(model: BoardModel, transform, params: SolveParams) -> BuiltModel
     if params.far_field:
         from emi_worker.openems import nf2ff as nf2ff_mod
 
-        ff_freqs = params.far_field_frequencies_hz or far_field_grid(
-            params.resolved_f_max())
-        faces = nf2ff_mod.plan_faces(mesh, params.roi)
-        nf2ff_mod.add_dumps(doc, faces, ff_freqs)
-        far_field_meta = {
-            "frequencies_hz": ff_freqs,
-            "faces_mm": [faces.x0, faces.y0, faces.z0, faces.x1, faces.y1, faces.z1],
-            "centre_mm": list(faces.centre()),
-            "sub_sampling": nf2ff_mod.FACE_SUB_SAMPLING,
-        }
-        notes.append(
-            f"the far field is recorded on a box {faces.x1 - faces.x0:.0f} x "
-            f"{faces.y1 - faces.y0:.0f} x {faces.z1 - faces.z0:.0f} mm at "
-            f"{len(ff_freqs)} frequencies"
-        )
+        lo_band, hi_band = min(params.frequencies_hz), f_max
+        if params.far_field_frequencies_hz:
+            asked = sorted(float(f) for f in params.far_field_frequencies_hz)
+            ff_freqs = [f for f in asked if lo_band <= f <= hi_band]
+            if len(ff_freqs) < len(asked):
+                notes.append(
+                    f"{len(asked) - len(ff_freqs)} far-field frequencies lie outside the "
+                    f"{lo_band / 1e6:g}-{hi_band / 1e6:g} MHz this solve excites and were "
+                    f"dropped: the transform returns a number there, and it is noise"
+                )
+        else:
+            ff_freqs = far_field_grid(lo_band, hi_band)
+        if not ff_freqs:
+            notes.append(
+                f"no far field was recorded: this solve covers {lo_band / 1e6:g}-"
+                f"{hi_band / 1e6:g} MHz and the radiated band starts at "
+                f"{RADIATED_MIN_HZ / 1e6:g} MHz"
+            )
+        else:
+            copper = (roi[0] - COPPER_MARGIN_MM, roi[1] - COPPER_MARGIN_MM,
+                      roi[2] + COPPER_MARGIN_MM, roi[3] + COPPER_MARGIN_MM,
+                      min(layer_z.values()), max(layer_z.values()))
+            try:
+                faces = nf2ff_mod.plan_faces(mesh, copper, ff_clearance)
+            except nf2ff_mod.NF2FFError as exc:
+                raise ModelError(str(exc)) from exc
+            nf2ff_mod.add_dumps(doc, faces, ff_freqs)
+            far_field_meta = {
+                "frequencies_hz": ff_freqs,
+                "faces_mm": [faces.x0, faces.y0, faces.z0, faces.x1, faces.y1, faces.z1],
+                "centre_mm": list(faces.centre()),
+                "sub_sampling": nf2ff_mod.FACE_SUB_SAMPLING,
+                "clearance_mm": ff_clearance,
+                # Where the box is a tenth of a wavelength out. Below this it sits closer, in
+                # the reactive near field, and nothing has measured how far down the
+                # transform stays right there. Carried so the result can say so.
+                "tenth_wavelength_above_hz": SPEED_OF_LIGHT / (10.0 * ff_clearance / 1000.0),
+            }
+            notes.append(
+                f"the far field is recorded on a box {faces.x1 - faces.x0:.0f} x "
+                f"{faces.y1 - faces.y0:.0f} x {faces.z1 - faces.z0:.0f} mm at "
+                f"{len(ff_freqs)} frequencies from {ff_freqs[0] / 1e6:.0f} to "
+                f"{ff_freqs[-1] / 1e6:.0f} MHz"
+            )
 
     return BuiltModel(
         doc=doc, mesh=mesh, dump_names=dump_names, port_names=port_names, notes=notes,
@@ -849,17 +902,57 @@ RADIATED_MIN_HZ = 30e6
 #: rather than a download. M0 sized both -- 0.07-0.25 GB sub-sampled at 60 frequencies.
 FAR_FIELD_POINTS = 60
 
+SPEED_OF_LIGHT = 299_792_458.0
 
-def far_field_grid(f_max: float, points: int = FAR_FIELD_POINTS) -> list[float]:
-    """A log grid across the radiated band, up to what this solve actually resolves.
+#: The far-field box's distance from the copper, never less than this, in mm.
+#:
+#: A documented choice, not a measured one. Surface equivalence is exact at any distance in
+#: principle; what goes wrong close in is numerical. The faces are sub-sampled 4:1, so a field
+#: that varies on the scale of the copper is under-sampled there, and the reactive fields that
+#: dominate close to a structure nearly cancel in the integral, which spends the dumps'
+#: single-precision digits. 25 mm is many board thicknesses of clearance at any preset.
+FAR_FIELD_MIN_CLEARANCE_MM = 25.0
+
+#: ...and never less than this fraction of the wavelength at the top of the solved band. At
+#: that frequency the box is then a tenth of a wavelength out, above the 0.064 wavelengths at
+#: which M0 saw a pattern no box that size can produce. Lower frequencies see the box
+#: electrically closer; that is unverified, and the result carries where it starts.
+FAR_FIELD_CLEARANCE_WAVELENGTHS = 0.1
+
+#: Grid lines kept between a face and the edge of the grid. openEMS's PML_8 absorbs over the
+#: outermost eight; a face among them samples the absorber, not the field.
+PML_CLEAR_LINES = 10
+
+
+def far_field_clearance_mm(f_top_hz: float) -> float:
+    """How far the far-field box sits from the copper, in mm, for a solve reaching ``f_top``."""
+    lam_mm = SPEED_OF_LIGHT / f_top_hz * 1000.0
+    return max(FAR_FIELD_MIN_CLEARANCE_MM, FAR_FIELD_CLEARANCE_WAVELENGTHS * lam_mm)
+
+
+def far_field_pad_mm(clearance_mm: float, max_cell_mm: float) -> float:
+    """Air to add around the copper so the box fits with the PML still clear of it."""
+    return clearance_mm + (PML_CLEAR_LINES + 2) * max_cell_mm
+
+
+def far_field_grid(f_lo: float, f_hi: float, points: int = FAR_FIELD_POINTS) -> list[float]:
+    """A log grid across the part of the radiated band this solve actually excited.
 
     Log rather than linear because the limits, the cable resonances and the board's own modes
     are all roughly log-spaced, and because a linear grid spends half its points above 500 MHz
     where nothing changes quickly.
 
-    Capped at the solve's own f_max: asking the transform for a frequency the excitation never
-    contained returns a number, and it is noise.
+    **Inside the solved band only.** The grid used to start at 30 MHz whatever the solve
+    covered, and reach at least 60 MHz, so a solve of 100-500 MHz was asked for 30 MHz: below
+    its lowest frequency the record is shorter than the three periods it was sized for and the
+    source put almost nothing there, and the transform returns a confident number anyway.
+    Empty when the solve ends below the radiated band.
     """
-    top = max(float(f_max), RADIATED_MIN_HZ * 2)
-    step = (top / RADIATED_MIN_HZ) ** (1.0 / (points - 1))
-    return [RADIATED_MIN_HZ * step ** k for k in range(points)]
+    lo = max(float(f_lo), RADIATED_MIN_HZ)
+    hi = float(f_hi)
+    if hi < lo:
+        return []
+    if hi == lo:
+        return [lo]
+    step = (hi / lo) ** (1.0 / (points - 1))
+    return [lo * step ** k for k in range(points)]

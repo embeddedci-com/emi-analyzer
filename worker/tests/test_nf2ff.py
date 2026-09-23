@@ -15,8 +15,8 @@ import pytest
 
 from emi_worker.openems import csx
 from emi_worker.openems.nf2ff import (
-    FACE_FRACTION,
     FACES,
+    MIN_LINES_OUTSIDE,
     PHI_DEG,
     THETA_DEG,
     Faces,
@@ -32,41 +32,47 @@ class FakeMesh:
         self.x, self.y, self.z = np.asarray(x), np.asarray(y), np.asarray(z)
 
 
-def _mesh(x0=-10.0, x1=30.0, y0=-10.0, y1=30.0, z0=-8.0, z1=8.0):
-    return FakeMesh(np.linspace(x0, x1, 80), np.linspace(y0, y1, 80),
-                    np.linspace(z0, z1, 40))
+def _mesh(x0=-60.0, x1=80.0, y0=-60.0, y1=80.0, z0=-60.0, z1=62.0):
+    return FakeMesh(np.linspace(x0, x1, 141), np.linspace(y0, y1, 141),
+                    np.linspace(z0, z1, 123))
 
 
-def test_faces_sit_between_the_region_and_the_boundary():
-    roi = (0.0, 0.0, 20.0, 20.0)
-    f = plan_faces(_mesh(), roi)
-    # Outside the region -- a face cutting through the board would enclose nothing.
-    assert f.x0 < roi[0] and f.x1 > roi[2]
-    assert f.y0 < roi[1] and f.y1 > roi[3]
-    # Inside the grid, with room to spare, so no face sits in the absorbing boundary.
-    m = _mesh()
-    assert f.x0 > m.x.min() and f.x1 < m.x.max()
-    assert f.z0 > m.z.min() and f.z1 < m.z.max()
+#: A 20 x 20 mm board, 1.6 mm thick, as the copper extent plan_faces takes.
+COPPER = (0.0, 0.0, 20.0, 20.0, 0.0, 1.6)
 
 
-def test_faces_follow_an_asymmetric_grid():
-    """A cable port extends the domain on one side only (§7).
+def test_faces_sit_the_clearance_outside_the_copper():
+    f = plan_faces(_mesh(), COPPER, 25.0)
+    assert (f.x0, f.y0, f.z0) == pytest.approx((-25.0, -25.0, -25.0))
+    assert (f.x1, f.y1, f.z1) == pytest.approx((45.0, 45.0, 26.6))
 
-    A box placed symmetrically around the region would then sit outside the grid on the
-    extended side -- or, worse, well inside the structure on the other, which is the reactive
-    near field M0 measured as giving a pattern no box that size can produce.
-    """
-    roi = (0.0, 0.0, 20.0, 20.0)
-    m = FakeMesh(np.linspace(-500.0, 30.0, 200), np.linspace(-10.0, 30.0, 80),
-                 np.linspace(-8.0, 8.0, 40))
-    f = plan_faces(m, roi)
-    assert f.x0 < -300.0            # it followed the extension west
-    assert 20.0 < f.x1 < 30.0       # and did not follow it east
-    assert f.x0 > m.x.min()
+
+def test_a_face_in_the_absorbing_boundary_is_refused():
+    """The grid used to end at the region in x and y, so the side faces sat on its outermost
+    lines -- inside the PML, sampling the absorber. That is now a refusal."""
+    tight = FakeMesh(np.linspace(0.0, 20.0, 80), np.linspace(-60.0, 80.0, 141),
+                     np.linspace(-60.0, 62.0, 123))
+    with pytest.raises(NF2FFError, match="along x"):
+        plan_faces(tight, COPPER, 25.0)
+    # Just enough lines outside passes.
+    ok = FakeMesh(np.concatenate([np.linspace(-40.0, -26.0, MIN_LINES_OUTSIDE),
+                                  np.linspace(-25.0, 45.0, 50),
+                                  np.linspace(46.0, 60.0, MIN_LINES_OUTSIDE)]),
+                  np.linspace(-60.0, 80.0, 141), np.linspace(-60.0, 62.0, 123))
+    plan_faces(ok, COPPER, 25.0)
+
+
+def test_faces_follow_an_asymmetric_copper_extent():
+    """A cable stub extends the copper on one side only (§7), and the box encloses it."""
+    m = FakeMesh(np.linspace(-600.0, 80.0, 700), np.linspace(-60.0, 80.0, 141),
+                 np.linspace(-60.0, 62.0, 123))
+    f = plan_faces(m, (-500.0, 0.0, 20.0, 20.0, 0.0, 1.6), 25.0)
+    assert f.x0 == pytest.approx(-525.0)
+    assert f.x1 == pytest.approx(45.0)
 
 
 def test_every_face_is_a_plane_and_the_box_is_closed():
-    f = plan_faces(_mesh(), (0.0, 0.0, 20.0, 20.0))
+    f = plan_faces(_mesh(), COPPER, 25.0)
     seen = set()
     for name, axis, sign in FACES:
         box = f.box(axis, sign)
@@ -82,7 +88,7 @@ def test_dumps_are_frequency_domain_and_paired():
     doc = csx.CSXDocument(excitation=csx.Excitation(type=0, f0=5e8, fc=4e8),
                           x_lines=[0, 1], y_lines=[0, 1], z_lines=[0, 1], f_max=9e8)
     freqs = [30e6, 100e6, 1e9]
-    names = add_dumps(doc, plan_faces(_mesh(), (0.0, 0.0, 20.0, 20.0)), freqs)
+    names = add_dumps(doc, plan_faces(_mesh(), COPPER, 25.0), freqs)
 
     assert len(names) == 12
     assert sum(n.startswith("nf2ff_E_") for n in names) == 6
@@ -101,7 +107,7 @@ def test_no_frequencies_is_refused():
     doc = csx.CSXDocument(excitation=csx.Excitation(type=0, f0=5e8, fc=4e8),
                           x_lines=[0, 1], y_lines=[0, 1], z_lines=[0, 1], f_max=9e8)
     with pytest.raises(NF2FFError, match="at least one frequency"):
-        add_dumps(doc, plan_faces(_mesh(), (0.0, 0.0, 20.0, 20.0)), [])
+        add_dumps(doc, plan_faces(_mesh(), COPPER, 25.0), [])
 
 
 def _stub_dumps(wd: Path, drop: str | None = None) -> None:
@@ -131,8 +137,12 @@ def test_the_job_is_written_in_radians_and_metres(tmp_path):
     assert root.get("Radius") == "3.0"
 
 
-def test_a_mirror_replaces_the_lower_face():
-    """Keeping both counts the structure twice: the image *is* the lower hemisphere."""
+def test_a_mirror_below_the_box_keeps_every_face():
+    """The ground plane sits 0.8 m under a box that ends millimetres below the board.
+
+    Dropping the lower face there left the surface open, so the transform integrated five of
+    the six faces the field crosses. Only a mirror lying *on* the lower face replaces it.
+    """
     import tempfile
     with tempfile.TemporaryDirectory() as d:
         wd = Path(d)
@@ -140,10 +150,34 @@ def test_a_mirror_replaces_the_lower_face():
         plain = ET.parse(write_job(str(wd), [100e6], str(wd / "a.h5"))).getroot()
         assert len(plain.findall("Planes")) == 6
 
-        mirrored = ET.parse(
-            write_job(str(wd), [100e6], str(wd / "b.h5"), mirror_z_m=-0.8)).getroot()
-        assert len(mirrored.findall("Planes")) == 5
-        assert not any("nf2ff_E_zn" in p.get("E_Field") for p in mirrored.findall("Planes"))
+        below = ET.parse(write_job(str(wd), [100e6], str(wd / "b.h5"), mirror_z_m=-0.8,
+                                   lower_face_z_m=-0.03)).getroot()
+        assert len(below.findall("Planes")) == 6
+        assert below.find("Mirror").get("Pos") == "-0.8"
+
+        # And without saying where the face is, the face is never assumed away.
+        unknown = ET.parse(write_job(str(wd), [100e6], str(wd / "c.h5"),
+                                     mirror_z_m=-0.8)).getroot()
+        assert len(unknown.findall("Planes")) == 6
+
+
+def test_a_mirror_on_the_lower_face_replaces_it():
+    """M0's configuration: the symmetry plane is the face, so the image is the lower half."""
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        wd = Path(d)
+        _stub_dumps(wd, drop="zn")
+        on = ET.parse(write_job(str(wd), [100e6], str(wd / "b.h5"), mirror_z_m=-0.03,
+                                lower_face_z_m=-0.03)).getroot()
+        assert len(on.findall("Planes")) == 5
+        assert not any("nf2ff_E_zn" in p.get("E_Field") for p in on.findall("Planes"))
+
+
+def test_a_box_reaching_through_the_ground_plane_is_refused(tmp_path):
+    _stub_dumps(tmp_path)
+    with pytest.raises(NF2FFError, match="reaches through"):
+        write_job(str(tmp_path), [100e6], str(tmp_path / "a.h5"), mirror_z_m=-0.8,
+                  lower_face_z_m=-1.0)
 
 
 def test_a_missing_face_is_refused_rather_than_transformed(tmp_path):
@@ -180,7 +214,7 @@ def test_faces_are_sub_sampled():
 
     doc = csx.CSXDocument(excitation=csx.Excitation(type=0, f0=5e8, fc=4e8),
                           x_lines=[0, 1], y_lines=[0, 1], z_lines=[0, 1], f_max=9e8)
-    add_dumps(doc, plan_faces(_mesh(), (0.0, 0.0, 20.0, 20.0)), [100e6])
+    add_dumps(doc, plan_faces(_mesh(), COPPER, 25.0), [100e6])
     xml = ET.fromstring(doc.to_string())
     dumps = [d for d in xml.iter("DumpBox") if d.get("Name", "").startswith("nf2ff_")]
     assert dumps
@@ -203,10 +237,10 @@ def test_an_ordinary_dump_still_writes_no_sub_sampling_attribute():
 
 # ---- the grid the far field is evaluated on -------------------------------------------
 
-def test_the_far_field_grid_spans_the_radiated_band():
+def test_the_far_field_grid_spans_the_solved_radiated_band():
     from emi_worker.openems.model import FAR_FIELD_POINTS, RADIATED_MIN_HZ, far_field_grid
 
-    g = far_field_grid(1e9)
+    g = far_field_grid(10e6, 1e9)
     assert len(g) == FAR_FIELD_POINTS
     assert g[0] == pytest.approx(RADIATED_MIN_HZ)
     assert g[-1] == pytest.approx(1e9)
@@ -217,19 +251,30 @@ def test_the_far_field_grid_spans_the_radiated_band():
 
 
 def test_the_grid_never_asks_for_a_frequency_the_solve_did_not_contain():
-    """The transform returns a number for any frequency it is given, and above the excitation
-    band that number is noise."""
+    """The transform returns a number for any frequency it is given, and outside the excited
+    band -- above it, or below the lowest frequency the record was sized for -- that number
+    is noise. The grid used to start at 30 MHz whatever the solve covered."""
     from emi_worker.openems.model import far_field_grid
 
-    assert max(far_field_grid(200e6)) == pytest.approx(200e6)
+    g = far_field_grid(100e6, 500e6)
+    assert min(g) == pytest.approx(100e6)
+    assert max(g) == pytest.approx(500e6)
+    # And it used to reach 60 MHz even for a solve that stopped at 40.
+    assert max(far_field_grid(30e6, 40e6)) == pytest.approx(40e6)
 
 
-def test_a_solve_below_the_radiated_band_still_produces_a_usable_grid():
-    from emi_worker.openems.model import RADIATED_MIN_HZ, far_field_grid
+def test_a_solve_below_the_radiated_band_records_no_far_field():
+    from emi_worker.openems.model import far_field_grid
 
-    g = far_field_grid(1e6)
-    assert g[0] == pytest.approx(RADIATED_MIN_HZ)
-    assert g[-1] > g[0]
+    assert far_field_grid(1e6, 20e6) == []
+
+
+def test_the_box_clearance_is_a_tenth_of_a_wavelength_at_the_top_but_never_below_25_mm():
+    from emi_worker.openems.model import far_field_clearance_mm
+
+    assert far_field_clearance_mm(1e9) == pytest.approx(29.98, abs=0.01)
+    assert far_field_clearance_mm(300e6) == pytest.approx(99.93, abs=0.01)
+    assert far_field_clearance_mm(6e9) == pytest.approx(25.0)
 
 
 def test_the_job_asks_for_the_standard_distance_directly(tmp_path):
@@ -244,3 +289,48 @@ def test_the_job_asks_for_the_standard_distance_directly(tmp_path):
     for distance in (3.0, 10.0):
         job = write_job(str(tmp_path), [100e6], str(tmp_path / "ff.h5"), radius_m=distance)
         assert float(ET.parse(job).getroot().get("Radius")) == pytest.approx(distance)
+
+
+# ---- per volt of source ----------------------------------------------------------------
+
+def _probe(path: Path, t, v) -> None:
+    path.write_text("% time value\n" + "".join(f"{a:.9e} {b:.9e}\n" for a, b in zip(t, v)))
+
+
+def test_the_source_is_in_openems_single_sided_convention(tmp_path):
+    """A far field dump is 2·Σx·e^(-jωt)·Δt; the port's transform must match before dividing,
+    or every far field is 6 dB high. Checked on a sine whose amplitude is known exactly."""
+    from emi_worker.openems.post import OPENEMS_FD_SCALE, source_spectrum
+
+    f0 = 100e6
+    t = np.arange(0, 400) * 1.25e-10   # exactly 5 periods
+    v = 1.0 * np.cos(2 * np.pi * f0 * t)
+    i = 0.01 * np.cos(2 * np.pi * f0 * t)
+    _probe(tmp_path / "p1_ut", t, v)
+    _probe(tmp_path / "p1_it", t, i)
+    out = source_spectrum(str(tmp_path), "p1", 50.0, [f0])
+    # V_src = V + I·50 = 1.5 V amplitude. The single-sided transform 2·Σ·Δt of a cosine of
+    # amplitude A over a record T is A·T: 1.5 V · 5e-8 s.
+    assert OPENEMS_FD_SCALE == 2.0
+    assert abs(out["v_src"][0]) == pytest.approx(1.5 * 400 * 1.25e-10, rel=1e-3)
+    assert out["z_in"][0].real == pytest.approx(100.0, rel=1e-6)
+
+
+def test_the_far_field_document_is_per_volt_and_refuses_an_empty_source():
+    from emi_worker.openems.model import Port
+    from emi_worker.stages.solve import FAR_FIELD_FORMAT_VERSION, far_field_document
+
+    field = {"frequencies_hz": [100e6, 200e6], "e_max_v_per_m": [2e-3, 1e-3],
+             "theta_deg": [30.0], "e_by_theta_v_per_m": [[2e-3], [1e-3]]}
+    source = {"v_src": np.array([4.0 + 0j, 0.0 + 0j]),
+              "z_in": np.array([30 + 40j, np.nan + 0j])}
+    meta = {"faces_mm": [0, 0, 0, 1, 1, 1], "sub_sampling": 4, "clearance_mm": 30.0,
+            "tenth_wavelength_above_hz": 1e9}
+    doc = far_field_document(field, source, [Port("p1", 0, 0, "F.Cu", resistance=50.0)], meta)
+    assert doc["format_version"] == FAR_FIELD_FORMAT_VERSION == 2
+    assert doc["e_per_volt"] == pytest.approx([5e-4, 0.0])
+    assert doc["usable"] == [True, False]
+    assert doc["z_in_real"][0] == 30.0 and doc["z_in_imag"][0] == 40.0
+    assert doc["source_impedance_ohm"] == 50.0
+    assert doc["driven_by"] == "p1"
+    assert "e_max_v_per_m" not in doc, "the raw pulse units must not look like V/m"
