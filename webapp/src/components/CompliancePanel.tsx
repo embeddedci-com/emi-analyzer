@@ -44,11 +44,13 @@ export function CompliancePanel({ doc }: { doc: ComplianceDoc }) {
         <Stack gap={0}>
           <Group gap="xs">
             <Title order={5}>Compliance outlook</Title>
+            <Experimental why={EXPERIMENTAL.complianceEstimate} />
             {anyCable && <Experimental why={EXPERIMENTAL.cableEmissions} />}
           </Group>
           <Text size="xs" c="dimmed">
             {doc.standard}
-            {doc.distance_m ? ` at ${doc.distance_m} m` : ''} · estimated, not a pre-compliance test
+            {doc.distance_m ? ` at ${doc.distance_m} m` : ''} · experimental estimate, not a
+            pre-compliance test
           </Text>
         </Stack>
         {scored && (
@@ -92,6 +94,12 @@ export function CompliancePanel({ doc }: { doc: ComplianceDoc }) {
 
       {doc.spectrum.length > 1 && <ComplianceSpectrum doc={doc} />}
 
+      {doc.notes && doc.notes.length > 0 && (
+        <List size="xs" spacing={2} c="dimmed">
+          {doc.notes.map((n) => <List.Item key={n}>{n}</List.Item>)}
+        </List>
+      )}
+
       {scored && (
         <>
           <Card withBorder padding="sm" radius="md">
@@ -110,10 +118,10 @@ export function CompliancePanel({ doc }: { doc: ComplianceDoc }) {
                        style={{ cursor: 'help' }}>uncalibrated</Badge>
               </Tooltip>
             </Group>
-            <Progress value={(doc.confidence ?? 0) * 100} size="lg" radius="sm"
+            <Progress value={(doc.confidence_uncalibrated ?? 0) * 100} size="lg" radius="sm"
                       color={marginColour(margin)} />
             <Group justify="space-between" mt={6}>
-              <Text size="sm" fw={600}>{Math.round((doc.confidence ?? 0) * 100)} %</Text>
+              <Text size="sm" fw={600}>{Math.round((doc.confidence_uncalibrated ?? 0) * 100)} %</Text>
               <Text size="xs" c="dimmed">
                 σ {doc.sigma_db?.toFixed(2)} dB · 80 % range{' '}
                 {doc.range_80_db?.[0].toFixed(1)} … {doc.range_80_db?.[1].toFixed(1)} dB

@@ -39,7 +39,8 @@ function closedForm(t: Trapezoid, n: number): number {
   const tauOverT = t.pulse_width_s / t.period_s
   const trOverT = t.rise_s / t.period_s
   return (
-    2 * t.amplitude_v * tauOverT *
+    // RMS, as every amplitude in the tool is: the textbook's peak over sqrt(2).
+    Math.SQRT2 * t.amplitude_v * tauOverT *
     Math.abs(sinc(n * Math.PI * tauOverT)) *
     Math.abs(sinc(n * Math.PI * trOverT))
   )
@@ -108,7 +109,7 @@ describe('D1 — the closed form', () => {
     trapezoidSeries(t, 7).forEach((point, i) => {
       const n = i + 1
       if (n % 2 === 1) {
-        expect(point.amplitude_v).toBeCloseTo(2 / (n * Math.PI), 5)
+        expect(point.amplitude_v).toBeCloseTo(2 / (n * Math.PI) / Math.SQRT2, 5)
       } else {
         expect(point.amplitude_v).toBeLessThan(1e-6)
       }
@@ -155,7 +156,7 @@ describe('the envelope', () => {
 
   it('has the stated slopes', () => {
     const { f1, f2 } = cornerFrequencies(t)
-    const flat = (2 * 3.3 * 1e-8) / 4e-8
+    const flat = (2 * 3.3 * 1e-8) / 4e-8 / Math.SQRT2
     expect(envelopeV(t, f1 / 10)).toBeCloseTo(flat, 12)
     expect(20 * Math.log10(envelopeV(t, f1 * 10) / flat)).toBeCloseTo(-20, 9)
     expect(20 * Math.log10(envelopeV(t, f2 * 10) / envelopeV(t, f2))).toBeCloseTo(-40, 9)

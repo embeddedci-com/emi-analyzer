@@ -32,6 +32,11 @@ export interface LimitSegment {
   /** Level at `f_hi_hz` when the segment slopes; absent for a flat one. */
   level_db_hi?: number
   microvolts_per_m?: number
+  /** The detector this level is read with, when it differs from the standard's. */
+  detector?: string
+  /** A peak-detector limit alongside `level_db` (47 CFR 15.35(b): 20 dB above average). */
+  peak_level_db?: number
+  peak_clause?: string
 }
 
 export interface Standard {
@@ -104,6 +109,40 @@ export function limitAt(standardId: string, frequencyHz: number): number {
     )
   }
   return Math.min(...levels)
+}
+
+/** True when the standard has a limit at this frequency at all. */
+export function inRange(standardId: string, frequencyHz: number): boolean {
+  const std = standard(standardId)
+  return std.segments[0].f_lo_hz <= frequencyHz
+    && frequencyHz <= std.segments[std.segments.length - 1].f_hi_hz
+}
+
+/**
+ * Which detector the governing limit at this frequency is read with. Above 1 GHz, 15.35(b)
+ * switches radiated limits to an average detector with a peak limit 20 dB above it.
+ */
+export function detectorAt(standardId: string, frequencyHz: number): string {
+  const std = standard(standardId)
+  const covering = std.segments.filter((s) => covers(s, frequencyHz))
+  if (covering.length === 0) {
+    throw new LimitError(`${std.id} has no limit at ${frequencyHz / 1e6} MHz`)
+  }
+  const seg = covering.reduce((a, b) =>
+    (levelAt(b, frequencyHz) < levelAt(a, frequencyHz) ? b : a))
+  return seg.detector ?? std.detector
+}
+
+/**
+ * The peak-detector limit alongside the governing one, or null where there is none. For a
+ * steady harmonic every detector reads the same level, so the tighter average limit governs
+ * and this one never decides a margin.
+ */
+export function peakLimitAt(standardId: string, frequencyHz: number): number | null {
+  const peaks = standard(standardId).segments
+    .filter((s) => covers(s, frequencyHz) && typeof s.peak_level_db === 'number')
+    .map((s) => s.peak_level_db as number)
+  return peaks.length > 0 ? Math.min(...peaks) : null
 }
 
 /**

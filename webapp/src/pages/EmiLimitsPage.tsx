@@ -89,6 +89,8 @@ function StandardCard({ std }: { std: Standard }) {
                   {seg.level_db_hi !== undefined && seg.level_db_hi !== null
                     ? `${seg.level_db} → ${seg.level_db_hi}`
                     : seg.level_db}
+                  {seg.detector && ` ${seg.detector}`}
+                  {typeof seg.peak_level_db === 'number' && `, ${seg.peak_level_db} peak`}
                 </Table.Td>
                 {std.segments.some((s) => s.microvolts_per_m !== undefined) && (
                   <Table.Td ff="monospace">

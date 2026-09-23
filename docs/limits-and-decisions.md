@@ -44,8 +44,11 @@ How the model works is in [`implementation.md`](implementation.md); what is miss
 - **Conducted segments interpolate.** §15.107 Class B falls from 66 to 56 dBµV quasi-peak, and 56
   to 46 average, over 0.15–0.5 MHz, *"with the logarithm of the frequency"*. Those segments carry
   `"interp": "log-f"`.
-- **Detectors are separate fields** (`quasi-peak`, `average`, `peak`). Above 1 GHz, §15.35 sets
-  average limits with a peak limit above them, cited by clause when that table is built.
+- **Detectors are separate fields** (`quasi-peak`, `average`, `peak`). §15.35(a) reads limits at
+  or below 1000 MHz with a quasi-peak detector; §15.35(b) reads the ones above with an average
+  detector and adds a peak limit 20 dB higher. The radiated tables split at 1 GHz, and the
+  segment above carries `"detector": "average"` and `peak_level_db`. For a steady harmonic every
+  detector reads the same RMS level, so the tighter average limit is the one a margin uses.
 
 ### 15.2 Starting set
 

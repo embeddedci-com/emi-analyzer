@@ -115,6 +115,12 @@ finished solve with it.
   uploaded waveform reuses the same code.
 - **A square wave's harmonics are `2A/(nπ)`, not `4A/(nπ)`.** The textbook figure is for a ±A
   swing; a driver swings 0→A. Getting this wrong would have made every absolute level 6 dB high.
+- **Every harmonic amplitude is RMS**: `√2·|Cₙ|`, the one-sided peak `2|Cₙ|` divided by √2
+  (`RMS_PER_PEAK`, the same constant in Python and TypeScript). An analyzer reads the RMS of a
+  steady sine on every detector, the limits are written in those units, and an uploaded analyzer
+  spectrum already is one. Until September 2026 trapezoids and waveforms carried the peak, which
+  put every level they produced 3 dB high against both. The near-field offsets in dBµA/m are RMS
+  for the same reason.
 - **Provenance is carried, never averaged.** `SOURCE_SIGMA_DB` runs scope 1.0, spectrum analyzer
   1.0, BenchPod 1.5, datasheet 3.0, assumed 6.0, and `weakest_source()` takes the worst value in
   a document rather than a blend.
@@ -194,91 +200,156 @@ the domain. It exists to certify Tier B on fixtures, and that certification is i
 
 ## 6. The board's far field
 
-`openems/nf2ff.py`. Six E and six H frequency-domain face dumps, then the shipped `nf2ff` CLI.
+`openems/nf2ff.py`, `stages/solve.py`. Six E and six H frequency-domain face dumps, then the
+shipped `nf2ff` CLI.
 
 - **A PEC `Mirror` at table height puts the ground reflection inside the transform.** M0
-  measured it against image theory at 0.08 dB median, which retired the hand-computed two-ray
-  sum and the flat +6 dB fallback the design originally planned. When the mirror is present the
-  lower face is dropped — the image *is* the lower hemisphere, and keeping both counts twice.
+  measured it against image theory at 0.08 dB median, with the mirror *on* the box's lower face.
+  The product puts the plane 0.8 m below a box that ends centimetres under the board, and there
+  **all six faces are kept**: the image of a closed box is a second closed box. The job used to
+  drop the lower face whenever a mirror was set, which left the surface open and integrated five
+  sixths of the currents. A face is now dropped only when the mirror lies on it, and a box that
+  reaches through the plane is refused. The off-face configuration has not been measured.
+- **The box sits a stated distance from the copper**: `max(25 mm, λ/10 at the top of the solved
+  band)`, with at least ten grid lines between each face and the edge of the grid so the PML_8
+  absorber stays clear. Before September 2026 the mesh ended at the region in x and y, so the
+  side faces were planned "0.8 of the way to the boundary" from a region that *was* the boundary
+  and sat inside the absorber; vertically the default 5 mm of air put them 4 mm from the copper.
+  The grid now grows by `clearance + 12 cells` on every side when the far field is on, and the
+  solve's notes state what that costs (2.6x the cells on the fixture board). Below
+  the frequency where the clearance is a tenth of a wavelength the box is electrically closer;
+  `farfield.json` carries `tenth_wavelength_above_hz` and the compliance result says so.
+- **The far-field grid covers the solved band only**: 60 log points from `max(30 MHz, lowest
+  solved frequency)` to the solve's `f_max`. It used to start at 30 MHz whatever the solve
+  covered and reach at least 60 MHz, so a 100-500 MHz solve was transformed at 30 MHz, where the
+  source put almost nothing and the record was too short. Frequencies asked for outside the band
+  are dropped with a note.
+- **`farfield.json` (format 2) is a transfer function per volt of source.** The raw transform is
+  in units of openEMS's Gaussian pulse, and the file used to carry it as "V/m". It is now divided
+  by the solve's Thévenin source `V_port + I_port·Z_s` at each frequency, with the port's `Z_in`
+  beside it so a driver can be attached later. **openEMS writes FD dumps single-sided**,
+  `2·Σx·e^(−jωt)·Δt`; `post._dft` has no factor of 2 because everything it fed before was a
+  ratio of two of its own transforms. `OPENEMS_FD_SCALE = 2` brings the source onto openEMS's
+  convention before dividing; without it every far field is 6 dB high.
+  `scripts/e2e_compliance_fixture.py` checks the factor against openEMS itself by integrating an
+  E dump along the port's voltage probe.
 - **`Radius` is where E is evaluated, and E really does scale as 1/r** — measured at 1, 3 and
-  10 m as 1.037e-11, 3.456e-12, 1.037e-12 V/m. So the job asks for the standard's own distance
-  and the artifact is directly comparable with a limit. A 1 m field against a 3 m limit is
-  9.5 dB optimistic and nothing in the output would say so.
+  10 m as 1.037e-11, 3.456e-12, 1.037e-12 V/m. So the job asks for the standard's own distance.
 - **Faces are sub-sampled 4:1.** The surface must resolve the *wavelength*, not the copper:
-  300 mm at 1 GHz against 200 µm for a quarter of a 50 µm mesh. M0 sized the artifact at
-  1.1–4.0 GB full and 0.07–0.25 GB sub-sampled.
+  300 mm at 1 GHz against 200 µm for a quarter of a 50 µm mesh.
 - **Radians and metres, checked.** `nf2ff` echoes its input angles into `/Mesh/theta`, so a job
   written in degrees produces an output file that agrees with itself and confirms nothing. The
   reader asserts the echo matches what was sent.
-- **A missing face is refused.** Surface equivalence needs the surface closed; five faces is not
-  a smaller answer.
-- **The box is placed from the finished mesh**, at 0.8 of the way to each boundary — so it
-  follows a cable port's one-sided extension instead of sitting in the reactive near field on one
-  side and outside the grid on the other. M0's first attempt put the faces 0.064 λ out and got a
-  pattern oscillating on a 7° scale, which no box that size can produce.
+- **A missing face is refused.** Surface equivalence needs the surface closed.
 
 ---
 
 ## 7. Compliance
 
-`compliance/` plus `stages/compliance.py`.
+`compliance/` plus `stages/compliance.py`. Behind `full-wave`, labelled experimental, and
+uncalibrated.
 
-### 7.1 Combination
+### 7.1 Where the inputs come from
+
+The run names a solve and a driver; **everything that decides the answer is read by the worker**.
+The server's run input (`server/emi/compliance.go`) carries the original upload, presigned URLs
+for five JSON artifacts of the named solve, and the driver's document. The solve must be a
+finished solve of the same project and the same board; anything else comes back as a message the
+worker reports as a gap, and a run in another project reads exactly like a missing one.
+
+`compliance/assemble.py` builds the paths:
+
+```
+board:  E(f) = e_per_volt(f) · |Z_s + Z_in(f)| / |Z_d + Z_in(f)| · |V_d(f)|
+cable:  E(f) = |H_cm(f)| · |Z_s + Z_in(f)| / |Z_d + Z_in(f)| · |V_d(f)| / |Z_ant(f)| · E_per_amp(f)
+```
+
+`Z_s` is the port's own resistance (recorded in the manifest since September 2026), `Z_d` the
+driver's source impedance. Everything in the structure is proportional to the port current, so a
+driver that is not the solve's source changes every field by that ratio; leaving it out is exact
+only when `Z_d = Z_s`. (The Cables tab's browser composition still leaves it out.)
+
+**A clock is evaluated at its own harmonics**, not on the solve's grid. Composing on the 60-point
+log grid drove a harmonic only where one landed within 100 ppm of a grid point: two of sixty for
+a 25 MHz clock. The transfer functions are interpolated to every harmonic instead, magnitudes in
+dB against log frequency and impedances by real and imaginary part, inside the band each one
+covers and never beyond it. An uploaded analyzer spectrum is continuous and is read at the
+transfer functions' own points inside its range.
+
+Before this, the request carried the paths and every gate input, the browser sent none, and every
+result was "nothing radiating"; an API client could send anything and get `complete: true`.
+
+### 7.2 Combination
 
 ```
 E_d(f) = Σ_paths |E_{d,path}(f)|     one driver's paths add in AMPLITUDE
 E(f)   = sqrt( Σ_d E_d(f)² )         different drivers add in POWER
 ```
 
-Amplitude for one driver is the worst case over a relative phase the model does not know. Two
-equal paths are 6 dB up this way and 3 dB in power — getting it backwards is optimistic exactly
-where two paths matter. When a driver does contribute through more than one path, the per-path
-**shares are marked indicative**, because an amplitude sum is not a power sum and the parts stop
-adding to the whole.
+**Paths meet on a common grid**: every frequency any path has, inside the standard's scan,
+merged to 100 ppm. A line spectrum is zero between its lines, which is the physics; a continuous
+path is interpolated in dB inside its band. Outside a path's band the answer is "not covered",
+recorded on the point, never zero. `Path.at` used to match by exact float, and the far-field and
+cable grids share no point, so two paths of one driver were never added.
 
-### 7.2 The budget
+Amplitude for one driver is the worst case over a relative phase the model does not know. When a
+driver contributes through more than one path, the per-path **shares are marked indicative**.
+
+**Levels are RMS** (§4), and so are the limits for a steady harmonic: quasi-peak below 1 GHz,
+average above it (§15.35), with the 20 dB higher peak limit recorded but never deciding a margin
+for a steady source.
+
+### 7.3 The budget
 
 σ is root-sum-square over the terms that apply, **each path's terms weighted by its power
-share** — a cable contributing 1 % of the power brings 0.45 dB of its 4.5, not the whole thing,
-so the confidence figure describes the prediction actually on screen.
+share**.
 
 | Term | Applies to | σ (dB) |
 |---|---|---|
-| Cable idealisation | radiated, cable paths | 4.5 |
-| Driver provenance | the field that sets the level | 1 / 1.5 / 3 / 6 by source |
-| Mesh preset | radiated, board path | fine 1 · normal 2 · coarse 4 |
-| Assumed permittivity | radiated, board path | 1.5 |
-| Far-field interpolation | radiated, board path | 1 |
-| Component coverage | both | 3 × unmatched fraction |
+| Cable idealisation | cable paths | 4.5 |
+| Transfer-function interpolation | cable paths | 1 |
+| Driver provenance | every path | 1 / 1.5 / 3 / 6 by source |
+| Mesh preset | board path | fine 1 · normal 2 · coarse 4 (coarse when not recorded) |
+| Permittivity (not confirmed) | board path | 1.5 (always: the solve does not record whether the stackup was assumed) |
+| Far-field interpolation | board path | 1 |
 
 These are **engineering placeholders**, conservative by choice, shown in the result, and
-replaced by residuals as the verification tests produce them — not tuned.
+replaced by residuals as the verification tests produce them — not tuned. Component coverage is
+not in the budget: the solve does not yet record how many parts on the path matched nothing.
 
-### 7.3 Confidence
+### 7.4 Confidence
 
 `Φ(margin / σ)`: the probability the true margin is positive *under the model's own budget*. Not
-a pass probability. Carried in the payload as `confidence_uncalibrated` as well as `confidence`,
-so no client can present it as one by accident. Evaluated at the worst frequency alone, which
-makes it **optimistic when several sit close** — hence the near-miss list, every frequency within
-one σ of the worst.
+a pass probability. It exists in the payload, the run summary, the TypeScript types and the
+fixtures **only** as `confidence_uncalibrated`; a plain `confidence` key used to travel beside it.
+Evaluated at the worst frequency alone, which makes it **optimistic when several sit close** —
+hence the near-miss list.
 
-### 7.4 The completeness gate
+### 7.5 The completeness gate
 
-An incomplete estimate carries **no** `margin_db` and no `confidence` key at all — not a margin
-with a warning attached, because a warning is what gets dropped when someone screenshots the
-number. The spectrum is still drawn, greyed. Every gap names the tab that fixes it, so the list
-doubles as the to-do list.
+An incomplete estimate carries **no** `margin_db` and no confidence key at all. The spectrum is
+still drawn, greyed. Every gap names the tab that fixes it.
 
-A board with three connectors where one has no declared cable produces a perfectly reasonable
-margin **about a different product**, and the arithmetic cannot tell the difference. That is the
-failure this prevents.
+**The gate's inputs are derived, not sent**: the band each path covers (from the artifacts), the
+scan it must cover (30 MHz to `scan_to_hz` of the driver's fundamental, §15.33(b)), the solve's
+excited ports and which have a far field, the board's connectors (found in the upload, as the
+cable run finds them), which cables the solve modelled, and whether power enters through a
+connector. What the user may still say is what only they know, and each can only add a
+requirement or record a decision the result names: a connector that carries no cable, the nets
+that are sources, a higher frequency in the product, the enclosure and the power. The result's
+`inputs` block lists all of it.
 
-### 7.5 Recommendations
+**Standards the estimate cannot reproduce are refused**, not scaled: the fields are computed at
+3 m for a 1-4 m height scan, and a 10 m standard sweeps different elevation angles, so 1/r scaling
+of the 3 m maximum is not the 10 m maximum; a conducted scan is a different quantity. Frequencies
+outside the scan are not scored (asking for a limit there used to raise an uncaught error).
+
+### 7.6 Recommendations
 
 Gathered from rule findings, **never invented**. A finding qualifies by rule *and* (net *or*
-proximity ≤ 25 mm): rule alone pulls in every plane gap on the board, net alone misses a
-stitching finding that has no net but sits 2 mm from the connector exit. With nothing specific
-found, general guidance for that path type, labelled general.
+proximity ≤ 25 mm). A board path uses the driver's net; a cable path uses the connector's pad
+nets and position from the board. With nothing specific found, general guidance, labelled
+general. The findings come with the request and only ever change this list.
 
 ---
 

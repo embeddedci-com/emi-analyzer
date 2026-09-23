@@ -55,6 +55,27 @@ export interface StoredDriver {
   updated_at: string
 }
 
+/**
+ * What a compliance run is asked. The solve and the driver are named, not sent: the server
+ * checks the solve belongs to this project and board, and the worker reads everything that
+ * decides the answer from it. The rest is what only the user knows, and can only add to what
+ * the estimate needs (a connector declared as carrying no cable is recorded as a decision).
+ */
+export interface ComplianceParams {
+  standard_id: string
+  solve_run_id?: string
+  driver_id?: string
+  /** Connector -> cable, where a type of "none" means the product never cables it. */
+  cable_assignments?: Record<string, { type: string | null; length_m?: number }>
+  power?: 'dc' | 'mains' | ''
+  enclosure?: 'none' | 'plastic' | 'metal'
+  source_nets?: string[]
+  /** A higher frequency than the driver's clock, if the product has one. */
+  highest_frequency_hz?: number
+  /** Rule findings, which recommendations are drawn from. Never part of the gate. */
+  findings?: Record<string, unknown>[]
+}
+
 export interface Board {
   id: string
   project_id: string
@@ -438,13 +459,12 @@ export class EmiApi {
   /**
    * A compliance run: seconds of arithmetic on what other runs already produced (§16, §17).
    *
-   * The caller assembles the inputs because only the browser knows which solve the user is
-   * looking at, which driver they attached and which cables they declared. The worker does the
-   * arithmetic and applies the completeness gate — deciding *here* whether the inputs are whole
-   * would put the one rule that stops a number being published in the one place a client can
-   * skip.
+   * The params name the solve and the driver and carry what only the user knows. The worker
+   * reads the solve's artifacts, the driver and the board itself, assembles the paths and
+   * applies the completeness gate — deciding *here* whether the inputs are whole would put the
+   * one rule that stops a number being published in the one place a client can skip.
    */
-  createComplianceRun = (projectId: string, boardId: string, params: Record<string, unknown>) =>
+  createComplianceRun = (projectId: string, boardId: string, params: ComplianceParams) =>
     this.call<Run>('POST', `/emi/projects/${projectId}/runs`, {
       board_id: boardId, kind: 'compliance', params,
     })

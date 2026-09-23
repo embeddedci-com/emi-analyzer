@@ -552,3 +552,42 @@ def test_a_placed_component_adds_three_elements_and_is_reported(board, transform
     parts = modelled_parts(plan)
     assert parts[0]["ref"] == "C1"
     assert parts[0]["generic"] is True
+
+
+# ---- the far-field box (§16.2) -----------------------------------------------------------
+
+def test_a_far_field_solve_gets_air_on_every_side_and_a_box_clear_of_the_pml(board, transform):
+    """The side faces used to sit on the grid's outermost lines, inside the absorbing layer,
+    because the grid ended at the region in x and y; vertically they were 4 mm from copper."""
+    from emi_worker.openems.model import far_field_clearance_mm
+    from emi_worker.openems.nf2ff import MIN_LINES_OUTSIDE
+
+    plain = build_model(board, transform, _params())
+    built = build_model(board, transform, _params(far_field=True))
+    meta = built.far_field
+    assert meta is not None
+    assert meta["clearance_mm"] == pytest.approx(far_field_clearance_mm(1e9))
+    x0, y0, z0, x1, y1, z1 = meta["faces_mm"]
+    m = built.mesh
+    for lines, lo, hi in ((m.x, x0, x1), (m.y, y0, y1), (m.z, z0, z1)):
+        assert np.sum(lines < lo) >= MIN_LINES_OUTSIDE
+        assert np.sum(lines > hi) >= MIN_LINES_OUTSIDE
+    # The copper sits well inside: the region is 4..30 x 24..38, and the box is 30 mm out.
+    assert x0 < 4.0 - 25.0 and x1 > 30.0 + 25.0
+    # The cost is stated, not hidden.
+    assert built.mesh.cells > plain.mesh.cells
+    assert any("cells instead of" in n for n in built.notes)
+
+
+def test_the_far_field_grid_stays_inside_the_solved_band(board, transform):
+    built = build_model(board, transform, _params(far_field=True))
+    freqs = built.far_field["frequencies_hz"]
+    assert min(freqs) == pytest.approx(500e6)
+    assert max(freqs) == pytest.approx(1e9)
+
+
+def test_far_field_frequencies_outside_the_band_are_dropped_and_said(board, transform):
+    built = build_model(board, transform, _params(
+        far_field=True, far_field_frequencies_hz=[30e6, 600e6, 2e9]))
+    assert built.far_field["frequencies_hz"] == [600e6]
+    assert any("were dropped" in n for n in built.notes)

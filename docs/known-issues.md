@@ -22,9 +22,9 @@ solver or a measurement — and passed. The gap between the two is most of this 
 | **Full-wave solve (openEMS)** | ✅ | ⚠️ **solves end to end on the fixture board; nothing verified at radiated record length — §2** | **off** (`full-wave`) |
 | Drivers (re-weighting a solve) | ✅ | ⚠️ partly | off, with full-wave |
 | Components (MLCC models in a solve) | ✅ | ⚠️ partly | off, with full-wave |
-| Board far field (NF2FF) | ✅ | ⚠️ on a dipole fixture only | off, with full-wave |
+| Board far field (NF2FF) | ✅ | ⚠️ on a dipole fixture only, with the ground plane on the box; the product places it 0.8 m below (§3) | off, with full-wave |
 | Cable emissions, Tier B | ✅ | ⚠️ synthetic board only | off, with full-wave |
-| Compliance estimate | ✅ | ❌ never run on real inputs | off, with full-wave |
+| Compliance estimate | ✅ | ❌ runs end to end on the fixture board; never checked against a lab or a second solver (§3) | off, with full-wave |
 | Conducted emissions scan | ❌ | ❌ | — |
 | Report export | ❌ | ❌ | — |
 
@@ -81,8 +81,8 @@ refusal rather than hiding it.
 frequency, on a fixture designed to be small. None of this has been run at the record length a
 radiated result needs: 30 MHz means 100 ns of simulated time whatever the board is, which is
 millions of timesteps, and no run of that length has been measured since the fix. Neither has
-the far field on a real board, nor cable emissions, nor a compliance estimate from real inputs
--- the three gates below that were blocked by the refusals and are now worth re-running.
+the far field on a real board, nor cable emissions; a compliance estimate has run end to end on
+the fixture board only (§4).
 
 **The detector's own limit**, stated because it is now the only thing standing between a bad
 mesh and a plausible-looking number: it judges a rise only after the energy has fallen 20 dB,
@@ -138,7 +138,12 @@ capacitor.
 | Combination of paths, totals and shares | ✅ |
 | Confidence arithmetic (Python and TypeScript agree) | ✅ |
 | Incomplete inputs remove the margin rather than guess | ✅ |
-| Far field vs theory (dipole 2.13 dBi vs 2.15; ground reflection within 0.08 dB) | ✅ on a fixture |
+| Far field vs theory (dipole 2.13 dBi vs 2.15; ground reflection within 0.08 dB) | ✅ on a fixture, mirror on the box face |
+| Far field with the ground plane 0.8 m below the box, as the product runs it, vs image theory | ❌ |
+| Far field below the frequency where the box is a tenth of a wavelength out | ❌ unmeasured; the result says where that starts |
+| Far field divided by the source in openEMS's own convention (the FD factor of 2) | ✅ against openEMS: an E dump integrated along the port's probe is 1.99-2.01 times `post._dft` of the same voltage, fixture board |
+| A real solve, a driver and the board assembled into a margin | ✅ runs on the fixture board (`scripts/e2e_compliance_fixture.py`); the level is not checked against anything |
+| Transfer functions interpolated between grid points | ❌ the 1 dB σ term is a placeholder, not a residual |
 | Disclaimer on reports and exports | ❌ no export exists |
 | LISN network for conducted emissions | ❌ not started |
 | One real board against a real lab result | ❌ |
@@ -155,8 +160,38 @@ capacitor.
   (§2). That is the run the far-field and compliance paths need.
 - **The far field has never run on a real board.** Box placement, face sub-sampling and artifact
   size are untested outside the fixture.
-- **The compliance chain has never been given real inputs.** Nothing yet assembles a real solve's
-  far field and cable transfer functions into the paths the compliance run combines.
+- **The compliance chain has only run on the fixture board.** The worker now assembles a solve's
+  far field and cable transfer functions into paths (September 2026), and
+  `worker/scripts/e2e_compliance_fixture.py` runs it on `tiny.kicad_pcb` in the worker image: a
+  30 MHz-1 GHz solve with the far field (1.89 M cells, converged at 48,930 steps, 5 minutes),
+  a 25 MHz 3.3 V clock attached, J1 declared as carrying no cable. It comes back complete,
+  one board path, 19 driven harmonics, +35.9 dB at 75 MHz, σ 7.4 dB. That shows the chain
+  runs; it does not show the level is right. One thing in it looks wrong and is not explained:
+  the far field per volt rises about 20 dB/decade (1.3e-6 V/m/V at 30 MHz, 6.0e-5 at 520 MHz)
+  while the port looks capacitive (|Z_in| falling as 1/f), and an electrically short radiator
+  fed through a capacitance should rise at least 40 dB/decade. The box is 0.003 λ from the
+  copper at 30 MHz, the regime nothing has checked, so the low end of the band is the first
+  suspect. The first real run also found the far field had never worked on a derived grid: the
+  job wrote frequencies with more digits than the dumps recorded, and `nf2ff` refused every
+  plane. Fixed; the check is in `test_nf2ff.py`.
+- **One driver per solve.** A solve has one excited port and the estimate attaches one driver to
+  it. A board with two clocks needs two solves, and combining two solves in one estimate is not
+  built. More than one excited port is a gap.
+- **Undeclared sources are invisible.** The gate knows the nets the user names as sources, not
+  every clock on the board; a clock nobody declared is missing, not zero.
+- **Harmonics of two drivers are combined only when they coincide to 100 ppm.** A receiver sees
+  everything inside its 120 kHz (or 1 MHz) bandwidth together; lines closer than that but not
+  equal are shown separately.
+- **The Cables tab's emission chart is still composed on the solve's grid** and still assumes the
+  driver's source impedance equals the port's. The compliance estimate does neither (it evaluates
+  every harmonic and applies `|Z_s+Z_in|/|Z_d+Z_in|`); the chart has not been brought in line.
+- **The far field makes a solve much larger.** The box is kept 25 mm or λ/10 from the copper and
+  the grid grows to hold it: 2.6x the cells on the fixture board. The browser's cost estimate
+  does not know this; the worker republishes the real figure at the mesh stage.
+- **The budget always carries the permittivity term**, because the solve does not record whether
+  the stackup was assumed, and never carries the component-coverage term, because it does not
+  record which parts matched nothing.
+- **10 m and conducted standards are refused** by the compliance estimate rather than scaled.
 - **There is no CISPR 32 table.** Only FCC Part 15 limits exist. When CISPR 32 is added its values
   will come from cross-checked secondary sources, not the standard itself.
 - **Capacitance is nominal**: no DC-bias or temperature derating.

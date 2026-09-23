@@ -119,12 +119,13 @@ describe('the whole chain, as the results view walks it', () => {
     const offset = applied.offsetDb[0]
     expect(offset).not.toBeNull()
 
-    // By hand: 0.5 A/m is 113.98 dBµA/m; the driver pushes 2.0977/(40+100) A against the
-    // 0.02 A the solve used, which is -2.51 dB; the layer is 12 dB down from the peak.
+    // By hand: 0.5 A/m is 113.98 dBµA/m; the driver pushes 2.0977 V peak, 1.4833 V RMS,
+    // through 40+100 ohm against the 0.02 A the solve used, which is -5.52 dB; the layer is
+    // 12 dB down from the peak.
     const reference = 20 * Math.log10(referenceMagnitude / MICRO)
-    const current = 20 * Math.log10(2.097736453123487 / 140 / 0.02)
+    const current = 20 * Math.log10(2.097736453123487 / Math.SQRT2 / 140 / 0.02)
     expect(peakDbRelative + offset!).toBeCloseTo(peakDbRelative + reference + current, 6)
-    expect(peakDbRelative + offset!).toBeCloseTo(99.47, 1)
+    expect(peakDbRelative + offset!).toBeCloseTo(96.46, 1)
   })
 
   it('gives all three refusals a distinguishable message', () => {

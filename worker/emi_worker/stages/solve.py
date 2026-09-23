@@ -323,6 +323,13 @@ def run_solve(ctx: StageContext) -> StageResult:
                 "elapsed_seconds": round(result.elapsed_s, 1),
                 "mesh": mesh_summary,
                 "roi_mm": list(params.roi),
+                # What a driver attached later needs to replace this solve's source (§8): the
+                # source impedance each port was driven from. And the cell size asked for,
+                # which sets the mesh term in the compliance budget (§17.2).
+                "ports": [{"name": p.name, "resistance_ohm": p.resistance,
+                           "excited": p.excited} for p in params.ports],
+                "mesh_request": {"dx_um": params.dx_um, "dy_um": params.dy_um,
+                                 "dz_um": params.dz_um},
                 "warnings": result.warnings + built.notes,
             },
         )
@@ -330,7 +337,7 @@ def run_solve(ctx: StageContext) -> StageResult:
         raise StageError(str(exc)) from exc
 
     _add_antenna_terms(ctx, params, built, artifacts, board, transform)
-    _add_far_field(ctx, built, artifacts, workdir)
+    _add_far_field(ctx, params, built, artifacts, workdir)
 
     ctx.progress("upload", 95, "uploading results")
 
@@ -440,13 +447,26 @@ def _board_span(board, transform) -> tuple[float, float, float, float]:
             max(p[0] for p in pts), max(p[1] for p in pts))
 
 
-def _add_far_field(ctx, built, artifacts, workdir: str) -> None:
+#: Version 2 is a transfer function per volt of source; version 1 was in whatever units the
+#: solve's Gaussian excitation happened to produce and cannot have a driver applied to it.
+FAR_FIELD_FORMAT_VERSION = 2
+
+
+def _add_far_field(ctx, params, built, artifacts, workdir: str) -> None:
     """Transform the NF2FF box into a field at the standard's distance (§16.2).
 
     Run **with a PEC mirror at the table height**, because every radiated standard measures over
     a ground plane and the reflection is part of the level, not a correction to it. M0 measured
     that putting it inside the transform matches image theory to 0.08 dB median, which is why
-    §16.2's hand-computed two-ray sum and its flat +6 dB fallback are both gone.
+    §16.2's hand-computed two-ray sum and its flat +6 dB fallback are both gone. (M0 measured it
+    with the mirror on the box's lower face; here it is 0.8 m below the box, which the transform
+    supports and which has not been measured.)
+
+    **The result is per volt of source.** A solve is excited by openEMS's Gaussian pulse, so the
+    raw transform is in units of that pulse and means nothing on its own -- the file used to
+    carry it as "V/m" regardless. It is divided here by the solve's Thévenin source at each
+    frequency, and carries the port's input impedance beside it, so a driver attached later is
+    arithmetic: E = e_per_volt · |Z_s + Z_in| / |Z_d + Z_in| · |V_d|.
 
     Like the antenna terms, a failure here does not fail the solve: the field maps are the run's
     main product and are already correct. The manifest says why the far field is missing rather
@@ -458,9 +478,12 @@ def _add_far_field(ctx, built, artifacts, workdir: str) -> None:
 
     meta = built.far_field
     freqs = meta["frequencies_hz"]
+    excited = [p for p in params.ports if p.excited]
     out_h5 = os.path.join(workdir, "farfield.h5")
     ctx.progress("post", 93, "transforming the far field")
     try:
+        if not excited:
+            raise nf2ff_mod.NF2FFError("no port was excited")
         job = nf2ff_mod.write_job(
             workdir, freqs, out_h5,
             centre_mm=tuple(meta["centre_mm"]),
@@ -468,10 +491,12 @@ def _add_far_field(ctx, built, artifacts, workdir: str) -> None:
             # The board sits on a table of this height above the plane, so the plane is that
             # far below the board -- in metres, which is the only unit nf2ff reads.
             mirror_z_m=-nf2ff_mod.TABLE_HEIGHT_M,
+            lower_face_z_m=meta["faces_mm"][2] / 1000.0,
         )
         nf2ff_mod.run_job(job, out_h5)
         field = nf2ff_mod.read_field(out_h5, freqs)
-    except nf2ff_mod.NF2FFError as exc:
+        source = post.source_spectrum(workdir, excited[0].name, excited[0].resistance, freqs)
+    except (nf2ff_mod.NF2FFError, OSError, ValueError) as exc:
         log.warning("far field failed: %s", exc)
         artifacts.manifest["far_field_note"] = (
             f"the far field could not be computed for this run ({exc}), so it contributes "
@@ -480,19 +505,63 @@ def _add_far_field(ctx, built, artifacts, workdir: str) -> None:
         artifacts.files["manifest.json"] = json.dumps(artifacts.manifest, indent=2).encode()
         return
 
-    field.update({
-        "format": "emi-far-field",
-        "format_version": 1,
-        "distance_m": FAR_FIELD_DISTANCE_M,
-        "table_height_m": nf2ff_mod.TABLE_HEIGHT_M,
-        "ground_plane": True,
-        "faces_mm": meta["faces_mm"],
-        "sub_sampling": meta["sub_sampling"],
-    })
-    artifacts.files["farfield.json"] = json.dumps(field, separators=(",", ":")).encode()
+    doc = far_field_document(field, source, excited, meta)
+    artifacts.files["farfield.json"] = json.dumps(doc, separators=(",", ":")).encode()
     artifacts.manifest["far_field"] = {
+        "format_version": FAR_FIELD_FORMAT_VERSION,
         "distance_m": FAR_FIELD_DISTANCE_M,
-        "frequencies_hz": freqs,
+        "frequencies_hz": doc["frequencies_hz"],
         "ground_plane": True,
+        "driven_by": doc["driven_by"],
     }
     artifacts.files["manifest.json"] = json.dumps(artifacts.manifest, indent=2).encode()
+
+
+def far_field_document(field: dict, source: dict, excited: list, meta: dict) -> dict:
+    """``farfield.json``: the transform per volt of the solve's own source.
+
+    A frequency where the source delivered nothing has no transfer function, only a ratio of two
+    small numbers, and is marked unusable rather than published -- the same rule as the cable
+    transfer function.
+    """
+    import numpy as np
+
+    from emi_worker.openems.nf2ff import TABLE_HEIGHT_M
+
+    v_src = np.asarray(source["v_src"])
+    z_in = np.asarray(source["z_in"])
+    mags = np.abs(v_src)
+    usable = [bool(m > 0 and np.isfinite(z)) for m, z in zip(mags, z_in)]
+    e_per_volt = [
+        float(e / m) if ok else 0.0 for e, m, ok in zip(field["e_max_v_per_m"], mags, usable)
+    ]
+    by_theta = [
+        [float(v / m) if ok else 0.0 for v in row]
+        for row, m, ok in zip(field["e_by_theta_v_per_m"], mags, usable)
+    ]
+    return {
+        "format": "emi-far-field",
+        "format_version": FAR_FIELD_FORMAT_VERSION,
+        "frequencies_hz": field["frequencies_hz"],
+        "unit": "V/m per V of source",
+        "e_per_volt": e_per_volt,
+        "e_by_theta_per_volt": by_theta,
+        "theta_deg": field["theta_deg"],
+        "usable": usable,
+        # What a driver needs to replace the solve's source with its own.
+        "driven_by": excited[0].name,
+        "source_impedance_ohm": float(excited[0].resistance),
+        "z_in_real": [float(z.real) if ok else 0.0 for z, ok in zip(z_in, usable)],
+        "z_in_imag": [float(z.imag) if ok else 0.0 for z, ok in zip(z_in, usable)],
+        # More than one excited port means the field is the response to all of them at once,
+        # and no single driver can be attached to it.
+        "excited_ports": [p.name for p in excited],
+        "distance_m": FAR_FIELD_DISTANCE_M,
+        "table_height_m": TABLE_HEIGHT_M,
+        "ground_plane": True,
+        "faces_mm": meta["faces_mm"],
+        "clearance_mm": meta.get("clearance_mm"),
+        "tenth_wavelength_above_hz": meta.get("tenth_wavelength_above_hz"),
+        "sub_sampling": meta["sub_sampling"],
+    }
+

@@ -32,9 +32,18 @@ export interface Trapezoid {
 
 export interface SeriesPoint {
   frequency_hz: number
-  /** One-sided peak amplitude of this harmonic, in volts. */
+  /** RMS amplitude of this harmonic, in volts (see RMS_PER_PEAK). */
   amplitude_v: number
 }
+
+/**
+ * Every harmonic amplitude in this system is an **RMS** value, `sqrt(2) * |C_n|`: the
+ * one-sided peak `2 * |C_n|` divided by `sqrt(2)`. A spectrum analyser reads the RMS of a
+ * steady sine on every detector, the limits are written in those units, and an uploaded
+ * analyser spectrum already is one. Carrying the peak made every level from a trapezoid or a
+ * waveform 3 dB high against both. Same constant as `drivers/spectrum.py`.
+ */
+export const RMS_PER_PEAK = 1 / Math.SQRT2
 
 /** Complex arithmetic, kept local: this is the only file in the webapp that needs it. */
 interface Complex {
@@ -152,8 +161,8 @@ export function piecewiseLinearSeries(
 /**
  * `(frequency, amplitude)` for harmonics 1..`harmonics`.
  *
- * The amplitude is the one-sided peak of that harmonic — `2 * |C_n|` — which is §9.1's
- * convention and what a spectrum analyser in peak mode reads. Note this is half the
+ * The amplitude is the RMS of that harmonic, `sqrt(2) * |C_n|`: §9.1's closed form gives the
+ * one-sided peak `2 * |C_n|`, and RMS_PER_PEAK says why it is converted. Note the peak is half the
  * textbook `4A/(n*pi)` quoted for square waves, because those swing between -A and +A while
  * a driver output swings between 0 and A.
  */
@@ -164,7 +173,7 @@ export function trapezoidSeries(t: Trapezoid, harmonics: number): SeriesPoint[] 
   const out: SeriesPoint[] = []
   for (let n = 1; n <= harmonics; n++) {
     const c = piecewiseLinearSeries(times, values, t.period_s, n)
-    out.push({ frequency_hz: n / t.period_s, amplitude_v: 2 * cAbs(c) })
+    out.push({ frequency_hz: n / t.period_s, amplitude_v: 2 * cAbs(c) * RMS_PER_PEAK })
   }
   return out
 }
@@ -192,7 +201,8 @@ export function envelopeV(t: Trapezoid, frequencyHz: number): number {
   validateTrapezoid(t)
   if (!(frequencyHz > 0)) throw new DriverError('envelope is defined above DC')
   const { f1, f2 } = cornerFrequencies(t)
-  const flat = (2 * Math.abs(t.amplitude_v) * t.pulse_width_s) / t.period_s
+  // RMS, like every harmonic amplitude here.
+  const flat = ((2 * Math.abs(t.amplitude_v) * t.pulse_width_s) / t.period_s) * RMS_PER_PEAK
   if (frequencyHz <= f1) return flat
   if (frequencyHz <= f2) return flat * (f1 / frequencyHz)
   return flat * (f1 / f2) * (f2 / frequencyHz) ** 2

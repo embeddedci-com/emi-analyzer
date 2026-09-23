@@ -28,6 +28,17 @@ import math
 from dataclasses import dataclass
 
 
+#: Every harmonic amplitude in this system is an **RMS** value: ``sqrt(2) * |C_n|``, which is
+#: the one-sided peak ``2 * |C_n|`` divided by ``sqrt(2)``.
+#:
+#: The reason is what the numbers are compared with. A spectrum analyser is calibrated to read
+#: the RMS of a sine, whatever its detector: a steady harmonic reads the same on peak,
+#: quasi-peak and average, and it reads its RMS level. Every emission limit is written in those
+#: units, and an uploaded analyser spectrum already is one. Carrying the peak instead made
+#: every predicted level from a trapezoid or a waveform 3 dB high against both.
+RMS_PER_PEAK = 1.0 / math.sqrt(2.0)
+
+
 class DriverError(ValueError):
     """A driver description that cannot be turned into a spectrum."""
 
@@ -136,8 +147,8 @@ def piecewise_linear_series(
 def trapezoid_series(trap: Trapezoid, harmonics: int) -> list[tuple[float, float]]:
     """``(frequency_hz, amplitude_v)`` for harmonics 1..``harmonics``.
 
-    The amplitude is the one-sided peak of that harmonic — ``2 * |C_n|`` — which is what
-    §9.1's closed form gives and what a spectrum analyser in peak mode reads.
+    The amplitude is the **RMS** of that harmonic, ``sqrt(2) * |C_n|``: §9.1's closed form
+    gives the one-sided peak ``2 * |C_n|``, and ``RMS_PER_PEAK`` says why it is converted.
     """
     trap.validate()
     if harmonics < 1:
@@ -146,7 +157,7 @@ def trapezoid_series(trap: Trapezoid, harmonics: int) -> list[tuple[float, float
     out = []
     for n in range(1, harmonics + 1):
         c = piecewise_linear_series(t, v, trap.period_s, n)
-        out.append((n / trap.period_s, 2.0 * abs(c)))
+        out.append((n / trap.period_s, 2.0 * abs(c) * RMS_PER_PEAK))
     return out
 
 
@@ -166,7 +177,8 @@ def corner_frequencies(trap: Trapezoid) -> tuple[float, float]:
 def envelope_v(trap: Trapezoid, frequency_hz: float) -> float:
     """The trapezoid's spectral envelope at one frequency, in volts.
 
-    Flat at ``2*A*tau/T`` to the first corner, then -20 dB/decade, then -40 dB/decade. This
+    Flat at ``sqrt(2)*A*tau/T`` (RMS) to the first corner, then -20 dB/decade, then
+    -40 dB/decade. This
     bounds the line spectrum rather than reproducing it; it is what the preview draws and
     what continues an uploaded waveform above its capture bandwidth (§9.3).
     """
@@ -174,7 +186,8 @@ def envelope_v(trap: Trapezoid, frequency_hz: float) -> float:
     if frequency_hz <= 0:
         raise DriverError("envelope is defined above DC")
     f1, f2 = corner_frequencies(trap)
-    flat = 2.0 * abs(trap.amplitude_v) * trap.pulse_width_s / trap.period_s
+    # RMS, like every harmonic amplitude here (RMS_PER_PEAK).
+    flat = 2.0 * abs(trap.amplitude_v) * trap.pulse_width_s / trap.period_s * RMS_PER_PEAK
     if frequency_hz <= f1:
         return flat
     if frequency_hz <= f2:

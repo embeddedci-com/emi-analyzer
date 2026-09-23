@@ -260,6 +260,35 @@ def cable_transfer(
     }
 
 
+#: openEMS writes its frequency-domain field dumps single-sided: 2 · Σ x(t)·e^(-jωt)·Δt
+#: (``ProcessFieldsFD``, "*2 for single-sided spectrum"), and its own port post-processing
+#: (``DFT_time2freq``) uses the same factor. ``_dft`` above has no factor of 2, because every
+#: quantity it has fed so far is a *ratio* of two of its own transforms and the factor cancels.
+#: A far field divided by a source voltage is a ratio across the two conventions, so the port's
+#: side has to be brought onto openEMS's before dividing -- or every far field is 6 dB high.
+OPENEMS_FD_SCALE = 2.0
+
+
+def source_spectrum(
+    workdir: str, port: str, source_impedance_ohm: float, frequencies: list[float],
+) -> dict:
+    """The solve's own Thévenin source and input impedance at ``frequencies``.
+
+    The source is ``V_port + I_port · Z_s``, as in ``cable_transfer``, in openEMS's
+    frequency-domain convention so a field dump can be divided by it. ``z_in`` is what a driver
+    attached later will see, and is convention-free.
+    """
+    u = read_probe(os.path.join(workdir, f"{port}_ut"))
+    i = read_probe(os.path.join(workdir, f"{port}_it"))
+    f = np.asarray(frequencies, dtype=np.float64)
+    v_port = _dft(u, f)
+    i_port = _dft(i, f)
+    v_src = (v_port + i_port * source_impedance_ohm) * OPENEMS_FD_SCALE
+    with np.errstate(divide="ignore", invalid="ignore"):
+        z_in = np.where(np.abs(i_port) > 0, v_port / i_port, np.nan + 0j)
+    return {"v_src": v_src, "z_in": z_in}
+
+
 @dataclass
 class PostResult:
     """Files to upload, plus the manifest describing them."""

@@ -39,6 +39,12 @@ class Segment:
     level_db: float
     #: Level at ``f_hi_hz`` when the segment slopes; ``None`` for a flat one.
     level_db_hi: float | None = None
+    #: The detector this segment's level is read with, when it differs from the standard's.
+    #: Above 1 GHz §15.35(b) switches radiated limits to an average detector.
+    detector: str | None = None
+    #: A second, peak-detector limit that applies alongside ``level_db`` (§15.35(b): 20 dB
+    #: above the average limit). ``None`` where the standard sets none.
+    peak_level_db: float | None = None
 
     def covers(self, frequency_hz: float) -> bool:
         """Inclusive at both ends, so a band edge belongs to both of its segments."""
@@ -87,6 +93,9 @@ def _parse(doc: dict) -> dict[str, Standard]:
                 f_hi_hz=float(s["f_hi_hz"]),
                 level_db=float(s["level_db"]),
                 level_db_hi=None if s.get("level_db_hi") is None else float(s["level_db_hi"]),
+                detector=s.get("detector"),
+                peak_level_db=(None if s.get("peak_level_db") is None
+                               else float(s["peak_level_db"])),
             )
             for s in raw["segments"]
         )
@@ -147,6 +156,44 @@ def limit_at(standard_id: str, frequency_hz: float) -> float:
             f"{frequency_hz / 1e6:g} MHz. Reporting a margin here would be inventing one"
         )
     return min(levels)
+
+
+def in_range(standard_id: str, frequency_hz: float) -> bool:
+    """True when the standard has a limit at this frequency at all.
+
+    The compliance run asks this before ``limit_at`` rather than catching its error: a
+    frequency outside the scan is not part of the estimate, and deciding that by exception is
+    how one slips through as a crash instead of a gap.
+    """
+    lo, hi = standard(standard_id).range_hz()
+    return lo <= frequency_hz <= hi
+
+
+def detector_at(standard_id: str, frequency_hz: float) -> str:
+    """Which detector the governing limit at this frequency is read with.
+
+    At a band edge this is the detector of the segment ``limit_at`` picked, so the two agree.
+    """
+    std = standard(standard_id)
+    covering = [s for s in std.segments if s.covers(frequency_hz)]
+    if not covering:
+        raise LimitError(f"{std.id} has no limit at {frequency_hz / 1e6:g} MHz")
+    seg = min(covering, key=lambda s: s.level_at(frequency_hz))
+    return seg.detector or std.detector
+
+
+def peak_limit_at(standard_id: str, frequency_hz: float) -> float | None:
+    """The peak-detector limit that applies alongside the governing one, if any.
+
+    For a steady harmonic the peak, quasi-peak and average detectors all read the same level
+    (an analyser is calibrated to the RMS of a sine), so the governing limit is the tighter
+    average one and this never decides a margin. It is here so the limit line can draw it and
+    so a pulsed source, when one is modelled, has the number it needs.
+    """
+    std = standard(standard_id)
+    peaks = [s.peak_level_db for s in std.segments
+             if s.covers(frequency_hz) and s.peak_level_db is not None]
+    return min(peaks) if peaks else None
 
 
 @functools.lru_cache(maxsize=1)

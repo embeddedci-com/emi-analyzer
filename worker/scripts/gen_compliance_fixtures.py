@@ -106,7 +106,7 @@ def build(case: dict) -> dict:
             "margin_db": o.margin_db,
             "sigma_db": o.sigma_db,
             "sigma_terms": o.sigma_terms,
-            "confidence": o.confidence,
+            "confidence_uncalibrated": o.confidence_uncalibrated,
             "range_80_db": list(o.range_80_db) if o.range_80_db else None,
             "near_misses_hz": [q.frequency_hz for q in o.near_misses],
         },

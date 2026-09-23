@@ -63,7 +63,7 @@ describe('compliance, against the shared fixtures', () => {
       }
       // The erf approximation is good to 1.5e-7, so confidence agrees to six places -- far
       // beyond the two the UI shows, and enough that a real disagreement cannot hide in it.
-      expect(o.confidence!).toBeCloseTo(want.confidence!, 6)
+      expect(o.confidenceUncalibrated!).toBeCloseTo(want.confidence_uncalibrated!, 6)
       expect(o.range80Db![0]).toBeCloseTo(want.range_80_db![0], 9)
       expect(o.range80Db![1]).toBeCloseTo(want.range_80_db![1], 9)
       expect(o.nearMisses.map((p) => p.frequencyHz)).toEqual(want.near_misses_hz)

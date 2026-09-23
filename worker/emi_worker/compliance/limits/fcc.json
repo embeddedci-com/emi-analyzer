@@ -11,6 +11,7 @@
       "class": "B",
       "distance_m": 3,
       "detector": "quasi-peak",
+      "_detector_comment": "Quasi-peak to 1 GHz (15.35(a)); a segment naming its own detector overrides it. Above 1 GHz the limit is an average one with a peak limit 20 dB above it (15.35(b), law.cornell.edu/cfr/text/47/15.35, read 23 Sep 2026).",
       "unit": "dBuV/m",
       "verified": "standard text",
       "source": "law.cornell.edu/cfr/text/47/15.109, read 11 Sep 2026 (as amended 80 FR 33447, 12 Jun 2015)",
@@ -18,7 +19,9 @@
         {"f_lo_hz": 30000000.0, "f_hi_hz": 88000000.0, "level_db": 40.0, "microvolts_per_m": 100.0},
         {"f_lo_hz": 88000000.0, "f_hi_hz": 216000000.0, "level_db": 43.5, "microvolts_per_m": 150.0},
         {"f_lo_hz": 216000000.0, "f_hi_hz": 960000000.0, "level_db": 46.0, "microvolts_per_m": 200.0},
-        {"f_lo_hz": 960000000.0, "f_hi_hz": 40000000000.0, "level_db": 54.0, "microvolts_per_m": 500.0}
+        {"f_lo_hz": 960000000.0, "f_hi_hz": 1000000000.0, "level_db": 54.0, "microvolts_per_m": 500.0},
+        {"f_lo_hz": 1000000000.0, "f_hi_hz": 40000000000.0, "level_db": 54.0, "microvolts_per_m": 500.0,
+         "detector": "average", "peak_level_db": 74.0, "peak_clause": "47 CFR 15.35(b)"}
       ]
     },
     {
@@ -36,7 +39,9 @@
         {"f_lo_hz": 30000000.0, "f_hi_hz": 88000000.0, "level_db": 39.1, "microvolts_per_m": 90.0},
         {"f_lo_hz": 88000000.0, "f_hi_hz": 216000000.0, "level_db": 43.5, "microvolts_per_m": 150.0},
         {"f_lo_hz": 216000000.0, "f_hi_hz": 960000000.0, "level_db": 46.4, "microvolts_per_m": 210.0},
-        {"f_lo_hz": 960000000.0, "f_hi_hz": 40000000000.0, "level_db": 49.5, "microvolts_per_m": 300.0}
+        {"f_lo_hz": 960000000.0, "f_hi_hz": 1000000000.0, "level_db": 49.5, "microvolts_per_m": 300.0},
+        {"f_lo_hz": 1000000000.0, "f_hi_hz": 40000000000.0, "level_db": 49.5, "microvolts_per_m": 300.0,
+         "detector": "average", "peak_level_db": 69.5, "peak_clause": "47 CFR 15.35(b)"}
       ]
     },
     {

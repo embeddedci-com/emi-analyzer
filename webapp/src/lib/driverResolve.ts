@@ -19,6 +19,7 @@ import {
   cornerFrequencies,
   DriverError,
   envelopeV,
+  RMS_PER_PEAK,
   piecewiseLinearSeries,
   validateTrapezoid,
   type Complex,
@@ -84,7 +85,8 @@ function resolveLines(
       continue
     }
     const c = piecewiseLinearSeries(times, values, periodS, n)
-    volts.push({ re: 2 * c.re, im: 2 * c.im })
+    // An RMS phasor, like every amplitude here (RMS_PER_PEAK).
+    volts.push({ re: 2 * RMS_PER_PEAK * c.re, im: 2 * RMS_PER_PEAK * c.im })
   }
   return { volts, undriven }
 }
