@@ -38,6 +38,10 @@ type FileBlob struct {
 	secret   []byte
 	basePath string // where Handler is mounted, e.g. "/blob"
 	fallback string // origin used when the context carries none
+
+	// MaxBytes caps one upload. Zero means emi.DefaultMaxUploadBytes. Without it a signed
+	// URL would let its holder fill the disk.
+	MaxBytes int64
 }
 
 // NewFileBlob stores objects under dir. basePath is where Handler will be mounted; fallback
@@ -119,13 +123,22 @@ func (b *FileBlob) metaPath(key string) string {
 	return filepath.Join(b.root, "meta", filepath.FromSlash(cleanKey(key)))
 }
 
-func (b *FileBlob) sign(op, key, contentType string, exp int64) string {
+func (b *FileBlob) maxBytes() int64 {
+	if b.MaxBytes > 0 {
+		return b.MaxBytes
+	}
+	return emi.DefaultMaxUploadBytes
+}
+
+// sign covers the declared size too, so a URL minted for a 1 MB upload cannot be reused
+// for a larger one.
+func (b *FileBlob) sign(op, key, contentType string, size, exp int64) string {
 	m := hmac.New(sha256.New, b.secret)
-	fmt.Fprintf(m, "%s\n%s\n%s\n%d", op, cleanKey(key), contentType, exp)
+	fmt.Fprintf(m, "%s\n%s\n%s\n%d\n%d", op, cleanKey(key), contentType, size, exp)
 	return hex.EncodeToString(m.Sum(nil))
 }
 
-func (b *FileBlob) presign(ctx context.Context, op, key, contentType string, ttl time.Duration) string {
+func (b *FileBlob) presign(ctx context.Context, op, key, contentType string, size int64, ttl time.Duration) string {
 	exp := time.Now().Add(ttl).Unix()
 	q := url.Values{}
 	q.Set("op", op)
@@ -133,17 +146,20 @@ func (b *FileBlob) presign(ctx context.Context, op, key, contentType string, ttl
 	if contentType != "" {
 		q.Set("ct", contentType)
 	}
-	q.Set("sig", b.sign(op, key, contentType, exp))
+	if size > 0 {
+		q.Set("n", strconv.FormatInt(size, 10))
+	}
+	q.Set("sig", b.sign(op, key, contentType, size, exp))
 	u := url.URL{Path: b.basePath + "/" + cleanKey(key)}
 	return b.origin(ctx) + u.EscapedPath() + "?" + q.Encode()
 }
 
 func (b *FileBlob) PresignGet(ctx context.Context, key string, ttl time.Duration) (string, error) {
-	return b.presign(ctx, "get", key, "", ttl), nil
+	return b.presign(ctx, "get", key, "", 0, ttl), nil
 }
 
-func (b *FileBlob) PresignPut(ctx context.Context, key, contentType string, ttl time.Duration) (string, error) {
-	return b.presign(ctx, "put", key, contentType, ttl), nil
+func (b *FileBlob) PresignPut(ctx context.Context, key, contentType string, size int64, ttl time.Duration) (string, error) {
+	return b.presign(ctx, "put", key, contentType, size, ttl), nil
 }
 
 func (b *FileBlob) Stat(_ context.Context, key string) (int64, string, error) {
@@ -179,7 +195,14 @@ func (b *FileBlob) Handler() http.Handler {
 			http.Error(w, "missing expiry", http.StatusForbidden)
 			return
 		}
-		want := b.sign(op, key, q.Get("ct"), exp)
+		var size int64
+		if n := q.Get("n"); n != "" {
+			if size, err = strconv.ParseInt(n, 10, 64); err != nil || size <= 0 {
+				http.Error(w, "bad size", http.StatusForbidden)
+				return
+			}
+		}
+		want := b.sign(op, key, q.Get("ct"), size, exp)
 		got, _ := hex.DecodeString(q.Get("sig"))
 		wantB, _ := hex.DecodeString(want)
 		if len(got) == 0 || !hmac.Equal(got, wantB) {
@@ -195,7 +218,7 @@ func (b *FileBlob) Handler() http.Handler {
 		case op == "get" && (r.Method == http.MethodGet || r.Method == http.MethodHead):
 			b.serveGet(w, r, key)
 		case op == "put" && r.Method == http.MethodPut:
-			b.servePut(w, r, key, q.Get("ct"))
+			b.servePut(w, r, key, q.Get("ct"), size)
 		default:
 			http.Error(w, "method not allowed for this url", http.StatusMethodNotAllowed)
 		}
@@ -221,7 +244,25 @@ func (b *FileBlob) serveGet(w http.ResponseWriter, r *http.Request, key string) 
 	http.ServeContent(w, r, "", st.ModTime(), f)
 }
 
-func (b *FileBlob) servePut(w http.ResponseWriter, r *http.Request, key, signedCT string) {
+func (b *FileBlob) servePut(w http.ResponseWriter, r *http.Request, key, signedCT string, size int64) {
+	limit := b.maxBytes()
+	if size > 0 {
+		// The URL was minted for exactly this many bytes, as a presigned S3 PUT with a
+		// signed Content-Length is.
+		if r.ContentLength != size {
+			http.Error(w, "content length does not match the signed size", http.StatusBadRequest)
+			return
+		}
+		limit = min(limit, size)
+	}
+	if r.ContentLength > limit {
+		http.Error(w, "upload is larger than the limit", http.StatusRequestEntityTooLarge)
+		return
+	}
+	// The declared length is only a claim: a chunked body has none. MaxBytesReader stops
+	// reading at the limit whatever the header said.
+	r.Body = http.MaxBytesReader(w, r.Body, limit)
+
 	dst := b.objectPath(key)
 	if err := os.MkdirAll(filepath.Dir(dst), 0o700); err != nil {
 		http.Error(w, "cannot create directory", http.StatusInternalServerError)
@@ -238,6 +279,11 @@ func (b *FileBlob) servePut(w http.ResponseWriter, r *http.Request, key, signedC
 	closeErr := tmp.Close()
 	if copyErr != nil || closeErr != nil {
 		os.Remove(tmp.Name())
+		var tooBig *http.MaxBytesError
+		if errors.As(copyErr, &tooBig) {
+			http.Error(w, "upload is larger than the limit", http.StatusRequestEntityTooLarge)
+			return
+		}
 		http.Error(w, "upload interrupted", http.StatusBadRequest)
 		return
 	}

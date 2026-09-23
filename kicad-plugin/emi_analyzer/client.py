@@ -110,7 +110,8 @@ class Client:
         project = urllib.parse.quote(project_id)
         init = self.post(
             f"/emi/projects/{project}/uploads",
-            {"filename": filename, "content_type": "application/zip", "sha256": sha256},
+            {"filename": filename, "content_type": "application/zip", "sha256": sha256,
+             "size_bytes": len(data)},
         )
         if not init.get("already_uploaded"):
             url = init.get("upload_url")

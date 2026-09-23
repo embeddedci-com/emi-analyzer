@@ -35,7 +35,7 @@ func (stubKeys) VerifyAgentKey(context.Context, string) (AgentKey, error) {
 type stubBlob struct{}
 
 func (stubBlob) PresignGet(context.Context, string, time.Duration) (string, error) { return "", nil }
-func (stubBlob) PresignPut(context.Context, string, string, time.Duration) (string, error) {
+func (stubBlob) PresignPut(context.Context, string, string, int64, time.Duration) (string, error) {
 	return "", nil
 }
 func (stubBlob) Stat(context.Context, string) (int64, string, error) { return 0, "", nil }

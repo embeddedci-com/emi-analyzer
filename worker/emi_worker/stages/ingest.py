@@ -443,5 +443,8 @@ def run_ingest(ctx: StageContext) -> StageResult:
                 "height": doc["board"]["height_mm"],
             },
             "stackup": doc["stackup"],
+            # The hash of the bytes actually read. The server records this, not the hash
+            # the uploader claimed, so deduplication only matches what was checked.
+            "content_sha256": digest,
         },
     )

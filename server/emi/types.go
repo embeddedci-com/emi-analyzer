@@ -273,6 +273,34 @@ type Artifact struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
+// Completion is everything a worker reports when a run ends. A store applies it in one
+// transaction, and only while the run is still in_progress or stopping: a run that timed out
+// or was retried must not gain artifacts, an estimate or a parsed board from a worker that
+// no longer holds it.
+type Completion struct {
+	Status    RunStatus
+	Summary   []byte
+	Error     string
+	Estimate  *Estimate
+	Artifacts []*Artifact
+	// Board is set by an ingest run once it has parsed the upload.
+	Board *ParsedBoard
+}
+
+// ParsedBoard is what an ingest run learned about its board.
+type ParsedBoard struct {
+	BoardID    string
+	BoardKey   string
+	LayerCount int
+	NetCount   int
+	OutlineMM  []byte
+	Stackup    []byte
+	// ContentSHA256 is the hash the worker computed over the bytes it downloaded. It
+	// replaces whatever the uploader claimed, and empty clears it, so deduplication only
+	// ever matches a hash somebody has checked.
+	ContentSHA256 string
+}
+
 // Worker is a registered EMI worker. A host may keep these rows in its own agents table; the
 // built-in stores keep them in emi_workers.
 type Worker struct {

@@ -396,6 +396,7 @@ export class EmiApi {
         filename: file.name,
         content_type: file.type || 'application/octet-stream',
         sha256: sha256 ?? '',
+        size_bytes: file.size,
       },
     )
 
@@ -496,7 +497,7 @@ export class EmiApi {
       upload_url?: string; key: string; content_type: string; already_uploaded?: boolean
     }>(
       'POST', `/emi/projects/${projectId}/uploads`,
-      { filename: file.name, content_type: 'text/plain', sha256: sha256 ?? '' },
+      { filename: file.name, content_type: 'text/plain', sha256: sha256 ?? '', size_bytes: file.size },
     )
     if (!init.already_uploaded) {
       if (!init.upload_url) throw new Error('the server offered neither an upload URL nor an existing object')

@@ -50,7 +50,9 @@ type KeyVerifier interface {
 // interface makes that impossible rather than merely discouraged.
 type Blob interface {
 	PresignGet(ctx context.Context, key string, ttl time.Duration) (string, error)
-	PresignPut(ctx context.Context, key, contentType string, ttl time.Duration) (string, error)
+	// PresignPut mints an upload URL. A size above zero is the exact length the upload must
+	// have, and storage that can enforce it does; zero means the client did not say.
+	PresignPut(ctx context.Context, key, contentType string, size int64, ttl time.Duration) (string, error)
 	Stat(ctx context.Context, key string) (sizeBytes int64, contentType string, err error)
 }
 
@@ -88,6 +90,22 @@ type Deps struct {
 	// RunTimeout is how long a run may sit in_progress before the sweeper marks it
 	// timed_out. Zero means DefaultRunTimeout.
 	RunTimeout time.Duration
+
+	// MaxUploadBytes caps one board upload or one artifact. Zero means
+	// DefaultMaxUploadBytes. Storage is told the declared size when the client gives one,
+	// and every object is checked against the cap before a row names it.
+	MaxUploadBytes int64
+}
+
+// DefaultMaxUploadBytes fits a zipped KiCad project with room to spare, and the largest
+// result a solve writes (near-field dumps run to a few hundred megabytes).
+const DefaultMaxUploadBytes int64 = 1 << 30
+
+func (d *Deps) maxUploadBytes() int64 {
+	if d.MaxUploadBytes > 0 {
+		return d.MaxUploadBytes
+	}
+	return DefaultMaxUploadBytes
 }
 
 // DefaultRunTimeout is generous because a legitimate solve genuinely can run for many
@@ -168,7 +186,9 @@ type Store interface {
 
 	UpdateRunProgress(ctx context.Context, runID string, p *Progress, at time.Time) error
 	SetRunEstimate(ctx context.Context, runID string, e *Estimate) error
-	CompleteRun(ctx context.Context, runID string, status RunStatus, summary []byte, errMsg string, at time.Time) error
+	// CompleteRun applies a worker's final report atomically. ErrConflict, and nothing
+	// written, when the run is no longer in_progress or stopping.
+	CompleteRun(ctx context.Context, runID string, c *Completion, at time.Time) error
 	// RequestStop moves an in_progress run to stopping, for its worker to wind down, and a
 	// queued (new or retry_pending) run straight to failed with StoppedBeforeStartError,
 	// because no worker holds it to report back. ErrConflict for any other state.

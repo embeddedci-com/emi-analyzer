@@ -205,11 +205,18 @@ func (b *S3Blob) PresignGet(ctx context.Context, key string, ttl time.Duration) 
 	return req.URL, nil
 }
 
-func (b *S3Blob) PresignPut(ctx context.Context, key, contentType string, ttl time.Duration) (string, error) {
-	req, err := b.presign.PresignPutObject(ctx, &s3.PutObjectInput{
+// PresignPut signs Content-Length when the size is known, so storage refuses a body of any
+// other length. A presigned PUT cannot carry a range the way a POST policy can, which is why
+// the handlers also check every object's real size before a row names it.
+func (b *S3Blob) PresignPut(ctx context.Context, key, contentType string, size int64, ttl time.Duration) (string, error) {
+	in := &s3.PutObjectInput{
 		Bucket: aws.String(b.bucket), Key: aws.String(b.objectKey(key)),
 		ContentType: aws.String(contentType),
-	}, s3.WithPresignExpires(ttl))
+	}
+	if size > 0 {
+		in.ContentLength = aws.Int64(size)
+	}
+	req, err := b.presign.PresignPutObject(ctx, in, s3.WithPresignExpires(ttl))
 	if err != nil {
 		return "", err
 	}

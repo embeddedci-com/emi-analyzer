@@ -604,20 +604,65 @@ func (s *PGStore) SetRunEstimate(ctx context.Context, runID string, e *Estimate)
 	return mapErr(err)
 }
 
-func (s *PGStore) CompleteRun(ctx context.Context, runID string, status RunStatus, summary []byte, errMsg string, at time.Time) error {
-	tag, err := s.pool.Exec(ctx, `
+// CompleteRun checks the run's state first, inside the transaction. Registering artifacts
+// before that check let a run that had already timed out gain results from a worker that no
+// longer held it. One transaction also means a reader never sees a finished run with half
+// its artifacts.
+func (s *PGStore) CompleteRun(ctx context.Context, runID string, c *Completion, at time.Time) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return mapErr(err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // a no-op after Commit
+
+	tag, err := tx.Exec(ctx, `
 		UPDATE emi.emi_runs
 		SET status = $2, summary = COALESCE($3::jsonb, summary), error = NULLIF($4,''),
 		    finished_at = $5, updated_at = $5
 		WHERE id = $1 AND status IN ('in_progress','stopping')`,
-		runID, string(status), nullJSON(summary), errMsg, at)
+		runID, string(c.Status), nullJSON(c.Summary), c.Error, at)
 	if err != nil {
 		return mapErr(err)
 	}
 	if tag.RowsAffected() == 0 {
 		return ErrConflict
 	}
-	return nil
+	if c.Estimate != nil {
+		b, err := json.Marshal(c.Estimate)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `UPDATE emi.emi_runs SET estimate = $2::jsonb WHERE id = $1`, runID, b); err != nil {
+			return mapErr(err)
+		}
+	}
+	for _, a := range c.Artifacts {
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO emi.emi_artifacts (id, run_id, name, s3_key, content_type, size_bytes, created_at)
+			VALUES ($1,$2,$3,$4,$5,$6,$7)
+			ON CONFLICT (run_id, name) DO UPDATE
+			SET s3_key = EXCLUDED.s3_key, content_type = EXCLUDED.content_type,
+			    size_bytes = EXCLUDED.size_bytes, created_at = EXCLUDED.created_at`,
+			a.ID, runID, a.Name, a.Key, a.ContentType, a.SizeBytes, a.CreatedAt); err != nil {
+			return mapErr(err)
+		}
+	}
+	if b := c.Board; b != nil {
+		if _, err := tx.Exec(ctx, `
+			UPDATE emi.emi_boards
+			SET s3_board_key   = COALESCE(NULLIF($2,''), s3_board_key),
+			    layer_count    = $3,
+			    net_count      = $4,
+			    outline_mm     = COALESCE($5::jsonb, outline_mm),
+			    stackup        = COALESCE($6::jsonb, stackup),
+			    content_sha256 = NULLIF($7,'')
+			WHERE id = $1`,
+			b.BoardID, b.BoardKey, b.LayerCount, b.NetCount, nullJSON(b.OutlineMM),
+			nullJSON(b.Stackup), b.ContentSHA256); err != nil {
+			return mapErr(err)
+		}
+	}
+	return mapErr(tx.Commit(ctx))
 }
 
 // RequestStop ends a queued run at once and asks a running one to stop.
