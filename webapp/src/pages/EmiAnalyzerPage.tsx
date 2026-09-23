@@ -12,20 +12,24 @@ import { Link, useNavigate } from 'react-router'
 import { EmiApi, hashFile } from '../lib/emiApi'
 import { ChecksTable } from '../components/ChecksTable'
 import type { EmiDeployment } from '../routes'
+import { resolveHostCopy, useEmiBase, type EmiHostCopy } from '../host'
 
 export interface EmiAnalyzerPageProps {
   api: EmiApi
   deployment?: EmiDeployment
+  /** What a hosted copy says about its server; see {@link EmiHostCopy}. */
+  host?: EmiHostCopy
 }
 
-export function EmiAnalyzerPage({ api, deployment = 'hosted' }: EmiAnalyzerPageProps) {
+export function EmiAnalyzerPage({ api, deployment = 'hosted', host }: EmiAnalyzerPageProps) {
   const local = deployment === 'local'
+  const copy = resolveHostCopy(host)
+  const base = useEmiBase()
   const qc = useQueryClient()
   const navigate = useNavigate()
   const [name, setName] = useState('')
   const [uploadPct, setUploadPct] = useState<number | null>(null)
   const [stage, setStage] = useState<string | null>(null)
-  const [reused, setReused] = useState<string | null>(null)
   const resetFile = useRef<() => void>(null)
 
   const projects = useQuery({ queryKey: ['emi', 'projects'], queryFn: api.listProjects })
@@ -62,7 +66,14 @@ export function EmiAnalyzerPage({ api, deployment = 'hosted' }: EmiAnalyzerPageP
         /\.zip$/i.test(file.name) ? 'gerber' : 'kicad',
       )
       setUploadPct(0)
-      await api.uploadBoard(project.id, file, (f) => setUploadPct(f * 100), sha)
+      try {
+        await api.uploadBoard(project.id, file, (f) => setUploadPct(f * 100), sha)
+      } catch (err) {
+        // Without this a failed upload left an empty project in the list, one per attempt.
+        // Best effort: the upload's error is the one worth showing.
+        await api.deleteProject(project.id).catch(() => undefined)
+        throw err
+      }
       return { project, existing: false }
     },
     onSuccess: ({ project, existing }) => {
@@ -70,9 +81,9 @@ export function EmiAnalyzerPage({ api, deployment = 'hosted' }: EmiAnalyzerPageP
       setStage(null)
       setName('')
       resetFile.current?.()
-      setReused(existing ? project.name : null)
       qc.invalidateQueries({ queryKey: ['emi', 'projects'] })
-      navigate(`/tools/emi/${project.id}`)
+      // Said on the board's page: this one is gone the moment it is navigated away from.
+      navigate(`${base}/${project.id}`, { state: existing ? { reused: true } : undefined })
     },
     onError: () => {
       setUploadPct(null)
@@ -106,7 +117,8 @@ export function EmiAnalyzerPage({ api, deployment = 'hosted' }: EmiAnalyzerPageP
                   <Anchor href="https://www.openems.de/" target="_blank" rel="noreferrer" inherit>
                     openEMS
                   </Anchor>
-                  , a real field solver, not an approximation.
+                  , a real field solver. It is experimental: its results are not yet checked
+                  against a real board.
                 </>
               ) : (
                 <>
@@ -117,10 +129,10 @@ export function EmiAnalyzerPage({ api, deployment = 'hosted' }: EmiAnalyzerPageP
                   {' '}is experimental and switched off in this build.
                 </>
               )}
-              {!local && (
+              {!local && copy.pluginDocsUrl && (
                 <>
                   {' '}Prefer to work inside KiCad?{' '}
-                  <Anchor component={Link} to="/docs/kicad-plugins" inherit>
+                  <Anchor component={Link} to={copy.pluginDocsUrl} inherit>
                     Install it as a plugin
                   </Anchor>
                   .
@@ -145,7 +157,7 @@ export function EmiAnalyzerPage({ api, deployment = 'hosted' }: EmiAnalyzerPageP
               size="lg"
               title={
                 me.data.anonymous
-                  ? 'Your boards are private to this browser. Sign in to EmbeddedCI to keep them with your account and share them with your organisation.'
+                  ? copy.signIn
                   : `Boards are filed under organisation ${me.data.organization_id}`
               }
             >
@@ -186,13 +198,6 @@ export function EmiAnalyzerPage({ api, deployment = 'hosted' }: EmiAnalyzerPageP
               </Group>
             )}
 
-            {reused && (
-              <Alert color="blue" variant="light" title="Opened the copy you already had">
-                This board was uploaded before, so nothing was sent again — you are looking
-                at {reused}, with its existing checks and results.
-              </Alert>
-            )}
-
             {uploadPct !== null && (
               <Stack gap={4}>
                 <Progress value={uploadPct} size="sm" animated />
@@ -225,10 +230,10 @@ export function EmiAnalyzerPage({ api, deployment = 'hosted' }: EmiAnalyzerPageP
             </Text>
             <Text size="xs" c="dimmed">
               {local
-                ? 'Board files are stored on this computer and processed by the worker container running on it — '
-                : 'Board files are stored in DigitalOcean Spaces and processed by an EmbeddedCI worker — '}
-              <Anchor component={Link} to="/tools/emi/limitations" size="xs">
-                what that means
+                ? 'Board files are stored on this computer and processed by the worker container running on it.'
+                : copy.storage}{' '}
+              <Anchor component={Link} to={`${base}/limitations`} size="xs">
+                What that means
               </Anchor>
               .
             </Text>
@@ -259,7 +264,7 @@ export function EmiAnalyzerPage({ api, deployment = 'hosted' }: EmiAnalyzerPageP
                 withBorder
                 padding="sm"
                 component={Link}
-                to={`/tools/emi/${p.id}`}
+                to={`${base}/${p.id}`}
                 style={{ textDecoration: 'none' }}
               >
                 <Group justify="space-between" wrap="nowrap">
@@ -381,11 +386,11 @@ export function EmiAnalyzerPage({ api, deployment = 'hosted' }: EmiAnalyzerPageP
           <Text size="xs" c="dimmed" mt="md">
             The memory and runtime arithmetic behind a solve, and what the results can and
             cannot tell you, are on{' '}
-            <Anchor component={Link} to="/tools/emi/limitations" size="xs">
+            <Anchor component={Link} to={`${base}/limitations`} size="xs">
               the limitations page
             </Anchor>
             . The published limits those results are read against are on{' '}
-            <Anchor component={Link} to="/tools/emi/limits" size="xs">
+            <Anchor component={Link} to={`${base}/limits`} size="xs">
               the emission limits page
             </Anchor>
             .

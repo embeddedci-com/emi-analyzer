@@ -64,8 +64,7 @@ export function CableEmissionPanel({ api, runId, projectId, manifest }: CableEmi
   useEffect(() => {
     if (!hasPorts || !hasAntenna) return
     let cancelled = false
-    const get = (name: string) =>
-      api.artifactUrl(runId, name).then((r) => fetch(r.url).then((x) => x.json()))
+    const get = (name: string) => api.artifactJson(runId, name)
     Promise.all([get('cable_ports.json'), get('cable_antenna.json')])
       .then(([ports, antenna]) => {
         if (cancelled) return

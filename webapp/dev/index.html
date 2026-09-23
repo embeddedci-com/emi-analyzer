@@ -86,8 +86,14 @@
     <div id="hud"></div>
   </main>
 
+<!--
+  The bare renderer, served by `npm run dev` at /dev/. Vite compiles the import below, so there
+  is no bundle to build. Boards come from dev/public/, which is not committed: a boards.json
+  listing them as [{ "id", "label", "layers", "tris" }], and <id>.board.json and
+  <id>.geometry.bin for each, the board.json and geometry.bin artifacts of its ingest run.
+-->
 <script type="module">
-import { BoardRenderer, DEFAULT_LAYER_COLORS } from './bundle.js'
+import { BoardRenderer } from '../src/lib/BoardRenderer.ts'
 
 const canvas = document.getElementById('c')
 const renderer = new BoardRenderer(canvas)
@@ -107,8 +113,8 @@ const rgb = (c) => `rgb(${c.map(v => Math.round(v * 255)).join(',')})`
 async function load(id) {
   const t0 = performance.now()
   const [d, geo] = await Promise.all([
-    fetch(`${id}.board.json`).then(r => r.json()),
-    fetch(`${id}.geometry.bin`).then(r => r.arrayBuffer()),
+    fetch(`public/${id}.board.json`).then(r => r.json()),
+    fetch(`public/${id}.geometry.bin`).then(r => r.arrayBuffer()),
   ])
   const tFetch = performance.now() - t0
   doc = d
@@ -172,8 +178,20 @@ async function load(id) {
     d.warnings.length ? `${d.warnings.length} warning(s): ${d.warnings[0]}` : ''
 }
 
-// Board picker
-const boards = await fetch('boards.json').then(r => r.json())
+// Board picker. The dev server answers a missing file with the app's index.html, so a
+// response only counts if it is JSON.
+async function listBoards() {
+  try {
+    const r = await fetch('public/boards.json', { headers: { accept: 'application/json' } })
+    if (r.ok && (r.headers.get('content-type') || '').includes('json')) return await r.json()
+  } catch {}
+  return []
+}
+const boards = await listBoards()
+if (boards.length === 0) {
+  document.getElementById('stats').textContent =
+    'No boards. Put boards.json and each board\'s board.json and geometry.bin in webapp/dev/public/.'
+}
 const sel = document.getElementById('board')
 for (const b of boards) {
   const o = document.createElement('option')
@@ -215,7 +233,7 @@ canvas.addEventListener('wheel', e => {
 document.getElementById('fit').onclick = () => { renderer.fit(); mark() }
 addEventListener('keydown', e => { if (e.key === 'f') { renderer.fit(); mark() } })
 
-await load(boards[0].id)
+if (boards.length > 0) await load(boards[0].id)
 </script>
 </body>
 </html>

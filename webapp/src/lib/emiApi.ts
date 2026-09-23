@@ -72,8 +72,8 @@ export interface Board {
  *
  * The page is public, so this has an answer either way and the difference matters to the
  * user: signed in, their boards are filed under their own organisation and will be there
- * next week; anonymous, they go to a shared one that everyone else's anonymous uploads go
- * to as well.
+ * next week; anonymous, they go to a space of this visitor's own, which lasts only as long
+ * as the browser keeps its visitor cookie.
  */
 export interface Identity {
   user_id: string
@@ -192,6 +192,29 @@ export class RunTooLargeError extends ApiError {
   ) {
     super(422, message)
   }
+}
+
+/**
+ * The message for a download from storage that did not succeed.
+ *
+ * A presigned URL fails in ways the API never sees: it expires, or the object behind it was
+ * removed. Parsing the error page as the artifact is what used to surface as a RangeError or
+ * a SyntaxError, which says nothing about what to do.
+ */
+export function downloadErrorMessage(what: string, status: number): string {
+  if (status === 403) return `The link to ${what} has expired. Reload the page to get a new one.`
+  if (status === 404) return `${what} is missing from storage.`
+  return `${what} could not be downloaded (HTTP ${status}).`
+}
+
+/**
+ * GET a presigned URL, and throw an {@link ApiError} carrying the status unless it answers
+ * 2xx. `what` names the file in the message.
+ */
+export async function fetchOk(fetchImpl: typeof fetch, url: string, what: string): Promise<Response> {
+  const res = await fetchImpl(url)
+  if (!res.ok) throw new ApiError(res.status, downloadErrorMessage(what, res.status))
+  return res
 }
 
 export interface EmiApiOptions {
@@ -433,12 +456,8 @@ export class EmiApi {
     return (await res.json()) as import('./complianceTypes').ComplianceDoc
   }
 
-  async fetchCables(runId: string): Promise<import('./cableTypes').CablesDoc> {
-    const ref = await this.artifactUrl(runId, 'cables.json')
-    const res = await this.fetchImpl(ref.url)
-    if (!res.ok) throw new ApiError(res.status, `cables.json failed with ${res.status}`)
-    return (await res.json()) as import('./cableTypes').CablesDoc
-  }
+  fetchCables = (runId: string) =>
+    this.artifactJson<import('./cableTypes').CablesDoc>(runId, 'cables.json')
 
   createTransientRun = (projectId: string, boardId: string, params: import('./transientTypes').TransientParams) =>
     this.call<Run>('POST', `/emi/projects/${projectId}/runs`, {
@@ -466,12 +485,8 @@ export class EmiApi {
     return { key: init.key, filename: file.name }
   }
 
-  async fetchTransient(runId: string): Promise<import('./transientTypes').TransientDoc> {
-    const ref = await this.artifactUrl(runId, 'transient.json')
-    const r = await fetch(ref.url)
-    if (!r.ok) throw new Error(`could not download the simulation results (${r.status})`)
-    return r.json()
-  }
+  fetchTransient = (runId: string) =>
+    this.artifactJson<import('./transientTypes').TransientDoc>(runId, 'transient.json')
 
   estimate = (input: EstimateInput) =>
     this.call<{ estimate: Estimate; eta_human: string; ram_gb: number }>(
@@ -492,23 +507,30 @@ export class EmiApi {
       'GET', `/emi/runs/${runId}/artifacts/${name}`,
     )
 
+  /** Download one artifact, failing with an ApiError unless storage answers 2xx. */
+  async artifactResponse(runId: string, name: string): Promise<Response> {
+    const ref = await this.artifactUrl(runId, name)
+    return fetchOk(this.fetchImpl, ref.url, name)
+  }
+
+  artifactJson = <T>(runId: string, name: string): Promise<T> =>
+    this.artifactResponse(runId, name).then((r) => r.json() as Promise<T>)
+
+  artifactBytes = (runId: string, name: string): Promise<ArrayBuffer> =>
+    this.artifactResponse(runId, name).then((r) => r.arrayBuffer())
+
   /** Fetch board.json and geometry.bin together — the viewer needs both or neither. */
   async fetchBoard(runId: string): Promise<{ doc: BoardDoc; geometry: ArrayBuffer }> {
-    const [docRef, geoRef] = await Promise.all([
-      this.artifactUrl(runId, 'board.json'),
-      this.artifactUrl(runId, 'geometry.bin'),
-    ])
     const [doc, geometry] = await Promise.all([
-      fetch(docRef.url).then((r) => r.json() as Promise<BoardDoc>),
-      fetch(geoRef.url).then((r) => r.arrayBuffer()),
+      this.artifactJson<BoardDoc>(runId, 'board.json'),
+      this.artifactBytes(runId, 'geometry.bin'),
     ])
     return { doc, geometry }
   }
 
   async fetchRules(runId: string): Promise<RulesDoc | null> {
     try {
-      const ref = await this.artifactUrl(runId, 'rules.json')
-      return (await fetch(ref.url).then((r) => r.json())) as RulesDoc
+      return await this.artifactJson<RulesDoc>(runId, 'rules.json')
     } catch (err) {
       // Rules are additive: a board that renders without findings is still useful, so a
       // missing rules.json must not take the viewer down with it.
@@ -523,8 +545,7 @@ export class EmiApi {
    */
   async fetchNets(runId: string): Promise<NetReport | null> {
     try {
-      const ref = await this.artifactUrl(runId, 'nets.json')
-      return (await fetch(ref.url).then((r) => r.json())) as NetReport
+      return await this.artifactJson<NetReport>(runId, 'nets.json')
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) return null
       throw err

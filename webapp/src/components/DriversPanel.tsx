@@ -222,6 +222,11 @@ export function DriversPanel({ api, projectId, frequencies = [], nets = [] }: Pr
       {drivers.error && (
         <Alert color="red" variant="light">{(drivers.error as Error).message}</Alert>
       )}
+      {remove.isError && (
+        <Alert color="red" variant="light" withCloseButton onClose={() => remove.reset()}>
+          <Text size="xs">{(remove.error as Error).message}</Text>
+        </Alert>
+      )}
 
       {drivers.data?.length === 0 && !adding && (
         <Text size="sm" c="dimmed">

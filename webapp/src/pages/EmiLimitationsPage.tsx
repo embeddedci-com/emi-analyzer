@@ -5,13 +5,14 @@
  * two versions of the same board are reliable, absolute field strengths are not. That entry
  * is listed first because the other limitations are easier to read with it in mind.
  *
- * This page is statically prerendered for search engines (embeddedci-server's
- * scripts/prerender.mjs), so keep it free of API calls.
+ * Keep it free of API calls: a host may prerender it statically for search engines.
  */
 
 import { Anchor, Badge, Card, Container, List, Stack, Table, Text, Title } from '@mantine/core'
 import { Link } from 'react-router'
 import type { EmiDeployment } from '../routes'
+import { resolveHostCopy, useEmiBase, type EmiHostCopy } from '../host'
+import { EXPERIMENTAL, EXPERIMENTAL_TITLES } from '../components/Experimental'
 
 interface Limitation {
   what: string
@@ -19,23 +20,13 @@ interface Limitation {
   why: string
 }
 
-const HOSTED_PRIVACY: Limitation = {
-  what: 'Board data is stored and processed in the cloud',
-  kind: 'privacy',
-  why:
-    'Uploaded board files and their results are stored in DigitalOcean Spaces and ' +
-    'processed by a worker operated by EmbeddedCI. They are not sent to any third-party ' +
-    'service or external solver. The files do leave your network, so handle them as you ' +
-    'would any other cloud upload of an unreleased design.',
-}
-
 const LOCAL_PRIVACY: Limitation = {
   what: 'Board data stays on this computer',
   kind: 'privacy',
   why:
     'Uploaded board files, results and components are stored in the app\'s data folder and ' +
-    'processed by a worker container on this computer. Nothing is sent to EmbeddedCI or any ' +
-    'other service; the only network access is Docker pulling the worker image.',
+    'processed by a worker container on this computer. Nothing is sent to any other ' +
+    'service; the only network access is Docker pulling the worker image.',
 }
 
 // Stands in for the privacy entry, which depends on where the tool runs.
@@ -133,9 +124,9 @@ const LIMITATIONS: Limitation[] = [
     kind: 'method',
     why:
       'The ESD, shield and reset-line checks look for the layout mistakes behind most ' +
-      'IEC 61000-4-2 and 61000-4-4 failures, from how parts are placed and connected. Nothing ' +
-      'is injected or simulated, so they cannot say what discharge or burst level a board ' +
-      'survives. Parts are recognised by reference designator, value and footprint: a ' +
+      'IEC 61000-4-2 and 61000-4-4 failures, from how parts are placed and connected. They ' +
+      'inject nothing, so they cannot say what discharge or burst level a board survives; ' +
+      'the ESD simulation below estimates one line at a time. Parts are recognised by reference designator, value and footprint: a ' +
       'protection device the tool does not recognise is reported as missing, and a connector ' +
       'counts as I/O by how close it sits to the board edge.',
   },
@@ -157,9 +148,9 @@ const LIMITATIONS: Limitation[] = [
     what: 'Results are not a compliance prediction',
     kind: 'legal',
     why:
-      'Where a CISPR limit line is shown, it is a reference for comparing versions of your ' +
-      'own board. It is not a pass or fail result, it is not a pre-scan, and it does not ' +
-      'replace testing at a test house.',
+      'Where an FCC Part 15B limit line is shown, it is a reference for comparing versions of ' +
+      'your own board. It is not a pass or fail result, it is not a pre-scan, and it does not ' +
+      'replace testing at a test house. CISPR 32 limits are not included.',
   },
 ]
 
@@ -172,9 +163,17 @@ const KIND_COLOR: Record<Limitation['kind'], string> = {
   legal: 'red',
 }
 
-export function EmiLimitationsPage({ deployment = 'hosted' }: { deployment?: EmiDeployment } = {}) {
+export interface EmiLimitationsPageProps {
+  deployment?: EmiDeployment
+  /** What a hosted copy says about its server; only its privacy entry is used here. */
+  host?: EmiHostCopy
+}
+
+export function EmiLimitationsPage({ deployment = 'hosted', host }: EmiLimitationsPageProps = {}) {
+  const base = useEmiBase()
+  const hosted: Limitation = { ...resolveHostCopy(host).privacy, kind: 'privacy' }
   const limitations = LIMITATIONS.map((l) =>
-    l === PRIVACY_PLACEHOLDER ? (deployment === 'local' ? LOCAL_PRIVACY : HOSTED_PRIVACY) : l,
+    l === PRIVACY_PLACEHOLDER ? (deployment === 'local' ? LOCAL_PRIVACY : hosted) : l,
   )
   return (
     <Container size="md" py="xl">
@@ -245,6 +244,25 @@ export function EmiLimitationsPage({ deployment = 'hosted' }: { deployment?: Emi
           </Table.ScrollContainer>
         </div>
 
+        {/* From the same list the badges read, so this cannot drift from what the tool shows. */}
+        <div>
+          <Title order={2} size="h4" mb="sm">
+            Experimental results
+          </Title>
+          <Text size="sm" c="dimmed" mb="sm">
+            A result marked experimental works, but the model behind it has not been checked
+            against the case in front of you. What is unproven in each:
+          </Text>
+          <Stack gap="sm">
+            {(Object.keys(EXPERIMENTAL) as (keyof typeof EXPERIMENTAL)[]).map((k) => (
+              <div key={k}>
+                <Text size="sm" fw={500}>{EXPERIMENTAL_TITLES[k]}</Text>
+                <Text size="sm" c="dimmed">{EXPERIMENTAL[k]}</Text>
+              </div>
+            ))}
+          </Stack>
+        </div>
+
         <Card withBorder padding="md">
           <Title order={2} size="h4" mb="sm">
             How the numbers are calculated
@@ -278,8 +296,8 @@ export function EmiLimitationsPage({ deployment = 'hosted' }: { deployment?: Emi
 
         <Text size="sm" c="dimmed">
           The published limits a prediction is measured against are on{' '}
-          <Anchor component={Link} to="/tools/emi/limits">the emission limits page</Anchor>.
-          Back to <Anchor component={Link} to="/tools/emi">the EMI Analyzer</Anchor>.
+          <Anchor component={Link} to={`${base}/limits`}>the emission limits page</Anchor>.
+          Back to <Anchor component={Link} to={base || '/'}>the EMI Analyzer</Anchor>.
         </Text>
       </Stack>
     </Container>

@@ -74,6 +74,22 @@ cd webapp && npm ci && npm run dev:app
 
 Then open <http://localhost:5175>.
 
+`npm run dev` is the same pages as a hosted copy would show them, against `emi-server` from the
+[integration stack](#postgres-integration-stack) on :8090:
+
+```bash
+make up
+```
+
+```bash
+cd webapp && npm run dev
+```
+
+Then open <http://localhost:5174> and upload a board;
+[`worker/tests/fixtures/tiny.kicad_pcb`](worker/tests/fixtures/tiny.kicad_pcb) is a small one.
+<http://localhost:5174/dev/> is the board renderer on its own. It reads boards from
+`webapp/dev/public/`, which is not committed; the page says what to put there.
+
 ### Experimental features
 
 `full-wave` is off by default; see [docs/known-issues.md](docs/known-issues.md). To work on it:

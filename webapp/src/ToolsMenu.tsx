@@ -1,9 +1,9 @@
 /**
  * The "Tools" pop-out in the header.
  *
- * Built with the same Mantine `Menu` as the existing account dropdown in Layout.tsx, so it
- * inherits the app's styling rather than introducing a second kind of menu. DEFAULT_TOOLS
- * holds the tools this repository provides; a host appends its own entries.
+ * A plain Mantine `Menu`, so it inherits the host's theme rather than introducing a second
+ * kind of menu. DEFAULT_TOOLS holds the tools this repository provides, at the path the local
+ * app and the dev harness mount them; a host that mounts elsewhere passes its own entries.
  */
 
 import { Menu, Stack, Text, UnstyledButton } from '@mantine/core'
@@ -15,7 +15,7 @@ export interface ToolEntry {
   description?: string
   to: string
   icon?: ReactNode
-  /** Hide entries the org is not entitled to, the way Cloud Bench is hidden today. */
+  /** False hides the entry, e.g. a tool the signed-in organisation has no access to. */
   enabled?: boolean
   /**
    * Load a new document instead of navigating client-side. For a host whose router on the
@@ -34,7 +34,7 @@ export const DEFAULT_TOOLS: ToolEntry[] = [
 
 export interface ToolsMenuProps {
   tools?: ToolEntry[]
-  /** The trigger's style, so the caller can pass Layout.tsx's own navLinkStyle. */
+  /** The trigger's style, so it can match the host's other header links. */
   triggerStyle?: CSSProperties
   label?: string
 }

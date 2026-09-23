@@ -26,6 +26,7 @@ import {
   applyDriver, portSpectrumFromJson, type PortSpectrum, type PortSpectrumJson,
 } from '../lib/driverApply'
 import { canAttachDriver, whyNoDriver, type SolveManifest } from './HotspotResults'
+import { EXPERIMENTAL, Experimental } from './Experimental'
 
 interface PortsJson {
   ports: {
@@ -65,8 +66,7 @@ export function DriverAttach({
     if (!attachable) return
     let cancelled = false
     api
-      .artifactUrl(runId, 'ports.json')
-      .then((ref) => fetch(ref.url).then((r) => r.json()))
+      .artifactJson(runId, 'ports.json')
       .then((d) => {
         if (cancelled) return
         const first = (d as PortsJson).ports?.[0]
@@ -154,16 +154,19 @@ export function DriverAttach({
             </Text>
           </Alert>
         ) : (
-          <Text size="xs">
-            Peak on this layer:{' '}
-            <Text span ff="monospace" fw={600}>
-              {peakDb === null ? '—' : `${(peakDb + offset).toFixed(1)} dBµA/m`}
-            </Text>{' '}
-            <Text span c="dimmed">
-              ({peakDb === null ? '—' : `${peakDb.toFixed(1)} dB relative`}, driver offset{' '}
-              {offset >= 0 ? '+' : ''}{offset.toFixed(1)} dB)
+          <Group gap={6} align="center">
+            <Text size="xs">
+              Peak on this layer:{' '}
+              <Text span ff="monospace" fw={600}>
+                {peakDb === null ? '—' : `${(peakDb + offset).toFixed(1)} dBµA/m`}
+              </Text>{' '}
+              <Text span c="dimmed">
+                ({peakDb === null ? '—' : `${peakDb.toFixed(1)} dB relative`}, driver offset{' '}
+                {offset >= 0 ? '+' : ''}{offset.toFixed(1)} dB)
+              </Text>
             </Text>
-          </Text>
+            <Experimental why={EXPERIMENTAL.hotspotMap} />
+          </Group>
         )
       )}
     </Stack>

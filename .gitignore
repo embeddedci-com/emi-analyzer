@@ -8,15 +8,13 @@ __pycache__/
 *.egg-info/
 .pytest_cache/
 
-# Node
-node_modules/
+# Node. No trailing slash, so a node_modules symlinked in from another checkout counts too.
+node_modules
 dist/
 
-# Dev harness artifacts: generated from real boards, and those boards are not ours to commit
+# Dev harness boards: generated from real boards, and those boards are not ours to commit
 webapp/dev/public/
-webapp/dev/bundle.js
 webapp/public/*.kicad_pcb
-webapp/index.html
 
 # Board files dropped in for a one-off smoke run
 worker/tests/fixtures/*.kicad_pcb

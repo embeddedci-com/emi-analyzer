@@ -18,6 +18,7 @@ import {
 } from '@mantine/core'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router'
+import { useEmiBase } from '../host'
 import type { BoardDoc } from '../lib/boardTypes'
 import { EmiApi, TERMINAL_STATUSES, type Run, type WorkerInfo } from '../lib/emiApi'
 import {
@@ -94,6 +95,7 @@ function lineKey(l: TransientLine) {
 export function EsdSimulation({
   api, projectId, boardId, doc, runs, workers, focusNet, onFocus, onSelectNet, onStarted,
 }: EsdSimulationProps) {
+  const base = useEmiBase()
   const qc = useQueryClient()
   const transients = useMemo(
     () =>
@@ -161,7 +163,7 @@ export function EsdSimulation({
         edge connector, with the trace, the clamp and its ground via as circuit elements. Each line
         is compared with the clamp moved to the connector. Compare those numbers; the absolute
         volts are an estimate —{' '}
-        <Anchor component={Link} to="/tools/emi/limitations" size="xs">limitations</Anchor>.
+        <Anchor component={Link} to={`${base}/limitations`} size="xs">limitations</Anchor>.
       </Text>
 
       <Group gap="xs" wrap="nowrap" align="flex-end">

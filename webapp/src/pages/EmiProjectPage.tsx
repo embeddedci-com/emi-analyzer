@@ -12,7 +12,7 @@ import {
   Stack, Tabs, Text, TextInput, Title, Tooltip,
 } from '@mantine/core'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate, useParams } from 'react-router'
+import { useLocation, useNavigate, useParams } from 'react-router'
 import type { BoardRenderer } from '../lib/BoardRenderer'
 import { BoardCanvas, type CanvasMode } from '../components/BoardCanvas'
 import { EsdSimulation } from '../components/EsdSimulation'
@@ -34,6 +34,7 @@ import { placePortOnAnchor, type PortAnchor, type PortSpec } from '../lib/portPl
 import { EmiApi, TERMINAL_STATUSES, type Run } from '../lib/emiApi'
 import { useKiCad } from '../lib/kicad'
 import type { EmiDeployment } from '../routes'
+import { useEmiBase } from '../host'
 
 type SolveView = 'setup' | 'result' | 'drivers' | 'parts'
 
@@ -43,8 +44,15 @@ export interface EmiProjectPageProps {
 }
 
 export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPageProps) {
+  const local = deployment === 'local'
   const { projectId = '' } = useParams()
   const navigate = useNavigate()
+  const base = useEmiBase()
+  // Set by the upload page when the file turned out to be a board that was already here.
+  const location = useLocation()
+  const [reused, setReused] = useState(
+    () => (location.state as { reused?: boolean } | null)?.reused === true,
+  )
   const [visibility, setVisibility] = useState<Record<string, boolean>>({})
   const [net, setNet] = useState<string | null>(null)
   const [focus, setFocus] = useState<{ x: number; y: number; zoom?: number } | null>(null)
@@ -149,9 +157,16 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
   })
 
   // Accumulate the energy curve across polls; the server only ever holds the latest point.
+  // Per run: a second solve used to draw its curve on the end of the first one's.
   const energyRef = useRef<[number, number][]>([])
+  const energyRunId = useRef<string | null>(null)
   const activeRun = runs.data?.find((r) => !TERMINAL_STATUSES.includes(r.status)) ?? null
   useEffect(() => {
+    const id = activeRun?.id ?? null
+    if (id !== energyRunId.current) {
+      energyRunId.current = id
+      energyRef.current = []
+    }
     const p = activeRun?.progress
     if (p?.timestep && p.energy_db !== undefined) {
       const last = energyRef.current[energyRef.current.length - 1]
@@ -160,7 +175,7 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
         energyRef.current = [...energyRef.current, sample].slice(-400)
       }
     }
-  }, [activeRun?.progress])
+  }, [activeRun?.id, activeRun?.progress])
 
   const doc: BoardDoc | null = board.data?.doc ?? null
 
@@ -213,10 +228,7 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
 
   const solveManifest = useQuery({
     queryKey: ['emi', 'manifest', activeSolve?.id],
-    queryFn: async () => {
-      const ref = await api.artifactUrl(activeSolve!.id, 'manifest.json')
-      return (await fetch(ref.url).then((r) => r.json())) as SolveManifest
-    },
+    queryFn: () => api.artifactJson<SolveManifest>(activeSolve!.id, 'manifest.json'),
     enabled: !!activeSolve && activeSolve.status === 'done',
     staleTime: Infinity,
   })
@@ -274,6 +286,10 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
     onSuccess: () => qc.invalidateQueries({ queryKey: ['emi', 'runs', projectId] }),
   })
 
+  // What the runs menu and Re-analyse did not manage. A refusal (a gated kind, a run that is
+  // no longer failed) used to change nothing on screen, which read as a button that is broken.
+  const actionError = [retry, stop, reanalyse].find((m) => m.isError)
+
   const rename = useMutation({
     mutationFn: (name: string) => api.renameProject(projectId, name),
     onSuccess: () => {
@@ -286,7 +302,7 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
     mutationFn: () => api.deleteProject(projectId),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['emi', 'projects'] })
-      navigate('/tools/emi')
+      navigate(base || '/')
     },
   })
 
@@ -354,7 +370,7 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
               ? 'It may have been deleted, or the link may come from another installation.'
               : (project.error as Error).message}
           </Text>
-          <Button size="xs" variant="light" onClick={() => navigate('/tools/emi')}>
+          <Button size="xs" variant="light" onClick={() => navigate(base || '/')}>
             Back to your boards
           </Button>
         </Stack>
@@ -415,6 +431,22 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
         </Group>
       </Group>
 
+      {actionError && (
+        <Alert color="red" variant="light" mx="md" mb="xs" withCloseButton
+               onClose={() => actionError.reset()}>
+          <Text size="xs">{(actionError.error as Error).message}</Text>
+        </Alert>
+      )}
+      {reused && (
+        <Alert color="blue" variant="light" mx="md" mb="xs" withCloseButton
+               onClose={() => setReused(false)} title="Opened the copy you already had">
+          <Text size="xs">
+            This board was uploaded before, so nothing was sent again. These are its existing
+            checks and results.
+          </Text>
+        </Alert>
+      )}
+
       {/* The two panes must be bounded by the row, not by their own content. Without
           overflow:hidden here and minHeight:0 on both children, flex stretches every item
           to the tallest one — and a findings list runs to thousands of pixels, which drags
@@ -440,8 +472,9 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
             <Alert color="red" m="md" title="The board could not be loaded">
               <Stack gap="xs" align="flex-start">
                 <Text size="sm">
-                  Its geometry could not be read back. Everything is on this computer, so this is
-                  usually a file that was moved or removed.
+                  {local
+                    ? 'Its geometry could not be read back. Everything is on this computer, so this is usually a file that was moved or removed.'
+                    : (board.error as Error).message}
                 </Text>
                 <Button size="xs" variant="light"
                         onClick={() => qc.invalidateQueries({ queryKey: ['emi', 'board'] })}>
@@ -466,8 +499,9 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
                     <RunProgress run={ingest} />
                     {!TERMINAL_STATUSES.includes(ingest.status) && workersOnline === 0 && (
                       <Text c="dimmed" size="xs">
-                        Nothing is working on it yet: no worker is connected. The app starts one
-                        by itself &mdash; its status is at the top of the window.
+                        {local
+                          ? 'Nothing is working on it yet: no worker is connected. The app starts one by itself. Its status is at the top of the window.'
+                          : 'Nothing is working on it yet: no worker is connected. It starts when one does.'}
                       </Text>
                     )}
                   </>
@@ -866,7 +900,7 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
         <Stack gap="sm">
           <Text size="sm">
             <Text span fw={600}>{project.data?.name}</Text>, its board file and every result on
-            it are deleted from this computer. This cannot be undone.
+            it are deleted{local ? ' from this computer' : ''}. This cannot be undone.
           </Text>
           {remove.isError && (
             <Text size="xs" c="red">{(remove.error as Error).message}</Text>
