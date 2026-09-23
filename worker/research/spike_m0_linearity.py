@@ -1,7 +1,7 @@
 """M0 · D2 — is a solve's transfer function independent of the excitation?
 
 docs/implementation.md §4 claims a finished solve can be re-weighted by any driver
-spectrum instead of re-solved (§8). That holds if, and only if,
+spectrum instead of re-solved. That holds if, and only if,
 
     T(f) = |H_dump(f)| / |I_port(f)|
 

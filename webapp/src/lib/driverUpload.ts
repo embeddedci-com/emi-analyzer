@@ -1,5 +1,5 @@
 /**
- * Turning an uploaded file into an `emi-driver` document (§9.1, §9.4).
+ * Turning an uploaded file into an `emi-driver` document (docs/emi-driver-format.md §4).
  *
  * Browser-only, deliberately. BenchPod writes the document format directly, so the worker
  * never sees a CSV; this exists for the scope trace and the spreadsheet a user already has.
@@ -23,7 +23,7 @@ export interface UploadOptions {
   source: Source
   sourceImpedanceOhm: number
   net?: string
-  /** Waveform only: the capture bandwidth, above which the samples say nothing (§9.3). */
+  /** Waveform only: the capture bandwidth, above which the samples say nothing. */
   bandwidthHz?: number
   /** Waveform only: a declared rise time lets the envelope continue above the bandwidth. */
   riseS?: number
@@ -131,7 +131,7 @@ export function waveformFromDelimited(text: string, opts: UploadOptions): Record
     waveform: {
       sample_interval_s: interval,
       samples_v: volts,
-      // The whole capture is one period unless the caller knows better. §9.2 refuses a
+      // The whole capture is one period unless the caller knows better. The format refuses a
       // capture shorter than a period, which is the check that matters here.
       period_s: { value: (rows.length - 1) * interval, source: opts.source },
       source_impedance_ohm: { value: opts.sourceImpedanceOhm, source: opts.source },

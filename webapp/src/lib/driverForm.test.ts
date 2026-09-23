@@ -1,7 +1,7 @@
 /**
  * The driver form's document builder.
  *
- * The form works in nanoseconds, which is what a datasheet quotes; §9.2's document is in
+ * The form works in nanoseconds, which is what a datasheet quotes; the driver document is in
  * seconds. A missing or doubled 1e-9 would move every harmonic by nine decades while still
  * producing a document that validates and a spectrum that looks like a spectrum, so the
  * conversion is pinned against a hand-computed fundamental rather than against itself.

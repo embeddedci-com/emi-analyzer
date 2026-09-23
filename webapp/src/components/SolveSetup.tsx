@@ -53,11 +53,14 @@ export interface SolveRequest {
   ports: Omit<PortSpec, 'origin' | 'net' | 'padRef'>[]
   mesh: { dx_um: number; dy_um: number; dz_um: number }
   estimateInput: EstimateInput
-  /** §12. The server attaches the caller's library when this is set. */
+  /** docs/implementation.md §3. The server attaches the caller's library when this is set. */
   model_components?: boolean
-  /** §7. `{ "USB1": { type, length_m } }` — the connectors to fit a Tier B gap port to. */
+  /**
+   * `{ "USB1": { type, length_m } }`: the connectors to fit a Tier B gap port to
+   * (docs/implementation.md §5.2).
+   */
   cable_ports?: Record<string, { type: string; length_m?: number }>
-  /** §16.2. Record the NF2FF box the board's own radiation is computed from. */
+  /** Record the NF2FF box the board's own radiation is computed from (implementation §6). */
   far_field?: boolean
 }
 

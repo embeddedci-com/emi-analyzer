@@ -1,7 +1,8 @@
 """M0 · cable 7 — is the Thevenin voltage at the connector independent of the cable?
 
-Tier B (§7) computes an open-circuit voltage at a one-cell gap between the board edge and a
-short cable root, hands the antenna to a method-of-moments solver for ``Z_ant``, and composes
+Tier B (docs/implementation.md §5.2) computes an open-circuit voltage at a one-cell gap
+between the board edge and a short cable root, hands the antenna to a method-of-moments
+solver for ``Z_ant``, and composes
 
     I_cm(f) = V_oc(f) / Z_ant(f)
 

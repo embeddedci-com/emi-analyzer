@@ -476,9 +476,9 @@ func (s *Service) handleCreateDriver(w http.ResponseWriter, r *http.Request) {
 	u, _ := userFrom(r.Context())
 
 	// Read the document as raw bytes rather than through decodeJSON. Two reasons: the cap
-	// here is §9.2's 2 MB rather than the 1 MB control-plane default, and the row stores the
-	// bytes that arrived -- re-encoding a driver would quietly reorder or reformat a document
-	// that BenchPod and a CI diff both treat as a file.
+	// here is the 2 MB of docs/emi-driver-format.md rather than the 1 MB control-plane default, and
+	// the row stores the bytes that arrived -- re-encoding a driver would quietly reorder or reformat
+	// a document that BenchPod and a CI diff both treat as a file.
 	r.Body = http.MaxBytesReader(w, r.Body, maxDriverDocumentBytes+1)
 	raw, err := io.ReadAll(r.Body)
 	if err != nil {

@@ -1,7 +1,7 @@
 """M0 · C7 — does the shipped nf2ff give a dipole's far field, and does Mirror do the ground?
 
-§19's C7 is the M4 gate: a half-wave dipole fixture's NF2FF directivity within 0.5 dB of
-theory, and a dipole over ground whose height scan is within 1 dB of image theory. The
+The far-field verification gate: a half-wave dipole fixture's NF2FF directivity within
+0.5 dB of theory, and a dipole over ground whose height scan is within 1 dB of image theory. The
 earlier M0 note read the XML schema out of `libnf2ff.so` strings; reading strings is not
 running the tool, so this runs it.
 

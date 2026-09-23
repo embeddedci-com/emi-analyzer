@@ -29,9 +29,9 @@ const (
 	// milliseconds of method-of-moments on a wire, needing no solve at all.
 	RunKindCable RunKind = "cable"
 	// RunKindCompliance combines what other runs already produced into a margin against a
-	// limit (§16, §17). It runs no solver at all -- it reads a solve's far field, its cable
-	// transfer functions and the rule findings -- so a user changing a cable length or
-	// swapping a driver gets the answer back without queueing behind a solver worker.
+	// limit (docs/implementation.md §7). It runs no solver at all -- it reads a solve's far field, its
+	// cable transfer functions and the rule findings -- so a user changing a cable length or swapping
+	// a driver gets the answer back without queueing behind a solver worker.
 	RunKindCompliance RunKind = "compliance"
 )
 
@@ -80,7 +80,7 @@ func (s RunStatus) Valid() bool {
 	return false
 }
 
-// SourceKind is the format the user uploaded. KiCad is the P1 path; Gerber arrives in P3.
+// SourceKind is the format the user uploaded: a KiCad board or project, or a Gerber set.
 type SourceKind string
 
 const (
@@ -164,9 +164,9 @@ type Driver struct {
 }
 
 // Component is a user's model for a part the analyzer would otherwise treat as bare copper
-// (§11-13). Saving one needs an account: a visitor can build and use a component, but it
-// lives in their browser and does not survive the session, because there is nothing to file
-// it under that they could come back to.
+// (docs/implementation.md §3). Saving one needs an account: a visitor can build and use a
+// component, but it lives in their browser and does not survive the session, because there is
+// nothing to file it under that they could come back to.
 type Component struct {
 	ID             string          `json:"id"`
 	OwnerUserID    string          `json:"owner_user_id"`

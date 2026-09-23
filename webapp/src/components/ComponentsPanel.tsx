@@ -1,5 +1,5 @@
 /**
- * The component library: mine, shared, unsaved (§13).
+ * The component library: mine, shared, unsaved (docs/implementation.md §3).
  *
  * A component says how to model a part the analyzer would otherwise treat as bare copper. It
  * spans every board, which is exactly why saving one needs an account — there is nothing to

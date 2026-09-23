@@ -25,7 +25,7 @@ export interface Project {
   created_at: string
 }
 
-/** A component in the library: the emi-component document of §11.2, plus its row fields. */
+/** A component in the library: the emi-component document, plus its row fields. */
 export interface StoredComponent {
   id: string
   owner_user_id: string
@@ -41,7 +41,8 @@ export interface StoredComponent {
   updated_at: string
 }
 
-/** A driver stored with a project: the emi-driver document of §9.2, plus its row fields. */
+/** A driver stored with a project: the emi-driver document of docs/emi-driver-format.md, plus its
+ * row fields. */
 export interface StoredDriver {
   id: string
   organization_id: string
@@ -343,7 +344,7 @@ export class EmiApi {
    *
    * Not wrapped in an envelope: the server stores the bytes that arrive, so that a document
    * BenchPod wrote or a CI diff reads stays byte-identical through a round trip. The cap is
-   * §9.2's 2 MB rather than the 1 MB the other control-plane calls use.
+   * the 2 MB of docs/emi-driver-format.md rather than the 1 MB the other control-plane calls use.
    */
   createDriver = (projectId: string, document: unknown) =>
     this.call<StoredDriver>('POST', `/emi/projects/${projectId}/drivers`, document)
@@ -458,7 +459,8 @@ export class EmiApi {
     })
 
   /**
-   * A compliance run: seconds of arithmetic on what other runs already produced (§16, §17).
+   * A compliance run: seconds of arithmetic on what other runs already produced
+   * (docs/implementation.md §7).
    *
    * The params name the solve and the driver and carry what only the user knows. The worker
    * reads the solve's artifacts, the driver and the board itself, assembles the paths and

@@ -250,13 +250,13 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
           // reads the resolved copies back out. Omitted when off, so a run that does not want
           // components looks exactly as it did before they existed.
           ...(req.model_components ? { model_components: true } : {}),
-          // §7. Omitted when empty, so a solve that wants no cable emissions is meshed
-          // exactly as it was before gap ports existed.
+          // docs/implementation.md §5.2. Omitted when empty, so a solve that wants no cable
+          // emissions is meshed exactly as it was before gap ports existed.
           ...(req.cable_ports && Object.keys(req.cable_ports).length > 0
             ? { cable_ports: req.cable_ports }
             : {}),
-          // §16.2. Omitted when off, so a hotspot solve is meshed and dumped exactly as it was
-          // before the far field existed.
+          // docs/implementation.md §6. Omitted when off, so a hotspot solve is meshed and dumped
+          // exactly as it was before the far field existed.
           ...(req.far_field ? { far_field: true } : {}),
         },
         req.estimateInput,
@@ -307,7 +307,7 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
   })
 
   // Which connector carries which cable. Lives here rather than in the Cables tab because
-  // the Solve tab needs it too: a gap port changes the mesh, so §7's cable has to be chosen
+  // the Solve tab needs it too: a gap port changes the mesh, so the cable has to be chosen
   // before the run, unlike a driver.
   const [cableAssignments, setCableAssignments] = useState<Record<string, Assignment>>({})
 

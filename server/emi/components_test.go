@@ -9,8 +9,8 @@ import (
 	"testing"
 )
 
-// §19's K4: "A visitor POST returns 403 with the UI bypassed. Share, edit and delete by a
-// non-owner return 403."
+// The verification gate: "A visitor POST returns 403 with the UI bypassed. Share, edit and
+// delete by a non-owner return 403."
 //
 // The UI hides the save button for a visitor, which is the friendly half. These tests are
 // about the other half: what happens when someone posts anyway, which is the only version

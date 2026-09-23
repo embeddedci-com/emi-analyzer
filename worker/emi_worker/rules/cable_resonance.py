@@ -1,4 +1,6 @@
-"""Cable resonance: does a clock harmonic land where a cable radiates best? (§4, Tier A)
+"""Cable resonance: does a clock harmonic land where a cable radiates best?
+
+The cable model is in docs/implementation.md §5.1.
 
 This is the cheapest useful thing in the whole plan. It needs no solve — a cable's resonances
 depend on the cable, not the layout — and it answers the question that decides whether a board
@@ -48,7 +50,7 @@ def check_cable_resonance(ctx: RuleContext) -> Iterator[Finding]:
     settings = getattr(ctx, "settings", None)
     assignments = getattr(settings, "cables", None) or {}
     if not assignments:
-        # Nothing declared. §5: an unassigned connector is not modelled, and guessing one here
+        # Nothing declared. An unassigned connector is not modelled, and guessing one here
         # would put a finding on a cable the user never said existed.
         return
 

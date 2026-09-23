@@ -1,5 +1,6 @@
 /**
- * |Z| against frequency for a capacitor model, with the self-resonance marked (§13).
+ * |Z| against frequency for a capacitor model, with the self-resonance marked
+ * (docs/implementation.md §3).
  *
  * This exists for one reason, stated in the design doc: a typo of 4 nH for 0.4 nH should show
  * before saving. Ten times the inductance moves the SRF by a factor of three and the whole

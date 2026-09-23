@@ -396,7 +396,7 @@ func (s *PGStore) ListComponents(ctx context.Context, orgID, userID string) ([]*
 }
 
 // UpdateComponent bumps the version. Runs keep the resolved copy they were built with, so a
-// later edit never changes a result that has already been reported (§12).
+// later edit never changes a result that has already been reported (docs/implementation.md §3).
 func (s *PGStore) UpdateComponent(ctx context.Context, c *Component) error {
 	tag, err := s.pool.Exec(ctx, `
 		UPDATE emi.emi_components

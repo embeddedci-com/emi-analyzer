@@ -1,5 +1,6 @@
 /**
- * What a cable is predicted to radiate, against the limit it has to stay under (§7, §17).
+ * What a cable is predicted to radiate, against the limit it has to stay under
+ * (docs/implementation.md §5.2 and §7).
  *
  * The budget chart next to this one answers "how much current may this cable carry"; this one
  * answers "how much is this layout putting into it". They are deliberately separate charts:

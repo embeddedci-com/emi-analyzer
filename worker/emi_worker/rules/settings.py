@@ -294,12 +294,12 @@ class Settings:
     rules: dict[str, RuleSetting] = field(default_factory=dict)
     groups: list[NetGroupSetting] = field(default_factory=list)
     suppressions: list[Suppression] = field(default_factory=list)
-    #: Cable assignments per connector reference (§5). ``{"J1": {"type": "usb2-shielded",
-    #: "length_m": 2.0}}``. A reference that is absent is **not** assigned a default: §5 says
-    #: an unassigned connector is not modelled and is reported as incomplete, and a cable the
-    #: user never declared would change a result without appearing in it.
+    #: Cable assignments per connector reference (docs/implementation.md §5). ``{"J1": {"type":
+    #: "usb2-shielded", "length_m": 2.0}}``. A reference that is absent is **not** assigned a
+    #: default: an unassigned connector is not modelled and is reported as incomplete, and a cable
+    #: the user never declared would change a result without appearing in it.
     cables: dict[str, dict] = field(default_factory=dict)
-    #: Which antenna solver to use. Printed on every cable result (§6.1).
+    #: Which antenna solver to use. Printed on every cable result (docs/implementation.md §5.1).
     cable_solver: str = "nec2c"
     warnings: list[str] = field(default_factory=list)
 

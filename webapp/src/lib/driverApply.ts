@@ -1,10 +1,10 @@
 /**
- * Applying a driver to a finished solve — the browser's copy (§8, §10).
+ * Applying a driver to a finished solve — the browser's copy (docs/implementation.md §4).
  *
  * The solve recorded fields in whatever units its Gaussian excitation produced, stored as dB
- * relative to one shared peak. A driver turns those into absolute units, and §10 asks for
- * that as **one dB offset per frequency** so the near-field shader adds a uniform rather than
- * rewriting a texture.
+ * relative to one shared peak. A driver turns those into absolute units, and docs/implementation.md
+ * §4 asks for that as **one dB offset per frequency** so the near-field shader adds a uniform
+ * rather than rewriting a texture.
  *
  *     displayed dBµA/m  =  stored dB (relative to peak)  +  offsetDb(f)
  *

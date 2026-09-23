@@ -1,4 +1,6 @@
-"""Compliance: the margin, what drives it, and how much weight it can bear (§16, §17).
+"""Compliance: the margin, what drives it, and how much weight it can bear.
+
+The model is in docs/implementation.md §7.
 
 Seconds of arithmetic on things other runs already produced -- a solve's far field, its cable
 transfer functions and the antenna terms beside them -- and the driver the user attached. No
@@ -14,9 +16,9 @@ are sources, the enclosure and the power. The first version took the paths and t
 inputs from the request, which the browser sent empty and an API client could fill with
 anything.
 
-**The gate comes first.** §17.3 says an incomplete estimate carries no margin and no confidence
-at all, so an incomplete document simply has no ``margin_db`` key. A warning is something a
-reader can skip, and a missing field is not.
+**The gate comes first.** An incomplete estimate carries no margin and no confidence at all
+(docs/implementation.md §7.5), so an incomplete document simply has no ``margin_db`` key. A
+warning is something a reader can skip, and a missing field is not.
 """
 
 from __future__ import annotations
@@ -252,7 +254,8 @@ def run_compliance(ctx: StageContext) -> StageResult:
         "uncertainty_note": PLACEHOLDER_NOTE,
     }
 
-    # The spectrum is always drawn, complete or not: §17.3 says a partial one is shown greyed.
+    # The spectrum is always drawn, complete or not: docs/implementation.md §7.5 says a partial one
+    # is shown greyed.
     if paths:
         ctx.progress("compliance", 50, "combining paths")
         out = predict.outlook(paths, None, standard_id, shared_terms=asm.shared_sigma)
@@ -342,8 +345,9 @@ def _scored(out: predict.Outlook, p: dict, asm, board: dict) -> dict:
         "margin_db": worst.margin_db,
         "sigma_db": out.sigma_db,
         "sigma_terms": out.sigma_terms,
-        # Uncalibrated until §17.4's recorded results exist, and named that way in the payload
-        # -- and only that way -- so no client can present it as a pass probability.
+        # Uncalibrated until recorded lab results exist (docs/implementation.md §7.4), and named
+        # that way in the payload -- and only that way -- so no client can present it as a pass
+        # probability.
         "confidence_uncalibrated": out.confidence_uncalibrated,
         "range_80_db": [lo, hi],
         "contributions": [
