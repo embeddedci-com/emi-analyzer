@@ -114,10 +114,84 @@ def test_a_declared_rise_time_continues_the_envelope_without_a_step():
     above = [(f, abs(v)) for f, v in zip(freqs, r.volts) if f > bandwidth]
     assert below and above
     # The first point above the join must be within a few dB of the last one below it,
-    # rather than jumping by whatever ratio the envelope happened to have.
+    # rather than jumping by whatever ratio the envelope happened to have. The 1 dB gate
+    # against a known envelope is test_an_uploaded_waveform_joins_the_envelope_within_1_db;
+    # this capture has one sample per 10 % of its period, so its own lines are coarse.
     last_below = max(below, key=lambda p: p[0])[1]
     first_above = min(above, key=lambda p: p[0])[1]
     assert abs(20 * math.log10(first_above / last_below)) < 12
+
+
+def _sampled_clock(duty: float, bandwidth_hz: float, *, rise_s: float = 1e-9,
+                  period_s: float = 40e-9, interval_s: float = 50e-12):
+    """A 25 MHz, 3.3 V trapezoid written out as a captured waveform, and the trapezoid."""
+    from emi_worker.drivers.spectrum import Trapezoid
+
+    trap = Trapezoid(amplitude_v=3.3, period_s=period_s, pulse_width_s=duty * period_s,
+                     rise_s=rise_s, fall_s=rise_s)
+    times, vals = trap.breakpoints()
+    n = int(round(period_s / interval_s))
+    samples = []
+    for k in range(n + 1):
+        t = k * interval_s
+        for (t0, v0), (t1, v1) in zip(zip(times, vals), zip(times[1:], vals[1:])):
+            if t0 <= t <= t1:
+                samples.append(v0 + (v1 - v0) * (t - t0) / (t1 - t0) if t1 > t0 else v0)
+                break
+        else:
+            samples.append(0.0)
+    doc = {
+        "format": "emi-driver", "version": 1, "name": "sampled clock", "kind": "waveform",
+        "role": "signal",
+        "waveform": {
+            "sample_interval_s": interval_s, "samples_v": samples,
+            "bandwidth_hz": bandwidth_hz,
+            "period_s": {"value": period_s, "source": "benchpod"},
+            "source_impedance_ohm": {"value": 50, "source": "assumed"},
+            "rise_s": {"value": rise_s, "source": "datasheet"},
+        },
+    }
+    return parse(doc), trap
+
+
+@pytest.mark.parametrize("duty,bandwidth_hz", [
+    (0.5, 210e6),     # the last harmonic below the join is the 8th: a square wave's null
+    (0.5, 180e6),     # the 7th: a lobe
+    (0.3, 210e6),
+    (0.5, 600e6),     # past the rise time's own corner, on the -40 dB/decade slope
+])
+def test_an_uploaded_waveform_joins_the_envelope_within_1_db(duty, bandwidth_hz):
+    """The gate in docs/known-issues.md: above its bandwidth a capture continues along its
+    rise-time envelope, and meets it within 1 dB.
+
+    The reference is the envelope of the trapezoid the capture was sampled from, which above
+    the capture's first corner depends only on amplitude, period and rise time. The join used
+    to scale the envelope to the single highest harmonic below it; with the bandwidth at
+    210 MHz that is the 8th harmonic of a square wave, a null, and every harmonic above the
+    bandwidth came out a null too.
+    """
+    from emi_worker.drivers.spectrum import envelope_v
+
+    d, trap = _sampled_clock(duty, bandwidth_hz)
+    freqs = [n / trap.period_s for n in range(1, 41)]
+    r = resolve(d, freqs)
+    above = [(f, v) for f, v in zip(freqs, r.volts) if f > bandwidth_hz]
+    assert above and all(v is not None for _f, v in above)
+    for f, v in above:
+        err = 20 * math.log10(abs(v) / envelope_v(trap, f))
+        assert abs(err) <= 1.0, f"{f/1e6:g} MHz is {err:+.2f} dB from the envelope"
+
+
+def test_the_join_does_not_depend_on_what_was_asked_for():
+    """The same harmonic must come out the same whether or not the caller also asked for the
+    ones below the bandwidth. The Cables tab and the compliance estimate ask for different
+    sets, and a scale taken from the request made them disagree."""
+    d, trap = _sampled_clock(0.5, 210e6)
+    f = 11 / trap.period_s
+    alone = resolve(d, [f]).volts[0]
+    with_rest = resolve(d, [n / trap.period_s for n in range(1, 12)]).volts[-1]
+    assert alone is not None and with_rest is not None
+    assert abs(alone) == pytest.approx(abs(with_rest), rel=1e-12)
 
 
 # ---- uploaded spectrum -----------------------------------------------------------------

@@ -181,7 +181,13 @@ function resolveWaveform(driver: Driver, frequencies: number[]): Resolved {
       }
     })
 
-    if (envelopeTrap !== null) matchEnvelopeAtJoin(volts, frequencies, bandwidth, envelopeTrap)
+    if (envelopeTrap !== null) {
+      const scale = joinScale(times, values, period, bandwidth, envelopeTrap)
+      frequencies.forEach((f, i) => {
+        const v = volts[i]
+        if (f > bandwidth && v !== null) volts[i] = { re: v.re * scale, im: v.im * scale }
+      })
+    }
   }
 
   return {
@@ -193,36 +199,45 @@ function resolveWaveform(driver: Driver, frequencies: number[]): Resolved {
   }
 }
 
+/** How many of the capture's own harmonics the envelope is matched against at the join. */
+export const JOIN_HARMONICS = 32
+
 /**
- * Scale the envelope so it meets the transform at the bandwidth.
+ * How much to scale the rise-time envelope so it meets the capture at its bandwidth.
  *
- * docs/emi-driver-format.md §4 asks the waveform to "continue above that with the envelope". An
- * unscaled envelope would step at the join by whatever ratio it happened to have, and a step in a
- * source spectrum becomes a step in every result that reads it.
+ * docs/emi-driver-format.md §4 continues a waveform above its bandwidth "with the envelope".
+ * The envelope bounds a line spectrum from above and touches it at the tops of its lobes, so
+ * the scale is the largest ratio of transform to envelope over the top octave below the
+ * bandwidth.
+ *
+ * It used to be the ratio at the single highest *requested* frequency below the join. That
+ * harmonic can sit on a null (every even harmonic of a square wave does), which scaled the
+ * envelope to nothing, and it depended on what the caller asked for. This reads the capture's
+ * own harmonics, with an odd stride so a square wave's nulls cannot fill the sample. The same
+ * function is `join_scale` in `resolve.py`.
  */
-function matchEnvelopeAtJoin(
-  volts: (Complex | null)[],
-  frequencies: number[],
-  bandwidth: number,
+export function joinScale(
+  times: number[],
+  values: number[],
+  periodS: number,
+  bandwidthHz: number,
   envelopeTrap: Trapezoid,
-): void {
-  let joinF = -Infinity
-  let joinV: Complex | null = null
-  frequencies.forEach((f, i) => {
-    const v = volts[i]
-    if (v !== null && f <= bandwidth && f > joinF) {
-      joinF = f
-      joinV = v
-    }
-  })
-  if (joinV === null) return
-  const predicted = envelopeV(envelopeTrap, joinF)
-  if (predicted <= 0) return
-  const scale = cAbs(joinV) / predicted
-  frequencies.forEach((f, i) => {
-    const v = volts[i]
-    if (f > bandwidth && v !== null) volts[i] = { re: v.re * scale, im: v.im * scale }
-  })
+): number {
+  const nHi = Math.floor(bandwidthHz * periodS * (1 + 1e-12))
+  if (nHi < 1) return 1
+  const nLo = Math.max(1, Math.ceil(nHi / 2))
+  const count = nHi - nLo + 1
+  let stride = Math.max(1, Math.ceil(count / JOIN_HARMONICS))
+  if (stride % 2 === 0) stride += 1
+  let best = 0
+  for (let n = nHi; n >= nLo; n -= stride) {
+    const line = 2 * RMS_PER_PEAK * cAbs(piecewiseLinearSeries(times, values, periodS, n))
+    const bound = envelopeV(envelopeTrap, n / periodS)
+    if (bound > 0) best = Math.max(best, line / bound)
+  }
+  // A capture with nothing in its top octave has nothing to match against; the unscaled
+  // envelope from its own amplitude and rise time is then the better guess.
+  return best > 0 ? best : 1
 }
 
 function resolveSpectrum(driver: Driver, frequencies: number[]): Resolved {
