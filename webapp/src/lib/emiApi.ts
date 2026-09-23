@@ -315,6 +315,10 @@ export class EmiApi {
     this.call<{ boards: Board[] }>('GET', `/emi/projects/${projectId}/boards`)
       .then((r) => r.boards ?? [])
 
+  /** Removes one version of the project's board and every result on it. Not the last one. */
+  deleteBoard = (projectId: string, boardId: string) =>
+    this.call<void>('DELETE', `/emi/projects/${projectId}/boards/${boardId}`)
+
   // ---- components ----
   //
   // Not project-scoped: a component is a library entry that spans every board, which is the
@@ -352,8 +356,14 @@ export class EmiApi {
   deleteDriver = (projectId: string, driverId: string) =>
     this.call<void>('DELETE', `/emi/projects/${projectId}/drivers/${driverId}`)
 
-  listRuns = (projectId: string) =>
-    this.call<{ runs: Run[] }>('GET', `/emi/projects/${projectId}/runs`).then((r) => r.runs ?? [])
+  /**
+   * The project's runs, newest first. The server's default page is 50, which a project with
+   * several versions outgrows: pass up to 200 to still see the older versions' runs.
+   */
+  listRuns = (projectId: string, limit?: number) =>
+    this.call<{ runs: Run[] }>(
+      'GET', `/emi/projects/${projectId}/runs${limit ? `?limit=${limit}` : ''}`,
+    ).then((r) => r.runs ?? [])
 
   // ---- upload ----
 

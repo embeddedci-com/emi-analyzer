@@ -9,10 +9,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActionIcon, Alert, Badge, Box, Button, Group, Loader, Menu, Modal, Paper, SegmentedControl,
-  Stack, Tabs, Text, TextInput, Title, Tooltip,
+  Select, Stack, Tabs, Text, TextInput, Title, Tooltip,
 } from '@mantine/core'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useLocation, useNavigate, useParams } from 'react-router'
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router'
+import { versionsOf } from '../lib/compare'
+import { NewVersionModal } from '../components/NewVersionModal'
 import type { BoardRenderer } from '../lib/BoardRenderer'
 import { createCursorStore, useCursor, type CursorStore } from '../lib/cursorStore'
 import { BoardCanvas, type CanvasMode } from '../components/BoardCanvas'
@@ -82,6 +84,8 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
   const [panelOpen, setPanelOpen] = useState(true)
   const [renaming, setRenaming] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [uploadingVersion, setUploadingVersion] = useState(false)
+  const [confirmDeleteVersion, setConfirmDeleteVersion] = useState(false)
   const rendererRef = useRef<BoardRenderer | null>(null)
   const qc = useQueryClient()
 
@@ -98,12 +102,31 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
   // forever. This is longer and it is observable.
   const [pollMs, setPollMs] = useState<number | false>(1500)
 
+  // Every upload into this project is a version of the board. The one on screen is the one
+  // the URL names, or the newest; every tab reads only that version's runs.
+  const boards = useQuery({
+    queryKey: ['emi', 'boards', projectId],
+    queryFn: () => api.listBoards(projectId),
+    enabled: !!projectId,
+  })
+  const versions = useMemo(() => versionsOf(boards.data ?? []), [boards.data])
+  const [search, setSearch] = useSearchParams()
+  const version = versions.find((v) => v.board.id === search.get('version'))
+    ?? versions[versions.length - 1] ?? null
+  const boardId = version?.board.id ?? null
+
   const runs = useQuery({
     queryKey: ['emi', 'runs', projectId],
-    queryFn: () => api.listRuns(projectId),
+    // The server's default page is 50 runs, which several versions outgrow.
+    queryFn: () => api.listRuns(projectId, versions.length > 1 ? 200 : undefined),
     enabled: !!projectId,
     refetchInterval: pollMs,
   })
+  // Until the boards are listed there is nothing to filter by, and a project always has one.
+  const boardRuns = useMemo(
+    () => (runs.data ?? []).filter((r) => !boardId || r.board_id === boardId),
+    [runs.data, boardId],
+  )
 
   useEffect(() => {
     const active = runs.data?.some((r) => !TERMINAL_STATUSES.includes(r.status)) ?? false
@@ -117,24 +140,24 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
   // status would blank the viewer for the whole of a re-analysis, and leave it blank if that
   // re-analysis failed — while a perfectly good earlier result sat unused.
   const ingest = useMemo(() => {
-    const ingests = (runs.data ?? [])
+    const ingests = boardRuns
       .filter((r) => r.kind === 'ingest')
       .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
     return ingests.find((r) => r.status === 'done') ?? ingests[0] ?? null
-  }, [runs.data])
+  }, [boardRuns])
   const ingestDone = ingest?.status === 'done'
 
   // A newer analysis than the one on screen, still running.
   const reanalysing = useMemo(
     () =>
-      (runs.data ?? []).some(
+      boardRuns.some(
         (r) =>
           r.kind === 'ingest' &&
           r.id !== ingest?.id &&
           !TERMINAL_STATUSES.includes(r.status) &&
           (!ingest || Date.parse(r.created_at) > Date.parse(ingest.created_at)),
       ),
-    [runs.data, ingest],
+    [boardRuns, ingest],
   )
   const reanalyse = useMutation({
     mutationFn: () => api.reanalyse(projectId, ingest!.board_id!),
@@ -218,8 +241,8 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
 
   // Solve runs, newest first. The one being viewed defaults to the newest finished one.
   const solves = useMemo(
-    () => (runs.data ?? []).filter((r) => r.kind === 'solve'),
-    [runs.data],
+    () => boardRuns.filter((r) => r.kind === 'solve'),
+    [boardRuns],
   )
   const activeSolve: Run | null = useMemo(() => {
     if (selectedSolveId) return solves.find((r) => r.id === selectedSolveId) ?? null
@@ -300,6 +323,15 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
       qc.invalidateQueries({ queryKey: ['emi', 'projects'] })
     },
   })
+  const removeVersion = useMutation({
+    mutationFn: () => api.deleteBoard(projectId, boardId!),
+    onSuccess: () => {
+      setConfirmDeleteVersion(false)
+      setSearch({}, { replace: true })
+      qc.invalidateQueries({ queryKey: ['emi', 'boards', projectId] })
+      qc.invalidateQueries({ queryKey: ['emi', 'runs', projectId] })
+    },
+  })
   const remove = useMutation({
     mutationFn: () => api.deleteProject(projectId),
     onSuccess: () => {
@@ -316,18 +348,23 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
   // The newest finished cable run, so the tab shows its result after a reload instead of
   // offering to start the same run again.
   const lastCableRun = useMemo(
+    () => boardRuns.find((r) => r.kind === 'cable' && r.status === 'done'),
+    [boardRuns],
+  )
+  // Assignments are not kept anywhere of their own: they are the params the last cable run was
+  // started with, which is the one place they already survive a restart. From any version: a
+  // new version usually has the same connectors carrying the same cables.
+  const lastCableParams = useMemo(
     () => (runs.data ?? []).find((r) => r.kind === 'cable' && r.status === 'done'),
     [runs.data],
   )
-  // Assignments are not kept anywhere of their own: they are the params the last cable run was
-  // started with, which is the one place they already survive a restart.
   const cablesHydrated = useRef(false)
   useEffect(() => {
-    if (cablesHydrated.current || !lastCableRun) return
-    const connectors = (lastCableRun.params as { connectors?: Record<string, Assignment> } | undefined)?.connectors
+    if (cablesHydrated.current || !lastCableParams) return
+    const connectors = (lastCableParams.params as { connectors?: Record<string, Assignment> } | undefined)?.connectors
     if (connectors && Object.keys(connectors).length > 0) setCableAssignments(connectors)
     cablesHydrated.current = true
-  }, [lastCableRun])
+  }, [lastCableParams])
 
   const [pickMiss, setPickMiss] = useState(false)
   const onPadPick = useCallback((anchor: PortAnchor | null) => {
@@ -391,6 +428,20 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
       <Group justify="space-between" px="md" py="sm" wrap="nowrap">
         <Group gap="sm" wrap="nowrap">
           <Title order={4}>{project.data?.name ?? 'Board'}</Title>
+          {versions.length > 1 && version && (
+            <Select
+              size="xs"
+              w={190}
+              aria-label="Version"
+              allowDeselect={false}
+              value={version.board.id}
+              onChange={(id) => id && setSearch({ version: id }, { replace: true })}
+              data={[...versions].reverse().map((v) => ({
+                value: v.board.id,
+                label: `v${v.number} · ${new Date(v.board.created_at).toLocaleDateString()}`,
+              }))}
+            />
+          )}
           {doc && (
             <Text size="xs" c="dimmed" ff="monospace">
               {/* Triangle count used to be here. It is how the viewer draws the board, not
@@ -403,6 +454,12 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
         </Group>
         <Group gap="xs" wrap="nowrap">
           <CursorReadout store={cursorStore} />
+          {versions.length > 1 && (
+            <Button size="compact-xs" variant="light" component={Link}
+                    to={`${base}/${projectId}/compare`}>
+              Compare
+            </Button>
+          )}
           <RunsMenu runs={runs.data ?? []} busy={retry.isPending || stop.isPending}
                     onRetry={(id) => retry.mutate(id)} onStop={(id) => stop.mutate(id)} />
           <Menu position="bottom-end" withinPortal>
@@ -412,6 +469,19 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
               </ActionIcon>
             </Menu.Target>
             <Menu.Dropdown>
+              <Menu.Item onClick={() => setUploadingVersion(true)}>
+                Upload a new version&#8230;
+              </Menu.Item>
+              {versions.length > 1 && (
+                <Menu.Item component={Link} to={`${base}/${projectId}/compare`}>
+                  Compare versions
+                </Menu.Item>
+              )}
+              {versions.length > 1 && version && (
+                <Menu.Item color="red" onClick={() => setConfirmDeleteVersion(true)}>
+                  Delete version {version.number}&#8230;
+                </Menu.Item>
+              )}
               <Menu.Item onClick={() => setRenaming(project.data?.name ?? '')}>
                 Rename&#8230;
               </Menu.Item>
@@ -735,7 +805,9 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
             )}
 
             <Tabs.Panel value="cables" p="sm">
+              {/* Keyed by version: the panel holds the run it shows, and must not carry it over. */}
               <CablesPanel
+                key={boardId ?? ''}
                 api={api} projectId={projectId} boardId={ingest?.board_id}
                 runId={lastCableRun?.id} workersOnline={workersOnline}
                 assignments={cableAssignments} onAssignmentsChange={setCableAssignments}
@@ -745,13 +817,14 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
             {fullWave && (
             <Tabs.Panel value="compliance" p="sm">
               <ComplianceTab
+                key={boardId ?? ''}
                 api={api}
                 projectId={projectId}
                 boardId={ingest?.board_id}
                 solveRunId={activeSolve?.status === 'done' ? activeSolve.id : undefined}
                 solveManifest={solveManifest.data}
                 cableAssignments={cableAssignments}
-                runId={(runs.data ?? []).find((r) => r.kind === 'compliance')?.id}
+                runId={boardRuns.find((r) => r.kind === 'compliance')?.id}
                 findings={
                   ((rules.data as RulesDoc | null)?.findings ?? []) as unknown as
                     Record<string, unknown>[]
@@ -767,7 +840,7 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
                   projectId={projectId}
                   boardId={ingest?.board_id}
                   doc={doc}
-                  runs={runs.data ?? []}
+                  runs={boardRuns}
                   workers={workers.data?.workers ?? []}
                   focusNet={esdNet}
                   onFocus={(x, y) => setFocus({ x, y, zoom: 28 })}
@@ -869,6 +942,19 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
         )}
       </Group>
 
+      <NewVersionModal
+        api={api}
+        projectId={projectId}
+        opened={uploadingVersion}
+        versions={versions}
+        onClose={() => setUploadingVersion(false)}
+        onDone={(id) => {
+          setUploadingVersion(false)
+          setSearch({ version: id }, { replace: false })
+          setPollMs(1500)
+        }}
+      />
+
       <Modal opened={renaming !== null} onClose={() => setRenaming(null)} title="Rename this board"
              size="sm" centered>
         {/* A real form, so Enter submits the way it does in every other dialog. A keydown
@@ -894,12 +980,33 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
         </form>
       </Modal>
 
+      <Modal opened={confirmDeleteVersion} onClose={() => setConfirmDeleteVersion(false)}
+             title={`Delete version ${version?.number ?? ''}`} size="sm" centered>
+        <Stack gap="sm">
+          <Text size="sm">
+            Version {version?.number} and every result on it are deleted
+            {local ? ' from this computer' : ''}. The other versions stay. This cannot be undone.
+          </Text>
+          {removeVersion.isError && (
+            <Text size="xs" c="red">{(removeVersion.error as Error).message}</Text>
+          )}
+          <Group justify="flex-end" gap="xs">
+            <Button size="xs" variant="default" onClick={() => setConfirmDeleteVersion(false)}>Cancel</Button>
+            <Button size="xs" color="red" loading={removeVersion.isPending}
+                    onClick={() => removeVersion.mutate()}>
+              Delete
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+
       <Modal opened={confirmDelete} onClose={() => setConfirmDelete(false)} title="Delete this board"
              size="sm" centered>
         <Stack gap="sm">
           <Text size="sm">
-            <Text span fw={600}>{project.data?.name}</Text>, its board file and every result on
-            it are deleted{local ? ' from this computer' : ''}. This cannot be undone.
+            <Text span fw={600}>{project.data?.name}</Text>
+            {versions.length > 1 ? `, all ${versions.length} versions of it` : ', its board file'} and
+            every result on it are deleted{local ? ' from this computer' : ''}. This cannot be undone.
           </Text>
           {remove.isError && (
             <Text size="xs" c="red">{(remove.error as Error).message}</Text>
