@@ -19,7 +19,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Alert, Badge, Group, Select, Stack, Text, Tooltip } from '@mantine/core'
 import type { EmiApi } from '../lib/emiApi'
-import { parseDriverDocument, sigmaDb, weakestSource } from '../lib/driverDocument'
+import {
+  driverOptionLabel, parseDriverDocument, sigmaDb, weakestSource,
+} from '../lib/driverDocument'
 import {
   composeCable, parseCablePorts, portResistance, whyNoCableDriver, type CableAntenna, type CablePort,
   type PortSpectrum,
@@ -139,7 +141,9 @@ export function CableEmissionPanel({ api, runId, projectId, manifest }: CableEmi
     )
   }
 
-  const options = (drivers.data ?? []).map((d) => ({ value: d.id, label: d.name }))
+  const options = (drivers.data ?? []).map((d) => ({
+    value: d.id, label: driverOptionLabel(d.name, d.document),
+  }))
 
   return (
     <Stack gap={6}>

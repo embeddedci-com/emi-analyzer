@@ -30,7 +30,17 @@ export interface SpectrumPoint {
 /** What the gate was given, derived by the worker from the board and the solve. */
 export interface ComplianceInputs {
   solve_run_id?: string | null
-  driver: { id: string; name: string; kind: string; net: string | null } | null
+  driver: {
+    id: string
+    name: string
+    kind: string
+    net: string | null
+    /** The worst source among its values, which sets its sigma term (§17.2). */
+    weakest_source?: string
+    sigma_db?: number
+    /** The values whose source is `assumed`. */
+    assumed?: string[]
+  } | null
   connectors: string[]
   modelled_cables: Record<string, { cable_id: string; length_m: number }>
   excited_ports: string[]
@@ -113,6 +123,22 @@ export interface ComplianceDoc {
 /** True when this document is allowed to show a number at all. */
 export const hasMargin = (d: ComplianceDoc): boolean =>
   d.complete && typeof d.margin_db === 'number'
+
+/**
+ * The driver's provenance, as the result states it, or null for a result from before it was
+ * recorded. Shown whether or not there is a margin: an assumed driver is assumed even when the
+ * estimate is incomplete.
+ */
+export function driverProvenance(
+  d: ComplianceDoc,
+): { name: string; source: string; sigmaDb: number; assumed: string[] } | null {
+  const drv = d.inputs?.driver
+  if (!drv || !drv.weakest_source || drv.sigma_db === undefined) return null
+  return {
+    name: drv.name, source: drv.weakest_source, sigmaDb: drv.sigma_db,
+    assumed: drv.assumed ?? [],
+  }
+}
 
 export const fmtHz = (f: number): string =>
   f >= 1e9 ? `${(f / 1e9).toFixed(2)} GHz` : `${(f / 1e6).toFixed(f / 1e6 >= 10 ? 0 : 1)} MHz`
