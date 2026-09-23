@@ -1,5 +1,11 @@
 {
   "_comment": "Shared fixtures for the FDTD cost model. The Go, Python and TypeScript implementations must all reproduce these exactly. Regenerate with `make fixtures`, never by hand.",
+  "in_plane_min_cell_fraction": 0.25,
+  "mesh_multiplier_floor": {
+    "coarse": 4.6,
+    "normal": 2.3,
+    "fine": 1.1
+  },
   "cases": [
     {
       "name": "whole-board-uniform",
@@ -16,10 +22,10 @@
       "expected": {
         "cells": 1920000000,
         "ram_bytes": 138240000000,
-        "timesteps": 623107,
-        "dt_seconds": 4.814583003866176e-14,
+        "timesteps": 1246214,
+        "dt_seconds": 2.407291501933088e-14,
         "sim_time_seconds": 3e-08,
-        "eta_seconds": 5981827.2
+        "eta_seconds": 11963654.4
       }
     },
     {
@@ -38,10 +44,10 @@
       "expected": {
         "cells": 11980800,
         "ram_bytes": 862617600,
-        "timesteps": 623107,
-        "dt_seconds": 4.814583003866176e-14,
+        "timesteps": 1246214,
+        "dt_seconds": 2.407291501933088e-14,
         "sim_time_seconds": 3e-08,
-        "eta_seconds": 37326.601728
+        "eta_seconds": 74653.203456
       }
     },
     {
@@ -60,10 +66,10 @@
       "expected": {
         "cells": 11980800,
         "ram_bytes": 862617600,
-        "timesteps": 623107,
-        "dt_seconds": 4.814583003866176e-14,
+        "timesteps": 1246214,
+        "dt_seconds": 2.407291501933088e-14,
         "sim_time_seconds": 3e-08,
-        "eta_seconds": 149306.406912
+        "eta_seconds": 298612.813824
       }
     },
     {
@@ -81,10 +87,10 @@
       "expected": {
         "cells": 400000,
         "ram_bytes": 28800000,
-        "timesteps": 15578,
-        "dt_seconds": 1.9258332015464704e-13,
+        "timesteps": 62311,
+        "dt_seconds": 4.814583003866176e-14,
         "sim_time_seconds": 3e-09,
-        "eta_seconds": 31.156
+        "eta_seconds": 124.622
       }
     },
     {
@@ -119,15 +125,37 @@
         "dz_um": 25,
         "f_min_hz": 100000000.0,
         "ports": 1,
-        "fill_factor": 1.64
+        "fill_factor": 2.9
       },
       "expected": {
-        "cells": 121753600,
-        "ram_bytes": 8766259200,
-        "timesteps": 623107,
-        "dt_seconds": 4.814583003866176e-14,
+        "cells": 215296000,
+        "ram_bytes": 15501312000,
+        "timesteps": 1246214,
+        "dt_seconds": 2.407291501933088e-14,
         "sim_time_seconds": 3e-08,
-        "eta_seconds": 379327.602176
+        "eta_seconds": 1341524.44672
+      }
+    },
+    {
+      "name": "coarse-30mhz-floor-multiplier",
+      "input": {
+        "roi_x_mm": 6,
+        "roi_y_mm": 6,
+        "roi_z_mm": 11.6,
+        "dx_um": 150,
+        "dy_um": 150,
+        "dz_um": 100,
+        "f_min_hz": 30000000.0,
+        "ports": 1,
+        "fill_factor": 4.6
+      },
+      "expected": {
+        "cells": 853760,
+        "ram_bytes": 61470720,
+        "timesteps": 1384683,
+        "dt_seconds": 7.221874505799264e-14,
+        "sim_time_seconds": 1e-07,
+        "eta_seconds": 5910.9347904
       }
     },
     {
@@ -148,10 +176,10 @@
       "expected": {
         "cells": 189405,
         "ram_bytes": 13637160,
-        "timesteps": 296718,
-        "dt_seconds": 6.740416205412646e-14,
+        "timesteps": 692342,
+        "dt_seconds": 2.8887498023197054e-14,
         "sim_time_seconds": 2e-08,
-        "eta_seconds": 749.3316372
+        "eta_seconds": 1748.4404868
       }
     }
   ]

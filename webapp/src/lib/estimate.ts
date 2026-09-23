@@ -32,26 +32,35 @@ export const DEFAULT_THROUGHPUT_MCELLS_PER_S = 200.0
 export const MAX_FILL_FACTOR = 50.0
 
 /**
- * Per-preset lower bounds on the mesh multiplier, measured on the four boards in
- * real boards by `worker/scripts/measure_fill_factor.py`.
+ * Per-preset lower bounds on the mesh multiplier, measured on four real boards by
+ * `worker/scripts/measure_fill_factor.py` (September 2026, after the mesher's grading fix
+ * and the thirds rule).
  *
  * These are usually **greater than 1**. `dx` and friends are a floor on cell size, not the
  * spacing: the mesher puts a line at every copper edge, and a routed board has edges far
- * closer than any preset. In-plane the mesh comes out 2.7–4.0× denser than uniform; the
- * vertical axis, whose air is graded coarsely, comes out 0.27–0.58×. In-plane wins.
+ * closer than any preset. In-plane the mesh comes out 2.0–4.0× denser than uniform; the
+ * vertical axis, whose air is graded coarsely, comes out 0.26–0.55×. In-plane wins.
  *
- *     coarse  min 3.55  median 6.11  max 8.75
- *     normal  min 1.49  median 2.99  max 4.79
- *     fine    min 0.70  median 1.64  max 2.89
+ *     coarse  min 4.67  median 7.53  max 8.65
+ *     normal  min 2.31  median 4.66  max 5.08
+ *     fine    min 1.14  median 2.90  max 3.22
  *
  * The *minimum* is used rather than the median because the panel says "At least". A median
  * would be wrong for half of all boards, in the direction that costs the user a day.
  */
 export const MESH_MULTIPLIER_FLOOR: Record<string, number> = {
-  coarse: 3.5,
-  normal: 1.4,
-  fine: 0.7,
+  coarse: 4.6,
+  normal: 2.3,
+  fine: 1.1,
 }
+
+/**
+ * The smallest in-plane cell as a fraction of the requested one. The mesher merges lines
+ * closer than a quarter of dx, and copper puts lines that close everywhere on a routed board,
+ * so the cell that sets the timestep is dx / 4, not dx. Taking dx put the step count 2.0–4.5×
+ * low on four real boards. Same constant in `estimate.py` and `estimate.go`.
+ */
+export const IN_PLANE_MIN_CELL_FRACTION = 0.25
 
 export interface EstimateInput {
   /** Region of interest including the air box, in mm. */
@@ -59,11 +68,11 @@ export interface EstimateInput {
   roi_y_mm: number
   roi_z_mm: number
   /**
-   * Smallest cell per axis, in um.
+   * Requested cell size per axis, in um: the mesh preset.
    *
-   * `dz_um` is usually the one that hurts: several cells have to fit through a 0.1 mm
-   * dielectric, so it lands around 20–25 um while the in-plane mesh is 50 um — and the
-   * Courant limit keys off the smallest cell in *any* axis.
+   * The Courant limit keys off the smallest cell in *any* axis, and in plane that is a
+   * quarter of the request (IN_PLANE_MIN_CELL_FRACTION), because copper edges put grid lines
+   * that close on any routed board. So it is usually dx, not dz, that sets the timestep.
    */
   dx_um: number
   dy_um: number
@@ -131,8 +140,13 @@ export function estimate(input: EstimateInput): Estimate {
   const nz = Math.ceil((roi_z_mm * 1000.0) / dz_um)
   const cells = Math.ceil(nx * ny * nz * fill_factor)
 
-  // Courant limit, from the smallest cell in any axis, converted um -> m.
-  const dminM = Math.min(dx_um, dy_um, dz_um) * 1e-6
+  // Courant limit, from the smallest cell in any axis, converted um -> m. In plane that is a
+  // quarter of the requested cell: see IN_PLANE_MIN_CELL_FRACTION.
+  const dminM = Math.min(
+    dx_um * IN_PLANE_MIN_CELL_FRACTION,
+    dy_um * IN_PLANE_MIN_CELL_FRACTION,
+    dz_um,
+  ) * 1e-6
   const dt = dminM / (SPEED_OF_LIGHT * Math.sqrt(3))
 
   const simTime = p / f_min_hz

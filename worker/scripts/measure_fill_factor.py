@@ -11,11 +11,17 @@ reports the ratio the estimator should have used:
 
     fill_factor = cells the mesher produced / uniform cells over the same box
 
-Run inside the worker image with the private boards mounted:
+It only meshes, so it needs no solver and runs anywhere the worker imports. Point it at a
+folder of ``<board>/<board>.kicad_pcb`` the way the tests are (``EMI_TEST_BOARDS``):
 
-    docker run --rm -v "$PWD/worker:/spike" -v <pcb dir>:/boards:ro -w /spike \\
-        -e PYTHONPATH=/spike --entrypoint python3 ghcr.io/embeddedci-com/emi-worker:dev \\
-        scripts/measure_fill_factor.py
+    cd worker && EMI_TEST_BOARDS=/path/to/boards OUT=/tmp/fill python3 scripts/measure_fill_factor.py
+
+Boards are reported as "board A", "board B", ... in path order, with their layer count and
+size, never by name: the boards this was calibrated on are private, and the output is meant
+to be pasted into the docs. ``SHOW_NAMES=1`` prints the folder names as well, for local use.
+
+It also reports the smallest cell, because the timestep is set by it and the estimator
+assumes it is ``min(dx, dy, dz)``.
 """
 from __future__ import annotations
 
@@ -42,7 +48,7 @@ def uniform_cells(roi_mm: tuple[float, float, float, float], z_mm: float,
 
 
 def boards() -> list[Path]:
-    root = Path(os.environ.get("BOARDS", "/boards"))
+    root = Path(os.environ.get("EMI_TEST_BOARDS") or os.environ.get("BOARDS", "/boards"))
     found = sorted(root.glob("*/*.kicad_pcb"))
     # KiCad leaves _autosave-*.kicad_pcb beside the real file; measuring both would weight
     # that board twice in the statistics.
@@ -53,18 +59,27 @@ def boards() -> list[Path]:
 def main() -> int:
     rows = []
     print(f"{'board':<22} {'region':>7} {'preset':<7} {'meshed':>12} {'uniform':>14} "
-          f"{'fill':>7}")
-    print("-" * 74)
-    for path in boards():
+          f"{'fill':>7} {'min um':>7}")
+    print("-" * 82)
+    show = os.environ.get("SHOW_NAMES") == "1"
+    for n, path in enumerate(boards()):
         try:
             board = parse_board(parse(path.read_text()))
         except Exception as exc:
-            print(f"{path.parent.name:<22} could not parse: {exc}")
+            print(f"board {chr(65 + n)} could not parse: {exc}")
             continue
         transform = _board_extent(board)
+        label = f"board {chr(65 + n)}"
+        outline = [transform.pt(*pt) for ring in board.outline for pt in ring]
+        size = ""
+        if outline:
+            size = (f", {max(p[0] for p in outline) - min(p[0] for p in outline):.0f} x "
+                    f"{max(p[1] for p in outline) - min(p[1] for p in outline):.0f} mm")
+        print(f"{label}: {len(board.copper_layers)} layers{size}"
+              + (f"  ({path.parent.name})" if show else ""))
         pts = [transform.pt(*pt) for t in board.tracks for pt in t.pts]
         if not pts:
-            print(f"{path.parent.name:<22} no tracks")
+            print(f"{label:<22} no tracks")
             continue
         xs = [p[0] for p in pts]
         ys = [p[1] for p in pts]
@@ -87,7 +102,7 @@ def main() -> int:
                 try:
                     built = build_model(board, transform, params)
                 except Exception as exc:
-                    print(f"{path.parent.name:<22} {side:>5.0f}mm {name:<7} "
+                    print(f"{label:<22} {side:>5.0f}mm {name:<7} "
                           f"could not build: {str(exc)[:40]}")
                     continue
                 meshed = built.mesh.cells
@@ -100,22 +115,33 @@ def main() -> int:
                             f"y {len(m.y)}/{uy} = {len(m.y)/uy:.2f}, "
                             f"z {len(m.z)}/{uz} = {len(m.z)/uz:.2f}]")
                 fill = meshed / uniform
-                rows.append({"board": path.parent.name, "region_mm": side,
+                min_um = m.min_cell_mm * 1000.0
+                rows.append({"board": label, "region_mm": side,
                              "preset": name, "meshed_cells": meshed,
-                             "uniform_cells": uniform, "fill_factor": fill})
-                print(f"{path.parent.name:<22} {side:>5.0f}mm {name:<7} {meshed:>12,} "
-                      f"{uniform:>14,} {fill:>7.3f}{per_axis}")
+                             "uniform_cells": uniform, "fill_factor": fill,
+                             "min_cell_um": round(min_um, 3),
+                             # How many more timesteps the real grid needs than the
+                             # estimator's min(dx, dy, dz) predicts.
+                             "timestep_ratio": round(min(dx, dy, dz) / min_um, 3)})
+                print(f"{label:<22} {side:>5.0f}mm {name:<7} {meshed:>12,} "
+                      f"{uniform:>14,} {fill:>7.3f} {min_um:>7.1f}{per_axis}")
 
     if not rows:
         print("\nno boards measured")
         return 1
 
-    fills = sorted(r["fill_factor"] for r in rows)
-    n = len(fills)
-    print(f"\n{n} measurements")
-    print(f"  min {fills[0]:.3f}   median {fills[n // 2]:.3f}   max {fills[-1]:.3f}")
-    print(f"  90th percentile {fills[int(0.9 * (n - 1))]:.3f}")
-    print(f"\nthe webapp currently passes 0.15")
+    from emi_worker.estimate import MESH_MULTIPLIER_FLOOR
+
+    print(f"\n{len(rows)} measurements")
+    for preset in PRESETS:
+        fills = sorted(r["fill_factor"] for r in rows if r["preset"] == preset)
+        steps = sorted(r["timestep_ratio"] for r in rows if r["preset"] == preset)
+        if not fills:
+            continue
+        n = len(fills)
+        print(f"  {preset:<7} fill min {fills[0]:.2f}  median {fills[n // 2]:.2f}  "
+              f"max {fills[-1]:.2f}   (floor in use {MESH_MULTIPLIER_FLOOR[preset]})   "
+              f"timestep ratio {steps[0]:.2f}-{steps[-1]:.2f}")
 
     out = Path(os.environ.get("OUT", "/spike/spike_out")) / "fill_factor.json"
     out.parent.mkdir(parents=True, exist_ok=True)
