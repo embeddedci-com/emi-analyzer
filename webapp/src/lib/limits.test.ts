@@ -7,8 +7,11 @@
 
 import { describe, expect, it } from 'vitest'
 import {
+  detectorAt,
+  inRange,
   limitAt,
   limitLine,
+  peakLimitAt,
   LimitError,
   scanToHz,
   standard,
@@ -66,6 +69,28 @@ describe('C2 — conducted interpolation', () => {
 
   it('leaves Class A conducted flat', () => {
     expect(limitAt('fcc-15a-conducted-qp', 0.3e6)).toBeCloseTo(79.0, 6)
+  })
+})
+
+describe('detectors, per 47 CFR 15.35', () => {
+  it('reads quasi-peak up to 1 GHz and average above it', () => {
+    for (const id of ['fcc-15b-radiated-3m', 'fcc-15a-radiated-10m']) {
+      expect(detectorAt(id, 980e6)).toBe('quasi-peak')
+      expect(detectorAt(id, 1000e6)).toBe('quasi-peak')
+      expect(detectorAt(id, 1.001e9)).toBe('average')
+    }
+  })
+
+  it('puts the peak limit 20 dB above the average one above 1 GHz', () => {
+    expect(limitAt('fcc-15b-radiated-3m', 2e9)).toBeCloseTo(20 * Math.log10(500), 1)
+    expect(peakLimitAt('fcc-15b-radiated-3m', 2e9)).toBeCloseTo(20 * Math.log10(500) + 20, 1)
+    expect(peakLimitAt('fcc-15a-radiated-10m', 2e9)).toBeCloseTo(20 * Math.log10(300) + 20, 1)
+    expect(peakLimitAt('fcc-15b-radiated-3m', 500e6)).toBeNull()
+  })
+
+  it('says whether a frequency is in the scan at all', () => {
+    expect(inRange('fcc-15b-radiated-3m', 20e6)).toBe(false)
+    expect(inRange('fcc-15b-radiated-3m', 30e6)).toBe(true)
   })
 })
 

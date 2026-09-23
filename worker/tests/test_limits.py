@@ -138,3 +138,42 @@ def test_the_class_b_standard_knows_its_own_geometry():
     assert std.device_class == "B"
     assert std.unit == "dBuV/m"
     assert std.detector == "quasi-peak"
+
+
+# ---- §15.35: which detector, and the peak limit above 1 GHz ------------------------------
+
+def test_15_35_quasi_peak_up_to_1_ghz_and_average_above():
+    """15.35(a) reads limits at or below 1000 MHz with a quasi-peak detector; 15.35(b) reads
+    the ones above it with an average detector. The table used to call 960 MHz-40 GHz
+    quasi-peak throughout."""
+    from emi_worker.compliance.limits import detector_at
+
+    for sid in ("fcc-15b-radiated-3m", "fcc-15a-radiated-10m"):
+        assert detector_at(sid, 500e6) == "quasi-peak"
+        assert detector_at(sid, 980e6) == "quasi-peak"
+        assert detector_at(sid, 1000e6) == "quasi-peak", "1000 MHz is 'below or equal'"
+        assert detector_at(sid, 1.001e9) == "average"
+        assert detector_at(sid, 10e9) == "average"
+
+
+def test_15_35b_the_peak_limit_is_20_db_above_the_average():
+    """Class B above 1 GHz: 500 uV/m average (54 dBuV/m), so a 74 dBuV/m peak limit. Class A:
+    300 uV/m average (49.5) and 69.5 peak."""
+    from emi_worker.compliance.limits import peak_limit_at
+
+    assert limit_at("fcc-15b-radiated-3m", 2e9) == pytest.approx(20 * math.log10(500), abs=0.05)
+    assert peak_limit_at("fcc-15b-radiated-3m", 2e9) == pytest.approx(
+        20 * math.log10(500) + 20, abs=0.05)
+    assert limit_at("fcc-15a-radiated-10m", 2e9) == pytest.approx(20 * math.log10(300), abs=0.05)
+    assert peak_limit_at("fcc-15a-radiated-10m", 2e9) == pytest.approx(
+        20 * math.log10(300) + 20, abs=0.05)
+    # Below 1 GHz there is no separate peak limit in the table.
+    assert peak_limit_at("fcc-15b-radiated-3m", 500e6) is None
+
+
+def test_a_frequency_outside_the_standard_is_out_of_range_not_an_error():
+    from emi_worker.compliance.limits import in_range
+
+    assert not in_range("fcc-15b-radiated-3m", 20e6)
+    assert in_range("fcc-15b-radiated-3m", 30e6)
+    assert not in_range("fcc-15b-conducted-qp", 100e6)
