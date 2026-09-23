@@ -302,18 +302,19 @@ def build_axis(
     max_res: float,
     ratio: float = MAX_CELL_RATIO,
     pml: bool = True,
+    merge_fraction: float = MERGE_FRACTION,
 ) -> np.ndarray:
     """Build one axis of the grid.
 
     ``required`` lines survive; everything else is filler chosen to satisfy the resolution
-    and grading bounds.
+    and grading bounds. Required lines closer than ``merge_fraction * min_res`` are one line.
     """
     if min_res <= 0 or max_res <= 0:
         raise MeshError("mesh resolutions must be positive")
     if max_res < min_res:
         max_res = min_res
 
-    lines = merge_close(np.asarray(required, dtype=np.float64), min_res * MERGE_FRACTION)
+    lines = merge_close(np.asarray(required, dtype=np.float64), min_res * merge_fraction)
     if len(lines) < 2:
         raise MeshError("an axis needs at least two distinct required lines")
 
@@ -321,7 +322,7 @@ def build_axis(
     # region hands over smoothly to a sparse one. The gap fill also enforces the wavelength
     # bound, since no generated cell exceeds max_res.
     lines = merge_close(np.asarray(_fill_all(lines, max_res, ratio)),
-                        min_res * MERGE_FRACTION)
+                        min_res * merge_fraction)
 
     # A gap whose own neighbours were coarse can still exceed max_res after one pass, so
     # subdivide anything left over before smoothing the seams.
@@ -358,6 +359,9 @@ class MeshSpec:
     #: sets the coarsest cell the whole grid may use.
     max_epsilon_r: float = 4.4
     ratio: float = MAX_CELL_RATIO
+    #: In-plane copper lines closer than this fraction of dx are merged; see MERGE_FRACTION. A
+    #: small-part solve uses a half (stages/small_part.py).
+    merge_fraction: float = MERGE_FRACTION
 
 
 @dataclass
@@ -448,8 +452,10 @@ def build_mesh(
     x_req = [min_x, max_x] + inside(copper_x, min_x, max_x)
     y_req = [min_y, max_y] + inside(copper_y, min_y, max_y)
 
-    x = build_axis(x_req, spec.dx_um / 1000.0, max_res, spec.ratio)
-    y = build_axis(y_req, spec.dy_um / 1000.0, max_res, spec.ratio)
+    x = build_axis(x_req, spec.dx_um / 1000.0, max_res, spec.ratio,
+                   merge_fraction=spec.merge_fraction)
+    y = build_axis(y_req, spec.dy_um / 1000.0, max_res, spec.ratio,
+                   merge_fraction=spec.merge_fraction)
 
     # Vertical: every copper layer, plus air boxes. The dielectric between layers needs
     # several cells through it, which is what dz_um is really specifying.

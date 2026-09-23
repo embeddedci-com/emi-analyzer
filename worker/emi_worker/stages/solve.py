@@ -20,7 +20,7 @@ from ..kicad.normalize import _board_extent
 from ..openems import model as emmodel
 from ..openems import post, run
 from ..openems.model import Port, SolveParams
-from . import StageContext, StageError, StageResult
+from . import StageContext, StageError, StageResult, small_part
 from .ingest import load_board
 
 log = logging.getLogger(__name__)
@@ -67,7 +67,7 @@ def _params_from_run(ctx: StageContext) -> SolveParams:
         ) from exc
 
     freqs = [float(f) for f in (p.get("frequencies_hz") or [])]
-    if not freqs:
+    if not freqs and not small_part.is_small_part(p):  # its band gives it maps
         raise StageError(
             "no frequencies were requested. Name the clock harmonics you care about — the "
             "solver records a field map at each one."
@@ -91,6 +91,7 @@ def _params_from_run(ctx: StageContext) -> SolveParams:
                 half_width_mm=float(raw.get("half_width_mm", 0.2)),
                 resistance=float(raw.get("resistance", 50.0)),
                 excited=bool(raw.get("excited", i == 0)),
+                reference_layer=str(raw.get("reference_layer") or ""),
             ))
         except (KeyError, TypeError, ValueError) as exc:
             raise StageError(f"port {i + 1} is malformed: {exc}") from exc
@@ -191,6 +192,11 @@ def _component_candidates(p: dict) -> list:
 
 def run_solve(ctx: StageContext) -> StageResult:
     params = _params_from_run(ctx)
+    # The bounded mode (stages/small_part.py): its band, end criterion and budget, and no far
+    # field. Everything after this is the same solve.
+    small = small_part.is_small_part(ctx.params)
+    if small:
+        params = small_part.apply(ctx.params, params)
 
     ctx.progress("fetch", 2, "fetching board")
     info = ctx.client.run_input(ctx.token)
@@ -210,6 +216,11 @@ def run_solve(ctx: StageContext) -> StageResult:
     except ValueError as exc:
         raise StageError(f"the board file could not be read: {exc}") from exc
     transform = _board_extent(board)
+    # A coupon keeps only the named nets over their planes. The transform is taken from the
+    # whole board first, so the coupon sits where the region and the ports say it does.
+    cut_notes: list[str] = []
+    if small:
+        board, cut_notes = small_part.cut(board, transform, ctx.params, params)
 
     ctx.progress("mesh", 10, "building the mesh")
     try:
@@ -219,8 +230,13 @@ def run_solve(ctx: StageContext) -> StageResult:
     except ValueError as exc:
         raise StageError(f"the mesh could not be built: {exc}") from exc
 
+    built.notes.extend(cut_notes)
     mesh_summary = built.mesh.summary()
     cells = mesh_summary["cells"]
+    if small:
+        # Against the real mesh, before a single timestep is spent: the cap the budget affords.
+        built.doc.max_timesteps = small_part.admit(
+            cells, built.doc.max_timesteps, mesh_summary["dt_seconds"])
 
     # Admission control, second and final gate. Refusing here costs the user ten seconds;
     # discovering it by running out of memory four hours in costs them the afternoon.
@@ -337,6 +353,10 @@ def run_solve(ctx: StageContext) -> StageResult:
     except ValueError as exc:
         raise StageError(str(exc)) from exc
 
+    if small:
+        artifacts.manifest["mode"] = small_part.MODE
+        small_part.add_network(artifacts, workdir, ctx.params.get("ports") or [], params,
+                               small_part.unusable_reason(result))
     _add_antenna_terms(ctx, params, built, artifacts, board, transform)
     _add_far_field(ctx, params, built, artifacts, workdir)
 
@@ -369,6 +389,8 @@ def run_solve(ctx: StageContext) -> StageResult:
         "layers": list(built.dump_names),
         "warnings": result.warnings + built.notes,
     }
+    if small:
+        summary["mode"] = small_part.MODE
     if not result.converged:
         log.warning("run did not converge: energy only fell to %.1f dB", result.final_energy_db)
 
