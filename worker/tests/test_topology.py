@@ -10,7 +10,9 @@ from __future__ import annotations
 import math
 
 from emi_worker import topology
-from emi_worker.kicad.board import BoardModel, CopperLayer, Pad, StackupLayer, Track, Via
+from emi_worker.kicad.board import (
+    BoardModel, CopperLayer, Pad, StackupLayer, Track, Via, ZonePolygon,
+)
 from emi_worker.stackup import BoardElectrics, LayerElectrics
 
 
@@ -173,3 +175,56 @@ def test_a_fixup_segment_shorter_than_the_join_tolerance_does_not_break_the_rout
     path = t.path("D3.4", "D4.3")
     assert path is not None, "the route fell apart at a short fix-up segment"
     assert abs(path.length_mm - 20.0) < 0.1
+
+
+def _plane_board(n: int):
+    """n decoupling pads in a grid on one F.Cu GND pour, each with a stub to a via, plus
+    eighty narrow pours on the back so the pad-by-pour test has something to skip."""
+    side = int(n ** 0.5) + 1
+    w = side * 2.0
+    pads, tracks, vias = [], [], []
+    for i in range(n):
+        x, y = (i % side) * 2.0, (i // side) * 2.0
+        pads.append(_pad(f"C{i}", "2", "GND", x, y))
+        tracks.append(_track("GND", [(x, y), (x + 0.7, y)]))
+        vias.append(Via(x=x + 0.7, y=y, size_mm=0.6, drill_mm=0.3,
+                        layers=["F.Cu", "B.Cu"], net="GND"))
+    zones = [ZonePolygon(layer="F.Cu", net="GND", ring=[(-1, -1), (w, -1), (w, w), (-1, w)])]
+    for k in range(80):
+        y0 = k * w / 80 - 1
+        zones.append(ZonePolygon(layer="B.Cu", net="GND",
+                                 ring=[(-1, y0), (w, y0), (w, y0 + w / 80), (-1, y0 + w / 80)]))
+    return _model(pads=pads, tracks=tracks, vias=vias, zones=zones, nets=["GND"])
+
+
+def test_a_big_ground_net_is_not_quadratic():
+    """2000 GND pads took a minute and a gigabyte, storing a path for every pair."""
+    import time
+
+    m = _plane_board(2000)
+    start = time.perf_counter()
+    t = topology.build(m)["GND"]
+    elapsed = time.perf_counter() - start
+
+    assert len(t.pads) == 2000 and not t.unreachable
+    assert elapsed < 5.0, f"{elapsed:.1f} s for 2000 ground pads"
+    assert not t._paths, "a plane net stored paths nobody asked for"
+    # Paths are still there when a check asks for one.
+    assert t.path("C0.2", "C1999.2") is not None
+    assert len(t.paths_from("C0.2")) == 1999
+    # "Longest path" means nothing on a plane, and finding it is the quadratic part.
+    assert t.longest_path() is None
+
+
+def test_a_pad_joins_only_a_pour_that_contains_it():
+    zone = ZonePolygon(layer="F.Cu", net="GND", ring=[(0, 0), (10, 0), (10, 10), (0, 10)])
+    other = ZonePolygon(layer="F.Cu", net="GND", ring=[(20, 0), (30, 0), (30, 10), (20, 10)])
+    m = _model(
+        pads=[_pad("C1", "2", "GND", 5, 5), _pad("C2", "2", "GND", 6, 6),
+              _pad("C3", "2", "GND", 15, 5), _pad("C4", "2", "GND", 5, 5, layers=("B.Cu",))],
+        zones=[zone, other],
+    )
+    t = topology.build(m)["GND"]
+    assert sorted(t.pads) == ["C1.2", "C2.2"]
+    assert sorted(t.unreachable) == ["C3.2", "C4.2"]
+    assert t.path("C1.2", "C2.2") is not None

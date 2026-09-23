@@ -1,0 +1,14 @@
+G04 Hand-written inch fixture: a 2 x 1 inch board outline.*
+%TF.FileFunction,Profile,NP*%
+%FSLAX24Y24*%
+%MOIN*%
+%LPD*%
+G01*
+%ADD10C,0.0040*%
+D10*
+X0Y0D02*
+X20000Y0D01*
+X20000Y10000D01*
+X0Y10000D01*
+X0Y0D01*
+M02*

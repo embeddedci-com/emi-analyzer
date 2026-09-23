@@ -1,0 +1,19 @@
+G04 Hand-written inch fixture: a one-inch SIG trace between two pads, plus a GND via.*
+%TF.FileFunction,Copper,L1,Top*%
+%TF.FilePolarity,Positive*%
+%FSLAX24Y24*%
+%MOIN*%
+%LPD*%
+G01*
+%ADD10R,0.0400X0.0600*%
+%ADD11C,0.0300*%
+%ADD12C,0.0100*%
+D10*
+X5000Y5000D03*
+X15000Y5000D03*
+D11*
+X10000Y8000D03*
+D12*
+X5000Y5000D02*
+X15000Y5000D01*
+M02*

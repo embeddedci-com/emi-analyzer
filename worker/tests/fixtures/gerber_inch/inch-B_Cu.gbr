@@ -1,0 +1,18 @@
+G04 Hand-written inch fixture: a GND pour with the via's pad on it.*
+%TF.FileFunction,Copper,L2,Bot*%
+%TF.FilePolarity,Positive*%
+%FSLAX24Y24*%
+%MOIN*%
+%LPD*%
+G01*
+%ADD11C,0.0300*%
+G36*
+X1000Y6500D02*
+X19000Y6500D01*
+X19000Y9000D01*
+X1000Y9000D01*
+X1000Y6500D01*
+G37*
+D11*
+X10000Y8000D03*
+M02*

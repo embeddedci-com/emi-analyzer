@@ -15,8 +15,8 @@ import logging
 
 from ..kicad.board import BoardModel, CopperLayer, Via
 from . import connectivity as conn_mod
-from .connectivity import Connectivity, apply_nets, rings_for_geometry
-from .drill import parse_drill
+from .connectivity import Connectivity, apply_nets, attach_parts, rings_for_geometry
+from .drill import Hole, holes_to_vias, parse_holes
 from .ipcd356 import Netlist, NetlistError, parse as parse_netlist
 from .reader import GerberError, GerberSet, identify, _read_layer, _stackup_from_job
 
@@ -53,9 +53,13 @@ def load_gerber_board(files: dict[str, bytes]) -> BoardModel:
     layers = list(gset.copper)
     log.info("gerber set: %d copper layers %s", len(layers), layers)
 
+    # The outline first: a negative plane image is copper everywhere inside it.
+    outline = _read_outline(gset.outline, warnings)
+    extent = _outline_extent(outline)
+
     tracks, pads, zones = [], [], []
     for layer, text in gset.copper.items():
-        t, p, z = _read_layer(text, layer, warnings)
+        t, p, z = _read_layer(text, layer, warnings, extent)
         tracks.extend(t)
         pads.extend(p)
         zones.extend(z)
@@ -64,16 +68,20 @@ def load_gerber_board(files: dict[str, bytes]) -> BoardModel:
         raise GerberError("the Gerber files contain no copper")
 
     vias: list[Via] = []
-    if gset.drill:
-        vias, drill_warnings = parse_drill(gset.drill, layers)
-        warnings.extend(drill_warnings)
+    if gset.drills:
+        holes: list[Hole] = []
+        for text in gset.drills:
+            h, drill_warnings = parse_holes(text)
+            holes.extend(h)
+            warnings.extend(drill_warnings)
+        vias = holes_to_vias(holes, layers)
+        if not vias:
+            warnings.append("the drill files contained no plated holes")
     else:
         warnings.append(
             "no drill file was found, so vias are missing from the model. Layer transitions "
             "will not be simulated and the return-via check cannot run."
         )
-
-    outline = _read_outline(gset.outline, warnings)
 
     stackup, thickness = _stackup_from_job(gset.job, layers, warnings)
 
@@ -86,6 +94,8 @@ def load_gerber_board(files: dict[str, bytes]) -> BoardModel:
     conn.assign(netlist, vias)
     apply_nets(conn, tracks, pads, zones, vias)
     warnings.extend(conn.warnings)
+    pads, vias, part_warnings = attach_parts(conn, netlist, pads, vias, layers)
+    warnings.extend(part_warnings)
 
     named = sum(1 for t in tracks if t.net) + sum(1 for z in zones if z.net)
     total = len(tracks) + len(zones)
@@ -138,20 +148,32 @@ def _read_outline(text: str | None, warnings: list[str]) -> list[list[tuple[floa
         warnings.append(f"the board outline could not be read ({exc}); using the copper extent")
         return []
 
+    from .reader import _arc_points, _to_mm
+
     rings: list[list[tuple[float, float]]] = []
     for obj in gf.objects:
         kind = type(obj).__name__
+        # In the file's own unit until converted; an inch outline read as mm made the
+        # board 25.4 times too small.
+        mm = _to_mm(getattr(obj, "unit", None))
         if kind == "Line":
             rings.append([
-                (float(obj.x1), -float(obj.y1)), (float(obj.x2), -float(obj.y2)),
+                (mm(obj.x1), -mm(obj.y1)), (mm(obj.x2), -mm(obj.y2)),
             ])
         elif kind == "Arc":
-            from .reader import _arc_points
             try:
                 rings.append([(float(x), -float(y)) for x, y in _arc_points(obj)])
             except Exception:  # noqa: BLE001
                 continue
     return rings
+
+
+def _outline_extent(outline) -> tuple[float, float, float, float] | None:
+    pts = [p for ring in outline for p in ring]
+    if not pts:
+        return None
+    return (min(p[0] for p in pts), min(p[1] for p in pts),
+            max(p[0] for p in pts), max(p[1] for p in pts))
 
 
 def _bounds(tracks, pads, zones, outline) -> tuple[float, float, float, float]:
