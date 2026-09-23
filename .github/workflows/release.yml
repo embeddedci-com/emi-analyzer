@@ -39,13 +39,24 @@ jobs:
     steps:
       - name: Tag and version
         id: v
+        # Inputs reach the script as environment variables, never pasted into it, so a tag
+        # name cannot become shell.
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
-          tag="${{ inputs.tag }}"
-          if [ "${{ github.ref_type }}" = "tag" ]; then tag="${GITHUB_REF_NAME}"; fi
+          tag="$INPUT_TAG"
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then tag="${GITHUB_REF_NAME}"; fi
           if [ -n "$tag" ]; then
+            if ! printf '%s' "$tag" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+              echo "::error::$tag is not a version tag (vX.Y.Z)"; exit 1
+            fi
+            if ! git ls-remote --exit-code --tags "https://github.com/$GITHUB_REPOSITORY" "refs/tags/$tag" >/dev/null; then
+              echo "::error::tag $tag does not exist"; exit 1
+            fi
             version="${tag#v}"
           else
-            version="${{ inputs.version }}"
+            version="$INPUT_VERSION"
             [ -n "$version" ] || version="0.0.0-dev.${GITHUB_RUN_NUMBER}"
           fi
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
@@ -93,7 +104,11 @@ jobs:
       VERSION: ${{ needs.prepare.outputs.version }}
       RELEASE_ID: ${{ needs.prepare.outputs.release_id }}
     steps:
+      # The tag's commit, not whatever branch a manual run was started from. v0.1.0's
+      # installers were built from main by a rerun and labelled with a tag three commits older.
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.tag && format('refs/tags/{0}', needs.prepare.outputs.tag) || github.ref }}
 
       - uses: actions/setup-go@v5
         with:
@@ -147,7 +162,7 @@ jobs:
         with:
           projectPath: desktop
           tauriScript: npx tauri
-          args: --target ${{ matrix.target }} --config '{"version":"${{ needs.prepare.outputs.version }}"}'
+          args: --target ${{ matrix.target }} --config '{"version":"${{ env.VERSION }}"}'
           # Empty for a test build, which then uploads nothing.
           releaseId: ${{ needs.prepare.outputs.release_id }}
 
@@ -164,6 +179,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           FILE: ${{ steps.sidecar.outputs.file }}
         run: |
+          # A retried release already has the asset, and GitHub refuses a second one by name.
+          old=$(gh api "repos/${{ github.repository }}/releases/${RELEASE_ID}/assets" \
+                  --jq ".[] | select(.name == \"$FILE\") | .id")
+          if [ -n "$old" ]; then gh api -X DELETE "repos/${{ github.repository }}/releases/assets/$old"; fi
           gh api -X POST -H "Content-Type: application/octet-stream" \
             "https://uploads.github.com/repos/${{ github.repository }}/releases/${RELEASE_ID}/assets?name=${FILE}" \
             --input "$FILE" --jq .browser_download_url
