@@ -15,15 +15,18 @@ from pathlib import Path
 HERE = Path(__file__).resolve()
 sys.path.insert(0, str(HERE.parents[1]))
 
-from emi_worker.rules.settings import catalogue  # noqa: E402
+from emi_worker.rules.settings import board_catalogue, catalogue  # noqa: E402
 
 OUT = HERE.parents[2] / "webapp" / "src" / "lib" / "ruleCatalogue.json"
+#: The board-wide settings, for the settings view in the app.
+BOARD_OUT = OUT.with_name("boardSettings.json")
 
 
-def render() -> str:
-    return json.dumps(catalogue(), indent=2, ensure_ascii=False) + "\n"
+def render(data: list | None = None) -> str:
+    return json.dumps(catalogue() if data is None else data, indent=2, ensure_ascii=False) + "\n"
 
 
 if __name__ == "__main__":
     OUT.write_text(render(), encoding="utf-8")
-    print(f"wrote {OUT}")
+    BOARD_OUT.write_text(render(board_catalogue()), encoding="utf-8")
+    print(f"wrote {OUT} and {BOARD_OUT.name}")

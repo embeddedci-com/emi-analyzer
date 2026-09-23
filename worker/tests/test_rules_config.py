@@ -224,6 +224,10 @@ def test_the_webapp_catalogue_matches_the_rules_that_run():
     assert json.loads(exported.read_text(encoding="utf-8")) == settings.catalogue(), (
         "ruleCatalogue.json is stale; run python scripts/export_rule_catalogue.py"
     )
+    board = exported.with_name("boardSettings.json")
+    assert json.loads(board.read_text(encoding="utf-8")) == settings.board_catalogue(), (
+        "boardSettings.json is stale; run python scripts/export_rule_catalogue.py"
+    )
 
 
 def test_every_rule_has_a_category_for_the_front_page():

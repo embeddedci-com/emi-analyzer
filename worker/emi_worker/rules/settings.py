@@ -586,6 +586,13 @@ def snapshot(s: Settings) -> dict:
     }
 
 
+def board_catalogue() -> list[dict]:
+    """The board-wide settings, for the app's settings view. ``positive``: zero is refused."""
+    return [
+        {"key": k, "default": v, "positive": k in _POSITIVE} for k, v in BOARD_DEFAULTS.items()
+    ]
+
+
 def catalogue() -> list[dict]:
     """The rule catalogue, for a UI that builds its settings page from the server."""
     return [
