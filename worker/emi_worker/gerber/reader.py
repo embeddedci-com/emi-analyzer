@@ -94,14 +94,13 @@ def identify(files: dict[str, bytes]) -> GerberSet:
     ordered: list[tuple[int, str, str]] = []
 
     if job:
-        try:
-            doc = json.loads(job)
-        except json.JSONDecodeError:
-            doc = None
+        doc = _job_document(job)
         if doc:
-            for entry in doc.get("FilesAttributes", []):
-                path = entry.get("Path", "")
-                fn = entry.get("FileFunction", "")
+            for entry in _job_list(doc, "FilesAttributes"):
+                path = str(entry.get("Path", "") or "")
+                fn = str(entry.get("FileFunction", "") or "")
+                if not path:
+                    continue
                 match = next((t for n, t in texts.items() if n.endswith(path)), None)
                 if match is None:
                     continue
@@ -182,6 +181,27 @@ def _looks_like_netlist(text: str) -> bool:
 
 # --- stackup ---------------------------------------------------------------------------
 
+def _job_document(text: str) -> dict | None:
+    """The job file as an object, or None when it is not one.
+
+    A job file is JSON, but one that is truncated, nested thousands deep or a bare list is
+    still an upload somebody made, and the right answer is "no job file", not a crash.
+    """
+    try:
+        doc = json.loads(text)
+    except (ValueError, RecursionError):
+        return None
+    return doc if isinstance(doc, dict) else None
+
+
+def _job_list(doc: dict, key: str) -> list[dict]:
+    """The entries of one list in the job file that are objects; anything else is skipped."""
+    val = doc.get(key)
+    if not isinstance(val, list):
+        return []
+    return [e for e in val if isinstance(e, dict)]
+
+
 def _stackup_from_job(job_text: str | None, layers: list[str],
                       warnings: list[str]) -> tuple[list[StackupLayer], float]:
     """Build a stackup from the .gbrjob, or synthesise one.
@@ -194,14 +214,15 @@ def _stackup_from_job(job_text: str | None, layers: list[str],
     total = 0.0
 
     if job_text:
-        try:
-            doc = json.loads(job_text)
-        except json.JSONDecodeError:
-            doc = {}
-        stack = doc.get("MaterialStackup") or []
-        for e in stack:
+        doc = _job_document(job_text) or {}
+        for e in _job_list(doc, "MaterialStackup"):
             kind = str(e.get("Type", "")).lower()
-            thickness = float(e.get("Thickness", 0.0) or 0.0)
+            try:
+                thickness = float(e.get("Thickness", 0.0) or 0.0)
+            except (TypeError, ValueError):
+                thickness = 0.0
+            if not 0.0 <= thickness < 100.0:
+                thickness = 0.0
             name = str(e.get("Name", "") or kind)
             if kind == "copper":
                 entries.append(StackupLayer(name=name, type="copper",

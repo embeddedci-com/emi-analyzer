@@ -315,9 +315,14 @@ def run_ingest(ctx: StageContext) -> StageResult:
         ("run", ctx.params.get("settings")),
     )
     if ctx.params.get("max_frequency_hz"):
-        cfg.board["max_frequency_hz"] = settings.Value(
-            float(ctx.params["max_frequency_hz"]), "run"
-        )
+        try:
+            fmax = settings.check_value(
+                "max_frequency_hz", ctx.params["max_frequency_hz"],
+                settings.BOARD_DEFAULTS["max_frequency_hz"], positive=True,
+            )
+        except ValueError as exc:
+            raise StageError(f"this run's settings are not valid: {exc}") from None
+        cfg.board["max_frequency_hz"] = settings.Value(fmax, "run")
     max_freq = float(cfg.value("max_frequency_hz") or DEFAULT_MAX_FREQUENCY_HZ)
 
     # Which layers are reference planes is decided once, from the pours, and handed to both
@@ -374,6 +379,8 @@ def run_ingest(ctx: StageContext) -> StageResult:
     # collected and then dropped on the floor.
     rules_doc["notes"] = (
         list(rules_doc.get("notes") or []) + list(sidecars.notes) + list(electrics.notes)
+        # A project file that could not be read says so, rather than netclasses vanishing.
+        + list(classes.warnings if classes else [])
         # Unfilled zones switch the plane checks off, so the note belongs with the findings
         # as well as with the board's warnings.
         + [w for w in model.warnings if w.endswith(ZONES_UNFILLED_NOTE.rsplit("}", 1)[-1])]
