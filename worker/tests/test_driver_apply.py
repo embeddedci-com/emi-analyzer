@@ -52,10 +52,11 @@ def test_the_reference_offset_is_the_micro_prefix_and_nothing_else():
 
 
 def test_the_offset_is_computable_by_hand():
-    """V_s = 2.0977 V behind 40 ohm into Z_in = 100 ohm, against a solve that used 20 mA."""
+    """V_s = 2.0977 V peak (1.4833 V RMS) behind 40 ohm into Z_in = 100 ohm, against a solve
+    that used 20 mA. RMS because every harmonic amplitude in the tool is (RMS_PER_PEAK)."""
     d = parse(BY_NAME["trapezoid-spi-clock"]["document"])
     applied = apply_driver(d, PORT, REFERENCE, [25e6])
-    i_new = 2.097736453123487 / (40 + 100)
+    i_new = 2.097736453123487 / math.sqrt(2.0) / (40 + 100)
     want = 20 * math.log10(REFERENCE / MICRO) + 20 * math.log10(i_new / 0.02)
     assert applied.offset_db[0] == pytest.approx(want, abs=1e-6)
 

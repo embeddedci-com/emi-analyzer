@@ -22,6 +22,7 @@ from dataclasses import dataclass, field
 
 from emi_worker.drivers.document import Driver
 from emi_worker.drivers.spectrum import (
+    RMS_PER_PEAK,
     DriverError,
     Trapezoid,
     corner_frequencies,
@@ -85,7 +86,8 @@ def _resolve_lines(
                 f"({fundamental_mhz:g} MHz fundamental), so it drives nothing there"
             )
             continue
-        volts.append(2.0 * piecewise_linear_series(times, values, period_s, n))
+        # An RMS phasor, like every amplitude here (spectrum.RMS_PER_PEAK).
+        volts.append(2.0 * RMS_PER_PEAK * piecewise_linear_series(times, values, period_s, n))
     return volts, undriven
 
 

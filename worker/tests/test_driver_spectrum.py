@@ -32,10 +32,13 @@ def _sinc(x: float) -> float:
 
 
 def closed_form(trap: Trapezoid, n: int) -> float:
-    """§9.1's textbook result, valid only for a symmetric edge."""
+    """§9.1's textbook result, valid only for a symmetric edge, as an RMS amplitude.
+
+    The textbook gives the one-sided peak; every amplitude in the tool is RMS, so this divides
+    by sqrt(2) the same way the implementation does (spectrum.RMS_PER_PEAK)."""
     tau_over_t = trap.pulse_width_s / trap.period_s
     tr_over_t = trap.rise_s / trap.period_s
-    return (2.0 * trap.amplitude_v * tau_over_t
+    return (math.sqrt(2.0) * trap.amplitude_v * tau_over_t
             * abs(_sinc(n * math.pi * tau_over_t))
             * abs(_sinc(n * math.pi * tr_over_t)))
 
@@ -83,7 +86,7 @@ def test_even_harmonics_vanish_at_fifty_percent():
 
 
 def test_a_square_wave_matches_its_fourier_series():
-    """2A/(n*pi) for odd n, with edges short enough not to matter.
+    """2A/(n*pi) peak for odd n, so sqrt(2)*A/(n*pi) RMS, with edges short enough not to matter.
 
     Not 4A/(n*pi): that is the figure for a wave swinging between -A and +A. A driver
     output swings between 0 and A, so every harmonic is half of the textbook number most
@@ -93,7 +96,7 @@ def test_a_square_wave_matches_its_fourier_series():
                      rise_s=1e-12, fall_s=1e-12)
     for n, (_f, amp) in enumerate(trapezoid_series(trap, 7), start=1):
         if n % 2 == 1:
-            assert amp == pytest.approx(2.0 / (n * math.pi), rel=1e-5)
+            assert amp == pytest.approx(2.0 / (n * math.pi) / math.sqrt(2.0), rel=1e-5)
 
 
 # ---- asymmetric edges ------------------------------------------------------------------
@@ -136,7 +139,7 @@ def test_the_envelope_has_the_stated_slopes():
     trap = Trapezoid(amplitude_v=3.3, period_s=4e-8, pulse_width_s=1e-8,
                      rise_s=1e-10, fall_s=1e-10)
     f1, f2 = corner_frequencies(trap)
-    flat = 2 * 3.3 * 1e-8 / 4e-8
+    flat = 2 * 3.3 * 1e-8 / 4e-8 / math.sqrt(2.0)
     assert envelope_v(trap, f1 / 10) == pytest.approx(flat)
     # a decade inside the middle region is 20 dB down
     mid = f1 * 10
@@ -224,3 +227,19 @@ def test_fixtures_reproduce():
         for point in case["expected"]["envelope"]:
             assert envelope_v(trap, point["frequency_hz"]) == pytest.approx(
                 point["amplitude_v"], rel=1e-12)
+
+
+def test_amplitudes_are_rms_not_peak():
+    """A 1 V peak harmonic reads 1/sqrt(2) V on an analyser, and so must it here.
+
+    Limits and uploaded analyser spectra are RMS. Leaving the trapezoid at its one-sided peak
+    made every predicted level 3 dB high against both."""
+    from emi_worker.drivers.spectrum import RMS_PER_PEAK, piecewise_linear_series
+
+    trap = Trapezoid(amplitude_v=1.0, period_s=1e-6, pulse_width_s=5e-7,
+                     rise_s=1e-9, fall_s=1e-9)
+    t, v = trap.breakpoints()
+    peak = 2.0 * abs(piecewise_linear_series(t, v, trap.period_s, 1))
+    (_f, amp), = trapezoid_series(trap, 1)
+    assert amp == pytest.approx(peak * RMS_PER_PEAK, rel=1e-12)
+    assert 20 * math.log10(peak / amp) == pytest.approx(3.0103, abs=1e-4)
