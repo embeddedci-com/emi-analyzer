@@ -22,6 +22,15 @@ they are not maintained, not tested, and may no longer run against the current w
 | `ff_real_board.py` | What does the far field cost, and does it run, on a real board? |
 | `ff_explore.py` | Which knob moves a short dipole's far field? |
 | `verify_cable_tier_a.py` | Does nec2c's product deck agree with openEMS on the same wire? |
+| `sp_verify_lines.py` | Does a small-part coupon of a microstrip or stripline read its Z0, delay and S21? |
+| `sp_verify_via.py` | Does a via between planes read the two-post closed-form inductance? |
+| `sp_convergence.py` | Does the size of a coupon or the mesh preset change a small-part answer? |
+| `sp_real_coupons.py` | What do coupons cut from real boards cost, and do the presets agree? |
+
+The `sp_` scripts share `sp_harness.py` and `sp_metrics.py`, run against the current worker,
+and are written up in [docs/verification/small-part-solve.md](../../docs/verification/small-part-solve.md).
+`sp_convergence.py` and `sp_real_coupons.py` read real boards from `/boards` with `SETUPS`
+(`folder:NET[|NET2]:label`).
 
 The `ff_` scripts share `ff_harness.py` and are written up in
 [docs/verification/far-field.md](../../docs/verification/far-field.md). Unlike the spikes they

@@ -102,7 +102,8 @@ Then open <http://localhost:5174> and upload a board;
 
 ### Experimental features
 
-`full-wave` is off by default; see [docs/known-issues.md](docs/known-issues.md). To work on it:
+`full-wave` and `small-part-solve` are off by default; see [docs/known-issues.md](docs/known-issues.md).
+To work on one:
 
 ```bash
 ./bin/emi-local -experimental full-wave
