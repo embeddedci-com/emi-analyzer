@@ -26,7 +26,7 @@ from .. import stackup, topology
 from ..gerber import GerberError, NetlistError, load_gerber_board
 from ..kicad import netclass, parse, parse_board
 from ..kicad.board import ZONES_UNFILLED_NOTE
-from ..kicad.normalize import _board_extent, normalize, to_json
+from ..kicad.normalize import board_extent, normalize, to_json
 from ..rules import run_rules, settings
 from ..rules import matching, netreport
 from ..rules.model import RuleContext
@@ -352,7 +352,7 @@ def run_ingest(ctx: StageContext) -> StageResult:
     ctx.progress("rules", 72, "running EMI checks")
     rules = run_rules(RuleContext(
         model=model,
-        transform=_board_extent(model),
+        transform=board_extent(model),
         max_frequency_hz=max_freq,
         settings=cfg,
         electrics=electrics,

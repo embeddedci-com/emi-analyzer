@@ -10,7 +10,7 @@ to the PMIC -- because those are where a naive check drowns people in noise.
 from __future__ import annotations
 
 from emi_worker.kicad.board import BoardModel, CopperLayer, Pad, Track, Via, ZonePolygon
-from emi_worker.kicad.normalize import _board_extent
+from emi_worker.kicad.normalize import board_extent
 from emi_worker.rules import emc, settings
 from emi_worker.rules.model import RuleContext
 
@@ -37,7 +37,7 @@ def via(x, y, net="GND"):
 
 
 def ctx_for(m, rules=None) -> RuleContext:
-    ctx = RuleContext(model=m, transform=_board_extent(m), max_frequency_hz=1e9)
+    ctx = RuleContext(model=m, transform=board_extent(m), max_frequency_hz=1e9)
     if rules:
         ctx.settings = settings.load(("file", {"rules": rules}))
     return ctx

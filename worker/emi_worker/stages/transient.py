@@ -14,7 +14,7 @@ import json
 import logging
 
 from .. import stackup, topology
-from ..kicad.normalize import _board_extent, normalize
+from ..kicad.normalize import board_extent, normalize
 from ..rules import emc, settings
 from ..rules.model import RuleContext, classify_net
 from ..transient import lines as tlines
@@ -106,7 +106,7 @@ def run_transient(ctx: StageContext) -> StageResult:
     ctx.progress("topology", 18, "tracing net connectivity")
     ctx.check_stop()
     rctx = RuleContext(
-        model=model, transform=_board_extent(model),
+        model=model, transform=board_extent(model),
         max_frequency_hz=float(cfg.value("max_frequency_hz") or DEFAULT_MAX_FREQUENCY_HZ),
         settings=cfg, electrics=electrics, topology=topology.build(model),
     )

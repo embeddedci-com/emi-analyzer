@@ -10,7 +10,7 @@ from __future__ import annotations
 from collections import defaultdict
 
 from ..kicad.board import BoardModel
-from ..kicad.normalize import _ring_area
+from ..kicad.geometry import ring_area
 from .model import classify_net
 
 PLANE_COVERAGE_MIN = 0.30
@@ -36,7 +36,7 @@ def plane_layers(model: BoardModel, min_coverage: float = PLANE_COVERAGE_MIN) ->
     area: dict[tuple[str, str], float] = defaultdict(float)
     for z in model.zones:
         if z.net:
-            area[(z.layer, z.net)] += _ring_area(z.ring)
+            area[(z.layer, z.net)] += ring_area(z.ring)
     best: dict[str, tuple[str, float]] = {}
     for (layer, net), a in area.items():
         if a / board >= min_coverage and a > best.get(layer, ("", 0.0))[1]:
@@ -50,13 +50,3 @@ def ground_planes(model: BoardModel) -> dict[str, str]:
 
 def severity(ctx, rule: str, natural: str) -> str:
     return ctx.settings.severity(rule, natural) if ctx.settings is not None else natural
-
-
-def point_segment_distance(px: float, py: float, x0: float, y0: float, x1: float, y1: float) -> float:
-    dx, dy = x1 - x0, y1 - y0
-    L2 = dx * dx + dy * dy
-    if L2 <= 0:
-        return ((px - x0) ** 2 + (py - y0) ** 2) ** 0.5
-    t = max(0.0, min(1.0, ((px - x0) * dx + (py - y0) * dy) / L2))
-    qx, qy = x0 + t * dx, y0 + t * dy
-    return ((px - qx) ** 2 + (py - qy) ** 2) ** 0.5

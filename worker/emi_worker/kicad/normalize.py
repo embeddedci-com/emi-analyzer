@@ -77,7 +77,7 @@ def _simplify(ring: list[tuple[float, float]], tol: float) -> list[tuple[float, 
     return out if len(out) >= 3 else ring
 
 
-class _Transform:
+class Transform:
     """KiCad space (mm, Y down, page origin) -> board space (mm, Y up, corner origin)."""
 
     def __init__(self, min_x: float, min_y: float, max_x: float, max_y: float):
@@ -102,7 +102,7 @@ class _Transform:
         return arr
 
 
-def _board_extent(model: BoardModel) -> _Transform:
+def board_extent(model: BoardModel) -> Transform:
     """Board bounds, from the Edge.Cuts outline when there is one, else from the copper."""
     rings: list[list[tuple[float, float]]] = list(model.outline)
     if not rings:
@@ -113,7 +113,12 @@ def _board_extent(model: BoardModel) -> _Transform:
     b = g.bounds([r for r in rings if r])
     if b is None:
         raise ValueError("board has no geometry to measure")
-    return _Transform(*b)
+    return Transform(*b)
+
+
+# The old private names, for callers that have not moved to the public ones yet.
+_Transform = Transform
+_board_extent = board_extent
 
 
 def _stackup_with_z(model: BoardModel) -> tuple[list[dict], dict[str, float]]:
@@ -166,18 +171,6 @@ def _via_ring(via: Via) -> list[tuple[float, float]]:
     return g.circle(via.x, via.y, r) if r > 0 else []
 
 
-def _ring_area(ring: list[tuple[float, float]]) -> float:
-    """Unsigned polygon area by the shoelace formula, in mm^2."""
-    if len(ring) < 3:
-        return 0.0
-    total = 0.0
-    for i in range(len(ring)):
-        x0, y0 = ring[i]
-        x1, y1 = ring[(i + 1) % len(ring)]
-        total += x0 * y1 - x1 * y0
-    return abs(total) / 2.0
-
-
 #: A layer is called a plane when one net's pours cover at least this much of the board.
 #: Below it the copper is pours around routing rather than a reference plane, and naming it
 #: would be misleading -- a signal layer with a bit of ground fill is not a ground plane.
@@ -200,7 +193,7 @@ def _plane_of(layer: str, plane_area: dict, board_area: float) -> dict:
 
 def normalize(model: BoardModel, source: dict | None = None) -> tuple[dict, bytes]:
     """Produce ``(board_doc, geometry_bytes)``."""
-    tf = _board_extent(model)
+    tf = board_extent(model)
     stackup, copper_z = _stackup_with_z(model)
     copper_names = set(model.copper_layer_names)
 
@@ -261,7 +254,7 @@ def normalize(model: BoardModel, source: dict | None = None) -> tuple[dict, byte
     for zone in model.zones:
         if zone.layer not in copper_names:
             continue
-        plane_area[(zone.layer, zone.net)] += _ring_area(zone.ring)
+        plane_area[(zone.layer, zone.net)] += g.ring_area(zone.ring)
         ring = zone.ring
         if len(ring) > ZONE_SIMPLIFY_ABOVE:
             ring = _simplify(ring, ZONE_SIMPLIFY_TOLERANCE_MM)

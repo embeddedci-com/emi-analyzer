@@ -237,6 +237,116 @@ def signed_area(ring: Ring) -> float:
     return a / 2.0
 
 
+def ring_area(ring: Ring) -> float:
+    """Unsigned polygon area by the shoelace formula, in mm^2."""
+    return abs(signed_area(ring)) if len(ring) >= 3 else 0.0
+
+
+def point_in_ring(x: float, y: float, ring: Ring) -> bool:
+    """Even-odd point-in-polygon. Pours are not convex, so a bounding box will not do."""
+    inside = False
+    n = len(ring)
+    for i in range(n):
+        x0, y0 = ring[i]
+        x1, y1 = ring[(i + 1) % n]
+        if (y0 > y) != (y1 > y):
+            xi = x0 + (y - y0) * (x1 - x0) / (y1 - y0)
+            if x < xi:
+                inside = not inside
+    return inside
+
+
+def point_segment_distance(px: float, py: float, x0: float, y0: float, x1: float, y1: float) -> float:
+    """Distance from a point to a line segment."""
+    dx, dy = x1 - x0, y1 - y0
+    denom = dx * dx + dy * dy
+    if denom < 1e-15:
+        return math.hypot(px - x0, py - y0)
+    t = max(0.0, min(1.0, ((px - x0) * dx + (py - y0) * dy) / denom))
+    return math.hypot(px - (x0 + t * dx), py - (y0 + t * dy))
+
+
+def ring_edges(rings: list[Ring]) -> np.ndarray:
+    """Every edge of a set of closed rings, as an (N, 4) array of x0, y0, x1, y1."""
+    out = []
+    for ring in rings:
+        n = len(ring)
+        for i in range(n):
+            (x0, y0), (x1, y1) = ring[i], ring[(i + 1) % n]
+            if (x0, y0) != (x1, y1):
+                out.append((x0, y0, x1, y1))
+    return np.asarray(out, dtype=np.float64).reshape(-1, 4)
+
+
+def _points_to_segments(px: np.ndarray, py: np.ndarray, seg: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Distance from each point to each segment (broadcast), and the closest points."""
+    x0, y0, x1, y1 = seg[..., 0], seg[..., 1], seg[..., 2], seg[..., 3]
+    dx, dy = x1 - x0, y1 - y0
+    denom = dx * dx + dy * dy
+    with np.errstate(invalid="ignore", divide="ignore"):
+        t = np.where(denom > 1e-15, ((px - x0) * dx + (py - y0) * dy) / denom, 0.0)
+    t = np.clip(t, 0.0, 1.0)
+    qx, qy = x0 + t * dx, y0 + t * dy
+    return np.hypot(px - qx, py - qy), qx, qy
+
+
+def segment_to_edges(ax: float, ay: float, bx: float, by: float,
+                     edges: np.ndarray) -> tuple[float, Point]:
+    """Closest approach of segment a-b to any of the edges, and where on a-b it happens.
+
+    Testing only a track's vertices misses a long straight run that passes the edge in its
+    middle, which is exactly the run most likely to hug a board edge.
+    """
+    if edges.size == 0:
+        return math.inf, (ax, ay)
+    e = edges
+    # Proper crossings are distance zero.
+    def cross(ox, oy, px, py, qx, qy):
+        return (px - ox) * (qy - oy) - (py - oy) * (qx - ox)
+    d1 = cross(ax, ay, bx, by, e[:, 0], e[:, 1])
+    d2 = cross(ax, ay, bx, by, e[:, 2], e[:, 3])
+    d3 = cross(e[:, 0], e[:, 1], e[:, 2], e[:, 3], ax, ay)
+    d4 = cross(e[:, 0], e[:, 1], e[:, 2], e[:, 3], bx, by)
+    hit = ((d1 > 0) != (d2 > 0)) & ((d3 > 0) != (d4 > 0)) & (d1 != 0) & (d2 != 0)
+    if hit.any():
+        i = int(np.argmax(hit))
+        denom = d1[i] - d2[i]
+        t = d1[i] / denom if denom else 0.0
+        return 0.0, (e[i, 0] + t * (e[i, 2] - e[i, 0]), e[i, 1] + t * (e[i, 3] - e[i, 1]))
+
+    ab = np.array([ax, ay, bx, by], dtype=np.float64)
+    # The track's end points against every edge ...
+    da, _, _ = _points_to_segments(np.float64(ax), np.float64(ay), e)
+    db, _, _ = _points_to_segments(np.float64(bx), np.float64(by), e)
+    # ... and every edge's end points against the track.
+    dc, cx, cy = _points_to_segments(e[:, 0], e[:, 1], ab)
+    dd, dx_, dy_ = _points_to_segments(e[:, 2], e[:, 3], ab)
+    best = min(
+        (float(da.min()), (ax, ay)),
+        (float(db.min()), (bx, by)),
+        (float(dc.min()), (float(cx[int(dc.argmin())]), float(cy[int(dc.argmin())]))),
+        (float(dd.min()), (float(dx_[int(dd.argmin())]), float(dy_[int(dd.argmin())]))),
+        key=lambda c: c[0],
+    )
+    return best
+
+
+def outer_rings(rings: list[Ring]) -> list[Ring]:
+    """The rings that are not inside another one: the board's edge, not its cutouts.
+
+    Edge.Cuts carries mounting holes and slots as rings of their own. They are holes in the
+    board, not its edge, and a trace beside a mounting hole is not radiating off the edge.
+    """
+    usable = [r for r in rings if len(r) >= 3]
+    by_area = sorted(usable, key=ring_area, reverse=True)
+    out: list[Ring] = []
+    for i, ring in enumerate(by_area):
+        x, y = ring[0]
+        if not any(point_in_ring(x, y, bigger) for bigger in by_area[:i]):
+            out.append(ring)
+    return out
+
+
 def triangulate(outer: Ring, holes: list[Ring] | None = None) -> np.ndarray:
     """Triangulate one polygon into a flat float32 array of x,y pairs (3 per triangle).
 
