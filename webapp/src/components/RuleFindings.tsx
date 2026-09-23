@@ -74,7 +74,7 @@ export function RuleFindings({
   if (!rules) {
     return (
       <Text size="sm" c="dimmed">
-        No checks have run for this board yet.
+        No checks have run yet. Re-analyse the board from the Board tab.
       </Text>
     )
   }
@@ -84,9 +84,10 @@ export function RuleFindings({
   if (rules.findings.length === 0) {
     return (
       <Alert color="green" variant="light" title="No findings">
-        The geometry checks found nothing at{' '}
+        The layout checks found nothing at{' '}
         {(rules.summary.assumed_max_frequency_hz / 1e6).toFixed(0)} MHz. That is not a clean
-        bill of health — these are layout checks, not a simulation.
+        bill of health: they are not a simulation. Under Checks you can see which ran and
+        raise the top frequency.
       </Alert>
     )
   }
@@ -114,7 +115,7 @@ export function RuleFindings({
       <Text size="xs" c="dimmed">
         Evaluated against a top frequency of{' '}
         {(rules.summary.assumed_max_frequency_hz / 1e6).toFixed(0)} MHz. These are geometric
-        checks — they say where to look, not how much your board radiates.
+        checks: they say where to look, not how much your board radiates.
       </Text>
 
       <Accordion variant="separated" defaultValue={grouped[0]?.[0]} chevronPosition="left">
@@ -150,22 +151,8 @@ export function RuleFindings({
         ))}
       </Accordion>
 
-      {(rules.suppressed ?? 0) > 0 && (
-        <Text size="xs" c="dimmed">
-          {rules.suppressed} finding{rules.suppressed === 1 ? '' : 's'} hidden by suppressions
-          in your rules file. A finding that is missing should be explainable, not mysterious.
-        </Text>
-      )}
-
-      {(rules.settings_warnings ?? []).length > 0 && (
-        <Alert color="yellow" variant="light" title="Some settings were not applied">
-          <Stack gap={2}>
-            {rules.settings_warnings!.map((w, i) => (
-              <Text key={i} size="xs">{w}</Text>
-            ))}
-          </Stack>
-        </Alert>
-      )}
+      {/* Suppressed findings and settings that were not applied are in the notes above the
+          findings (AnalysisNotes), with everything else the worker said about the board. */}
 
       {rules.findings.length > 0 && (
         <Text size="xs" c="dimmed">
