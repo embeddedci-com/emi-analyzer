@@ -22,7 +22,7 @@ solver or a measurement — and passed. The gap between the two is most of this 
 | **Full-wave solve (openEMS)** | ✅ | ⚠️ **solves end to end on the fixture board; nothing verified at radiated record length — §2** | **off** (`full-wave`) |
 | Drivers (re-weighting a solve) | ✅ | ⚠️ partly | off, with full-wave |
 | Components (MLCC models in a solve) | ✅ | ⚠️ partly | off, with full-wave |
-| Board far field (NF2FF) | ✅ | ⚠️ on a dipole fixture only, with the ground plane on the box; the product places it 0.8 m below (§3) | off, with full-wave |
+| Board far field (NF2FF) | ✅ | ⚠️ matches nec2c on dipoles over the ground plane as the product runs it, 30 MHz up (§3); no board checked against a measurement | off, with full-wave |
 | Cable emissions, Tier B | ✅ | ⚠️ synthetic board only | off, with full-wave |
 | Compliance estimate | ✅ | ❌ runs end to end on the fixture board; never checked against a lab or a second solver (§3) | off, with full-wave |
 | Conducted emissions scan | ❌ | ❌ | — |
@@ -138,9 +138,10 @@ capacitor.
 | Combination of paths, totals and shares | ✅ |
 | Confidence arithmetic (Python and TypeScript agree) | ✅ |
 | Incomplete inputs remove the margin rather than guess | ✅ |
-| Far field vs theory (dipole 2.13 dBi vs 2.15; ground reflection within 0.08 dB) | ✅ on a fixture, mirror on the box face |
-| Far field with the ground plane 0.8 m below the box, as the product runs it, vs image theory | ❌ |
-| Far field below the frequency where the box is a tenth of a wavelength out | ❌ unmeasured; the result says where that starts |
+| Far field vs theory: directivity 1.76 dBi short dipole, 2.15 dBi half-wave | ✅ 1.75-1.79 and 2.15 dBi ([verification/far-field.md](verification/far-field.md)) |
+| Far field with the ground plane 0.8 m below, scanned 1-4 m at 3 m, vs nec2c | ✅ short dipoles within 0.22 dB to 850 MHz; ⚠️ -1.8 dB at the top of the solved band (0.04 dB when solved past it); half-wave dipoles within about 1 dB to resonance, 1.3 dB above |
+| Far field below the frequency where the box is a tenth of a wavelength out | ✅ on dipoles and a loop down to 30 MHz (0.003 λ); not on a board |
+| Far field per volt rises as theory says (loop, short dipole, fixture board) | ✅ loop within 0.2 dB of closed form below 300 MHz; dipole 40.3 dB/decade; fixture 39 (was 22.6, see §4) |
 | Far field divided by the source in openEMS's own convention (the FD factor of 2) | ✅ against openEMS: an E dump integrated along the port's probe is 1.99-2.01 times `post._dft` of the same voltage, fixture board |
 | A real solve, a driver and the board assembled into a margin | ✅ runs on the fixture board (`scripts/e2e_compliance_fixture.py`); the level is not checked against anything |
 | Transfer functions interpolated between grid points | ❌ the 1 dB σ term is a placeholder, not a residual |
@@ -158,20 +159,27 @@ capacitor.
 - **The cost estimator is calibrated against the old mesher** and now under-predicts (§2).
 - **No solve has been run at radiated record length** since the divergence check was fixed
   (§2). That is the run the far-field and compliance paths need.
-- **The far field has never run on a real board.** Box placement, face sub-sampling and artifact
-  size are untested outside the fixture.
+- **The far field on a real board runs, but its record is too short.** Board A (4 layers,
+  100 x 80 mm, a 15 mm region at 300 µm): 7.9 M cells, 2 h 38 min on three threads, 1.8 GB, an
+  83 x 83 x 71 mm box, a 47 KB `farfield.json`. It stopped on the -40 dB end criterion at 165,536
+  steps with the board still ringing, and the port read a negative resistance at 57 of 60
+  frequencies. Those are now marked unusable (`truncated_hz`) and the estimate says a longer run
+  would recover them. What end criterion a real board needs, and what it costs, is not measured.
+  At the 600 µm preset the same run was refused as unstable. See
+  [verification/far-field.md](verification/far-field.md) §5.
 - **The compliance chain has only run on the fixture board.** The worker now assembles a solve's
   far field and cable transfer functions into paths (September 2026), and
   `worker/scripts/e2e_compliance_fixture.py` runs it on `tiny.kicad_pcb` in the worker image: a
   30 MHz-1 GHz solve with the far field (1.89 M cells, converged at 48,930 steps, 5 minutes),
   a 25 MHz 3.3 V clock attached, J1 declared as carrying no cable. It comes back complete,
   one board path, 19 driven harmonics, +35.9 dB at 75 MHz, σ 7.4 dB. That shows the chain
-  runs; it does not show the level is right. One thing in it looks wrong and is not explained:
-  the far field per volt rises about 20 dB/decade (1.3e-6 V/m/V at 30 MHz, 6.0e-5 at 520 MHz)
-  while the port looks capacitive (|Z_in| falling as 1/f), and an electrically short radiator
-  fed through a capacitance should rise at least 40 dB/decade. The box is 0.003 λ from the
-  copper at 30 MHz, the regime nothing has checked, so the low end of the band is the first
-  suspect. The first real run also found the far field had never worked on a derived grid: the
+  runs; it does not show the level is right. That run's far field rose 20 dB/decade per volt
+  where a capacitive port needs 40. The cause was two faults, both fixed (September 2026):
+  `nf2ff`'s PEC mirror images horizontal currents wrongly, and the stride-sampled faces left a
+  14 mm slot round the box ([verification/far-field.md](verification/far-field.md) §1). The
+  far field is now read at the scan's positions with image currents, format 3; the same run
+  now gives 39 dB/decade and a margin of +41.5 dB at 325 MHz (it was +35.9 dB at 75 MHz, with
+  most of the low band inflated). The first real run also found the far field had never worked on a derived grid: the
   job wrote frequencies with more digits than the dumps recorded, and `nf2ff` refused every
   plane. Fixed; the check is in `test_nf2ff.py`.
 - **One driver per solve.** A solve has one excited port and the estimate attaches one driver to
