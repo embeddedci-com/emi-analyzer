@@ -58,6 +58,10 @@ const (
 	StatusTimedOut     RunStatus = "timed_out"
 )
 
+// StoppedBeforeStartError is the error recorded on a run stopped while it was still queued.
+// It ends as failed, like a run its worker stopped, so it can be retried the same way.
+const StoppedBeforeStartError = "stopped before a worker started it"
+
 // Claimable reports whether a worker may take this run.
 func (s RunStatus) Claimable() bool {
 	return s == StatusNew || s == StatusRetryPending

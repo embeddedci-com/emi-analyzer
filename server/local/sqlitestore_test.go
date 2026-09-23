@@ -366,3 +366,49 @@ func TestCountBoardsSharingInput(t *testing.T) {
 		t.Fatalf("unshared count = %d, want 0", n)
 	}
 }
+
+// A queued run has no worker to wind it down, so stopping it ends it. It used to be left in
+// "stopping" for good: nothing claims or completes a run in that state, the sweeper skips it
+// for having no claimed_at, and retry and stop both refused it.
+func TestRequestStop(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	for _, st := range []emi.RunStatus{emi.StatusNew, emi.StatusRetryPending} {
+		_, _, r := seed(t, s, "org-"+string(st), now)
+		if st == emi.StatusRetryPending {
+			if _, err := s.db.ExecContext(ctx, `UPDATE emi_runs SET status = 'retry_pending' WHERE id = ?`, r.ID); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := s.RequestStop(ctx, r.ID, now); err != nil {
+			t.Fatalf("%s: %v", st, err)
+		}
+		got, _ := s.GetRun(ctx, r.ID)
+		if got.Status != emi.StatusFailed || got.Error != emi.StoppedBeforeStartError || got.FinishedAt == nil {
+			t.Fatalf("%s after stop = %+v", st, got)
+		}
+		if err := s.RetryRun(ctx, r.ID, now); err != nil {
+			t.Fatalf("%s: a stopped queued run cannot be retried: %v", st, err)
+		}
+	}
+
+	_, _, r := seed(t, s, "org-running", now)
+	if _, err := s.ClaimRun(ctx, r.ID, "kid", "jti", now); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.RequestStop(ctx, r.ID, now); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := s.GetRun(ctx, r.ID)
+	if got.Status != emi.StatusStopping || got.Error != "" || got.FinishedAt != nil {
+		t.Fatalf("running run after stop = %+v", got)
+	}
+	if err := s.RequestStop(ctx, r.ID, now); !errors.Is(err, emi.ErrConflict) {
+		t.Fatalf("stopping twice: %v, want ErrConflict", err)
+	}
+	if err := s.CompleteRun(ctx, r.ID, emi.StatusFailed, nil, "stopped on request", now); err != nil {
+		t.Fatalf("the owner could not report back: %v", err)
+	}
+}

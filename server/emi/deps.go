@@ -169,6 +169,9 @@ type Store interface {
 	UpdateRunProgress(ctx context.Context, runID string, p *Progress, at time.Time) error
 	SetRunEstimate(ctx context.Context, runID string, e *Estimate) error
 	CompleteRun(ctx context.Context, runID string, status RunStatus, summary []byte, errMsg string, at time.Time) error
+	// RequestStop moves an in_progress run to stopping, for its worker to wind down, and a
+	// queued (new or retry_pending) run straight to failed with StoppedBeforeStartError,
+	// because no worker holds it to report back. ErrConflict for any other state.
 	RequestStop(ctx context.Context, runID string, at time.Time) error
 	RetryRun(ctx context.Context, runID string, at time.Time) error
 

@@ -620,10 +620,21 @@ func (s *PGStore) CompleteRun(ctx context.Context, runID string, status RunStatu
 	return nil
 }
 
+// RequestStop ends a queued run at once and asks a running one to stop.
+//
+// Only a run a worker holds can be "stopping": that state means "waiting for the owner to
+// report back". A queued run has no owner, so it used to sit in stopping forever -- nothing
+// claims it, nothing completes it, the sweeper skips it for having no claimed_at, and retry
+// and stop both refuse it. It goes straight to failed instead, which retry accepts.
 func (s *PGStore) RequestStop(ctx context.Context, runID string, at time.Time) error {
 	tag, err := s.pool.Exec(ctx, `
-		UPDATE emi.emi_runs SET status = 'stopping', updated_at = $2
-		WHERE id = $1 AND status IN ('new','retry_pending','in_progress')`, runID, at)
+		UPDATE emi.emi_runs
+		SET status      = CASE WHEN status = 'in_progress' THEN 'stopping' ELSE 'failed' END,
+		    error       = CASE WHEN status = 'in_progress' THEN error ELSE $3 END,
+		    finished_at = CASE WHEN status = 'in_progress' THEN finished_at ELSE $2 END,
+		    updated_at  = $2
+		WHERE id = $1 AND status IN ('new','retry_pending','in_progress')`,
+		runID, at, StoppedBeforeStartError)
 	if err != nil {
 		return mapErr(err)
 	}

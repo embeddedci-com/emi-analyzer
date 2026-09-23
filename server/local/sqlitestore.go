@@ -624,10 +624,16 @@ func (s *SQLiteStore) CompleteRun(ctx context.Context, runID string, status emi.
 		string(status), nullJSON(summary), errMsg, ts(at), ts(at), runID))
 }
 
+// RequestStop follows emi.PGStore: a queued run ends at once, a running one is asked to stop.
 func (s *SQLiteStore) RequestStop(ctx context.Context, runID string, at time.Time) error {
 	return conflictIfNone(s.db.ExecContext(ctx, `
-		UPDATE emi_runs SET status = 'stopping', updated_at = ?
-		WHERE id = ? AND status IN ('new','retry_pending','in_progress')`, ts(at), runID))
+		UPDATE emi_runs
+		SET status      = CASE WHEN status = 'in_progress' THEN 'stopping' ELSE 'failed' END,
+		    error       = CASE WHEN status = 'in_progress' THEN error ELSE ? END,
+		    finished_at = CASE WHEN status = 'in_progress' THEN finished_at ELSE ? END,
+		    updated_at  = ?
+		WHERE id = ? AND status IN ('new','retry_pending','in_progress')`,
+		emi.StoppedBeforeStartError, ts(at), ts(at), runID))
 }
 
 func (s *SQLiteStore) RetryRun(ctx context.Context, runID string, at time.Time) error {

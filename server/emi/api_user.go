@@ -605,13 +605,20 @@ func (s *Service) handleStopRun(w http.ResponseWriter, r *http.Request) {
 		writeStoreErr(w, err)
 		return
 	}
+	// Read back rather than assume: a queued run ends as failed, a running one is stopping,
+	// and a worker may have claimed it between the read above and the update.
+	fresh, err := s.deps.Store.GetRun(r.Context(), run.ID)
+	if err != nil {
+		writeStoreErr(w, err)
+		return
+	}
 	// Best effort. The run is already marked stopping in the database, so a worker that
 	// misses this push still finds out at its next progress post.
 	delivered := false
-	if run.OwnerAPIKeyKid != "" {
-		delivered = s.hub.PushStop(r.Context(), run.OwnerAPIKeyKid, run.ID)
+	if fresh.Status == StatusStopping && fresh.OwnerAPIKeyKid != "" {
+		delivered = s.hub.PushStop(r.Context(), fresh.OwnerAPIKeyKid, fresh.ID)
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"status": StatusStopping, "pushed": delivered})
+	writeJSON(w, http.StatusOK, map[string]any{"status": fresh.Status, "pushed": delivered})
 }
 
 func (s *Service) handleRetryRun(w http.ResponseWriter, r *http.Request) {
