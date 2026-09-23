@@ -121,9 +121,6 @@ def params() -> SolveParams:
         ports=[Port("p1", X0 - PAD_DX, Y0, "F.Cu", half_width_mm=0.2)],
         dx_um=dx, dy_um=dy, dz_um=dz, air_mm=3.0,
         model_components=True, solver_series_rlc=True,
-        # A 20:1 band is one cycle of the pulse's carrier, and openEMS checks its end criterion
-        # while the source is on; -70 dB is below any dip between its lobes.
-        end_criteria=1e-7,
     )
 
 
@@ -148,9 +145,13 @@ def shorted(built):
 def solve(name: str, doc, built) -> tuple[np.ndarray, run.RunResult]:
     work = OUT / name
     work.mkdir(parents=True, exist_ok=True)
+    # As the solve stage does: the end criterion is enforced after the source, not by openEMS.
+    end_db = 10 * math.log10(doc.end_criteria)
+    doc.end_criteria = run.OPENEMS_NEVER_STOPS
     (work / "model.xml").write_text(doc.to_string())
     res = run.run_openems(str(work / "model.xml"), str(work), threads=THREADS,
-                          excitation_s=excitation_seconds(built.doc.excitation.fc))
+                          excitation_s=excitation_seconds(built.doc.excitation.fc),
+                          stop_below_db=end_db)
     u = post.read_probe(str(work / "p1_ut"))
     i = post.read_probe(str(work / "p1_it"))
     f = np.asarray(FREQS)

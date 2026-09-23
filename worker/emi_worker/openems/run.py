@@ -137,7 +137,13 @@ class RunResult:
 
     @property
     def converged(self) -> bool:
-        """Whether the run reached its energy cutoff, after its source, not its timestep cap."""
+        """Whether the run reached its energy cutoff, after its source, not its timestep cap.
+
+        A run the runner stopped on its energy (``stop_below_db``) is converged: openEMS then
+        prints the timestep-cap warning too, against the unreachable criterion it was given.
+        """
+        if self.stopped_on_energy_at:
+            return not self.stopped_inside_the_source
         return TIMESTEP_LIMIT_NEEDLE not in self.log_text and not self.stopped_inside_the_source
 
     def unconverged_reason(self) -> str | None:
@@ -212,6 +218,11 @@ def run_openems(
         cmd.append(f"--numThreads={threads}")
 
     log.info("running %s in %s", " ".join(cmd), workdir)
+    # openEMS does not always delete the file it stopped on, and a stale one ends the next run
+    # in the same directory at its first timestep.
+    abort_file = os.path.join(workdir, "ABORT")
+    if os.path.exists(abort_file):
+        os.remove(abort_file)
     started = time.monotonic()
 
     try:
@@ -295,7 +306,7 @@ def run_openems(
                         and last.timestep > source_done and last.energy_db <= stop_below_db):
                     aborted_at = last.timestep
                     try:
-                        with open(os.path.join(workdir, "ABORT"), "w"):
+                        with open(abort_file, "w"):
                             pass
                     except OSError as exc:
                         log.warning("could not ask openEMS to stop: %s", exc)
@@ -305,6 +316,8 @@ def run_openems(
 
     returncode = proc.wait()
     elapsed = time.monotonic() - started
+    if os.path.exists(abort_file):
+        os.remove(abort_file)
 
     if cancelled:
         raise Stopped()

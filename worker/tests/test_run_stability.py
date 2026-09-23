@@ -194,8 +194,10 @@ def _abortable_openems(tmp_path, energies_db: list[tuple[int, float]]):
         lines.append(f"echo '[@ 1s] Timestep: {step} || Speed: 100 MC/s (1e-03 s/TS) || "
                      f"Energy: ~1e-15 ({db:+.2f}dB)'")
         lines.append("sleep 0.05")
-    lines.append("for i in $(seq 1 40); do [ -f ABORT ] && echo 'Time for 3000 iterations' "
-                 "&& exit 0; sleep 0.05; done")
+    # What openEMS 0.0.35 prints on an abort, cap warning included (its criterion was -300 dB).
+    lines.append("for i in $(seq 1 40); do [ -f ABORT ] && echo 'Found file \"ABORT\"' && "
+                 "echo 'Max. number of timesteps was reached before the end-criteria of -300dB' "
+                 "&& echo 'Time for 3000 iterations' && exit 0; sleep 0.05; done")
     lines.append("echo 'Max. number of timesteps was reached before the end-criteria!'")
     fake = tmp_path / "openEMS"
     fake.write_text("#!/bin/sh\n" + "\n".join(lines) + "\n")
@@ -209,9 +211,11 @@ def test_the_runner_stops_openems_only_after_its_source(tmp_path, monkeypatch):
 
     monkeypatch.setattr(runmod, "OPENEMS_BIN", _abortable_openems(
         tmp_path, [(400, -60.0), (800, -0.0), (2000, -30.0), (3000, -45.0)]))
+    (tmp_path / "ABORT").write_text("")  # left behind by an earlier run
     r = runmod.run_openems("model.xml", str(tmp_path), stop_below_db=-40.0)
     assert r.stopped_on_energy_at == 3000
     assert r.converged is True
+    assert not (tmp_path / "ABORT").exists()
 
 
 def test_without_the_runner_criterion_the_run_goes_to_its_cap(tmp_path, monkeypatch):

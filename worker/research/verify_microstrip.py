@@ -161,6 +161,8 @@ def main() -> int:
         built = build_model(board, transform, params)
         work = OUT / name
         work.mkdir(parents=True, exist_ok=True)
+        # As the solve stage does: the end criterion is enforced after the source, not by openEMS.
+        built.doc.end_criteria = run.OPENEMS_NEVER_STOPS
         (work / "model.xml").write_text(built.doc.to_string())
         m = built.mesh
         across = int(((m.y >= Y_MM - w / 2 - 1e-9) & (m.y <= Y_MM + w / 2 + 1e-9)).sum()) - 1
@@ -168,7 +170,8 @@ def main() -> int:
         print(f"\n== {name}: {m.cells:,} cells, {across} cells across the strip, "
               f"smallest {m.min_cell_mm * 1000:.1f} um", flush=True)
         res = run.run_openems(str(work / "model.xml"), str(work), threads=THREADS,
-                              excitation_s=excitation_seconds(built.doc.excitation.fc))
+                              excitation_s=excitation_seconds(built.doc.excitation.fc),
+                              stop_below_db=-40.0)
         got = extract(work, freqs)
         err = (np.abs(got["z0"]) / z_hj - 1) * 100
         e_err = (got["eps_eff"] / e_hj - 1) * 100
