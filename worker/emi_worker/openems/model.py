@@ -880,8 +880,8 @@ def build_model(model: BoardModel, transform, params: SolveParams) -> BuiltModel
                 "face_resolution_mm": resolution,
                 "clearance_mm": ff_clearance,
                 # Where the box is a tenth of a wavelength out. Below this it sits closer, in
-                # the reactive near field, and nothing has measured how far down the
-                # transform stays right there. Carried so the result can say so.
+                # the reactive near field. Dipoles and a loop read right down to 30 MHz (0.003
+                # wavelengths, docs/verification/far-field.md); a board has not been checked.
                 "tenth_wavelength_above_hz": SPEED_OF_LIGHT / (10.0 * ff_clearance / 1000.0),
             }
             notes.append(
@@ -920,7 +920,8 @@ FAR_FIELD_MIN_CLEARANCE_MM = 25.0
 #: ...and never less than this fraction of the wavelength at the top of the solved band. At
 #: that frequency the box is then a tenth of a wavelength out, above the 0.064 wavelengths at
 #: which M0 saw a pattern no box that size can produce. Lower frequencies see the box
-#: electrically closer; that is unverified, and the result carries where it starts.
+#: electrically closer; on dipoles and a loop that measured right to 30 MHz, 0.003 wavelengths,
+#: once the box was closed and read at the scan's positions. The result carries where it starts.
 FAR_FIELD_CLEARANCE_WAVELENGTHS = 0.1
 
 #: Grid lines kept between a face and the edge of the grid. openEMS's PML_8 absorbs over the
