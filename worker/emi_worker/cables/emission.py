@@ -131,7 +131,7 @@ def antenna_terms(
     length_m: float,
     frequencies_hz: list[float],
     *,
-    height_m: float = 1.0,
+    height_m: float | None = None,
     board_span_m: float = 0.1,
     distance_m: float = 3.0,
 ) -> dict:
@@ -148,6 +148,8 @@ def antenna_terms(
     from emi_worker.cables.library import get
 
     cable = get(cable_id)
+    if height_m is None:
+        height_m = nec.TABLE_HEIGHT_M
     ring = nec.ObservationRing(distance_m=distance_m)
     z_real: list[float] = []
     z_imag: list[float] = []

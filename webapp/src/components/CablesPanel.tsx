@@ -245,6 +245,7 @@ export function CablesPanel({
                       step={0.1}
                       decimalScale={2}
                       min={0.05}
+                      max={10}
                       value={chosen?.length_m ?? cable.length_m}
                       onChange={(v) =>
                         setAssignment(c.ref, cable.id, typeof v === 'number' ? v : undefined)}

@@ -194,7 +194,7 @@ def solver_budget(
     frequencies_hz: list[float],
     standard_id: str = "fcc-15b-radiated-3m",
     *,
-    height_m: float = 1.0,
+    height_m: float | None = None,
     board_span_m: float = 0.1,
 ) -> Budget:
     """The real Tier A budget: how much current this cable may carry, from the antenna solver.
@@ -215,6 +215,8 @@ def solver_budget(
         raise ValueError(f"{standard_id} is a {std.scan} standard; a cable budget is radiated")
     distance = std.distance_m or 3.0
 
+    if height_m is None:
+        height_m = nec.TABLE_HEIGHT_M
     ring = nec.ObservationRing(distance_m=distance)
     results = []
     for f in sorted(frequencies_hz):

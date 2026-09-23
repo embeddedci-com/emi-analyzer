@@ -14,7 +14,7 @@ import numpy as np
 
 import pytest
 
-from emi_worker.cables import CableError, built_in, get, parse
+from emi_worker.cables import CableError, built_in, get, nec, parse
 from emi_worker.cables.budget import (
     SPEED_OF_LIGHT,
     UNIFORM_CURRENT_FRACTION,
@@ -563,7 +563,9 @@ def test_the_lowest_peaks_are_stable_on_any_usable_grid():
     for points in (28, 36, 48, 64):
         got = _peaks(points)
         assert got, f"{points}-point grid found no peaks at all"
-        assert abs(got[0] - 39e6) < 39e6 * 0.15, f"{points} points put the first peak at {got[0]}"
+        # 45 MHz at the 0.8 m table height. It was 39 MHz when the cable was modelled 1 m up:
+        # the same structure at 1.0 m gives 38 MHz with today's ring and segmentation.
+        assert abs(got[0] - 45e6) < 45e6 * 0.15, f"{points} points put the first peak at {got[0]}"
 
 
 @needs_nec
@@ -899,3 +901,52 @@ def test_the_cable_stage_reads_a_settings_document_from_the_archive(tmp_path):
     doc = json.loads(client.uploads["cables.json"])
     assigned = {c["ref"] for c in doc["cables"] if c.get("cable_id")}
     assert "USB1" in assigned, "the committed settings document was not read"
+
+
+# ---- where the receiving antenna is ------------------------------------------------------
+
+def _wire_distance(point, x_min, x_max, height):
+    x, y, _ = point
+    nearest = min(max(x, x_min), x_max)
+    return math.hypot(x - nearest, y)
+
+
+@pytest.mark.parametrize("length_m", [0.2, 1.0, 2.0, 3.0, 10.0])
+def test_the_antenna_is_never_closer_than_the_measurement_distance(length_m):
+    """The ring was centred on the junction with a 3 m radius, so a 3 m cable ran through it."""
+    deck = nec.Deck(length_m=length_m, frequency_hz=100e6)
+    ring = deck.ring.points(-deck.board_span_m, length_m)
+    closest = min(_wire_distance(p, -deck.board_span_m, length_m, deck.height_m) for p in ring)
+    assert closest >= deck.ring.distance_m - 1e-9
+    # and it is the measurement distance, not further: the scan touches the boundary circle
+    assert closest == pytest.approx(deck.ring.distance_m, abs=1e-6)
+
+
+def test_the_deck_puts_its_observation_points_on_that_ring():
+    deck = nec.Deck(length_m=3.0, frequency_hz=100e6)
+    points = [tuple(float(v) for v in line.split()[5:8])
+              for line in deck.to_text().splitlines() if line.startswith("NE ")]
+    assert points
+    assert min(_wire_distance(p, -deck.board_span_m, 3.0, deck.height_m) for p in points) >= 3.0 - 1e-6
+
+
+def test_cables_sit_at_the_same_table_height_as_the_far_field():
+    from emi_worker.openems import nf2ff
+
+    assert nec.TABLE_HEIGHT_M == nf2ff.TABLE_HEIGHT_M == nec.Deck(length_m=1, frequency_hz=1e8).height_m
+
+
+def test_the_longest_cable_is_segmented_finely_at_the_top_of_the_grid():
+    from emi_worker.cables.library import MAX_LENGTH_M
+
+    lam = nec.SPEED_OF_LIGHT / 1.2e9
+    assert MAX_LENGTH_M / nec.segments_for(MAX_LENGTH_M, 1.2e9) <= lam / 10
+    board = nec.Deck(length_m=1, frequency_hz=1.2e9).board_span_m
+    assert board / nec.segments_for(board, 1.2e9) <= lam / 10
+
+
+def test_a_cable_longer_than_the_model_supports_is_refused():
+    from emi_worker.cables.library import MAX_LENGTH_M
+
+    with pytest.raises(CableError, match="not modelled"):
+        get("usb2-shielded").with_length(MAX_LENGTH_M + 1)

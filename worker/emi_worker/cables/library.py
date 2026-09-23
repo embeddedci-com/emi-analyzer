@@ -27,6 +27,10 @@ FAR_ENDS = ("open", "equipment", "ground")
 ROUTINGS = ("horizontal", "horizontal-then-drop", "vertical")
 
 
+#: The longest cable modelled, in metres. It is what nec.MAX_SEGMENTS is sized for.
+MAX_LENGTH_M = 10.0
+
+
 class CableError(ValueError):
     """A cable document that cannot be read."""
 
@@ -54,6 +58,10 @@ class Cable:
     def with_length(self, length_m: float) -> "Cable":
         if not (length_m > 0):
             raise CableError("a cable length must be positive")
+        if length_m > MAX_LENGTH_M:
+            raise CableError(
+                f"a cable longer than {MAX_LENGTH_M:g} m is not modelled. A radiated test bundles "
+                f"the excess length, so a straight {length_m:g} m run is not what a lab measures")
         return Cable(**{**self.__dict__, "length_m": float(length_m)})
 
     def describe_shield(self) -> str:

@@ -134,6 +134,16 @@ valid below λ/10, which for a 1 m cable is 30 MHz — the bottom of the radiate
 closed-form budget would be an extrapolation everywhere it is used. It survives as a sanity
 bound only.
 
+**The geometry.** The cable lies straight along +x, 0.8 m above a perfect ground plane (the
+tabletop height of ANSI C63.4 and CISPR 16-2-3, and the same height the far field uses). The
+board is a 0.1 m wire on the other side of the feed. The receiving antenna sweeps a ring 3 m
+outside the smallest circle around board and cable, as a turntable scan does, at 1-4 m. Cables
+are limited to 10 m and segmented at λ/20 up to 800 segments, so the longest is still finer
+than λ/10 at 1.2 GHz. Before September 2026 the ring was centred on the feed with a 3 m radius
+and the table was 1 m high: the antenna sat 1 m from the end of a 2 m cable and on the wire of a
+3 m one. The closed-form comparison below was measured with that geometry and has not been
+repeated.
+
 **How far the closed form is from the solver, measured.** Inside the window where both are
 entitled to an opinion — the wire electrically short *and* the observation point in the far
 field, which for a 1 m cable at 3 m is 16–30 MHz — the closed form sits **3.5–4 dB above** a

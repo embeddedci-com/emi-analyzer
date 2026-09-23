@@ -33,7 +33,16 @@ NEC2C = "nec2c"
 #: so this is comfortable rather than marginal.
 SEGMENTS_PER_WAVELENGTH = 20
 MIN_SEGMENTS = 9
-MAX_SEGMENTS = 201
+#: Enough for the longest cable the library accepts at the top of the grid: 10 m at 1.2 GHz is
+#: 40 wavelengths, 800 segments at λ/20. The old cap of 201 cut a 3 m cable to λ/8 at 1.2 GHz
+#: and a 30 m one to λ/1.7, where NEC's thin-wire currents mean nothing.
+MAX_SEGMENTS = 801
+
+#: Height of the table top above the ground plane, in metres. The tabletop setups of ANSI C63.4
+#: and CISPR 16-2-3 put the product and its cables 0.8 m up, and the full-wave far field uses
+#: the same height (openems.nf2ff.TABLE_HEIGHT_M). This was 1.0 m, so board and cable paths
+#: were modelled over two different grounds.
+TABLE_HEIGHT_M = 0.8
 
 SPEED_OF_LIGHT = 299_792_458.0
 
@@ -77,21 +86,30 @@ def segments_for(length_m: float, frequency_hz: float) -> int:
 class ObservationRing:
     """Where the receiving antenna looks from (§6.2).
 
-    A ring at the standard's distance, swept in azimuth, at the heights the scan covers. The
-    maximum over the ring is what a measurement reports, because the turntable and mast exist
-    precisely to find it.
+    The measurement distance is from the antenna to the **boundary of the product
+    arrangement**, the smallest circle around it (CISPR 16-2-3; ANSI C63.4 measures from the
+    periphery the same way). The turntable spins that circle, so the antenna sweeps a ring
+    centred on it, ``distance_m`` outside it, at the heights the mast covers. The maximum over
+    the ring is what a measurement reports.
+
+    The ring was once centred on the board/cable junction with a 3 m radius, whatever the
+    cable's length. A 2 m cable along +x then ended 1 m from the antenna, and a 3 m one ran
+    straight through it: the "field at 3 m" was the field on the wire.
     """
 
     distance_m: float = 3.0
     heights_m: tuple[float, ...] = (1.0, 2.0, 3.0, 4.0)
     azimuth_steps: int = 12
 
-    def points(self) -> list[tuple[float, float, float]]:
+    def points(self, x_min: float = 0.0, x_max: float = 0.0) -> list[tuple[float, float, float]]:
+        """The scan around an arrangement lying along the x axis from x_min to x_max."""
+        centre = (x_min + x_max) / 2.0
+        radius = self.distance_m + (x_max - x_min) / 2.0
         out = []
         for h in self.heights_m:
             for k in range(self.azimuth_steps):
                 a = 2 * math.pi * k / self.azimuth_steps
-                out.append((self.distance_m * math.cos(a), self.distance_m * math.sin(a), h))
+                out.append((centre + radius * math.cos(a), radius * math.sin(a), h))
         return out
 
 
@@ -102,7 +120,7 @@ class Deck:
     length_m: float
     frequency_hz: float
     #: Height of the cable above the ground plane, in metres.
-    height_m: float = 1.0
+    height_m: float = TABLE_HEIGHT_M
     #: The board, as the other arm of the antenna. A bounding box edge is enough at these
     #: frequencies; §6.2's wire grid arrives with Tier B.
     board_span_m: float = 0.1
@@ -137,7 +155,9 @@ class Deck:
 
     def to_text(self) -> str:
         segments = segments_for(self.length_m, self.frequency_hz)
-        board_segments = max(3, segments_for(self.board_span_m, self.frequency_hz) // 3 | 1)
+        # The board arm is segmented like the cable. It was a third as fine, 33 mm segments on a
+        # 0.1 m board, which is coarser than λ/10 above 900 MHz right at the feed.
+        board_segments = segments_for(self.board_span_m, self.frequency_hz)
         lines = [
             f"CM cable {self.length_m:g} m at {self.frequency_hz / 1e6:g} MHz",
             f"CM far end {self.far_end}",
@@ -195,7 +215,8 @@ class Deck:
 
         # Near field, not a pattern. NE 0 selects E-field in rectangular coordinates; each
         # card names one point, which keeps the reader simple and the deck explicit.
-        for x, y, z in self.ring.points():
+        x_min = -self.board_span_m if self.feed == "board" else 0.0
+        for x, y, z in self.ring.points(x_min, self.length_m):
             lines.append(f"NE 0 1 1 1 {x:.6f} {y:.6f} {z:.6f} 0 0 0")
 
         # Without this NEC echoes the structure and computes nothing, with no error at all.

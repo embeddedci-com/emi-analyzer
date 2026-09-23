@@ -68,10 +68,10 @@ def check_cable_resonance(ctx: RuleContext) -> Iterator[Finding]:
             continue
         try:
             cable = get(cable_id)
+            if isinstance(spec, dict) and spec.get("length_m"):
+                cable = cable.with_length(float(spec["length_m"]))
         except CableError:
             continue
-        if isinstance(spec, dict) and spec.get("length_m"):
-            cable = cable.with_length(float(spec["length_m"]))
 
         try:
             budget = solver_budget(cable, grid)

@@ -8,7 +8,7 @@ Reads the original upload the way ingest and transient do, so a cable run works 
 whether or not it has ever been solved. Produces ``cables.json``.
 
 **Assumptions, which the result carries** — see ASSUMPTIONS below and §6.2 in the design doc.
-The one that matters most is the height: a cable is modelled 1 m above the ground plane,
+The one that matters most is the height: a cable is modelled 0.8 m above the ground plane,
 because that is the table height the measurement standards specify, and the height sets both
 the resonance and the radiation.
 """
@@ -36,8 +36,9 @@ GRID_MIN_HZ = 30e6
 GRID_MAX_HZ = 1.2e9
 
 ASSUMPTIONS = [
-    "The cable is modelled 1 m above a perfect ground plane, which is the table height the "
-    "measurement standards specify. Height sets both where the cable resonates and how well "
+    "The cable is modelled 0.8 m above a perfect ground plane, which is the table height the "
+    "measurement standards specify. It lies straight, and the field is read 3 m outside the "
+    "circle around the board and cable, as a turntable scan does. Height sets both where the cable resonates and how well "
     "it radiates, so a cable that will be run along a metal chassis behaves differently.",
     "The board is the other arm of the antenna, modelled as a 0.1 m wire rather than as its "
     "real outline. Below about 300 MHz the cable dominates and this matters little; above it, "
@@ -119,10 +120,10 @@ def run_cable(ctx: StageContext) -> StageResult:
             continue
         try:
             cable = get(cable_id)
+            if spec.get("length_m"):
+                cable = cable.with_length(float(spec["length_m"]))
         except CableError as exc:
             raise StageError(f"{suggestion.ref}: {exc}") from exc
-        if spec.get("length_m"):
-            cable = cable.with_length(float(spec["length_m"]))
 
         ctx.progress("solve", 20 + 70 * i / max(len(suggestions), 1),
                      f"{suggestion.ref}: {cable.name} at {cable.length_m:g} m")
