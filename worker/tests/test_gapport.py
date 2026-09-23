@@ -172,8 +172,14 @@ def test_the_dielectric_is_clipped_to_the_board_outline():
 
 
 def test_a_region_entirely_over_the_board_keeps_its_dielectric():
-    """The other half of it: clipping must not eat dielectric that should be there."""
+    """The other half of it: clipping must not eat dielectric that should be there.
+
+    The region is over the board, but the PML padding grows outward from its outermost cell
+    and can reach past the outline. So the dielectric has to cover every part of the board the
+    mesh contains -- not the whole mesh, which would put FR-4 in the air beyond the edge.
+    """
     built = _built()
     lo, hi = _dielectric_x(built)
-    assert lo <= float(built.mesh.x[0]) + 1e-6
-    assert hi >= float(built.mesh.x[-1]) - 1e-6
+    board_lo, board_hi = 0.0, 50.0  # tiny.kicad_pcb's outline
+    assert lo <= max(float(built.mesh.x[0]), board_lo) + 1e-6
+    assert hi >= min(float(built.mesh.x[-1]), board_hi) - 1e-6
