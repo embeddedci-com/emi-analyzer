@@ -323,7 +323,10 @@ def run_openems(
         raise Stopped()
 
     log_text = "\n".join(lines)
-    warnings = [msg for needle, msg in _SIGNIFICANT_WARNINGS if needle in log_text]
+    warnings = [msg for needle, msg in _SIGNIFICANT_WARNINGS if needle in log_text
+                # On an abort openEMS also reports missing the unreachable criterion it was
+                # given; that is not a cap the run hit.
+                and not (aborted_at and needle == TIMESTEP_LIMIT_NEEDLE)]
 
     if not excitation_steps and excitation_s and dt > 0:
         excitation_steps = int(excitation_s / dt)

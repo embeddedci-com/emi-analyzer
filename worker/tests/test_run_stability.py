@@ -215,6 +215,7 @@ def test_the_runner_stops_openems_only_after_its_source(tmp_path, monkeypatch):
     r = runmod.run_openems("model.xml", str(tmp_path), stop_below_db=-40.0)
     assert r.stopped_on_energy_at == 3000
     assert r.converged is True
+    assert not any("timestep limit" in w for w in r.warnings)
     assert not (tmp_path / "ABORT").exists()
 
 

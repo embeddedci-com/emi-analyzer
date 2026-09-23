@@ -27,6 +27,10 @@ self-resonance 1 / (2 pi sqrt((ESL + L_mount) C)) is compared with where Im(Z_in
 Pass criteria (docs/known-issues.md): SRF within 5 %, and |Z_part| within 1 dB of the analytic
 series R-L-C from a third of the SRF to three times it.
 
+``END_CRITERIA`` (default the solve's 1e-4, -40 dB) sets where the runs end. The capacitor's
+loop rings down slowly, and at -40 dB its transform still ripples by several dB; 1e-7 gives the
+clean record the comparison needs.
+
 The solve refuses to place a component on a solver without a series lumped element, which is
 what openEMS 0.0.35 is, so this needs the image built with OPENEMS_SOURCE=build:
 
@@ -121,6 +125,7 @@ def params() -> SolveParams:
         ports=[Port("p1", X0 - PAD_DX, Y0, "F.Cu", half_width_mm=0.2)],
         dx_um=dx, dy_um=dy, dz_um=dz, air_mm=3.0,
         model_components=True, solver_series_rlc=True,
+        end_criteria=float(os.environ.get("END_CRITERIA", "1e-4")),
     )
 
 
