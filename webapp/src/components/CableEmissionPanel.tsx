@@ -104,7 +104,7 @@ export function CableEmissionPanel({ api, runId, projectId, manifest }: CableEmi
     return (
       <Alert color="gray" variant="light" title="No cable emissions for this result">
         <Text size="xs">
-          This solve hit its timestep limit before its fields settled, so its transfer functions
+          This solve stopped before its fields settled, so its transfer functions
           are not used.
         </Text>
       </Alert>

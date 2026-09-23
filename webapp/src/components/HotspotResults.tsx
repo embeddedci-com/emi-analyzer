@@ -100,7 +100,7 @@ export function whyNoDriver(manifest: SolveManifest): string | null {
     return 'Re-run this solve to attach a driver: it predates the port spectra drivers need.'
   }
   if (manifest.run?.converged === false) {
-    return 'This solve hit its timestep limit before its fields settled, so a driver would put a level on noise.'
+    return 'This solve stopped before its fields settled, so a driver would put a level on noise.'
   }
   return 'This solve recorded no excited port, so there is nothing for a driver to drive.'
 }
@@ -267,12 +267,12 @@ export function HotspotResults({
       <Experimental why={EXPERIMENTAL.hotspotMap} mb={0} />
       {state === 'unusable' && (
         <Alert color="red" variant="light" title="This run stopped before its fields settled">
-          {manifest.run?.converged === false
-            ? `It hit its timestep limit with the energy at ${energyDb?.toFixed(1) ?? '?'} dB, `
-            : `Energy only fell to ${energyDb?.toFixed(1)} dB, `}
-          so this is a snapshot of fields still ringing, not the steady state a hotspot map
-          needs. No level, impedance or driver is offered from it, and the map is hidden unless
-          you turn it on. Try a smaller region.
+          {typeof manifest.run?.unusable_reason === 'string'
+            ? `The solver says ${manifest.run.unusable_reason}. `
+            : `Energy only fell to ${energyDb?.toFixed(1)} dB, so this is a snapshot of fields ` +
+              'still ringing, not the steady state a hotspot map needs. '}
+          No level, impedance or driver is offered from it, and the map is hidden unless you
+          turn it on.
         </Alert>
       )}
       {state === 'partial' && (

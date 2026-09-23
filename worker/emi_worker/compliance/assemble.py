@@ -245,11 +245,12 @@ def assemble(art: SolveArtifacts, attached: AttachedDriver | None,
     # here, so this is where it is refused: no path at all, and the gate says why.
     if run_meta.get("converged") is False:
         energy = run_meta.get("final_energy_db")
-        down = f" only {abs(float(energy)):.0f} dB down" if energy is not None else ""
+        down = f" with its energy only {abs(float(energy)):.0f} dB down" if energy is not None else ""
+        why = str(run_meta.get("unusable_reason") or "")
         asm.problems.append((
             "solve-unconverged",
-            f"The solve hit its timestep limit with its energy{down}, before its fields "
-            f"settled, so none of its levels are used. Run it again over a smaller region.",
+            f"The solve stopped{down}, before its fields settled, so none of its levels are "
+            f"used." + (f" In detail: {why}." if why else ""),
         ))
         return asm
 

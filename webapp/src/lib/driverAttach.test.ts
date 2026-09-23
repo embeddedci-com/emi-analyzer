@@ -47,7 +47,7 @@ describe('canAttachDriver', () => {
   it('refuses a run that hit its timestep limit', () => {
     const capped = manifest({ run: { converged: false, final_energy_db: -24 } })
     expect(canAttachDriver(capped)).toBe(false)
-    expect(whyNoDriver(capped)).toMatch(/timestep limit/)
+    expect(whyNoDriver(capped)).toMatch(/before its fields settled/)
     expect(canAttachDriver(manifest({ run: { converged: true } }))).toBe(true)
   })
 
