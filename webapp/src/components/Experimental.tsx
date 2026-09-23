@@ -70,7 +70,9 @@ export const EXPERIMENTAL = {
     'Checked on test antennas, not on a board: dipoles over the ground plane match a second '
     + 'solver (nec2c) within 0.2 dB from 30 MHz, and within about 1 dB for a resonant one up '
     + 'to its resonance. The top 15 % of the solved band reads up to 2 dB low, so solve past the '
-    + 'highest frequency you care about. No real board has been compared with a measurement. A '
+    + 'highest frequency you care about. On a real board the run can stop while the board is '
+    + 'still ringing; those frequencies are dropped and marked. No real board has been compared '
+    + 'with a measurement. A '
     + 'far-field run is always a long one: the band starts at 30 MHz, which needs 100 ns of '
     + 'simulated time whatever the board is.',
 

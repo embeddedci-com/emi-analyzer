@@ -246,6 +246,10 @@ positions with the full free-space Green's function, plus their image in the gro
   **openEMS writes FD dumps single-sided**, `2·Σx·e^(−jωt)·Δt`; `OPENEMS_FD_SCALE = 2` brings the
   source onto that convention before dividing. Format 2 results are refused by the compliance
   estimate with a re-run message.
+- **A port reading negative resistance means the record was cut short.** A passive port cannot
+  have one; when `Re(Z_in) < -5 % |Z_in|` the run stopped on its end criterion while the board
+  was still ringing, and the frequency is marked unusable and listed in `truncated_hz`. A real
+  4-layer board at the default -40 dB lost 57 of 60 frequencies this way.
 - **Radians and metres, checked**, for the `nf2ff` guard job: it echoes its input angles into
   `/Mesh/theta`, so a job written in degrees produces an output file that agrees with itself.
 - **A missing face is refused.** Surface equivalence needs the surface closed.

@@ -453,6 +453,10 @@ def _board_span(board, transform) -> tuple[float, float, float, float]:
 #: wrongly (docs/verification/far-field.md); version 1 was in the solver's pulse units.
 FAR_FIELD_FORMAT_VERSION = 3
 
+#: How negative a port's resistance may read, as a fraction of |Z_in|, before the frequency is
+#: taken as truncated rather than solved. See ``far_field_document``.
+PASSIVE_TOLERANCE = 0.05
+
 #: How far the scan's reading may differ from `nf2ff` in the far-field limit before the far field
 #: is refused. The two integrate the same dumps and agree to 0.001 dB when both are right, so
 #: anything near this is a reading or a units error, not a numerical difference.
@@ -599,7 +603,13 @@ def far_field_document(field: dict, source: dict, excited: list, meta: dict) -> 
     v_src = np.asarray(source["v_src"])
     z_in = np.asarray(source["z_in"])
     mags = np.abs(v_src)
-    usable = [bool(m > 0 and np.isfinite(z)) for m, z in zip(mags, z_in)]
+    # A passive port cannot have a negative resistance. When the transform says it does, the
+    # record stopped before the structure stopped ringing and what it holds at that frequency is
+    # the truncation, not the board: a real 4-layer board stopped at -40 dB reported -25 kOhm
+    # against |Z| = 25.5 kOhm at 30 MHz. The dipoles, whose records are complete, stay above
+    # -0.5 % of |Z| everywhere, so the line is drawn well clear of them.
+    passive = [bool(not np.isfinite(z) or z.real >= -PASSIVE_TOLERANCE * abs(z)) for z in z_in]
+    usable = [bool(m > 0 and np.isfinite(z)) and ok for m, z, ok in zip(mags, z_in, passive)]
     e_per_volt = [
         float(e / m) if ok else 0.0 for e, m, ok in zip(field["e_max_v_per_m"], mags, usable)
     ]
@@ -617,6 +627,9 @@ def far_field_document(field: dict, source: dict, excited: list, meta: dict) -> 
         "e_by_height_per_volt": by_height,
         "heights_m": list(scan.SCAN_HEIGHTS_M),
         "usable": usable,
+        # Frequencies dropped because the port read as a negative resistance: the run stopped
+        # too early for them, and a longer run (a lower end criterion) would recover them.
+        "truncated_hz": [float(f) for f, ok in zip(field["frequencies_hz"], passive) if not ok],
         # What a driver needs to replace the solve's source with its own.
         "driven_by": excited[0].name,
         "source_impedance_ohm": float(excited[0].resistance),

@@ -125,6 +125,16 @@ def test_a_hole_in_the_solved_energy_is_undriven():
     fs = [30e6, 100e6, 300e6, 1e9]
     asm = assemble(_art(fs, [1e-3] * 4, usable=[True, False, True, True]), _clock(), STD)
     assert 100e6 in asm.undriven
+    assert "no source energy" in asm.undriven[100e6]
+
+
+def test_a_hole_left_by_a_short_record_says_so():
+    """The fix for a truncated record is a longer run, not a different source."""
+    fs = [30e6, 100e6, 300e6, 1e9]
+    art = _art(fs, [1e-3] * 4, usable=[True, False, True, True])
+    art.farfield["truncated_hz"] = [100e6]
+    asm = assemble(art, _clock(), STD)
+    assert "stopped before the board stopped ringing" in asm.undriven[100e6]
 
 
 def test_an_old_solve_asks_for_a_rerun():

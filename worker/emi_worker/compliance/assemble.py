@@ -270,9 +270,14 @@ def assemble(art: SolveArtifacts, attached: AttachedDriver | None,
             fs, (e, zr, zi), holes = _usable_series(
                 ff["frequencies_hz"], ff["usable"], ff["e_per_volt"], ff["z_in_real"],
                 ff["z_in_imag"])
+            truncated = {round(float(f)) for f in ff.get("truncated_hz") or []}
             for f in holes:
-                asm.undriven[f] = (f"the solve put no source energy near {f / 1e6:g} MHz, so "
-                                   f"the board's far field is unknown there")
+                asm.undriven[f] = (
+                    f"the solve stopped before the board stopped ringing near {f / 1e6:g} MHz, "
+                    f"so the board's far field is unknown there. A lower end criterion would "
+                    f"recover it" if round(float(f)) in truncated else
+                    f"the solve put no source energy near {f / 1e6:g} MHz, so the board's far "
+                    f"field is unknown there")
             if fs:
                 label = "board (solved region)"
                 band = (max(fs[0], std_lo), min(fs[-1], std_hi))

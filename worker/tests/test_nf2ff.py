@@ -359,10 +359,29 @@ def test_the_far_field_document_is_per_volt_and_refuses_an_empty_source():
     assert doc["e_per_volt"] == pytest.approx([5e-4, 0.0])
     assert doc["e_by_height_per_volt"][0] == pytest.approx([5e-4, 2.5e-4])
     assert doc["usable"] == [True, False]
+    assert doc["truncated_hz"] == []
     assert doc["z_in_real"][0] == 30.0 and doc["z_in_imag"][0] == 40.0
     assert doc["source_impedance_ohm"] == 50.0
     assert doc["driven_by"] == "p1"
     assert "e_max_v_per_m" not in doc, "the raw pulse units must not look like V/m"
+
+
+def test_a_port_reading_negative_resistance_is_truncation_not_a_result():
+    """A passive port cannot have a negative resistance. On a real board stopped at -40 dB the
+    port read -25 kOhm against |Z| = 25.5 kOhm at 30 MHz: the record ended before the board
+    stopped ringing, and the far field there is the truncation."""
+    from emi_worker.openems.model import Port
+    from emi_worker.stages.solve import far_field_document
+
+    field = {"frequencies_hz": [30e6, 100e6, 300e6], "e_max_v_per_m": [1e-3, 1e-3, 1e-3]}
+    source = {"v_src": np.array([1.0 + 0j] * 3),
+              "z_in": np.array([-25485 - 1493j, -100 - 20000j, 0.5 - 2000j])}
+    doc = far_field_document(field, source, [Port("p1", 0, 0, "F.Cu")],
+                             {"faces_mm": [0, 0, 0, 1, 1, 1]})
+    # -0.5 % of |Z| is a complete record's numerical noise (a short dipole at 30 MHz); -99.8 %
+    # is not.
+    assert doc["usable"] == [False, True, True]
+    assert doc["truncated_hz"] == [30e6]
 
 
 def test_the_job_names_frequencies_exactly_as_the_dumps_recorded_them(tmp_path):
