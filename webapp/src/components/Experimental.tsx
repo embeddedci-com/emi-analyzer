@@ -54,12 +54,11 @@ export const EXPERIMENTAL: Record<string, string> = {
     + 'absolute level as a prediction of what a test house would measure.',
 
   complianceEstimate:
-    'The whole chain behind this number is built and unit-tested, and it has not yet been run '
-    + 'end to end on a real board: no project has produced a margin from a real solve, real '
-    + 'cables and a real driver together. Individually the pieces are checked — the far-field '
-    + 'transform against a dipole to 0.02 dB, the combination and the budget against shared '
-    + 'fixtures — but the assembly is not. Read the ranking and the contributions before the '
-    + 'absolute margin.',
+    'The chain behind this number runs end to end on the small fixture board, and has never '
+    + 'been checked against a lab result or a second solver on a real board. The far field was '
+    + 'checked against a dipole with the ground plane on the box; the product places the plane '
+    + '0.8 m below it, which has not been measured. The uncertainty is uncalibrated. Read the '
+    + 'ranking and the contributions before the absolute margin.',
 
   farField:
     'The transform is proven on a fixture — a half-wave dipole comes back at 2.13 dBi against '
