@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import re
 from dataclasses import dataclass, field, asdict
 from typing import Iterable
 
@@ -10,20 +11,47 @@ from ..kicad.board import BoardModel
 
 FORMAT_VERSION = 1
 
-#: Ground and power net names, matched case-insensitively. Several checks need to know
-#: which nets are references rather than signals -- a "long trace" finding on a ground pour
-#: is noise, and a return-via check has to know what a return via looks like.
-GROUND_HINTS = ("gnd", "ground", "agnd", "dgnd", "pgnd", "vss", "earth", "0v")
-POWER_HINTS = ("vcc", "vdd", "vbus", "vin", "vout", "+3v", "+5v", "+1v", "+12v", "+2v",
-               "3v3", "5v", "vbat", "vsys", "avdd", "vddio")
+#: Ground and power net names are recognised word by word, never by substring: "+10V" holds
+#: "0v" and "/SIGNDIR" holds "gnd", and neither is a ground. A name splits into words at
+#: anything but a letter, a digit or a decimal point, so "+3.3V" is the one word "3.3v" and
+#: "VBUS_20V" is "vbus" and "20v".
+_WORD_SPLIT = re.compile(r"[^a-z0-9.]+")
+
+#: A word that names a ground: GND and its A/D/P/S variants with any suffix (GNDA, GND1,
+#: PGND2), VSS and its variants, and the plain words.
+_GROUND_WORD = re.compile(r"^(?:[adps]?gnd[a-z0-9]*|vss[a-z0-9]*|ground|earth|0v)$")
+
+#: A word that names a supply: the usual rail prefixes with any suffix (VDDIO, VCCA, VBAT1)...
+_RAIL_WORD = re.compile(r"^(?:[ad]?v(?:cc|dd|bus|in|out|bat|sys|ee)[a-z0-9]*)$")
+#: ...or a voltage: 5v, 12v, 3.3v, 3v3, 1v8, 20v, and the like.
+_VOLTAGE_WORD = re.compile(r"^\d+(?:\.\d+)?v\d*$")
+#: KiCad's power symbols put a sign in front of the voltage: +3.3V, +24V, -12V, +3V3.
+_SIGNED_VOLTAGE = re.compile(r"^[+-]\d")
+
+#: Words that make a rail-named net a signal about that rail: 3V3_EN, VBUS_DET, VIN_SENSE and
+#: 5V_PG carry logic or a divided-down voltage to a pin, not the supply current.
+_SIGNAL_WORDS = frozenset({
+    "en", "enable", "pg", "pgood", "good", "ok", "det", "detect", "sense", "sns", "fb",
+    "flt", "fault", "ctrl", "ctl", "sel", "mon", "alert", "int", "irq", "adc", "div",
+})
+
+
+def _words(name: str) -> tuple[list[str], str]:
+    # Hierarchical names ("/Power/+3V3") are judged by their last part.
+    leaf = name.lower().rstrip("/").rsplit("/", 1)[-1]
+    return [w.strip(".") for w in _WORD_SPLIT.split(leaf) if w.strip(".")], leaf
 
 
 def classify_net(name: str) -> str:
     """"ground", "power" or "signal"."""
-    low = name.lower().lstrip("/")
-    if any(h in low for h in GROUND_HINTS):
+    words, leaf = _words(name)
+    if leaf.startswith("net-("):  # KiCad's name for an unnamed net
+        return "signal"
+    if any(_GROUND_WORD.match(w) for w in words):
         return "ground"
-    if any(low.startswith(h) or h in low for h in POWER_HINTS):
+    rail = _SIGNED_VOLTAGE.match(leaf) is not None or any(
+        _RAIL_WORD.match(w) or _VOLTAGE_WORD.match(w) for w in words)
+    if rail and not any(w in _SIGNAL_WORDS for w in words):
         return "power"
     return "signal"
 
