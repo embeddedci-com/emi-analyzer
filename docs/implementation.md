@@ -172,8 +172,8 @@ bound only.
 tabletop height of ANSI C63.4 and CISPR 16-2-3, and the same height the far field uses). The
 board is a 0.1 m wire on the other side of the feed. The receiving antenna sweeps a ring 3 m
 outside the smallest circle around board and cable, as a turntable scan does, at 1-4 m. Cables
-are limited to 10 m and segmented at λ/20 up to 800 segments, so the longest is still finer
-than λ/10 at 1.2 GHz. Before September 2026 the ring was centred on the feed with a 3 m radius
+are limited to 10 m and segmented at λ/20 or 12.5 mm, whichever is shorter, up to 800
+segments. The 12.5 mm cap is what makes nec2c agree with openEMS on the same wire (below). Before September 2026 the ring was centred on the feed with a 3 m radius
 and the table was 1 m high: the antenna sat 1 m from the end of a 2 m cable and on the wire of a
 3 m one. The closed-form comparison below was measured with that geometry and has not been
 repeated.
@@ -185,7 +185,14 @@ solved fed wire, with a constant offset across the band. That gap is the current
 fed wire tapers towards its open end, and a perfectly triangular taper would be 6 dB. The
 direction is the useful one — the closed form predicts more field per amp, so the budget it
 computes is tighter. Below the far-field boundary the two diverge without limit (25 dB at 5 MHz),
-because 1/r² and 1/r³ terms dominate there and no far-field formula contains them.
+because 1/r² and 1/r³ terms dominate there and no far-field formula contains them. That holds
+for an open far end only: with a grounded or equipment far end the drop wire radiates as a
+monopole over the plane, and the closed form sits 4-26 dB *below* the solver.
+
+**The solver against a second solver.** The product deck agrees with openEMS on the same wire
+over a PEC ground, current integrated to the same ring, within 1 dB below the first resonance in
+most cases and 2 dB and 3 % around the peaks; the numbers and the exceptions are in
+[`verification/cables-and-drivers.md`](verification/cables-and-drivers.md).
 
 Radiation peaks are marked by comparing each point against a **window** — ±25 % of its own
 frequency, capped at ⅓ of `c/2L`. Both bounds were measured into existence: neighbour-based

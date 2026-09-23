@@ -284,8 +284,8 @@ def _record_steps(doc) -> int:
 def _probe_decay_db(wd: Path) -> float:
     """How far below its own peak the last tenth of the loudest-ending probe is, in dB.
 
-    run.divergence_ratio is switched off here (see solve), so this is the stability check
-    instead: a diverging grid ends loud, a healthy one ends quiet.
+    Reported, not gated: the 1 MOhm gap bleeds off its charge over ~100 ns, so a gap probe can
+    end 10 dB below peak in a run whose energy is 60 dB down.
     """
     worst = -300.0
     for f in wd.iterdir():
