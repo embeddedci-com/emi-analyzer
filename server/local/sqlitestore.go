@@ -612,13 +612,59 @@ func (s *SQLiteStore) SetRunEstimate(ctx context.Context, runID string, e *emi.E
 	return mapErr(err)
 }
 
-func (s *SQLiteStore) CompleteRun(ctx context.Context, runID string, status emi.RunStatus, summary []byte, errMsg string, at time.Time) error {
-	return conflictIfNone(s.db.ExecContext(ctx, `
+// CompleteRun follows emi.PGStore: the state check comes first, inside the transaction, so
+// a run that has already ended gains nothing.
+func (s *SQLiteStore) CompleteRun(ctx context.Context, runID string, c *emi.Completion, at time.Time) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return mapErr(err)
+	}
+	defer tx.Rollback() //nolint:errcheck // a no-op after Commit
+
+	if err := conflictIfNone(tx.ExecContext(ctx, `
 		UPDATE emi_runs
 		SET status = ?, summary = COALESCE(?, summary), error = NULLIF(?,''),
 		    finished_at = ?, updated_at = ?
 		WHERE id = ? AND status IN ('in_progress','stopping')`,
-		string(status), nullJSON(summary), errMsg, ts(at), ts(at), runID))
+		string(c.Status), nullJSON(c.Summary), c.Error, ts(at), ts(at), runID)); err != nil {
+		return err
+	}
+	if c.Estimate != nil {
+		b, err := json.Marshal(c.Estimate)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE emi_runs SET estimate = ? WHERE id = ?`, string(b), runID); err != nil {
+			return mapErr(err)
+		}
+	}
+	for _, a := range c.Artifacts {
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO emi_artifacts (id, run_id, name, s3_key, content_type, size_bytes, created_at)
+			VALUES (?,?,?,?,?,?,?)
+			ON CONFLICT (run_id, name) DO UPDATE
+			SET s3_key = excluded.s3_key, content_type = excluded.content_type,
+			    size_bytes = excluded.size_bytes, created_at = excluded.created_at`,
+			a.ID, runID, a.Name, a.Key, a.ContentType, a.SizeBytes, ts(a.CreatedAt)); err != nil {
+			return mapErr(err)
+		}
+	}
+	if b := c.Board; b != nil {
+		if _, err := tx.ExecContext(ctx, `
+			UPDATE emi_boards
+			SET s3_board_key   = COALESCE(NULLIF(?,''), s3_board_key),
+			    layer_count    = ?,
+			    net_count      = ?,
+			    outline_mm     = COALESCE(?, outline_mm),
+			    stackup        = COALESCE(?, stackup),
+			    content_sha256 = NULLIF(?,'')
+			WHERE id = ?`,
+			b.BoardKey, b.LayerCount, b.NetCount, nullJSON(b.OutlineMM), nullJSON(b.Stackup),
+			b.ContentSHA256, b.BoardID); err != nil {
+			return mapErr(err)
+		}
+	}
+	return mapErr(tx.Commit())
 }
 
 // RequestStop follows emi.PGStore: a queued run ends at once, a running one is asked to stop.

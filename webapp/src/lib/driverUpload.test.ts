@@ -1,5 +1,5 @@
 /**
- * Uploaded captures (§9.1).
+ * Uploaded captures (docs/emi-driver-format.md §4).
  *
  * The refusals are the point. A capture that covers less than one period, or whose samples
  * are not evenly spaced, transforms into something that looks entirely plausible and is
@@ -146,7 +146,7 @@ describe('documentFromFile', () => {
 
   it('refuses a capture shorter than one period via the shared validator', () => {
     // Two samples describe a 1 ns window; declaring that as a period is fine, but the
-    // waveform validator is what enforces §9.2's rule and this proves the path reaches it.
+    // waveform validator is what enforces the format's rule and this proves the path reaches it.
     const doc = waveformFromDelimited('time,voltage\n0,0\n1e-9,3.3', opts) as {
       waveform: { period_s: { value: number } }
     }

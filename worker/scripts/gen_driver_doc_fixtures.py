@@ -2,9 +2,9 @@
 """Regenerate the shared driver-document fixtures.
 
 Asserted against by worker/tests/test_driver_document.py and
-webapp/src/lib/driverDocument.test.ts. §9.2 asks for validation in the browser *and* on the
-server; these fixtures are what stops the two from drifting apart, which would show up as a
-document a user was allowed to save and the worker then refused.
+webapp/src/lib/driverDocument.test.ts. docs/emi-driver-format.md asks for validation in the
+browser *and* on the server; these fixtures are what stops the two from drifting apart,
+which would show up as a document a user was allowed to save and the worker then refused.
 
 Invalid cases carry `must_mention` rather than a full message. Matching exact wording across
 two languages would be brittle for no benefit; what matters is that both refuse, and that

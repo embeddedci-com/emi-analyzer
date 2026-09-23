@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regenerate the shared compliance fixtures (§19, C3 and C4).
+"""Regenerate the shared compliance fixtures (docs/implementation.md §9).
 
 Asserted by BOTH worker/tests/test_predict.py and webapp/src/lib/compliance.test.ts. The margin
 and the confidence beside it are the two numbers a user is most likely to quote at someone else,

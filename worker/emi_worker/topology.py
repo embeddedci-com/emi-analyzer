@@ -21,6 +21,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 
 from .kicad.board import BoardModel
+from .kicad.geometry import point_in_ring
 from .stackup import BoardElectrics
 
 #: Two endpoints closer than this are the same point.
@@ -308,7 +309,7 @@ def build(model: BoardModel, nets: list[str] | None = None) -> dict[str, NetTopo
                     continue
                 zone = model.zones[zi]
                 node = zone_nodes[pad.net][(zone.layer, zi)]
-                if _point_in_ring(pad.x, pad.y, zone.ring):
+                if point_in_ring(pad.x, pad.y, zone.ring):
                     by_net[pad.net].connect(
                         by_net[pad.net].node(pad.x, pad.y, zone.layer), node, 0.0, zone.layer
                     )
@@ -327,20 +328,6 @@ def _ring_centroid(ring: list[tuple[float, float]]) -> tuple[float, float]:
     if not ring:
         return 0.0, 0.0
     return sum(p[0] for p in ring) / len(ring), sum(p[1] for p in ring) / len(ring)
-
-
-def _point_in_ring(x: float, y: float, ring: list[tuple[float, float]]) -> bool:
-    """Even-odd point-in-polygon. Pours are not convex, so a bounding box will not do."""
-    inside = False
-    n = len(ring)
-    for i in range(n):
-        x0, y0 = ring[i]
-        x1, y1 = ring[(i + 1) % n]
-        if (y0 > y) != (y1 > y):
-            xi = x0 + (y - y0) * (x1 - x0) / (y1 - y0)
-            if x < xi:
-                inside = not inside
-    return inside
 
 
 def _finish(net: str, g: _Graph, pads: list[tuple[str, float, float, list[str]]],

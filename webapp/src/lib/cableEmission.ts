@@ -1,17 +1,18 @@
 /**
  * Composing a solve, a driver and a cable into a field at three metres — the browser's copy
- * of `worker/emi_worker/cables/emission.py` (§7, §10).
+ * of `worker/emi_worker/cables/emission.py` (docs/implementation.md §5.2 and §4).
  *
  *     I_cm(f) = H_cm(f) · V_src(f) / Z_ant(f)
  *     E(f)    = I_cm(f) · E_per_amp(f)
  *
- * This runs in the browser for the same reason the near-field re-weighting does: §10 says a
- * driver is attached **after** the solve, so every term except the driver's voltage has to be
- * in the result already. `cable_ports.json` carries H_cm and `cable_antenna.json` carries
- * Z_ant and E_per_amp, both on the solve's dense grid; the driver supplies the rest.
+ * This runs in the browser for the same reason the near-field re-weighting does:
+ * docs/implementation.md §4 says a driver is attached **after** the solve, so every term except the
+ * driver's voltage has to be in the result already. `cable_ports.json` carries H_cm and
+ * `cable_antenna.json` carries Z_ant and E_per_amp, both on the solve's dense grid; the driver
+ * supplies the rest.
  *
  * The composition is exact for a linear system provided the board and the cable interact only
- * through the gap. M0 measured what that costs: 1.2 dB median on a synthetic board, and
+ * through the gap. The early spikes measured what that costs: 1.2 dB median on a synthetic board, and
  * cable test 4 is re-measuring it on the real fixtures.
  */
 
@@ -22,7 +23,7 @@ import { limitAt } from './limits'
 /** One microvolt per metre, the reference for dBµV/m. */
 export const MICRO = 1e-6
 
-/** §7's transfer function, as `cable_ports.json` writes it. */
+/** The cable transfer function, as `cable_ports.json` writes it. */
 export interface CableTransfer {
   ref: string
   frequencies_hz: number[]
@@ -30,6 +31,33 @@ export interface CableTransfer {
   h_imag: number[]
   /** False where the solve delivered no source energy, so H is a ratio of two small numbers. */
   usable?: boolean[]
+}
+
+/**
+ * `cable_ports.json` as `worker/emi_worker/openems/post.py` writes it: one entry per gap port,
+ * with the transfer function nested under `transfer` beside the port's own metadata.
+ */
+export interface CablePortsJson {
+  ports?: {
+    ref: string
+    anchor_mm?: number[]
+    driven_by?: string
+    transfer: Omit<CableTransfer, 'ref'>
+  }[]
+}
+
+/** Flattens each port's nested `transfer` into the `CableTransfer` the composition takes. */
+export function parseCablePorts(json: unknown): CableTransfer[] {
+  const ports = (json as CablePortsJson | null)?.ports ?? []
+  return ports
+    .filter((p) => p && typeof p.ref === 'string' && p.transfer)
+    .map((p) => ({
+      ref: p.ref,
+      frequencies_hz: p.transfer.frequencies_hz,
+      h_real: p.transfer.h_real,
+      h_imag: p.transfer.h_imag,
+      usable: p.transfer.usable,
+    }))
 }
 
 /** The antenna solver's terms, as `cable_antenna.json` writes them. */
@@ -60,7 +88,10 @@ export interface Emission {
   /** Where the field is evaluated, in metres — the standard's measuring distance. */
   distanceM: number
   points: EmissionPoint[]
-  /** Frequency -> why there is no point there. Never silently dropped: §17.3 reads this. */
+  /**
+   * Frequency -> why there is no point there. Never silently dropped: the completeness gate
+   * (docs/implementation.md §7.5) reads this.
+   */
   undriven: Map<number, string>
 }
 

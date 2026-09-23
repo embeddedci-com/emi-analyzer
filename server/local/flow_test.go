@@ -30,7 +30,7 @@ type flow struct {
 
 // newFlow mounts a Service under /api. The user middleware trusts an X-Test-Org header, which
 // is how a test acts as two organisations against one server.
-func newFlow(t *testing.T, features emi.Features) *flow {
+func newFlow(t *testing.T, features emi.Features, opts ...func(*emi.Deps)) *flow {
 	t.Helper()
 	ctx := context.Background()
 	store, err := OpenSQLite(ctx, filepath.Join(t.TempDir(), "emi.db"))
@@ -51,10 +51,14 @@ func newFlow(t *testing.T, features emi.Features) *flow {
 	f := &flow{t: t, srv: srv, store: store, blob: blob, keys: NewKeys(store.DB(), secret),
 		now: time.Date(2026, 9, 23, 12, 0, 0, 0, time.UTC)}
 
-	svc, err := emi.New(emi.Deps{
+	deps := emi.Deps{
 		Store: store, Keys: f.keys, Blob: blob, TokenSecret: secret,
 		Features: features, Now: f.clock,
-	})
+	}
+	for _, o := range opts {
+		o(&deps)
+	}
+	svc, err := emi.New(deps)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,7 +131,7 @@ func (f *flow) agent(token, method, path string, body any) (int, map[string]any)
 // put writes an object the way a browser or worker does: through a presigned PUT.
 func (f *flow) put(key string, data []byte) {
 	f.t.Helper()
-	u, err := f.blob.PresignPut(context.Background(), key, "application/octet-stream", time.Hour)
+	u, err := f.blob.PresignPut(context.Background(), key, "application/octet-stream", 0, time.Hour)
 	if err != nil {
 		f.t.Fatal(err)
 	}

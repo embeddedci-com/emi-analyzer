@@ -169,7 +169,7 @@ describe('axis formatting', () => {
   })
 })
 
-describe('the typo the preview exists to catch (§13)', () => {
+describe('the typo the preview exists to catch', () => {
   it('moves the self-resonance visibly for a factor of ten in ESL', () => {
     const base = { c_f: 100e-9, esr_ohm: 0.02, esl_includes_mount: false }
     const right = selfResonanceHz({ ...base, esl_h: 0.4e-9 })!

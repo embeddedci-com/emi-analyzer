@@ -5,9 +5,17 @@ from __future__ import annotations
 import math
 import re
 from dataclasses import dataclass, field, asdict
-from typing import Iterable
+from typing import TYPE_CHECKING, Any, Iterable
 
 from ..kicad.board import BoardModel
+
+if TYPE_CHECKING:  # annotations only; importing these at run time would be circular
+    from ..kicad.netclass import DiffPair, NetClasses
+    from ..kicad.normalize import Transform
+    from ..stackup import BoardElectrics
+    from ..topology import NetTopology
+    from .matching import MatchGroup
+    from .settings import Settings
 
 FORMAT_VERSION = 1
 
@@ -116,50 +124,50 @@ class RuleContext:
     """
 
     model: BoardModel
-    transform: object  # normalize._Transform
+    transform: Transform
     max_frequency_hz: float
     #: Everything that is configurable. Defaults when the caller passes nothing, so a check
     #: can always read a threshold without asking whether settings exist.
-    settings: object = None  # settings.Settings
+    settings: Settings | None = None
     #: Per-layer delay and reference-plane geometry, from the stackup.
-    electrics: object = None  # stackup.BoardElectrics
+    electrics: BoardElectrics | None = None
     #: Net connectivity: pin-to-pin paths, not total copper.
-    topology: dict = field(default_factory=dict)  # str -> topology.NetTopology
-    netclasses: object = None  # netclass.NetClasses
-    pairs: list = field(default_factory=list)  # netclass.DiffPair
-    groups: list = field(default_factory=list)  # matching.MatchGroup
+    topology: dict[str, NetTopology] = field(default_factory=dict)
+    netclasses: NetClasses | None = None
+    pairs: list[DiffPair] = field(default_factory=list)
+    groups: list[MatchGroup] = field(default_factory=list)
     #: Propagation velocity factor in FR-4, used for the wavelength checks. c/sqrt(er) with
     #: er ~4.4 gives roughly 0.48c; microstrip sees a lower effective er, so 0.5 is a fair
     #: middle. Being slightly optimistic here means slightly fewer findings, not more.
     velocity_factor: float = 0.5
     notes: list[str] = field(default_factory=list)
 
-    def setting(self, rule_id: str, key: str, net: str = "") -> object:
-        """A rule's threshold, with any net-group override applied."""
-        from .settings import RULE_CATALOGUE, defaults
+    def _settings(self) -> Settings:
         if self.settings is None:
+            from .settings import defaults
             self.settings = defaults()
+        return self.settings
+
+    def setting(self, rule_id: str, key: str, net: str = "") -> Any:
+        """A rule's threshold, with any net-group override applied."""
         netclass = self.netclasses.of(net) if (self.netclasses and net) else ""
-        return self.settings.param(rule_id, key, net=net, netclass=netclass)  # type: ignore[union-attr]
+        return self._settings().param(rule_id, key, net=net, netclass=netclass)
 
     def enabled(self, rule_id: str) -> bool:
-        from .settings import defaults
-        if self.settings is None:
-            self.settings = defaults()
-        return self.settings.enabled(rule_id)  # type: ignore[union-attr]
+        return self._settings().enabled(rule_id)
 
     def ps_per_mm(self, layer: str) -> float:
-        return self.electrics.ps_per_mm(layer) if self.electrics else 6.0  # type: ignore[union-attr]
+        return self.electrics.ps_per_mm(layer) if self.electrics else 6.0
 
     def pt(self, x: float, y: float) -> tuple[float, float]:
-        return self.transform.pt(x, y)  # type: ignore[attr-defined]
+        return self.transform.pt(x, y)
 
     @property
     def wavelength_mm(self) -> float:
         # Velocity comes from the stackup when it is known. The old constant 0.5 was a fair
         # middle for FR-4 microstrip, but a board with a different dielectric -- or a signal
         # on an inner layer, which is ~20% slower -- was measured against the wrong ruler.
-        vf = self.electrics.mean_velocity_factor if self.electrics else self.velocity_factor  # type: ignore[union-attr]
+        vf = self.electrics.mean_velocity_factor if self.electrics else self.velocity_factor
         c_mm_s = 299_792_458.0 * 1000.0
         return (c_mm_s * vf) / self.max_frequency_hz
 
@@ -204,13 +212,3 @@ def dedupe(findings: Iterable[Finding], per_rule_limit: int = 40) -> list[Findin
             ),
         ))
     return out
-
-
-def distance_point_segment(px: float, py: float,
-                           x0: float, y0: float, x1: float, y1: float) -> float:
-    dx, dy = x1 - x0, y1 - y0
-    denom = dx * dx + dy * dy
-    if denom < 1e-15:
-        return math.hypot(px - x0, py - y0)
-    t = max(0.0, min(1.0, ((px - x0) * dx + (py - y0) * dy) / denom))
-    return math.hypot(px - (x0 + t * dx), py - (y0 + t * dy))

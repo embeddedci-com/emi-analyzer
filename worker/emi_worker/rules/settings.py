@@ -19,6 +19,7 @@ provenance costs an hour.
 from __future__ import annotations
 
 import fnmatch
+import math
 from dataclasses import dataclass, field, replace
 from typing import Any
 
@@ -293,12 +294,12 @@ class Settings:
     rules: dict[str, RuleSetting] = field(default_factory=dict)
     groups: list[NetGroupSetting] = field(default_factory=list)
     suppressions: list[Suppression] = field(default_factory=list)
-    #: Cable assignments per connector reference (§5). ``{"J1": {"type": "usb2-shielded",
-    #: "length_m": 2.0}}``. A reference that is absent is **not** assigned a default: §5 says
-    #: an unassigned connector is not modelled and is reported as incomplete, and a cable the
-    #: user never declared would change a result without appearing in it.
+    #: Cable assignments per connector reference (docs/implementation.md §5). ``{"J1": {"type":
+    #: "usb2-shielded", "length_m": 2.0}}``. A reference that is absent is **not** assigned a
+    #: default: an unassigned connector is not modelled and is reported as incomplete, and a cable
+    #: the user never declared would change a result without appearing in it.
     cables: dict[str, dict] = field(default_factory=dict)
-    #: Which antenna solver to use. Printed on every cable result (§6.1).
+    #: Which antenna solver to use. Printed on every cable result (docs/implementation.md §5.1).
     cable_solver: str = "nec2c"
     warnings: list[str] = field(default_factory=list)
 
@@ -363,7 +364,61 @@ def load(*layers: tuple[str, dict | None]) -> Settings:
     return s
 
 
+#: Board settings that must be above zero rather than merely not negative: a maximum
+#: frequency of zero makes every wavelength infinite.
+_POSITIVE = frozenset({"max_frequency_hz", "epsilon_r_at_hz"})
+
+
+def check_value(where: str, value: Any, default: Any, positive: bool = False) -> Any:
+    """A setting as the type its default has, or ValueError saying what is wrong with it.
+
+    Every parameter in the catalogue is a number or a switch. A string such as "1GHz" used to
+    be stored as given and fail the run later as an internal error, and a negative value gave
+    negative wavelengths; both are refused here with a message naming the setting.
+    """
+    if isinstance(default, bool):
+        if isinstance(value, bool):
+            return value
+        raise ValueError(f"{where} must be true or false, not {value!r}")
+    if not isinstance(default, (int, float)):
+        return value
+    if isinstance(value, bool):
+        raise ValueError(f"{where} must be a number, not {value!r}")
+    try:
+        num = float(value)
+    except (TypeError, ValueError):
+        raise ValueError(f"{where} must be a number, not {value!r}") from None
+    if not math.isfinite(num) or num < 0 or (positive and num == 0):
+        raise ValueError(f"{where} must be {'above' if positive else 'at least'} zero, not {value!r}")
+    if where.endswith("epsilon_r") and 0 < num < 1:
+        raise ValueError(f"{where} must be 1 or more (or 0 to use the board file's), not {value!r}")
+    if isinstance(default, int) and num.is_integer():
+        return int(num)
+    return num
+
+
+def _param_default(key: str) -> Any:
+    """The default a parameter has in whichever rule defines it, for net-group overrides."""
+    for spec in RULE_CATALOGUE.values():
+        if key in spec.get("params", {}):
+            return spec["params"][key]
+    return None
+
+
+def _section(s: Settings, source: str, doc: dict, key: str, kind: type) -> Any:
+    """One section of a document, or an empty one with a warning when it has the wrong shape."""
+    val = doc.get(key)
+    if val is None:
+        return kind()
+    if not isinstance(val, kind):
+        s.warnings.append(f"{source}: {key} should be a {'mapping' if kind is dict else 'list'}; ignored")
+        return kind()
+    return val
+
+
 def _apply(s: Settings, source: str, doc: dict) -> None:
+    if not isinstance(doc, dict):
+        raise ValueError(f"expected a mapping of settings, found a {type(doc).__name__}")
     version = doc.get("version", SETTINGS_VERSION)
     if int(version) > SETTINGS_VERSION:
         raise ValueError(
@@ -371,36 +426,63 @@ def _apply(s: Settings, source: str, doc: dict) -> None:
             f"({SETTINGS_VERSION}); update the worker"
         )
 
-    for key, val in (doc.get("board") or {}).items():
+    for key, val in _section(s, source, doc, "board", dict).items():
         if key not in BOARD_DEFAULTS:
             s.warnings.append(f"{source}: unknown board setting {key!r}")
             continue
+        try:
+            val = check_value(key, val, BOARD_DEFAULTS[key], positive=key in _POSITIVE)
+        except ValueError as exc:
+            s.warnings.append(f"{source}: {exc}; ignored")
+            continue
         s.board[key] = Value(val, source)
 
-    for rule_id, spec in (doc.get("rules") or {}).items():
+    for rule_id, spec in _section(s, source, doc, "rules", dict).items():
         if rule_id not in RULE_CATALOGUE:
             s.warnings.append(f"{source}: unknown rule {rule_id!r}")
             continue
         rs = s.rules.setdefault(rule_id, _default_rule(rule_id))
         if isinstance(spec, bool):
             spec = {"enabled": spec}
+        if not isinstance(spec, dict):
+            s.warnings.append(f"{source}: rule {rule_id} should be true, false or a mapping; ignored")
+            continue
         if "enabled" in spec:
             rs.enabled = bool(spec["enabled"])
         if spec.get("severity"):
             rs.severity = str(spec["severity"])
         known = RULE_CATALOGUE[rule_id].get("params", {})
-        for key, val in (spec.get("params") or {}).items():
+        params = spec.get("params") or {}
+        if not isinstance(params, dict):
+            s.warnings.append(f"{source}: {rule_id}.params should be a mapping; ignored")
+            params = {}
+        for key, val in params.items():
             if key not in known:
                 s.warnings.append(f"{source}: unknown parameter {rule_id}.{key}")
+                continue
+            try:
+                val = check_value(f"{rule_id}.{key}", val, known[key])
+            except ValueError as exc:
+                s.warnings.append(f"{source}: {exc}; ignored")
                 continue
             rs.params[key] = Value(val, source)
         rs.source = source
 
-    for g in doc.get("groups") or []:
+    for g in _section(s, source, doc, "groups", list):
+        if not isinstance(g, dict):
+            s.warnings.append(f"{source}: a net group is not a mapping; ignored")
+            continue
+        params: dict[str, Value] = {}
+        raw = g.get("params") or {}
+        for k, v in (raw.items() if isinstance(raw, dict) else ()):
+            try:
+                params[k] = Value(check_value(f"group {g.get('match', '*')}: {k}", v, _param_default(k)), source)
+            except ValueError as exc:
+                s.warnings.append(f"{source}: {exc}; ignored")
         s.groups.append(NetGroupSetting(
-            match=g.get("match", "*"),
-            netclass=g.get("netclass", ""),
-            params={k: Value(v, source) for k, v in (g.get("params") or {}).items()},
+            match=str(g.get("match", "*")),
+            netclass=str(g.get("netclass", "") or ""),
+            params=params,
         ))
 
     cables = doc.get("cables")
@@ -412,7 +494,11 @@ def _apply(s: Settings, source: str, doc: dict) -> None:
                     f"{source}: unknown antenna solver {solver!r}; keeping {s.cable_solver}")
             else:
                 s.cable_solver = solver
-        for ref, spec in (cables.get("connectors") or {}).items():
+        connectors = cables.get("connectors") or {}
+        if not isinstance(connectors, dict):
+            s.warnings.append(f"{source}: cables.connectors should be a mapping; ignored")
+            connectors = {}
+        for ref, spec in connectors.items():
             # Two spellings, because both read naturally: a bare cable id, or a block with a
             # length. "none" is a real answer - a debug header that is never cabled in the
             # product - and is kept rather than dropped, so the connector counts as decided.
@@ -424,12 +510,16 @@ def _apply(s: Settings, source: str, doc: dict) -> None:
                 s.warnings.append(
                     f"{source}: cable assignment for {ref} is neither a name nor a block")
 
-    for sup in doc.get("suppress") or []:
+    for sup in _section(s, source, doc, "suppress", list):
+        if not isinstance(sup, dict):
+            s.warnings.append(f"{source}: a suppression is not a mapping; ignored")
+            continue
         if not sup.get("reason"):
             # A suppression without a reason is a mystery to whoever finds it later.
             s.warnings.append(f"{source}: suppression for {sup.get('rule', '*')} has no reason")
         s.suppressions.append(Suppression(
-            rule=sup.get("rule", "*"), net=sup.get("net", "*"), reason=sup.get("reason", "")
+            rule=str(sup.get("rule", "*")), net=str(sup.get("net", "*")),
+            reason=str(sup.get("reason", "")),
         ))
 
 

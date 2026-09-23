@@ -202,7 +202,8 @@ func (s *Service) handleDeleteComponent(w http.ResponseWriter, r *http.Request) 
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// attachComponents resolves the caller's component library into the run's params (§12).
+// attachComponents resolves the caller's component library into the run's params
+// (docs/implementation.md §3).
 //
 // Two things happen here that cannot happen anywhere else.
 //

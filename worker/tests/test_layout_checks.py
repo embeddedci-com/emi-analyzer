@@ -10,7 +10,7 @@ from __future__ import annotations
 import pytest
 
 from emi_worker.kicad.board import BoardModel, CopperLayer, Pad, Track, Via, ZonePolygon
-from emi_worker.kicad.normalize import _board_extent
+from emi_worker.kicad.normalize import board_extent
 from emi_worker.rules import decoupling, placement, stitching
 from emi_worker.rules.model import RuleContext
 from emi_worker.stackup import BoardElectrics, LayerElectrics
@@ -28,7 +28,7 @@ def board(layers=("F.Cu", "B.Cu"), size=40.0) -> BoardModel:
 
 
 def ctx_for(m, electrics=None, freq=1e9) -> RuleContext:
-    return RuleContext(model=m, transform=_board_extent(m), max_frequency_hz=freq, electrics=electrics)
+    return RuleContext(model=m, transform=board_extent(m), max_frequency_hz=freq, electrics=electrics)
 
 
 def pad(ref, number, net, x, y, layers=("F.Cu",), value="", kind="smd"):

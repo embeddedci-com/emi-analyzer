@@ -24,7 +24,7 @@ OUT = (Path(__file__).resolve().parents[2] / "server" / "emi" / "testdata"
        / "driver_fixtures.json")
 
 CASES = [
-    # §9.2's worked example: a 25 MHz SPI clock at 50 % duty.
+    # The worked example in docs/emi-driver-format.md: a 25 MHz SPI clock at 50 % duty.
     ("spi-clock-25mhz", 40, dict(
         amplitude_v=3.3, period_s=4.0e-8, pulse_width_s=2.0e-8,
         rise_s=1.2e-9, fall_s=1.2e-9)),

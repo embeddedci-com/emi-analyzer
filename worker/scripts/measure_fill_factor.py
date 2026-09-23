@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Measure the cost model's fill factor against real boards (M0 correction, §21 P1).
+"""Measure the cost model's fill factor against real boards (a correction to the first estimate).
 
 ``estimate.py`` scales a uniform bounding-box cell count by ``fill_factor`` to account for
 grading. The webapp has been passing 0.15 -- a guess, made before any mesh had been built.
-M0 found a real 20x20 mm region at the fine preset is 62.6 M cells against the ~13 M the
+The early spikes found a real 20x20 mm region at the fine preset is 62.6 M cells against the ~13 M the
 design doc assumed, so the guess is worth checking rather than inheriting.
 
 This builds the real mesh with the real mesher for each board, region size and preset, and

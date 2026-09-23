@@ -3,6 +3,7 @@ package emi
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -130,8 +131,14 @@ func (s *Service) handleCreateUpload(w http.ResponseWriter, r *http.Request) {
 		// sending it is what allows the upload to be skipped when we already hold those
 		// bytes -- and a board file is tens of megabytes.
 		SHA256 string `json:"sha256"`
+		// SizeBytes is the exact length of the file. Optional; when given, storage refuses
+		// a body of any other length, and a file over the limit is refused here.
+		SizeBytes int64 `json:"size_bytes"`
 	}
 	if !decodeJSON(w, r, &body) {
+		return
+	}
+	if !s.uploadSizeOK(w, body.SizeBytes) {
 		return
 	}
 	name, valid := sanitiseArtifactName(body.Filename)
@@ -153,19 +160,31 @@ func (s *Service) handleCreateUpload(w http.ResponseWriter, r *http.Request) {
 	// Content-addressed and scoped to the organisation, not the project: the same board
 	// uploaded into two projects is one object, and a second upload of it is no upload at
 	// all. Without a hash we fall back to a random key, which is simply the old behaviour.
+	//
+	// The hash is the client's claim, so an object merely existing at the hashed key proves
+	// nothing: in a shared organisation one user could have put other bytes there. Only a
+	// board whose ingest worker hashed the bytes itself counts as "already uploaded".
 	key := "uploads/" + p.OrganizationID + "/" + newID() + "/" + name
 	if sha != "" {
 		key = "uploads/" + p.OrganizationID + "/sha256/" + sha + "/" + name
-		if size, _, sErr := s.deps.Blob.Stat(r.Context(), key); sErr == nil {
-			writeJSON(w, http.StatusOK, map[string]any{
-				"key": key, "already_uploaded": true,
-				"size_bytes": size, "content_type": ct,
-			})
-			return
+		if b, _, fErr := s.deps.Store.FindBoardByContent(r.Context(), p.OrganizationID, sha); fErr == nil &&
+			b.ContentSHA256 == sha && uploadKeyAllowed(b.InputKey, p.OrganizationID) {
+			if size, _, sErr := s.deps.Blob.Stat(r.Context(), b.InputKey); sErr == nil {
+				writeJSON(w, http.StatusOK, map[string]any{
+					"key": b.InputKey, "already_uploaded": true,
+					"size_bytes": size, "content_type": ct,
+				})
+				return
+			}
+		}
+		// Something unverified is already there. It is not overwritten: it may be another
+		// user's upload waiting for its ingest. This upload goes to a key of its own.
+		if _, _, sErr := s.deps.Blob.Stat(r.Context(), key); sErr == nil {
+			key = "uploads/" + p.OrganizationID + "/" + newID() + "/" + name
 		}
 	}
 
-	url, err := s.deps.Blob.PresignPut(r.Context(), key, ct, presignTTL)
+	url, err := s.deps.Blob.PresignPut(r.Context(), key, ct, body.SizeBytes, presignTTL)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "failed to create upload url")
 		return
@@ -175,6 +194,23 @@ func (s *Service) handleCreateUpload(w http.ResponseWriter, r *http.Request) {
 		"already_uploaded": false,
 		"content_type":     ct, "expires_in": int(presignTTL.Seconds()),
 	})
+}
+
+// uploadSizeOK checks a size a client declared before it uploads.
+func (s *Service) uploadSizeOK(w http.ResponseWriter, size int64) bool {
+	switch {
+	case size < 0:
+		writeErr(w, http.StatusBadRequest, "size_bytes must not be negative")
+		return false
+	case size > s.deps.maxUploadBytes():
+		writeErr(w, http.StatusRequestEntityTooLarge, s.tooLargeMessage())
+		return false
+	}
+	return true
+}
+
+func (s *Service) tooLargeMessage() string {
+	return fmt.Sprintf("file is larger than the %d MB upload limit", s.deps.maxUploadBytes()>>20)
 }
 
 // normaliseSHA256 accepts an empty string or a 64-character hex digest, lowercased.
@@ -225,16 +261,27 @@ func (s *Service) handleCreateBoard(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "no uploaded object at that key")
 		return
 	}
+	// A presigned PUT without a declared size cannot be capped by storage, so the cap is
+	// checked again here, before anything is queued to parse it.
+	if size > s.deps.maxUploadBytes() {
+		writeErr(w, http.StatusRequestEntityTooLarge, s.tooLargeMessage())
+		return
+	}
 	sha, err := normaliseSHA256(body.SHA256)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
+	// The claimed hash is checked for shape and then set aside. The board's content hash is
+	// recorded when the ingest worker reports the hash of the bytes it actually read, so a
+	// wrong or malicious claim never reaches deduplication.
+	_ = sha
+
 	now := s.deps.now()
 	b := &Board{
 		ID: newID(), ProjectID: p.ID, InputKey: body.InputKey,
-		ContentSHA256: sha, SizeBytes: size, CreatedAt: now,
+		SizeBytes: size, CreatedAt: now,
 	}
 	if err := s.deps.Store.CreateBoard(r.Context(), b); err != nil {
 		writeStoreErr(w, err)
@@ -429,9 +476,9 @@ func (s *Service) handleCreateDriver(w http.ResponseWriter, r *http.Request) {
 	u, _ := userFrom(r.Context())
 
 	// Read the document as raw bytes rather than through decodeJSON. Two reasons: the cap
-	// here is §9.2's 2 MB rather than the 1 MB control-plane default, and the row stores the
-	// bytes that arrived -- re-encoding a driver would quietly reorder or reformat a document
-	// that BenchPod and a CI diff both treat as a file.
+	// here is the 2 MB of docs/emi-driver-format.md rather than the 1 MB control-plane default, and
+	// the row stores the bytes that arrived -- re-encoding a driver would quietly reorder or reformat
+	// a document that BenchPod and a CI diff both treat as a file.
 	r.Body = http.MaxBytesReader(w, r.Body, maxDriverDocumentBytes+1)
 	raw, err := io.ReadAll(r.Body)
 	if err != nil {

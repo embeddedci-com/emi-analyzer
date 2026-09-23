@@ -1,5 +1,5 @@
 /**
- * The published emission limits, as tables (§15.3).
+ * The published emission limits, as tables (docs/limits-and-decisions.md §15.3).
  *
  * Every number here comes from `worker/emi_worker/compliance/limits/fcc.json`, the same file
  * the worker reads when it computes a margin. Nothing on this page is retyped: a limit a user

@@ -26,7 +26,7 @@ from .. import stackup, topology
 from ..gerber import GerberError, NetlistError, load_gerber_board
 from ..kicad import netclass, parse, parse_board
 from ..kicad.board import ZONES_UNFILLED_NOTE
-from ..kicad.normalize import _board_extent, normalize, to_json
+from ..kicad.normalize import board_extent, normalize, to_json
 from ..rules import run_rules, settings
 from ..rules import matching, netreport
 from ..rules.model import RuleContext
@@ -315,9 +315,14 @@ def run_ingest(ctx: StageContext) -> StageResult:
         ("run", ctx.params.get("settings")),
     )
     if ctx.params.get("max_frequency_hz"):
-        cfg.board["max_frequency_hz"] = settings.Value(
-            float(ctx.params["max_frequency_hz"]), "run"
-        )
+        try:
+            fmax = settings.check_value(
+                "max_frequency_hz", ctx.params["max_frequency_hz"],
+                settings.BOARD_DEFAULTS["max_frequency_hz"], positive=True,
+            )
+        except ValueError as exc:
+            raise StageError(f"this run's settings are not valid: {exc}") from None
+        cfg.board["max_frequency_hz"] = settings.Value(fmax, "run")
     max_freq = float(cfg.value("max_frequency_hz") or DEFAULT_MAX_FREQUENCY_HZ)
 
     # Which layers are reference planes is decided once, from the pours, and handed to both
@@ -347,7 +352,7 @@ def run_ingest(ctx: StageContext) -> StageResult:
     ctx.progress("rules", 72, "running EMI checks")
     rules = run_rules(RuleContext(
         model=model,
-        transform=_board_extent(model),
+        transform=board_extent(model),
         max_frequency_hz=max_freq,
         settings=cfg,
         electrics=electrics,
@@ -374,6 +379,8 @@ def run_ingest(ctx: StageContext) -> StageResult:
     # collected and then dropped on the floor.
     rules_doc["notes"] = (
         list(rules_doc.get("notes") or []) + list(sidecars.notes) + list(electrics.notes)
+        # A project file that could not be read says so, rather than netclasses vanishing.
+        + list(classes.warnings if classes else [])
         # Unfilled zones switch the plane checks off, so the note belongs with the findings
         # as well as with the board's warnings.
         + [w for w in model.warnings if w.endswith(ZONES_UNFILLED_NOTE.rsplit("}", 1)[-1])]
@@ -443,5 +450,8 @@ def run_ingest(ctx: StageContext) -> StageResult:
                 "height": doc["board"]["height_mm"],
             },
             "stackup": doc["stackup"],
+            # The hash of the bytes actually read. The server records this, not the hash
+            # the uploader claimed, so deduplication only matches what was checked.
+            "content_sha256": digest,
         },
     )

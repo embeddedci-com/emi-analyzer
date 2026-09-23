@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"math/rand/v2"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/coder/websocket"
@@ -21,6 +22,9 @@ type Hub struct {
 	byKid map[string]*workerConn
 
 	log func() string
+
+	// Socket liveness. Fields rather than constants so tests can shrink them.
+	pingInterval, pingTimeout, idleTimeout time.Duration
 }
 
 type workerConn struct {
@@ -33,6 +37,21 @@ type workerConn struct {
 	sendMu sync.Mutex
 	closed chan struct{}
 	once   sync.Once
+
+	// lastSeen is the monotonic time of the last message or answered ping, in UnixNano.
+	// It is liveness, not a business timestamp, so it reads the real clock and not
+	// Deps.Now.
+	lastSeen atomic.Int64
+}
+
+func (wc *workerConn) seen() { wc.lastSeen.Store(time.Now().UnixNano()) }
+
+func (wc *workerConn) idleFor() time.Duration {
+	last := wc.lastSeen.Load()
+	if last == 0 {
+		return 0
+	}
+	return time.Since(time.Unix(0, last))
 }
 
 // NewHub returns an empty hub.
@@ -40,6 +59,10 @@ func NewHub() *Hub {
 	return &Hub{
 		conns: make(map[*workerConn]struct{}),
 		byKid: make(map[string]*workerConn),
+
+		pingInterval: wsPingInterval,
+		pingTimeout:  wsPingTimeout,
+		idleTimeout:  wsIdleTimeout,
 	}
 }
 
@@ -49,6 +72,8 @@ func (h *Hub) register(wc *workerConn) {
 	// One connection per key. A reconnecting worker replaces its old connection rather
 	// than accumulating ghosts, which is what happens when a laptop lid closes and the
 	// TCP connection dies without a close frame.
+	// The old socket is closed, not just marked: its read loop is blocked in Read and only
+	// a closed connection gets it out, taking its goroutine and file descriptor with it.
 	if old, ok := h.byKid[wc.keyKid]; ok {
 		delete(h.conns, old)
 		old.shutdown()
@@ -67,8 +92,14 @@ func (h *Hub) unregister(wc *workerConn) {
 	wc.shutdown()
 }
 
+// shutdown marks the connection closed and closes the socket, which unblocks its read loop.
 func (wc *workerConn) shutdown() {
-	wc.once.Do(func() { close(wc.closed) })
+	wc.once.Do(func() {
+		close(wc.closed)
+		if wc.conn != nil {
+			_ = wc.conn.CloseNow()
+		}
+	})
 }
 
 // send writes one JSON message. Writes are serialised per connection because

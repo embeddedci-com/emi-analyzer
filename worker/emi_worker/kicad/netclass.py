@@ -79,10 +79,23 @@ def parse_project(data: bytes | str) -> NetClasses:
     out = NetClasses()
     try:
         doc = json.loads(data if isinstance(data, str) else data.decode("utf-8", "replace"))
-    except (ValueError, AttributeError) as exc:
+    except (ValueError, AttributeError, RecursionError) as exc:
         out.warnings.append(f"project file could not be read ({exc}); netclasses unavailable")
         return out
+    try:
+        _read_project(doc, out)
+    except (AttributeError, TypeError, ValueError, IndexError) as exc:
+        # A file of the right name with an unexpected shape: a list at the top, a class
+        # that is a string, a width that is not a number. Degrade the same way.
+        out = NetClasses()
+        out.warnings.append(
+            f"project file has an unexpected layout ({type(exc).__name__}); netclasses unavailable")
+    return out
 
+
+def _read_project(doc: object, out: NetClasses) -> None:
+    if not isinstance(doc, dict):
+        raise TypeError("the top level is not an object")
     settings = doc.get("net_settings") or {}
     for c in settings.get("classes") or []:
         name = c.get("name") or ""
@@ -123,7 +136,6 @@ def parse_project(data: bytes | str) -> NetClasses:
             out.patterns.append((pattern, cls))
 
     out.available = bool(out.classes)
-    return out
 
 
 def split_pair_name(net: str) -> tuple[str, bool] | None:

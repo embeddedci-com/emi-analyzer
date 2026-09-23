@@ -6,9 +6,9 @@ import (
 	"errors"
 )
 
-// A compliance run is arithmetic on another run's results (§16, §17), so its worker needs that
-// run's artifacts. It used to be handed nothing: the browser was meant to assemble the inputs,
-// sent an empty list, and every estimate came back with nothing radiating.
+// A compliance run is arithmetic on another run's results (docs/implementation.md §7), so its
+// worker needs that run's artifacts. It used to be handed nothing: the browser was meant to
+// assemble the inputs, sent an empty list, and every estimate came back with nothing radiating.
 //
 // The worker now reads them itself, and this is the one place that decides which. The rule is
 // narrow on purpose: the named solve must belong to the same project and the same board as the

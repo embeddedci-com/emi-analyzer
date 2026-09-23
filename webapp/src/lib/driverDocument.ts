@@ -1,17 +1,17 @@
 /**
- * The `emi-driver` document (§9.2) — the browser's validator.
+ * The `emi-driver` document (docs/emi-driver-format.md) — the browser's validator.
  *
  * The worker holds the other one (`worker/emi_worker/drivers/document.py`) and both assert
- * against `server/emi/testdata/driver_document_fixtures.json`. §9.2 asks for validation in
- * both places for different reasons: this one tells someone their numbers do not make sense
- * while they are typing them, and the worker's refuses a document that arrived some other
- * way — BenchPod, a CI commit, a hand-edited file. If they disagree, a user saves something
- * the worker then rejects.
+ * against `server/emi/testdata/driver_document_fixtures.json`. docs/emi-driver-format.md asks for
+ * validation in both places for different reasons: this one tells someone their numbers do not make
+ * sense while they are typing them, and the worker's refuses a document that arrived some other way
+ * — BenchPod, a CI commit, a hand-edited file. If they disagree, a user saves something the worker
+ * then rejects.
  *
  * **Every number carries where it came from.** The weakest source in a driver sets a term in
- * the confidence budget (§17.2), travels with the result, and is what the Drivers panel puts
- * on a chip. A document whose amplitude was measured and whose rise time was guessed is not
- * the same document as one measured throughout.
+ * the confidence budget (docs/implementation.md §7.4), travels with the result, and is what the
+ * Drivers panel puts on a chip. A document whose amplitude was measured and whose rise time was
+ * guessed is not the same document as one measured throughout.
  */
 
 import { DriverError, validateTrapezoid, type Trapezoid } from './driverSpectrum'
@@ -19,13 +19,14 @@ import { DriverError, validateTrapezoid, type Trapezoid } from './driverSpectrum
 export const DRIVER_FORMAT = 'emi-driver'
 export const DRIVER_VERSION = 1
 
-/** §9.2's list, worst last. */
+/** The list in docs/emi-driver-format.md, worst last. */
 export const SOURCES = ['scope', 'spectrum-analyzer', 'benchpod', 'datasheet', 'assumed'] as const
 export type Source = (typeof SOURCES)[number]
 
 /**
- * Provisional sigma per source, in dB, from §17.2. Engineering placeholders that M5 replaces
- * with residuals from recorded lab results; the ordering is the part that matters today.
+ * Provisional sigma per source, in dB, from docs/implementation.md §7.4. Engineering placeholders
+ * that measured results replace with residuals from recorded lab results; the ordering is the part
+ * that matters today.
  */
 export const SOURCE_SIGMA_DB: Record<Source, number> = {
   scope: 1.0,
@@ -41,7 +42,7 @@ export type Kind = (typeof KINDS)[number]
 export const ROLES = ['signal', 'switching-regulator'] as const
 export type Role = (typeof ROLES)[number]
 
-/** §9.2's caps: a jsonb column, and a file parsed in a browser tab. */
+/** Size caps (docs/emi-driver-format.md): a jsonb column, and a file parsed in a browser tab. */
 export const MAX_DOCUMENT_BYTES = 2 * 1024 * 1024
 export const MAX_SAMPLES = 1_000_000
 
@@ -281,7 +282,7 @@ export function parseDriverDocument(doc: unknown, documentBytes?: number): Drive
       if (!(field in d)) {
         throw new DriverError(
           `a switching-regulator driver needs ${field}, which the conducted prediction ` +
-            `reads (§16.3)`,
+            `reads`,
         )
       }
       values[field] = sourced(d[field], field)
@@ -303,10 +304,10 @@ export function parseDriverDocument(doc: unknown, documentBytes?: number): Drive
 }
 
 /**
- * The source that sets this driver's confidence term (§17.2).
+ * The source that sets this driver's confidence term (docs/implementation.md §7.4).
  *
  * Worst, not average: an averaged provenance would hide a guessed rise time behind four
- * measured values, which is exactly the case §17.2 exists to price.
+ * measured values, which is exactly the case the confidence term exists to price.
  */
 export function weakestSource(driver: Driver): Source {
   return Object.values(driver.values).reduce((worst, s) =>

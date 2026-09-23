@@ -17,7 +17,7 @@ import pytest
 
 from emi_worker.kicad import parse, parse_board
 from emi_worker.kicad import geometry as g
-from emi_worker.kicad.normalize import _board_extent, _simplify, normalize
+from emi_worker.kicad.normalize import board_extent, _simplify, normalize
 from emi_worker.kicad.sexpr import SexprError
 from emi_worker.rules import run_rules
 from emi_worker.rules.checks import PLANE_RASTER_MM, _rasterize_layer
@@ -222,13 +222,13 @@ def test_copper_z_heights_come_from_the_stackup(normalized):
 
 @pytest.fixture(scope="module")
 def rules(model):
-    ctx = RuleContext(model=model, transform=_board_extent(model), max_frequency_hz=1e9)
+    ctx = RuleContext(model=model, transform=board_extent(model), max_frequency_hz=1e9)
     return run_rules(ctx).as_dict()
 
 
 def test_plane_raster_matches_the_known_pour(model):
     """B.Cu is a split plane: 5..20 and 30..45, both 5..35, with a channel between."""
-    ctx = RuleContext(model=model, transform=_board_extent(model), max_frequency_hz=1e9)
+    ctx = RuleContext(model=model, transform=board_extent(model), max_frequency_hz=1e9)
     mask, ox, oy, res = _rasterize_layer(ctx, "B.Cu")
 
     def filled(x, y):
@@ -254,7 +254,7 @@ def test_overlapping_pours_do_not_cancel():
         (filled_polygon (layer "B.Cu") (pts (xy 0 0) (xy 20 0) (xy 20 20) (xy 0 20)))
         (filled_polygon (layer "B.Cu") (pts (xy 10 10) (xy 30 10) (xy 30 30) (xy 10 30)))))""")
     m = parse_board(tree)
-    ctx = RuleContext(model=m, transform=_board_extent(m), max_frequency_hz=1e9)
+    ctx = RuleContext(model=m, transform=board_extent(m), max_frequency_hz=1e9)
     mask, ox, oy, res = _rasterize_layer(ctx, "B.Cu")
     # The overlap must still be copper.
     assert bool(mask[int((15 - oy) / res), int((15 - ox) / res)]) is True

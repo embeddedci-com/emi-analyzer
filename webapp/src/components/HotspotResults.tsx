@@ -60,14 +60,15 @@ export interface SolveManifest {
   has_port_spectra?: boolean
   dense_frequencies_hz?: number[]
   /**
-   * Which parts were modelled rather than left as bare copper (§12). Empty means none were;
-   * absent means the result predates the list. Those are different answers.
+   * Which parts were modelled rather than left as bare copper (docs/implementation.md §3). Empty
+   * means none were; absent means the result predates the list. Those are different answers.
    */
   modelled_parts?: ModelledPart[]
   /**
-   * Connectors this solve fitted a Tier B gap port to (§7), and those the antenna solver
-   * then produced terms for. They are separate lists because a worker without `nec2c` can
-   * produce the first and not the second, and the UI has different things to say about each.
+   * Connectors this solve fitted a Tier B gap port to (docs/implementation.md §5.2), and those the
+   * antenna solver then produced terms for. They are separate lists because a worker without
+   * `nec2c` can produce the first and not the second, and the UI has different things to say about
+   * each.
    */
   cable_ports?: string[]
   cable_antenna?: string[]
@@ -76,7 +77,7 @@ export interface SolveManifest {
 }
 
 /**
- * Whether a driver can be attached to this result (§10).
+ * Whether a driver can be attached to this result (docs/implementation.md §4).
  *
  * A version-1 solve never recorded the complex port spectra and they cannot be recovered
  * from the artifacts it did write, so the honest answer is to offer a re-run rather than a

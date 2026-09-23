@@ -14,15 +14,17 @@ import (
 // Off means off at the server, not merely hidden in the UI: runs of a gated kind are refused at
 // creation and on retry, and a worker is never handed one that was queued before the switch.
 type Features struct {
-	// FullWave enables openEMS full-wave solves and everything built on them: hotspot maps, the
-	// far field, cable emissions and the compliance estimate.
+	// FullWave enables the run kinds built on an openEMS full-wave solve: "solve" (hotspot
+	// maps, the far field, and the cable emissions computed from a solve's cable ports) and
+	// "compliance", which reads a solve's results. The "cable" run kind is not gated: it is a
+	// method-of-moments budget on a wire alone and needs no solve.
 	//
 	// Off by default because none of it is verified, not because it is known to be broken. It
 	// does solve end to end: the runs that used to be refused as unstable were a false positive
 	// in the divergence check, which read the ripple on the excitation ramp as a blow-up. What
 	// has not been done is a run at the record length a radiated result needs, or any check of
-	// the far field, cable emissions or a compliance estimate against a real board. See
-	// docs/known-issues.md.
+	// the far field, solve-based cable emissions or a compliance estimate against a real board.
+	// See docs/known-issues.md.
 	FullWave bool `json:"full_wave"`
 }
 

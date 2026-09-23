@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -110,7 +111,7 @@ func TestLifecycleTransitions(t *testing.T) {
 	now := time.Now().UTC()
 	_, _, r := seed(t, s, "org", now)
 
-	if err := s.CompleteRun(ctx, r.ID, emi.StatusDone, nil, "", now); !errors.Is(err, emi.ErrConflict) {
+	if err := s.CompleteRun(ctx, r.ID, &emi.Completion{Status: emi.StatusDone}, now); !errors.Is(err, emi.ErrConflict) {
 		t.Fatalf("completing an unclaimed run: %v, want ErrConflict", err)
 	}
 	claimed, err := s.ClaimRun(ctx, r.ID, "kid", "jti-1", now)
@@ -120,7 +121,7 @@ func TestLifecycleTransitions(t *testing.T) {
 	if err := s.UpdateRunProgress(ctx, r.ID, &emi.Progress{Stage: "mesh", Pct: 40}, now); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.CompleteRun(ctx, r.ID, emi.StatusFailed, []byte(`{"x":1}`), "boom", now); err != nil {
+	if err := s.CompleteRun(ctx, r.ID, &emi.Completion{Status: emi.StatusFailed, Summary: []byte(`{"x":1}`), Error: "boom"}, now); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.RetryRun(ctx, r.ID, now); err != nil {
@@ -408,7 +409,71 @@ func TestRequestStop(t *testing.T) {
 	if err := s.RequestStop(ctx, r.ID, now); !errors.Is(err, emi.ErrConflict) {
 		t.Fatalf("stopping twice: %v, want ErrConflict", err)
 	}
-	if err := s.CompleteRun(ctx, r.ID, emi.StatusFailed, nil, "stopped on request", now); err != nil {
+	if err := s.CompleteRun(ctx, r.ID, &emi.Completion{Status: emi.StatusFailed, Error: "stopped on request"}, now); err != nil {
 		t.Fatalf("the owner could not report back: %v", err)
+	}
+}
+
+// A run that has already ended gains nothing from a late completion: no artifacts, no
+// estimate, no parsed board. Registering artifacts before the state check let a timed-out
+// run pick up results from a worker that no longer held it.
+func TestCompletingAnEndedRunWritesNothing(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	_, b, r := seed(t, s, "org", now)
+	if _, err := s.ClaimRun(ctx, r.ID, "kid", "jti-1", now); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := s.SweepTimedOut(ctx, now.Add(time.Hour), now); err != nil || n != 1 {
+		t.Fatalf("sweep = %d, %v", n, err)
+	}
+
+	late := &emi.Completion{
+		Status:    emi.StatusDone,
+		Estimate:  &emi.Estimate{Cells: 42},
+		Artifacts: []*emi.Artifact{{ID: "a1", Name: "late.json", Key: "runs/" + r.ID + "/late.json", CreatedAt: now}},
+		Board:     &emi.ParsedBoard{BoardID: b.ID, BoardKey: "runs/" + r.ID + "/board.json", LayerCount: 9},
+	}
+	if err := s.CompleteRun(ctx, r.ID, late, now); !errors.Is(err, emi.ErrConflict) {
+		t.Fatalf("late completion: %v, want ErrConflict", err)
+	}
+	if arts, _ := s.ListArtifacts(ctx, r.ID); len(arts) != 0 {
+		t.Errorf("a timed-out run gained %d artifacts", len(arts))
+	}
+	got, _ := s.GetRun(ctx, r.ID)
+	if got.Status != emi.StatusTimedOut || got.Estimate != nil {
+		t.Errorf("run after late completion = %+v", got)
+	}
+	if gb, _ := s.GetBoard(ctx, b.ID); gb.BoardKey != "" || gb.LayerCount == 9 {
+		t.Errorf("a timed-out run parsed its board: %+v", gb)
+	}
+}
+
+// The board's content hash is whatever the worker computed, and an empty one clears the
+// uploader's claim: deduplication must only ever match a hash somebody checked.
+func TestCompletionSetsTheVerifiedHash(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	_, b, r := seed(t, s, "org", now)
+	if _, err := s.ClaimRun(ctx, r.ID, "kid", "jti-1", now); err != nil {
+		t.Fatal(err)
+	}
+	real := strings.Repeat("b", 64)
+	if err := s.CompleteRun(ctx, r.ID, &emi.Completion{
+		Status: emi.StatusDone,
+		Board:  &emi.ParsedBoard{BoardID: b.ID, BoardKey: "runs/" + r.ID + "/board.json", ContentSHA256: real},
+		Artifacts: []*emi.Artifact{{ID: "a1", Name: "board.json", Key: "runs/" + r.ID + "/board.json",
+			ContentType: "application/json", SizeBytes: 3, CreatedAt: now}},
+	}, now); err != nil {
+		t.Fatal(err)
+	}
+	gb, _ := s.GetBoard(ctx, b.ID)
+	if gb.ContentSHA256 != real {
+		t.Errorf("content hash = %q, want the worker's", gb.ContentSHA256)
+	}
+	if arts, _ := s.ListArtifacts(ctx, r.ID); len(arts) != 1 {
+		t.Errorf("artifacts = %d, want 1", len(arts))
 	}
 }

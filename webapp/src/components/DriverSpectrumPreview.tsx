@@ -1,5 +1,5 @@
 /**
- * The live preview a driver form draws while someone types (§9.4).
+ * The live preview a driver form draws while someone types (docs/implementation.md §4).
  *
  * Shows the line spectrum, the envelope, and both corners — `1/(πτ)` and `1/(πt_r)` — which
  * are the two numbers that decide everything above the fundamental. A form that only showed

@@ -1,5 +1,5 @@
 /**
- * The gate on attaching a driver to an existing result (§10).
+ * The gate on attaching a driver to an existing result (docs/implementation.md §4).
  *
  * A version-1 solve never recorded complex port spectra, and they cannot be recovered from
  * the artifacts it did write. The UI has to say so rather than offer a control that would

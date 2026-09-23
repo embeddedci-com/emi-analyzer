@@ -1,5 +1,5 @@
 /**
- * The browser's half of §9.2.
+ * The browser's half of the docs/emi-driver-format.md validation.
  *
  * Same fixtures as `worker/tests/test_driver_document.py`. A document one validator accepts
  * and the other refuses is a user allowed to save something the worker then rejects.
