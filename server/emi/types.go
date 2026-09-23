@@ -242,10 +242,14 @@ type Run struct {
 	Params    json.RawMessage `json:"params,omitempty"`
 	Estimate  *Estimate       `json:"estimate,omitempty"`
 
-	// Ownership, assigned when a worker mints a run token. Mirrors jobs.owner_api_key_kid
-	// and jobs.jti_key in embeddedci-server.
-	OwnerAPIKeyKid string `json:"owner_api_key_kid,omitempty"`
-	JTIKey         string `json:"jti_key,omitempty"`
+	// Ownership, assigned when a worker mints a run token: the id of the worker key that holds
+	// the run, and the jti its current run token must carry.
+	//
+	// Never serialised. A Run is what the browser receives, and neither field is any of its
+	// business: the kid names a credential, and the jti is half of what authorises writes to
+	// the run. Workers get runEnvelope, which leaves them out as well.
+	OwnerAPIKeyKid string `json:"-"`
+	JTIKey         string `json:"-"`
 
 	ClaimedAt  *time.Time `json:"claimed_at,omitempty"`
 	StartedAt  *time.Time `json:"started_at,omitempty"`
