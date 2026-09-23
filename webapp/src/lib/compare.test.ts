@@ -31,8 +31,21 @@ describe('diffFindings', () => {
   })
 
   it('reports a finding that moved too far as one fixed and one new', () => {
-    const d = diffFindings([finding({})], [finding({ x: 20 })])
+    const d = diffFindings([finding({ title: 'Via 3.1 mm from a return' })],
+      [finding({ x: 20, title: 'Via 2.8 mm from a return' })])
     expect(d.changes.map((c) => c.status).sort()).toEqual(['fixed', 'new'])
+  })
+
+  it('matches a finding that moved far when it still says exactly the same thing', () => {
+    const d = diffFindings([finding({ title: "D1's ground pad has no via" })],
+      [finding({ x: 40, title: "D1's ground pad has no via" })])
+    expect(d.changes.map((c) => c.status)).toEqual(['unchanged'])
+    // A near partner still wins over a far one with the same title.
+    const two = diffFindings(
+      [finding({ id: 'far', x: 40, title: 'T' }), finding({ id: 'near', x: 10.5, title: 'U' })],
+      [finding({ id: 'b', title: 'T' })],
+    )
+    expect(two.changes.find((c) => c.status === 'unchanged')!.before!.id).toBe('near')
   })
 
   it('never matches across rule, net or layer', () => {

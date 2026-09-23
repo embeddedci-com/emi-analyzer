@@ -20,18 +20,21 @@ const fmtHz = (f: number) =>
   f >= 1e9 ? `${(f / 1e9).toFixed(1)} GHz` : `${f / 1e6 >= 10 ? (f / 1e6).toFixed(0) : (f / 1e6).toFixed(1)} MHz`
 
 export function CableBudgetChart({
-  points, peaks = [], marks = [],
+  points, peaks = [], marks = [], before,
 }: {
   points: CableBudgetPoint[]
   peaks?: number[]
   /** Clock harmonics, so it is visible whether any lands in a dip. */
   marks?: number[]
+  /** An earlier version's budget, drawn under this one when comparing versions. */
+  before?: CableBudgetPoint[]
 }) {
   if (points.length < 2) return null
 
   const fLo = points[0].frequency_hz
   const fHi = points[points.length - 1].frequency_hz
-  const values = points.map((p) => p.max_current_dbua).filter((v) => Number.isFinite(v))
+  const values = [...points, ...(before ?? [])]
+    .map((p) => p.max_current_dbua).filter((v) => Number.isFinite(v))
   if (values.length < 2) return null
   const top = Math.ceil(Math.max(...values) / 10) * 10
   const bottom = Math.floor(Math.min(...values) / 10) * 10 - 5
@@ -42,10 +45,11 @@ export function CableBudgetChart({
   const y = (v: number) =>
     PAD.top + ((top - v) / (top - bottom)) * (H - PAD.top - PAD.bottom)
 
-  const path = points
-    .filter((p) => Number.isFinite(p.max_current_dbua))
+  const line = (pts: CableBudgetPoint[]) => pts
+    .filter((p) => Number.isFinite(p.max_current_dbua) && p.frequency_hz >= fLo && p.frequency_hz <= fHi)
     .map((p, i) => `${i === 0 ? 'M' : 'L'}${x(p.frequency_hz).toFixed(1)},${y(p.max_current_dbua).toFixed(1)}`)
     .join(' ')
+  const path = line(points)
 
   const decades: number[] = []
   for (let d = Math.ceil(Math.log10(fLo)); d <= Math.floor(Math.log10(fHi)); d++) decades.push(10 ** d)
@@ -82,11 +86,20 @@ export function CableBudgetChart({
                   fill="var(--mantine-color-teal-6)" />
         ))}
 
+        {before && before.length > 1 && (
+          <path d={line(before)} fill="none" stroke="var(--mantine-color-gray-6)" strokeWidth={1.4}
+                strokeDasharray="4 2" />
+        )}
         <path d={path} fill="none" stroke="var(--mantine-color-blue-7)" strokeWidth={1.6} />
         <text x={4} y={11} fontSize={10} fill="currentColor" fillOpacity={0.55}>dBµA</text>
       </svg>
 
       <Group gap="md">
+        {before && before.length > 1 && (
+          <Text size="xs" c="dimmed">
+            <Text span c="gray.6">- - -</Text> before, <Text span c="blue.7">—</Text> after
+          </Text>
+        )}
         <Text size="xs" c="dimmed">
           <Text span c="orange.7">— —</Text> where it radiates best
         </Text>

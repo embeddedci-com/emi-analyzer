@@ -234,9 +234,15 @@ running in the background.
    - **Cables** — say which cable plugs into which connector, and see its common-mode budget.
    - **Board** — stackup, nets and layer settings.
 4. Opening the same file again takes you to the existing project instead of creating a new one.
-5. The header has two more things: **Runs**, which lists what has been analysed and lets you
-   retry anything that failed, and a **⋯** menu to rename or delete the board. Deleting removes
-   its board file and every result from this computer.
+5. Changed the layout? In the **⋯** menu, click **Upload a new version** and pick the changed file.
+   It becomes version 2 of the same board, and a version picker appears in the header.
+6. Click **Compare** in the header to see two versions side by side: which findings were fixed
+   and which are new, which nets changed length or via count, and, when both versions have run
+   them, the cable budgets and the ESD peak at each pin. A version without a cable or ESD run
+   offers to run it with the other version's settings.
+7. The header also has **Runs**, which lists what has been analysed and lets you retry anything
+   that failed, and the **⋯** menu can rename the board, delete one version, or delete the board
+   with every version. Deleting removes the files and results from this computer.
 
 ---
 

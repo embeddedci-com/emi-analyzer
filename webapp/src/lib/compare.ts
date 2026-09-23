@@ -111,8 +111,10 @@ const groupKey = (f: RuleFinding) => `${f.rule}\u0000${f.net ?? ''}\u0000${f.lay
 /**
  * Pair the findings of two versions. Within each rule, net and layer, the closest pairs are
  * taken first, so two findings that swapped order in the file still match their own partner.
- * What pairs is unchanged, what is left over in the older version is fixed, and what is left
- * over in the newer one is new.
+ * Then what is left pairs on an identical title however far it moved: "clamp D1's ground pad
+ * has no via" is the same finding when D1 moved across the board, and titles that carry a
+ * measurement only repeat when the measurement did. What pairs is unchanged, what is left over
+ * in the older version is fixed, and what is left over in the newer one is new.
  */
 export function diffFindings(
   before: RuleFinding[], after: RuleFinding[], tol = MATCH_TOLERANCE_MM,
@@ -132,6 +134,10 @@ export function diffFindings(
     a.forEach((fa, i) => b.forEach((fb, j) => {
       const d = distance(fa, fb, tol)
       if (d <= tol) pairs.push([d, i, j])
+    }))
+    a.forEach((fa, i) => b.forEach((fb, j) => {
+      const d = distance(fa, fb, tol)
+      if (d > tol && d < Infinity && fa.title === fb.title) pairs.push([tol + d, i, j])
     }))
     pairs.sort((p, q) => p[0] - q[0] || p[1] - q[1] || p[2] - q[2])
     const usedA = new Set<number>()
@@ -246,6 +252,8 @@ export interface CableSide {
   note?: string
   tightest?: { frequency_hz: number; max_current_dbua: number } | null
   points?: CableBudgetPoint[]
+  /** Where the cable radiates best. */
+  peaks?: number[]
 }
 
 function cableSides(doc: CablesDoc): Map<string, CableSide> {
@@ -258,6 +266,7 @@ function cableSides(doc: CablesDoc): Map<string, CableSide> {
             .filter(Boolean).join(', '),
           tightest: c.tightest ?? null,
           points: c.points,
+          peaks: c.radiation_peaks_hz,
         })
   }
   for (const u of doc.unassigned) if (!out.has(u.ref)) out.set(u.ref, { note: 'No cable set' })
