@@ -53,7 +53,7 @@ export function EmiAnalyzerPage({ api, deployment = 'hosted', host }: EmiAnalyze
       if (sha) {
         const hit = await api.lookupBoard(sha)
         if (hit.found && hit.project && hit.parsed) {
-          return { project: hit.project, existing: true }
+          return { project: hit.project, existing: true, boardId: hit.board?.id }
         }
       }
 
@@ -74,16 +74,18 @@ export function EmiAnalyzerPage({ api, deployment = 'hosted', host }: EmiAnalyze
         await api.deleteProject(project.id).catch(() => undefined)
         throw err
       }
-      return { project, existing: false }
+      return { project, existing: false, boardId: undefined }
     },
-    onSuccess: ({ project, existing }) => {
+    onSuccess: ({ project, existing, boardId }) => {
       setUploadPct(null)
       setStage(null)
       setName('')
       resetFile.current?.()
       qc.invalidateQueries({ queryKey: ['emi', 'projects'] })
-      // Said on the board's page: this one is gone the moment it is navigated away from.
-      navigate(`${base}/${project.id}`, { state: existing ? { reused: true } : undefined })
+      // Opened at the version these bytes are, which need not be the newest one in that project.
+      // "Reused" is said on the board's page: it is gone the moment it is navigated away from.
+      navigate(`${base}/${project.id}${boardId ? `?version=${boardId}` : ''}`,
+               { state: existing ? { reused: true } : undefined })
     },
     onError: () => {
       setUploadPct(null)

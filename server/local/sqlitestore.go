@@ -335,6 +335,26 @@ func (s *SQLiteStore) UpdateBoardParsed(ctx context.Context, id, boardKey string
 	return mapErr(err)
 }
 
+// DeleteBoard: see emi.BoardDeleter. The runs go explicitly, because their board_id is ON
+// DELETE SET NULL and would otherwise leave them in the project with no version to belong to.
+func (s *SQLiteStore) DeleteBoard(ctx context.Context, projectID, boardID string) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return mapErr(err)
+	}
+	defer tx.Rollback() //nolint:errcheck // a no-op after Commit
+
+	if _, err := tx.ExecContext(ctx, `DELETE FROM emi_runs WHERE project_id = ? AND board_id = ?`,
+		projectID, boardID); err != nil {
+		return mapErr(err)
+	}
+	if err := affected(tx.ExecContext(ctx, `DELETE FROM emi_boards WHERE project_id = ? AND id = ?`,
+		projectID, boardID)); err != nil {
+		return err
+	}
+	return mapErr(tx.Commit())
+}
+
 func (s *SQLiteStore) ListBoards(ctx context.Context, projectID string) ([]*emi.Board, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT `+boardCols+` FROM emi_boards
 		WHERE project_id = ? ORDER BY created_at DESC`, projectID)

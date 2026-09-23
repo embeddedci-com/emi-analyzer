@@ -455,6 +455,100 @@ func (s *Service) handleListBoards(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"boards": bs})
 }
 
+// handleDeleteBoard removes one version of a project's board: the board, its runs and the
+// objects nothing else refers to.
+//
+// The last version is refused, because a project with no board is a page with nothing on it;
+// deleting the project is the way to remove that. So is a version with a run still going:
+// its worker would report into rows that are gone.
+func (s *Service) handleDeleteBoard(w http.ResponseWriter, r *http.Request) {
+	p, ok := s.project(w, r)
+	if !ok {
+		return
+	}
+	del, can := s.deps.Store.(BoardDeleter)
+	if !can {
+		writeErr(w, http.StatusNotImplemented, "this server cannot delete a single version")
+		return
+	}
+	boards, err := s.deps.Store.ListBoards(r.Context(), p.ID)
+	if err != nil {
+		writeStoreErr(w, err)
+		return
+	}
+	var board *Board
+	for _, b := range boards {
+		if b.ID == r.PathValue("board_id") {
+			board = b
+		}
+	}
+	if board == nil {
+		writeErr(w, http.StatusNotFound, "not found")
+		return
+	}
+	if len(boards) == 1 {
+		writeErr(w, http.StatusConflict, "this is the only version; delete the board instead")
+		return
+	}
+	all, err := s.deps.Store.ListRuns(r.Context(), p.ID, 1000)
+	if err != nil {
+		writeStoreErr(w, err)
+		return
+	}
+	var runs []*Run
+	for _, run := range all {
+		if run.BoardID != board.ID {
+			continue
+		}
+		if !run.Status.Terminal() {
+			writeErr(w, http.StatusConflict, "a run on this version is still going; stop it first")
+			return
+		}
+		runs = append(runs, run)
+	}
+
+	// Asked before the row goes. The upload is content-addressed, so another version of this
+	// project or another project may hold the same bytes; only an object nobody else names is
+	// removed.
+	var orphaned []string
+	for _, key := range []string{board.InputKey, board.BoardKey} {
+		if key == "" {
+			continue
+		}
+		shared := false
+		for _, b := range boards {
+			if b.ID != board.ID && (b.InputKey == key || b.BoardKey == key) {
+				shared = true
+			}
+		}
+		if n, err := s.deps.Store.CountBoardsSharingInput(r.Context(), key, p.ID); err != nil || n > 0 {
+			shared = true
+		}
+		if !shared {
+			orphaned = append(orphaned, key)
+		}
+	}
+
+	if err := del.DeleteBoard(r.Context(), p.ID, board.ID); err != nil {
+		writeStoreErr(w, err)
+		return
+	}
+	// Best effort and after the rows, for the reason handleDeleteProject gives.
+	if blobDel, canDelete := s.deps.Blob.(BlobDeleter); canDelete {
+		for _, run := range runs {
+			if err := blobDel.DeletePrefix(r.Context(), "runs/"+run.ID+"/"); err != nil {
+				s.deps.log().Warn("emi: could not delete a run's artifacts", "run", run.ID, "err", err)
+			}
+		}
+		for _, key := range orphaned {
+			if err := blobDel.Delete(r.Context(), key); err != nil {
+				s.deps.log().Warn("emi: could not delete an uploaded file", "key", key, "err", err)
+			}
+		}
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (s *Service) handleListDrivers(w http.ResponseWriter, r *http.Request) {
 	p, ok := s.project(w, r)
 	if !ok {
