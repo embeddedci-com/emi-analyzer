@@ -46,7 +46,7 @@ def log_grid(lo: float, hi: float, n: int = 60) -> list[float]:
     return [lo * step ** k for k in range(n)]
 
 
-def far_field(lo=30e6, hi=1e9, e_per_volt=1e-3, version=2) -> dict:
+def far_field(lo=30e6, hi=1e9, e_per_volt=1e-3, version=3) -> dict:
     fs = log_grid(lo, hi)
     doc = {
         "format": "emi-far-field", "format_version": version, "frequencies_hz": fs,

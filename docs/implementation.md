@@ -200,46 +200,58 @@ the domain. It exists to certify Tier B on fixtures, and that certification is i
 
 ## 6. The board's far field
 
-`openems/nf2ff.py`, `stages/solve.py`. Six E and six H frequency-domain face dumps, then the
-shipped `nf2ff` CLI.
+`openems/nf2ff.py`, `openems/scan.py`, `stages/solve.py`. Six E and six H frequency-domain face
+dumps; their tangential fields are equivalent surface currents, integrated at the scan's antenna
+positions with the full free-space Green's function, plus their image in the ground plane.
+[verification/far-field.md](verification/far-field.md) has the measurements behind each point.
 
-- **A PEC `Mirror` at table height puts the ground reflection inside the transform.** The
-  spikes measured it against image theory at 0.08 dB median, with the mirror *on* the box's lower face.
-  The product puts the plane 0.8 m below a box that ends centimetres under the board, and there
-  **all six faces are kept**: the image of a closed box is a second closed box. The job used to
-  drop the lower face whenever a mirror was set, which left the surface open and integrated five
-  sixths of the currents. A face is now dropped only when the mirror lies on it, and a box that
-  reaches through the plane is refused. The off-face configuration has not been measured.
+- **The level is read where a scan reads it, not on a far-field sphere.** The antenna stands 3 m
+  from the smallest circle around the copper and rises 1-4 m (0.1 m steps, 24 azimuths) above a
+  plane 0.8 m under the board; the reading is the better of vertical and horizontal, as the cable
+  path reads nec2c. Until September 2026 the level came from `nf2ff` on a 3 m sphere, 30-90° from
+  the zenith, with its own PEC `Mirror`. That was wrong in two ways that dipoles over ground
+  against nec2c measured: the sphere is not the scan (the far-field limit does not hold at 3 m
+  below 100 MHz, nor for a source and its image 1.6 m apart), which read up to 7.7 dB high on a
+  vertical dipole; and **`nf2ff`'s PEC mirror images horizontal currents wrongly**, which read a
+  horizontal dipole 19 dB high at 30 MHz. A board's currents are all horizontal.
+- **The image is of the currents.** A PEC plane reverses the horizontal part of J and the
+  vertical part of M. The board itself is solved in free space, so the plane's effect back on the
+  board's currents is left out; nec2c puts that at up to 11 % of a half-wave dipole's input
+  impedance at 0.8 m, and under 1 % of an electrically short one's.
+- **`nf2ff` is kept as a guard.** Without a mirror, in the far-field limit, it integrates the same
+  dumps as `scan.field`; the two agree to 0.001 dB, and a far field where they differ by more
+  than 0.5 dB is refused rather than published.
+- **The box must be closed, and is checked.** openEMS sub-samples a dump by striding from the
+  box's first grid line, so the old every-4th-line faces lost their last lines wherever the count
+  did not fit the stride: on the fixture board every face stopped 14 mm short of its neighbours.
+  Faces are now thinned with `OptResolution` (5 mm, or λ/20 at the top of the band if finer),
+  which keeps both ends, and `scan.read_surface` refuses a box whose faces do not meet. On a
+  short dipole 5 mm agrees with the full grid to 0.03 dB; the 4th-line stride read 0.35 dB high.
+- **Both faults together made the fixture board's far field rise 20 dB/decade per volt** where an
+  electrically small, capacitively fed structure must rise 40. Each alone breaks it: the closed
+  box through the old mirror gives 25 dB/decade, the open box without a mirror 31. Fixed, the
+  fixture reads 39.
 - **The box sits a stated distance from the copper**: `max(25 mm, λ/10 at the top of the solved
-  band)`, with at least ten grid lines between each face and the edge of the grid so the PML_8
-  absorber stays clear. Before September 2026 the mesh ended at the region in x and y, so the
-  side faces were planned "0.8 of the way to the boundary" from a region that *was* the boundary
-  and sat inside the absorber; vertically the default 5 mm of air put them 4 mm from the copper.
-  The grid now grows by `clearance + 12 cells` on every side when the far field is on, and the
-  solve's notes state what that costs (2.6x the cells on the fixture board). Below
-  the frequency where the clearance is a tenth of a wavelength the box is electrically closer;
-  `farfield.json` carries `tenth_wavelength_above_hz` and the compliance result says so.
+  band)`, snapped outward to grid lines, with at least ten grid lines between each face and the
+  edge of the grid so the PML_8 absorber stays clear. The grid grows by `clearance + 12 cells` on
+  every side when the far field is on, and the solve's notes state what that costs (2.6x the cells
+  on the fixture board). Below the frequency where the clearance is a tenth of a wavelength the
+  box is electrically closer; on dipoles and a loop it measured right down to 30 MHz (0.003 λ).
 - **The far-field grid covers the solved band only**: 60 log points from `max(30 MHz, lowest
-  solved frequency)` to the solve's `f_max`. It used to start at 30 MHz whatever the solve
-  covered and reach at least 60 MHz, so a 100-500 MHz solve was transformed at 30 MHz, where the
-  source put almost nothing and the record was too short. Frequencies asked for outside the band
-  are dropped with a note.
-- **`farfield.json` (format 2) is a transfer function per volt of source.** The raw transform is
-  in units of openEMS's Gaussian pulse, and the file used to carry it as "V/m". It is now divided
-  by the solve's Thévenin source `V_port + I_port·Z_s` at each frequency, with the port's `Z_in`
-  beside it so a driver can be attached later. **openEMS writes FD dumps single-sided**,
-  `2·Σx·e^(−jωt)·Δt`; `post._dft` has no factor of 2 because everything it fed before was a
-  ratio of two of its own transforms. `OPENEMS_FD_SCALE = 2` brings the source onto openEMS's
-  convention before dividing; without it every far field is 6 dB high.
-  `scripts/e2e_compliance_fixture.py` checks the factor against openEMS itself by integrating an
-  E dump along the port's voltage probe.
-- **`Radius` is where E is evaluated, and E really does scale as 1/r** — measured at 1, 3 and
-  10 m as 1.037e-11, 3.456e-12, 1.037e-12 V/m. So the job asks for the standard's own distance.
-- **Faces are sub-sampled 4:1.** The surface must resolve the *wavelength*, not the copper:
-  300 mm at 1 GHz against 200 µm for a quarter of a 50 µm mesh.
-- **Radians and metres, checked.** `nf2ff` echoes its input angles into `/Mesh/theta`, so a job
-  written in degrees produces an output file that agrees with itself and confirms nothing. The
-  reader asserts the echo matches what was sent.
+  solved frequency)` to the solve's `f_max`. Frequencies asked for outside the band are dropped
+  with a note.
+- **`farfield.json` (format 3) is a transfer function per volt of source**, the maximum over the
+  scan and per antenna height. It is divided by the solve's Thévenin source `V_port + I_port·Z_s`
+  at each frequency, with the port's `Z_in` beside it so a driver can be attached later.
+  **openEMS writes FD dumps single-sided**, `2·Σx·e^(−jωt)·Δt`; `OPENEMS_FD_SCALE = 2` brings the
+  source onto that convention before dividing. Format 2 results are refused by the compliance
+  estimate with a re-run message.
+- **A port reading negative resistance means the record was cut short.** A passive port cannot
+  have one; when `Re(Z_in) < -5 % |Z_in|` the run stopped on its end criterion while the board
+  was still ringing, and the frequency is marked unusable and listed in `truncated_hz`. A real
+  4-layer board at the default -40 dB lost 57 of 60 frequencies this way.
+- **Radians and metres, checked**, for the `nf2ff` guard job: it echoes its input angles into
+  `/Mesh/theta`, so a job written in degrees produces an output file that agrees with itself.
 - **A missing face is refused.** Surface equivalence needs the surface closed.
 
 ---

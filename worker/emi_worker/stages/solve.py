@@ -448,26 +448,43 @@ def _board_span(board, transform) -> tuple[float, float, float, float]:
             max(p[0] for p in pts), max(p[1] for p in pts))
 
 
-#: Version 2 is a transfer function per volt of source; version 1 was in whatever units the
-#: solve's Gaussian excitation happened to produce and cannot have a driver applied to it.
-FAR_FIELD_FORMAT_VERSION = 2
+#: Version 3 is the field at the scan's antenna positions (3 m from the board's boundary, 1-4 m
+#: over the plane), exact at any distance, with the plane as image currents. Version 2 was the
+#: far-field transform on a 3 m sphere with nf2ff's own mirror, which images horizontal currents
+#: wrongly (docs/verification/far-field.md); version 1 was in the solver's pulse units.
+FAR_FIELD_FORMAT_VERSION = 3
+
+#: How negative a port's resistance may read, as a fraction of |Z_in|, before the frequency is
+#: taken as truncated rather than solved. See ``far_field_document``.
+PASSIVE_TOLERANCE = 0.05
+
+#: How far the scan's reading may differ from `nf2ff` in the far-field limit before the far field
+#: is refused. The two integrate the same dumps and agree to 0.001 dB when both are right, so
+#: anything near this is a reading or a units error, not a numerical difference.
+NF2FF_AGREEMENT_DB = 0.5
 
 
 def _add_far_field(ctx, params, built, artifacts, workdir: str) -> None:
-    """Transform the NF2FF box into a field at the standard's distance (§16.2).
+    """The board's field where a radiated scan reads it (§16.2), per volt of source.
 
-    Run **with a PEC mirror at the table height**, because every radiated standard measures over
-    a ground plane and the reflection is part of the level, not a correction to it. M0 measured
-    that putting it inside the transform matches image theory to 0.08 dB median, which is why
-    §16.2's hand-computed two-ray sum and its flat +6 dB fallback are both gone. (M0 measured it
-    with the mirror on the box's lower face; here it is 0.8 m below the box, which the transform
-    supports and which has not been measured.)
+    The NF2FF box's surface currents are integrated with the full Green's function at the
+    antenna positions a scan visits, plus their image in the ground plane (``openems.scan``).
+    This replaced the `nf2ff` transform for the level, for two measured reasons. The transform
+    only exists in the far-field limit, which 3 m is not below about 100 MHz and which a source
+    and its image 1.6 m apart are not at any frequency: on a dipole it read up to 7.6 dB high.
+    And its PEC mirror images horizontal currents wrongly: on a horizontal dipole it read 19 dB
+    high at 30 MHz, and on a board, where every current is horizontal, it left the quasi-static
+    field uncancelled and made the far field rise about 20 dB/decade per volt where physics says
+    40. docs/verification/far-field.md has the numbers.
+
+    `nf2ff` still runs, without a mirror, as a guard: in the far-field limit it must agree with
+    the scan's integral of the same dumps, and if it does not, one of them read the dumps wrongly
+    and the far field is refused rather than published.
 
     **The result is per volt of source.** A solve is excited by openEMS's Gaussian pulse, so the
-    raw transform is in units of that pulse and means nothing on its own -- the file used to
-    carry it as "V/m" regardless. It is divided here by the solve's Thévenin source at each
-    frequency, and carries the port's input impedance beside it, so a driver attached later is
-    arithmetic: E = e_per_volt · |Z_s + Z_in| / |Z_d + Z_in| · |V_d|.
+    raw field is in units of that pulse and means nothing on its own. It is divided here by the
+    solve's Thévenin source at each frequency, and carries the port's input impedance beside it,
+    so a driver attached later is arithmetic: E = e_per_volt · |Z_s + Z_in| / |Z_d + Z_in| · |V_d|.
 
     Like the antenna terms, a failure here does not fail the solve: the field maps are the run's
     main product and are already correct. The manifest says why the far field is missing rather
@@ -476,28 +493,20 @@ def _add_far_field(ctx, params, built, artifacts, workdir: str) -> None:
     if not built.far_field:
         return
     from emi_worker.openems import nf2ff as nf2ff_mod
+    from emi_worker.openems import scan
 
     meta = built.far_field
     freqs = meta["frequencies_hz"]
     excited = [p for p in params.ports if p.excited]
-    out_h5 = os.path.join(workdir, "farfield.h5")
-    ctx.progress("post", 93, "transforming the far field")
+    ctx.progress("post", 93, "computing the far field")
     try:
         if not excited:
             raise nf2ff_mod.NF2FFError("no port was excited")
-        job = nf2ff_mod.write_job(
-            workdir, freqs, out_h5,
-            centre_mm=tuple(meta["centre_mm"]),
-            radius_m=FAR_FIELD_DISTANCE_M,
-            # The board sits on a table of this height above the plane, so the plane is that
-            # far below the board -- in metres, which is the only unit nf2ff reads.
-            mirror_z_m=-nf2ff_mod.TABLE_HEIGHT_M,
-            lower_face_z_m=meta["faces_mm"][2] / 1000.0,
-        )
-        nf2ff_mod.run_job(job, out_h5)
-        field = nf2ff_mod.read_field(out_h5, freqs)
+        surface = scan.read_surface(workdir, freqs)
+        field = scan_board(surface, freqs, meta)
+        check_against_nf2ff(workdir, freqs, surface, meta)
         source = post.source_spectrum(workdir, excited[0].name, excited[0].resistance, freqs)
-    except (nf2ff_mod.NF2FFError, OSError, ValueError) as exc:
+    except (nf2ff_mod.NF2FFError, scan.ScanError, OSError, ValueError, KeyError) as exc:
         log.warning("far field failed: %s", exc)
         artifacts.manifest["far_field_note"] = (
             f"the far field could not be computed for this run ({exc}), so it contributes "
@@ -518,8 +527,70 @@ def _add_far_field(ctx, params, built, artifacts, workdir: str) -> None:
     artifacts.files["manifest.json"] = json.dumps(artifacts.manifest, indent=2).encode()
 
 
+def scan_board(surface, freqs: list[float], meta: dict) -> dict:
+    """The scan's reading around the board, in the solve's pulse units, before any division.
+
+    The board stands on the table by its bottom copper, and the antenna is 3 m from the smallest
+    circle around the copper in plan, as the cable path measures (ANSI C63.4 measures from the
+    periphery of the equipment).
+    """
+    import numpy as np
+
+    from emi_worker.openems import scan
+    from emi_worker.openems.nf2ff import TABLE_HEIGHT_M
+
+    x0, y0, x1, y1, z0, _z1 = (float(v) / 1000.0 for v in meta["copper_mm"])
+    ground = z0 - TABLE_HEIGHT_M
+    radius = FAR_FIELD_DISTANCE_M + 0.5 * float(np.hypot(x1 - x0, y1 - y0))
+    points = scan.ring(((x0 + x1) / 2, (y0 + y1) / 2), radius, ground)
+    e = scan.reading(scan.field(surface, freqs, points, ground_z_m=ground))
+    by_height = e.reshape(len(freqs), len(scan.SCAN_HEIGHTS_M), -1).max(axis=2)
+    return {
+        "frequencies_hz": [float(f) for f in freqs],
+        "e_max_v_per_m": [float(v) for v in e.max(axis=1)],
+        "e_by_height_v_per_m": [[float(v) for v in row] for row in by_height],
+        "scan_radius_m": radius,
+    }
+
+
+def check_against_nf2ff(workdir: str, freqs: list[float], surface, meta: dict) -> None:
+    """Refuse the far field if the scan's integral and `nf2ff` disagree in the far-field limit."""
+    import numpy as np
+
+    from emi_worker.openems import nf2ff as nf2ff_mod
+    from emi_worker.openems import scan
+
+    # Far enough that the 1/r^2 terms are gone at 30 MHz (kr = 630).
+    r = 1000.0
+    out_h5 = os.path.join(workdir, "farfield.h5")
+    job = nf2ff_mod.write_job(workdir, freqs, out_h5, centre_mm=tuple(meta["centre_mm"]),
+                              radius_m=r)
+    nf2ff_mod.run_job(job, out_h5)
+    theirs = nf2ff_mod.read_field(out_h5, freqs)
+    th = np.deg2rad(nf2ff_mod.THETA_DEG)
+    ph = np.deg2rad(nf2ff_mod.PHI_DEG)
+    c = np.asarray(meta["centre_mm"], dtype=float) / 1000.0
+    dirs = np.array([[np.sin(t) * np.cos(p), np.sin(t) * np.sin(p), np.cos(t)]
+                     for p in ph for t in th])
+    e = scan.field(surface, freqs, c + r * dirs)
+    # The better of the two polarisations as nf2ff defines them, theta and phi.
+    t_hat = np.array([[np.cos(t) * np.cos(p), np.cos(t) * np.sin(p), -np.sin(t)]
+                      for p in ph for t in th])
+    p_hat = np.array([[-np.sin(p), np.cos(p), 0.0] for p in ph for t in th])
+    ours = np.maximum(np.abs((e * t_hat[None]).sum(-1)), np.abs((e * p_hat[None]).sum(-1)))
+    for k, f in enumerate(freqs):
+        a, b = float(ours[k].max()), float(theirs["e_max_v_per_m"][k])
+        if a <= 0 or b <= 0:
+            raise nf2ff_mod.NF2FFError(f"the far field is zero at {f / 1e6:g} MHz")
+        if abs(20 * np.log10(a / b)) > NF2FF_AGREEMENT_DB:
+            raise nf2ff_mod.NF2FFError(
+                f"the far field's own check failed at {f / 1e6:g} MHz: the scan integral and "
+                f"nf2ff read the same box {20 * np.log10(a / b):+.1f} dB apart"
+            )
+
+
 def far_field_document(field: dict, source: dict, excited: list, meta: dict) -> dict:
-    """``farfield.json``: the transform per volt of the solve's own source.
+    """``farfield.json``: the scan's reading per volt of the solve's own source.
 
     A frequency where the source delivered nothing has no transfer function, only a ratio of two
     small numbers, and is marked unusable rather than published -- the same rule as the cable
@@ -527,18 +598,25 @@ def far_field_document(field: dict, source: dict, excited: list, meta: dict) -> 
     """
     import numpy as np
 
+    from emi_worker.openems import scan
     from emi_worker.openems.nf2ff import TABLE_HEIGHT_M
 
     v_src = np.asarray(source["v_src"])
     z_in = np.asarray(source["z_in"])
     mags = np.abs(v_src)
-    usable = [bool(m > 0 and np.isfinite(z)) for m, z in zip(mags, z_in)]
+    # A passive port cannot have a negative resistance. When the transform says it does, the
+    # record stopped before the structure stopped ringing and what it holds at that frequency is
+    # the truncation, not the board: a real 4-layer board stopped at -40 dB reported -25 kOhm
+    # against |Z| = 25.5 kOhm at 30 MHz. The dipoles, whose records are complete, stay above
+    # -0.5 % of |Z| everywhere, so the line is drawn well clear of them.
+    passive = [bool(not np.isfinite(z) or z.real >= -PASSIVE_TOLERANCE * abs(z)) for z in z_in]
+    usable = [bool(m > 0 and np.isfinite(z)) and ok for m, z, ok in zip(mags, z_in, passive)]
     e_per_volt = [
         float(e / m) if ok else 0.0 for e, m, ok in zip(field["e_max_v_per_m"], mags, usable)
     ]
-    by_theta = [
+    by_height = [
         [float(v / m) if ok else 0.0 for v in row]
-        for row, m, ok in zip(field["e_by_theta_v_per_m"], mags, usable)
+        for row, m, ok in zip(field.get("e_by_height_v_per_m") or [], mags, usable)
     ]
     return {
         "format": "emi-far-field",
@@ -546,9 +624,13 @@ def far_field_document(field: dict, source: dict, excited: list, meta: dict) -> 
         "frequencies_hz": field["frequencies_hz"],
         "unit": "V/m per V of source",
         "e_per_volt": e_per_volt,
-        "e_by_theta_per_volt": by_theta,
-        "theta_deg": field["theta_deg"],
+        # The highest reading over the turntable at each antenna height.
+        "e_by_height_per_volt": by_height,
+        "heights_m": list(scan.SCAN_HEIGHTS_M),
         "usable": usable,
+        # Frequencies dropped because the port read as a negative resistance: the run stopped
+        # too early for them, and a longer run (a lower end criterion) would recover them.
+        "truncated_hz": [float(f) for f, ok in zip(field["frequencies_hz"], passive) if not ok],
         # What a driver needs to replace the solve's source with its own.
         "driven_by": excited[0].name,
         "source_impedance_ohm": float(excited[0].resistance),
@@ -558,11 +640,11 @@ def far_field_document(field: dict, source: dict, excited: list, meta: dict) -> 
         # and no single driver can be attached to it.
         "excited_ports": [p.name for p in excited],
         "distance_m": FAR_FIELD_DISTANCE_M,
+        "scan_radius_m": field.get("scan_radius_m"),
         "table_height_m": TABLE_HEIGHT_M,
         "ground_plane": True,
         "faces_mm": meta["faces_mm"],
         "clearance_mm": meta.get("clearance_mm"),
         "tenth_wavelength_above_hz": meta.get("tenth_wavelength_above_hz"),
-        "sub_sampling": meta["sub_sampling"],
+        "face_resolution_mm": meta.get("face_resolution_mm"),
     }
-
