@@ -18,6 +18,7 @@ node carries the small capacitance it physically has.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 from . import parts
@@ -34,6 +35,12 @@ PIN_INTERNAL_PF = 0.5
 #: to the line, as in calibration, while a high-impedance load sees at most about the charge
 #: voltage instead of whatever a pure current source would force.
 GENERATOR_OHM = 330.0
+#: Anything but printable ASCII in the title line. The title carries a net name and a reference
+#: designator from the board, and a newline there would start a new netlist line -- a
+#: ``.control`` block that ngspice runs, shell commands included.
+_UNSAFE_TITLE = re.compile(r"[^\x20-\x7e]")
+MAX_TITLE = 120
+
 #: A trace is a ladder of sections no longer than this. At about 2 mm of FR-4 microstrip a
 #: section's cutoff is above 20 GHz, far past the band a 0.8 ns rise occupies.
 SECTION_PS = 12.0
@@ -206,6 +213,11 @@ def circuit_lines(c: Circuit, samples: list[tuple[float, float]]) -> list[str]:
     return out
 
 
+def safe_title(title: str) -> str:
+    """The title reduced to one line of printable ASCII, so board text cannot add netlist lines."""
+    return _UNSAFE_TITLE.sub("?", title)[:MAX_TITLE]
+
+
 def build(
     circuits: list[Circuit],
     definitions: list[str],
@@ -215,7 +227,7 @@ def build(
     max_step_s: float,
     title: str = "emi transient",
 ) -> str:
-    lines = [f"* {title}", *parts.pin_model_lines(), *definitions]
+    lines = [f"* {safe_title(title)}", *parts.pin_model_lines(), *definitions]
     saves: list[str] = []
     for c in circuits:
         lines += circuit_lines(c, samples)

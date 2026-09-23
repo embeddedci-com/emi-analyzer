@@ -79,6 +79,21 @@ def _limits(timeout_s: float):
     return apply
 
 
+#: Directives no deck of ours contains. ngspice runs a ``.control`` block, which can call
+#: ``shell``, and the others read files from disk. Uploaded models are vetted for these in
+#: spice_model; this is the last check, on the whole deck, for text from anywhere else.
+_FORBIDDEN = re.compile(r"^\s*\.(control|endc|include|inc|lib|osdi)\b", re.I | re.M)
+
+
+def check_deck(netlist: str) -> None:
+    """Refuse a deck that could make ngspice do more than simulate."""
+    # The first line is the title, which ngspice never reads as a directive.
+    body = netlist.split("\n", 1)[1] if "\n" in netlist else ""
+    m = _FORBIDDEN.search(body)
+    if m:
+        raise SimulationError(f"refused to run a netlist containing .{m.group(1).lower()}")
+
+
 def _summarise(log: str) -> str:
     seen: list[str] = []
     for line in log.splitlines():
@@ -90,6 +105,7 @@ def _summarise(log: str) -> str:
 
 def run(netlist: str, timeout_s: float = TIMEOUT_S, expect_end_s: float | None = None) -> Waveforms:
     """Simulate. Raises SimulationError with ngspice's own words when it fails."""
+    check_deck(netlist)
     binary = shutil.which(BINARY)
     if not binary:
         raise SimulationError("ngspice is not installed on this worker")
