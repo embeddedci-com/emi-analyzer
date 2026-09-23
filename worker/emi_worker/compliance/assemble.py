@@ -13,9 +13,9 @@ built here instead, in the worker, from what the solve itself wrote:
 and from the driver the user attached. Nothing that decides the answer comes from the request.
 
 **Transfer functions are evaluated at the driver's own frequencies.** A clock is a line
-spectrum. Composing it on the solve's 60-point log grid, as the cable view does, drove a
+spectrum. Composing it on the solve's 60-point log grid, as the cable view once did, drove a
 harmonic only where one happened to land within 100 ppm of a grid point -- two of sixty for a
-25 MHz clock. Here the transfer functions are interpolated to every harmonic instead: in dB
+25 MHz clock. The cable view now composes through ``compose_cable`` too. Here the transfer functions are interpolated to every harmonic instead: in dB
 against log frequency for magnitudes, linearly in log frequency for the real and imaginary
 parts of an impedance. Only inside the band each one covers; never extrapolated.
 
@@ -183,7 +183,7 @@ def _evaluation_frequencies(d: Driver, band: tuple[float, float], grid: list[flo
     return [f for f in grid if s_lo <= f <= s_hi and in_range(standard_id, f)], False
 
 
-def _volts(d: Driver, freqs: list[float], asm: Assembly) -> list[float | None]:
+def _volts(d: Driver, freqs: list[float], undriven: dict) -> list[float | None]:
     """RMS source volts at ``freqs``; ``None`` where the driver says nothing (recorded)."""
     if not freqs:
         return []
@@ -197,7 +197,7 @@ def _volts(d: Driver, freqs: list[float], asm: Assembly) -> list[float | None]:
         # A null of the driver's own spectrum is a real zero, not a small number (apply.py).
         out.append(0.0 if r.scale_v > 0 and mag < r.scale_v * NULL_FLOOR else mag)
     for f, why in r.undriven.items():
-        asm.undriven[f] = why
+        undriven[f] = why
     return out
 
 
@@ -330,28 +330,24 @@ def assemble(art: SolveArtifacts, attached: AttachedDriver | None,
                 f"The solve recorded no port spectrum for {driven_by}, which drives {ref}.",
             ))
             continue
-        h = tr["transfer"]
-        fs_h, (hr, hi_), holes = _usable_series(
-            h["frequencies_hz"], h.get("usable") or [True] * len(h["frequencies_hz"]),
-            h["h_real"], h["h_imag"])
-        for f in holes:
-            asm.undriven[f] = (f"the solve put no source energy near {f / 1e6:g} MHz, so "
-                               f"{ref}'s transfer function is unknown there")
-        if not fs_h:
-            continue
         label = f"cable {ref} ({ant.get('cable_id')}, {float(ant.get('length_m') or 0):g} m)"
-        lo = max(fs_h[0], ant["frequencies_hz"][0], port["f"][0])
-        hi = min(fs_h[-1], ant["frequencies_hz"][-1], port["f"][-1])
-        asm.covered[label] = (lo, hi)
-        band = (max(lo, std_lo), min(hi, std_hi))
-        if attached is None or band[0] > band[1]:
+        comp = compose_cable(tr["transfer"], ant, port, resistance.get(driven_by, 50.0),
+                             attached.driver if attached is not None else None, standard_id,
+                             ref=ref)
+        asm.undriven.update(comp.undriven)
+        if comp.covered is None:
             continue
-        path = _cable_path(label, attached, fs_h, [abs(complex(a, b)) for a, b in zip(hr, hi_)],
-                           ant, port, resistance.get(driven_by, 50.0), band, standard_id,
-                           asm)
-        if path is not None:
-            asm.paths.append(path)
-            asm.path_meta[label] = {"ref": ref}
+        asm.covered[label] = comp.covered
+        if attached is None or comp.band is None:
+            continue
+        asm.paths.append(Path(
+            kind="cable", label=label, driver_id=attached.id,
+            points=[PathPoint(p.frequency_hz, p.field_v_per_m) for p in comp.points],
+            line=comp.line, covered_hz=comp.band,
+            sigma_terms={"cable idealisation": SIGMA_CABLE_DB,
+                         "transfer-function interpolation": SIGMA_FAR_FIELD_INTERP_DB},
+        ))
+        asm.path_meta[label] = {"ref": ref}
     return asm
 
 
@@ -359,23 +355,27 @@ def _dense_port(ports: dict | None) -> dict:
     out = {}
     for p in (ports or {}).get("ports") or []:
         block = p.get("dense")
-        if not block:
-            continue
-        f = block["frequencies_hz"]
-        v = [complex(a, b) for a, b in zip(block["v_real"], block["v_imag"])]
-        i = [complex(a, b) for a, b in zip(block["i_real"], block["i_imag"])]
-        z = [vv / ii if ii != 0 else complex("nan") for vv, ii in zip(v, i)]
-        ok = [ii != 0 for ii in i]
-        fs, (zr, zi), _ = _usable_series(f, ok, [x.real for x in z], [x.imag for x in z])
-        out[p["port"]] = {"f": fs, "zr": zr, "zi": zi}
+        if block:
+            out[p["port"]] = port_impedance(block)
     return out
+
+
+def port_impedance(block: dict) -> dict:
+    """A port's input impedance from its ``ports.json`` dense block, as ``{f, zr, zi}``."""
+    f = block["frequencies_hz"]
+    v = [complex(a, b) for a, b in zip(block["v_real"], block["v_imag"])]
+    i = [complex(a, b) for a, b in zip(block["i_real"], block["i_imag"])]
+    z = [vv / ii if ii != 0 else complex("nan") for vv, ii in zip(v, i)]
+    ok = [ii != 0 for ii in i]
+    fs, (zr, zi), _ = _usable_series(f, ok, [x.real for x in z], [x.imag for x in z])
+    return {"f": fs, "zr": zr, "zi": zi}
 
 
 def _board_path(label, attached, fs, e, zr, zi, z_s, band, standard_id, asm,
                 manifest) -> Path | None:
     d = attached.driver
     freqs, line = _evaluation_frequencies(d, band, fs, standard_id)
-    volts = _volts(d, freqs, asm)
+    volts = _volts(d, freqs, asm.undriven)
     z_d = d.source_impedance_ohm()
     points = []
     for f, v in zip(freqs, volts):
@@ -400,28 +400,80 @@ def _board_path(label, attached, fs, e, zr, zi, z_s, band, standard_id, asm,
     )
 
 
-def _cable_path(label, attached, fs_h, h_mag, ant, port, z_s, band, standard_id,
-                asm) -> Path | None:
-    d = attached.driver
-    freqs, line = _evaluation_frequencies(d, band, fs_h, standard_id)
-    volts = _volts(d, freqs, asm)
-    z_d = d.source_impedance_ohm()
-    fa = ant["frequencies_hz"]
-    points = []
+@dataclass(frozen=True)
+class CablePoint:
+    frequency_hz: float
+    #: Common-mode current on the cable, A RMS.
+    current_a: float
+    #: Field at the standard's distance, V/m RMS.
+    field_v_per_m: float
+
+
+@dataclass
+class CableComposition:
+    """One cable driven by one driver, the way both the estimate and the Cables tab see it."""
+
+    #: The band all three terms cover: transfer function, antenna and port. None if none.
+    covered: tuple[float, float] | None = None
+    #: ``covered`` inside the standard's scan. None when they do not overlap.
+    band: tuple[float, float] | None = None
+    points: list[CablePoint] = field(default_factory=list)
+    #: True when the points are a driver's harmonics rather than a continuous spectrum.
+    line: bool = False
+    undriven: dict = field(default_factory=dict)
+
+
+def compose_cable(transfer: dict, antenna: dict, port: dict, z_s: float,
+                  driver: Driver | None, standard_id: str, *, ref: str) -> CableComposition:
+    """Compose a cable's emission for one driver (§7).
+
+    ``transfer`` is the ``transfer`` block of a ``cable_ports.json`` entry, ``antenna`` a
+    ``cable_antenna.json`` entry, ``port`` the driving port's impedance (``port_impedance``)
+    and ``z_s`` the resistance the solve drove that port from.
+
+    The compliance estimate and the Cables tab's chart both compose through this function (the
+    chart through its TypeScript copy, ``composeCable`` in ``cableEmission.ts``, pinned by
+    ``cable_emission_fixtures.json``). The chart used to compose on the solve's grid and to
+    assume the driver's source impedance equalled the port's; it now shows the numbers the
+    estimate combines.
+    """
+    comp = CableComposition()
+    fs_h, (hr, hi_), holes = _usable_series(
+        transfer["frequencies_hz"],
+        transfer.get("usable") or [True] * len(transfer["frequencies_hz"]),
+        transfer["h_real"], transfer["h_imag"])
+    for f in holes:
+        comp.undriven[f] = (f"the solve put no source energy near {f / 1e6:g} MHz, so "
+                            f"{ref}'s transfer function is unknown there")
+    if not fs_h or not port["f"] or not antenna["frequencies_hz"]:
+        return comp
+    lo = max(fs_h[0], antenna["frequencies_hz"][0], port["f"][0])
+    hi = min(fs_h[-1], antenna["frequencies_hz"][-1], port["f"][-1])
+    if lo > hi:
+        return comp
+    comp.covered = (lo, hi)
+    std_lo, std_hi = standard(standard_id).range_hz()
+    band = (max(lo, std_lo), min(hi, std_hi))
+    if band[0] > band[1]:
+        return comp
+    comp.band = band
+    if driver is None:
+        return comp
+
+    h_mag = [abs(complex(a, b)) for a, b in zip(hr, hi_)]
+    freqs, comp.line = _evaluation_frequencies(driver, band, fs_h, standard_id)
+    volts = _volts(driver, freqs, comp.undriven)
+    z_d = driver.source_impedance_ohm()
+    fa = antenna["frequencies_hz"]
     for f, v in zip(freqs, volts):
         if v is None:
             continue
         h = interp_db(fs_h, h_mag, f)
-        z_ant = interp_complex(fa, ant["z_real"], ant["z_imag"], f)
-        e_amp = interp_db(fa, ant["e_per_amp"], f)
+        z_ant = interp_complex(fa, antenna["z_real"], antenna["z_imag"], f)
+        e_amp = interp_db(fa, antenna["e_per_amp"], f)
         z_in = interp_complex(port["f"], port["zr"], port["zi"], f)
         if h is None or z_ant is None or e_amp is None or z_in is None or abs(z_ant) == 0:
             continue
         i_cm = h * _source_factor(z_s, z_d, z_in) * v / abs(z_ant)
-        points.append(PathPoint(f, i_cm * e_amp))
-    return Path(
-        kind="cable", label=label, driver_id=attached.id, points=points, line=line,
-        covered_hz=band,
-        sigma_terms={"cable idealisation": SIGMA_CABLE_DB,
-                     "transfer-function interpolation": SIGMA_FAR_FIELD_INTERP_DB},
-    )
+        comp.points.append(CablePoint(f, i_cm, i_cm * e_amp))
+    return comp
