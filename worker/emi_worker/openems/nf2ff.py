@@ -202,7 +202,11 @@ def write_job(
     wd = Path(workdir)
     root = ET.Element("nf2ff", {
         "Eps_r": "1", "Mue_r": "1", "Verbose": "0",
-        "freq": ",".join(repr(float(f)) for f in frequencies),
+        # Written exactly as the dumps' FD_Samples were (9 significant figures), because nf2ff
+        # looks each frequency up in the dump by value and refuses the plane when it is not
+        # there: "Error, analysing Plane". repr() wrote 31837045.556580506 for a dump that
+        # recorded 31837045.6, and every far field on a derived grid failed that way.
+        "freq": csx._lines([float(f) for f in frequencies]),
         "Outfile": str(out_h5),
         # Metres. The dump meshes are in metres whatever the model's drawing unit is.
         "Center": ",".join(repr(v / 1000.0) for v in centre_mm),
@@ -244,7 +248,9 @@ def run_job(job_path: str, out_h5: str, *, timeout_s: float = 900.0) -> None:
     except subprocess.TimeoutExpired as exc:
         raise NF2FFError(f"nf2ff did not finish within {timeout_s:.0f} s") from exc
     if p.returncode != 0:
-        raise NF2FFError(f"nf2ff exited with status {p.returncode}: {p.stdout[-800:]}")
+        # stderr first: the reason is there, and stdout is mostly the banner.
+        raise NF2FFError(f"nf2ff exited with status {p.returncode}: "
+                         f"{(p.stderr or '')[-800:]} {p.stdout[-400:]}".strip())
     if not Path(out_h5).exists():
         # It can exit zero having written nothing, which is the family of failure M0 met
         # three times. Exit status is not evidence.

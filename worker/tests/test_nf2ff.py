@@ -334,3 +334,20 @@ def test_the_far_field_document_is_per_volt_and_refuses_an_empty_source():
     assert doc["source_impedance_ohm"] == 50.0
     assert doc["driven_by"] == "p1"
     assert "e_max_v_per_m" not in doc, "the raw pulse units must not look like V/m"
+
+
+def test_the_job_names_frequencies_exactly_as_the_dumps_recorded_them(tmp_path):
+    """nf2ff looks each frequency up in the dump by value. The dumps record FD_Samples at nine
+    significant figures, and a job written with repr() asked for 31837045.556580506 where the
+    dump held 31837045.6 -- "Error, analysing Plane" on the first real far field."""
+    from emi_worker.openems.model import far_field_grid
+
+    _stub_dumps(tmp_path)
+    freqs = far_field_grid(30e6, 1e9)
+    doc = csx.CSXDocument(excitation=csx.Excitation(type=0, f0=5e8, fc=4e8),
+                          x_lines=[0, 1], y_lines=[0, 1], z_lines=[0, 1], f_max=1e9)
+    add_dumps(doc, plan_faces(_mesh(), COPPER, 25.0), freqs)
+    dumped = next(d for d in ET.fromstring(doc.to_string()).iter("DumpBox")
+                  if d.get("Name") == "nf2ff_E_xn").find("FD_Samples").text
+    job = ET.parse(write_job(str(tmp_path), freqs, str(tmp_path / "ff.h5"))).getroot()
+    assert job.get("freq") == dumped
