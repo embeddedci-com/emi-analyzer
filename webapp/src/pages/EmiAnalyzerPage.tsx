@@ -349,6 +349,20 @@ export function EmiAnalyzerPage({ api, deployment = 'hosted', host }: EmiAnalyze
               </Text>
             </List.Item>
             <List.Item>
+              <Text size="sm" fw={500} span>Small-part solve (minutes).</Text>{' '}
+              {features.isSuccess && !features.data.small_part_solve && (
+                <Badge component="span" size="xs" variant="light" color="yellow"
+                       style={{ display: 'inline-flex', verticalAlign: 'middle' }}>
+                  experimental · off
+                </Badge>
+              )}{' '}
+              <Text size="sm" c="dimmed" span>
+                One net cut out with the planes under it, solved in openEMS with a port at each end.
+                You get where its current flows and the impedance and S-parameters its ends see.
+                No far field, and a size limit that keeps it to minutes.
+              </Text>
+            </List.Item>
+            <List.Item>
               <Text size="sm" fw={500} span>Full-wave solve (hours).</Text>{' '}
               {features.isSuccess && !features.data.full_wave && (
                 <Tooltip

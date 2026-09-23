@@ -36,6 +36,9 @@ import { ComponentsPanel } from '../components/ComponentsPanel'
 import { CablesPanel, type Assignment } from '../components/CablesPanel'
 import { ComplianceTab } from '../components/ComplianceTab'
 import { SolveSetup, type SolveRequest } from '../components/SolveSetup'
+import { SmallPartSetup } from '../components/SmallPartSolve'
+import { SmallPartResult } from '../components/SmallPartResult'
+import { isSmallPartRun } from '../lib/smallPart'
 import type { BoardDoc, RuleFinding, RulesDoc } from '../lib/boardTypes'
 import type { FieldOverlayData } from '../lib/overlay'
 import { placePortOnAnchor, type PortAnchor, type PortSpec } from '../lib/portPlacement'
@@ -87,6 +90,8 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
   // Which part of the full-wave workflow is showing: setting one up, its result, or the
   // libraries that feed it.
   const [solveView, setSolveView] = useState<SolveView>('setup')
+  const [selectedPartId, setSelectedPartId] = useState<string | null>(null)
+  const [partView, setPartView] = useState<'setup' | 'result'>('setup')
   // The panel is the whole right-hand side; on a small screen the board needs the room back.
   const [panelOpen, setPanelOpen] = useState(true)
   const [renaming, setRenaming] = useState<string | null>(null)
@@ -239,6 +244,8 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
   // until the server says they are on -- including while it has not answered yet.
   const features = useQuery({ queryKey: ['emi', 'features'], queryFn: api.features, staleTime: 5 * 60_000 })
   const fullWave = features.data?.full_wave === true
+  // Its own switch (docs/verification/small-part-solve.md); full-wave includes it.
+  const smallPart = features.data?.small_part_solve === true || fullWave
 
   const me = useQuery({
     queryKey: ['emi', 'whoami'], queryFn: api.whoami, staleTime: 60_000,
@@ -253,10 +260,42 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
   })
 
   // Solve runs, newest first. The one being viewed defaults to the newest finished one.
+  // Small-part solves have their own tab and are left out here: their result has no far field
+  // and no driver, so nothing the full-wave tab or compliance does with a solve applies.
   const solves = useMemo(
-    () => boardRuns.filter((r) => r.kind === 'solve'),
+    () => boardRuns.filter((r) => r.kind === 'solve' && !isSmallPartRun(r.params)),
     [boardRuns],
   )
+  const partSolves = useMemo(
+    () => boardRuns.filter((r) => r.kind === 'solve' && isSmallPartRun(r.params)),
+    [boardRuns],
+  )
+  const activePart: Run | null = useMemo(() => {
+    if (selectedPartId) return partSolves.find((r) => r.id === selectedPartId) ?? null
+    return partSolves.find((r) => !TERMINAL_STATUSES.includes(r.status))
+      ?? partSolves.find((r) => r.status === 'done') ?? partSolves[0] ?? null
+  }, [partSolves, selectedPartId])
+  const partManifest = useQuery({
+    queryKey: ['emi', 'manifest', activePart?.id],
+    queryFn: () => api.artifactJson<SolveManifest>(activePart!.id, 'manifest.json'),
+    enabled: !!activePart && activePart.status === 'done',
+    staleTime: Infinity,
+  })
+  const startPart = useMutation({
+    mutationFn: async (params: unknown) => {
+      const boardId = ingest?.board_id
+      if (!boardId) throw new Error('this project has no ingested board')
+      // No estimate input: the server's cost model is for regions of every net, and a coupon
+      // meshes an order of magnitude sparser. The worker's budget is the gate.
+      return api.createSolveRun(projectId, boardId, params)
+    },
+    onSuccess: (run) => {
+      setSelectedPartId(run.id)
+      setPartView('result')
+      setPollMs(1500)
+      qc.invalidateQueries({ queryKey: ['emi', 'runs', projectId] })
+    },
+  })
   const activeSolve: Run | null = useMemo(() => {
     if (selectedSolveId) return solves.find((r) => r.id === selectedSolveId) ?? null
     return solves.find((r) => r.status === 'done')
@@ -396,9 +435,10 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
   // result is never shown without marking where current was injected: the loudest point of a
   // map is usually at or right beside its port, and unmarked it reads as a hotspot.
   const markers = useMemo(() => {
-    const solved = (activeSolve?.params as { ports?: PortSpec[] } | undefined)?.ports ?? []
+    const shown = tab === 'part' ? activePart : activeSolve
+    const solved = (shown?.params as { ports?: PortSpec[] } | undefined)?.ports ?? []
     return (ports.length ? ports : solved).map((p) => ({ x: p.x_mm, y: p.y_mm, label: p.name }))
-  }, [ports, activeSolve])
+  }, [ports, activeSolve, activePart, tab])
 
   const onFocusFinding = (f: RuleFinding) => {
     if (f.x != null && f.y != null) setFocus({ x: f.x, y: f.y, zoom: 28 })
@@ -703,6 +743,7 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
                   )}
                 </Group>
               </Tabs.Tab>
+              {smallPart && <Tabs.Tab value="part" px={6}>Part solve</Tabs.Tab>}
               {fullWave && <Tabs.Tab value="fullwave" px={6}>Full-wave</Tabs.Tab>}
               <Tabs.Tab value="cables" px={6}>Cables</Tabs.Tab>
               {fullWave && <Tabs.Tab value="compliance" px={6}>Compliance</Tabs.Tab>}
@@ -757,6 +798,53 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
                 </Stack>
               )}
             </Tabs.Panel>
+
+            {smallPart && (
+            <Tabs.Panel value="part" p="sm">
+              <Stack gap="sm">
+                <SegmentedControl
+                  size="xs" fullWidth value={partView}
+                  onChange={(v) => setPartView(v as 'setup' | 'result')}
+                  data={[{ label: 'Set up', value: 'setup' }, { label: 'Result', value: 'result' }]}
+                />
+                {partView === 'setup' && (doc ? (
+                  <SmallPartSetup
+                    doc={doc}
+                    geometry={board.data?.geometry ?? null}
+                    roi={roi}
+                    onRoiChange={setRoi}
+                    ports={ports}
+                    onPortsChange={setPorts}
+                    onHighlightNet={setNet}
+                    pickingPad={pickingPad}
+                    onPickPad={(v) => { setPickingPad(v); setPickMiss(false) }}
+                    pickMiss={pickMiss}
+                    drawingRoi={drawingRoi}
+                    onDrawRoi={setDrawingRoi}
+                    onSubmit={(params) => startPart.mutate(params)}
+                    submitting={startPart.isPending}
+                    error={startPart.error ? (startPart.error as Error).message : null}
+                  />
+                ) : (
+                  <Text size="sm" c="dimmed">The board has to finish processing first.</Text>
+                ))}
+                {partView === 'result' && (
+                  <SmallPartResult
+                    api={api}
+                    projectId={projectId}
+                    runs={partSolves}
+                    run={activePart}
+                    manifest={partManifest.data}
+                    manifestError={partManifest.error ? (partManifest.error as Error).message : null}
+                    energyHistory={energyRef.current}
+                    onSelectRun={setSelectedPartId}
+                    onOverlayChange={setOverlay}
+                    onGateChange={setGateDb}
+                  />
+                )}
+              </Stack>
+            </Tabs.Panel>
+            )}
 
             {/*
               Setting a solve up, the two libraries that feed it and the result it produces are

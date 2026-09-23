@@ -46,6 +46,17 @@ const LIMITATIONS: Limitation[] = [
       'the ESD simulation and the cable budget do not use it.',
   },
   {
+    what: 'Small-part solves are experimental and off by default',
+    kind: 'method',
+    why:
+      'A small-part solve cuts one net out with its planes and solves it in minutes, with no ' +
+      'far field. It has been checked against closed forms for lines and vias, for how much ' +
+      'the size of the cut changes the answer, and on coupons from real boards, but not ' +
+      'against a measurement. It is off unless a server enables it with ' +
+      'EMI_EXPERIMENTAL=small-part-solve. Neighbouring nets are left out of the cut, so it ' +
+      'does not show coupling into them.',
+  },
+  {
     what: 'Only comparisons between board versions are reliable',
     kind: 'method',
     why:

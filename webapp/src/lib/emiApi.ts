@@ -113,6 +113,12 @@ export interface Identity {
  */
 export interface Features {
   full_wave: boolean
+  /**
+   * One net cut out over its planes, or a small region: near-field map and port impedance, no
+   * far field, under a size budget. Its own switch; full_wave implies it. Absent on an older
+   * server, which is the same as off.
+   */
+  small_part_solve?: boolean
 }
 
 /** The answer to "have I uploaded this file before?". */
@@ -449,9 +455,9 @@ export class EmiApi {
       ...(settings && Object.keys(settings).length > 0 ? { params: { settings } } : {}),
     })
 
-  createSolveRun = (projectId: string, boardId: string, params: unknown, est: EstimateInput) =>
+  createSolveRun = (projectId: string, boardId: string, params: unknown, est?: EstimateInput) =>
     this.call<Run>('POST', `/emi/projects/${projectId}/runs`, {
-      board_id: boardId, kind: 'solve', params, estimate_input: est,
+      board_id: boardId, kind: 'solve', params, ...(est ? { estimate_input: est } : {}),
     })
 
   /**
