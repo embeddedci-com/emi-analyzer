@@ -27,8 +27,8 @@ is source-zeroing, which is what a Thevenin impedance is defined against — del
 driver instead would change the board arm.
 
     docker run --rm -v "$PWD/worker:/spike" -v <out>:/spike/spike_out -w /spike \\
-        -e PYTHONPATH=/spike --entrypoint python3 embeddedci/emi-worker:dev \\
-        scripts/spike_m0_coupling.py
+        -e PYTHONPATH=/spike --entrypoint python3 ghcr.io/embeddedci-com/emi-worker:dev \\
+        research/spike_m0_coupling.py
 """
 
 from __future__ import annotations

@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/embeddedci-com/emi-analyzer/security/advisories/new
+    about: Privately, please. See SECURITY.md.
+  - name: Install and troubleshooting guide
+    url: https://github.com/embeddedci-com/emi-analyzer#readme
+    about: Docker, first launch and the common problems are covered there.

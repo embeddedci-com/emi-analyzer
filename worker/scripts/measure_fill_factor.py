@@ -14,7 +14,7 @@ reports the ratio the estimator should have used:
 Run inside the worker image with the private boards mounted:
 
     docker run --rm -v "$PWD/worker:/spike" -v <pcb dir>:/boards:ro -w /spike \\
-        -e PYTHONPATH=/spike --entrypoint python3 embeddedci/emi-worker:dev \\
+        -e PYTHONPATH=/spike --entrypoint python3 ghcr.io/embeddedci-com/emi-worker:dev \\
         scripts/measure_fill_factor.py
 """
 from __future__ import annotations

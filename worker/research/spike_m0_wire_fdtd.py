@@ -10,8 +10,8 @@ is set by the mesh, not by a radius we choose. Finding which nec2c radius reprod
 resonance is therefore part of the answer, and it is the number a Tier C comparison needs.
 
     docker run --rm -v "$PWD/worker:/spike" -v <out>:/spike/spike_out -w /spike \\
-        -e PYTHONPATH=/spike --entrypoint python3 embeddedci/emi-worker:dev \\
-        scripts/spike_m0_wire_fdtd.py
+        -e PYTHONPATH=/spike --entrypoint python3 ghcr.io/embeddedci-com/emi-worker:dev \\
+        research/spike_m0_wire_fdtd.py
 """
 
 from __future__ import annotations

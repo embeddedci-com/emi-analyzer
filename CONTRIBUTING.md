@@ -18,6 +18,8 @@ webapp/        React + Mantine
   src/           the analyzer: pages, board renderer, API client
   app/           the local app's shell around it
 worker/        Python: ingest, rule checks, ngspice, nec2c, openEMS. Published as a Docker image.
+  scripts/       maintained tools: fixture generators, the rule catalogue export
+  research/      one-off experiments from the model's design; not maintained
 desktop/       Tauri 2: a window around emi-local, which it runs as a sidecar
 kicad-plugin/  the KiCad plugin: a front end that hands the app the board open in pcbnew
 deploy/        Postgres + MinIO integration stack, and the end-to-end smoke test
@@ -123,6 +125,7 @@ make plugin-test
 They stand in for KiCad and for the app, so they need neither; the handful that need PySide6
 skip themselves. `PLUGIN_PY=` a Python that has PySide6 and kicad-python runs those too.
 
+`make test` installs gerbonara the way the worker image does, so the Gerber tests run too.
 Tests that need `ngspice`, `nec2c` or openEMS skip where those are not installed. CI runs the
 worker tests inside the worker image, so they are covered there
 ([`.github/workflows/test.yml`](.github/workflows/test.yml)). A few tests also run against real
@@ -154,7 +157,8 @@ minutes; otherwise it checks that the solve is refused.
 
 ## Releasing
 
-1. Make sure CI is green on `main`.
+1. Make sure CI is green on `main`, and move the `Unreleased` notes in
+   [CHANGELOG.md](CHANGELOG.md) under the new version.
 2. Tag and push:
 
    ```bash
@@ -163,12 +167,14 @@ minutes; otherwise it checks that the solve is refused.
 
 3. Two workflows run:
    - [`worker-image`](.github/workflows/worker-image.yml) pushes
-     `ghcr.io/embeddedci-com/emi-worker:0.1.0` and `:latest`, for amd64 and arm64. Pushes to
+     `ghcr.io/embeddedci-com/emi-worker:0.1.0` and `:latest`, for amd64 and arm64. A pre-release
+     tag (`v0.2.0-rc1`) does not move `:latest`. Pushes to
      `main` publish `:dev`, `:main` and `:sha-<short>` instead; `:dev` is what a build from
      source starts, so it is the one to keep working.
-   - [`release`](.github/workflows/release.yml) builds the installers for macOS (Apple Silicon and
-     Intel), Windows and Linux, plus the standalone `emi-local` binaries, and attaches them to a
-     **draft** GitHub release.
+   - [`release`](.github/workflows/release.yml) runs the whole test workflow on the tag's commit
+     and stops if it fails. Then it builds the installers for macOS (Apple Silicon and Intel),
+     Windows and Linux, plus the standalone `emi-local` binaries, and attaches them with a
+     `SHA256SUMS` file to a **draft** GitHub release.
 4. Install the draft's builds on each platform and run through the README's steps.
 5. Publish the release.
 

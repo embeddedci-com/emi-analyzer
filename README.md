@@ -440,7 +440,7 @@ only to loopback addresses; answers only requests addressed to `localhost` or `1
 stops web pages reaching it through DNS rebinding; refuses changes requested by any other origin,
 including other ports on this computer, and changes not sent as JSON; cannot be framed by other
 sites; serves files only on links signed with a per-installation secret that expire after 15
-minutes; and gives the worker a key that is revoked when the app stops.
+minutes; and gives the worker a key that is revoked when the app stops. To report a vulnerability, see [SECURITY.md](SECURITY.md).
 
 ## License
 

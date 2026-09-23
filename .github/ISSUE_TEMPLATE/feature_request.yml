@@ -1,0 +1,21 @@
+name: Feature request
+description: A check, an import format or a workflow you would like
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What you are trying to do
+      description: The design question or task, not the feature yet. For example, "find out whether this USB cable pushes us over the FCC Class B limit."
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would help
+      description: How you imagine it working. A rule, a report, an input format, a button.
+  - type: textarea
+    id: references
+    attributes:
+      label: References
+      description: A standard, an application note or a vendor guide the check should follow, if there is one.
