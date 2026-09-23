@@ -37,6 +37,16 @@ MIN_SEGMENTS = 9
 #: 40 wavelengths, 800 segments at λ/20. The old cap of 201 cut a 3 m cable to λ/8 at 1.2 GHz
 #: and a 30 m one to λ/1.7, where NEC's thin-wire currents mean nothing.
 MAX_SEGMENTS = 801
+#: The longest segment on any wire, whatever the frequency: λ/20 at 1.2 GHz.
+#:
+#: λ/20 alone let a segment grow as the frequency fell. At 30 MHz a 1 m cable was nine 111 mm
+#: segments, fed on the first one and joined to a board arm of 11 mm segments, a 10:1 step
+#: right at the source. Against openEMS on the same wire (docs/verification/
+#: cables-and-drivers.md) that deck read e_per_amp up to 1.7 dB off below the first
+#: resonance; with every segment at 12.5 mm it agreed to 0.7 dB, and a 6.25 mm deck moved
+#: by less than 0.5 dB more, so this is converged. It costs nothing that matters: a 1 m cable
+#: is 80 segments at every frequency.
+MAX_SEGMENT_M = 0.0125
 
 #: Height of the table top above the ground plane, in metres. The tabletop setups of ANSI C63.4
 #: and CISPR 16-2-3 put the product and its cables 0.8 m up, and the full-wave far field uses
@@ -77,7 +87,8 @@ def transmission_line_resonance_hz(length_m: float, height_m: float, far_end: st
 def segments_for(length_m: float, frequency_hz: float) -> int:
     """An odd segment count, so a centre feed lands on a segment rather than between two."""
     lam = SPEED_OF_LIGHT / frequency_hz
-    n = int(math.ceil(SEGMENTS_PER_WAVELENGTH * length_m / lam))
+    step = min(lam / SEGMENTS_PER_WAVELENGTH, MAX_SEGMENT_M)
+    n = int(math.ceil(length_m / step - 1e-9))
     n = max(MIN_SEGMENTS, min(MAX_SEGMENTS, n))
     return n if n % 2 else n + 1
 

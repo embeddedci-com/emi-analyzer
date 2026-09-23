@@ -357,8 +357,15 @@ def test_a_longer_cable_resonates_lower_and_allows_less():
     freqs = [30e6 * 1.12 ** k for k in range(34)]
     short = solver_budget(get("debug-leads"), freqs)          # 0.2 m
     long = solver_budget(get("ethernet-utp"), freqs)          # 2.0 m
-    assert long.radiation_peaks()[0] < short.radiation_peaks()[0]
-    assert long.tightest().max_current_a < short.tightest().max_current_a
+    first_short = short.radiation_peaks()[0]
+    assert long.radiation_peaks()[0] < first_short
+    # Well below the short cable's own first peak (half of it) the long one is the better
+    # antenna everywhere, so it may carry less. Nearer the peak the short one catches up. Comparing the two tightest points instead compares different
+    # limits: the short cable's is at its 717 MHz resonance under the 46 dBuV/m line, and the
+    # two came out within 0.4 dB of each other.
+    for s, g in zip(short.points, long.points):
+        if s.frequency_hz < first_short / 2:
+            assert g.max_current_a < s.max_current_a, f"{s.frequency_hz / 1e6:.0f} MHz"
 
 
 @needs_nec
@@ -601,10 +608,15 @@ def test_peak_positions_do_not_move_with_the_grid():
 
     A finer grid still resolves MORE peaks above a few hundred megahertz, which is the real
     physics rather than instability: they are genuinely every 150 MHz up there.
+
+    Held below 400 MHz. Segmented finely enough to agree with openEMS (nec.MAX_SEGMENT_M), this
+    cable's resonances above about 500 MHz are 80 MHz apart, closer than a 48-point grid's
+    steps there (44 MHz at 550 MHz), so which of them a coarse grid lands on is sampling: 547
+    on 48 points, 470 and 630 on 64, 455 and 552 on 96.
     """
     coarse, fine = _peaks(48), _peaks(64)
     assert coarse and fine
-    for f in coarse:
+    for f in (f for f in coarse if f < 400e6):
         assert any(abs(g - f) <= f * 0.1 for g in fine), f"{f / 1e6:.0f} MHz moved on a finer grid"
 
 
@@ -1015,6 +1027,23 @@ def test_the_longest_cable_is_segmented_finely_at_the_top_of_the_grid():
     assert MAX_LENGTH_M / nec.segments_for(MAX_LENGTH_M, 1.2e9) <= lam / 10
     board = nec.Deck(length_m=1, frequency_hz=1.2e9).board_span_m
     assert board / nec.segments_for(board, 1.2e9) <= lam / 10
+
+
+@pytest.mark.parametrize("frequency_hz", [30e6, 100e6, 1.2e9])
+def test_every_arm_is_segmented_alike_at_every_frequency(frequency_hz):
+    """At 30 MHz λ/20 alone made a 1 m cable nine 111 mm segments against the board arm's
+    11 mm ones, a 10:1 step at the feed, and that deck read up to 1.7 dB off openEMS on the
+    same wire. No segment is now longer than 12.5 mm, so the arms meet at the same length."""
+    deck = Deck(length_m=1.0, frequency_hz=frequency_hz, far_end="ground", bond_nh=0.0)
+    lengths = []
+    for line in deck.to_text().splitlines():
+        if line.startswith("GW "):
+            v = line.split()
+            a = np.array([float(x) for x in v[3:6]])
+            b = np.array([float(x) for x in v[6:9]])
+            lengths.append(float(np.linalg.norm(b - a)) / int(v[2]))
+    assert max(lengths) <= nec.MAX_SEGMENT_M + 1e-12
+    assert max(lengths) / min(lengths) < 1.5
 
 
 def test_a_cable_longer_than_the_model_supports_is_refused():
