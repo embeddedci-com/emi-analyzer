@@ -155,6 +155,7 @@ export function HotspotResults({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [sparams, setSparams] = useState<SParams | null>(null)
+  const [sparamsError, setSparamsError] = useState<string | null>(null)
 
   const grid = useMemo(() => {
     const entry = manifest.layers.find((l) => l.layer === layer)
@@ -196,8 +197,7 @@ export function HotspotResults({
     setLoading(true)
     setError(null)
     api
-      .artifactUrl(runId, grid.file)
-      .then((ref) => fetch(ref.url).then((r) => r.arrayBuffer()))
+      .artifactBytes(runId, grid.file)
       .then((buf) => {
         if (cancelled) return
         const values = new Float32Array(buf)
@@ -236,15 +236,19 @@ export function HotspotResults({
   useEffect(() => {
     if (!manifest.has_sparams) return
     let cancelled = false
+    setSparamsError(null)
     api
-      .artifactUrl(runId, 'sparams.json')
-      .then((ref) => fetch(ref.url).then((r) => r.json()))
-      .then((d) => !cancelled && setSparams(d as SParams))
-      .catch(() => undefined)
+      .artifactJson<SParams>(runId, 'sparams.json')
+      .then((d) => !cancelled && setSparams(d))
+      .catch((err) => !cancelled && setSparamsError((err as Error).message))
     return () => {
       cancelled = true
     }
   }, [api, runId, manifest.has_sparams])
+
+  // The overlay lives on the page, so leaving the result (another run, another tab) would
+  // otherwise keep this run's map drawn over the board.
+  useEffect(() => () => onOverlayChange(null), [onOverlayChange])
 
   const warnings = (manifest.run?.warnings as string[] | undefined) ?? []
 
@@ -395,6 +399,12 @@ export function HotspotResults({
       {error && (
         <Alert color="red" variant="light" title="Could not load the field map">
           {error}
+        </Alert>
+      )}
+
+      {sparamsError && (
+        <Alert color="red" variant="light" title="Could not load the port impedance">
+          {sparamsError}
         </Alert>
       )}
 

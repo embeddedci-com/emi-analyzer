@@ -65,8 +65,7 @@ export function DriverAttach({
     if (!attachable) return
     let cancelled = false
     api
-      .artifactUrl(runId, 'ports.json')
-      .then((ref) => fetch(ref.url).then((r) => r.json()))
+      .artifactJson(runId, 'ports.json')
       .then((d) => {
         if (cancelled) return
         const first = (d as PortsJson).ports?.[0]

@@ -213,10 +213,7 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
 
   const solveManifest = useQuery({
     queryKey: ['emi', 'manifest', activeSolve?.id],
-    queryFn: async () => {
-      const ref = await api.artifactUrl(activeSolve!.id, 'manifest.json')
-      return (await fetch(ref.url).then((r) => r.json())) as SolveManifest
-    },
+    queryFn: () => api.artifactJson<SolveManifest>(activeSolve!.id, 'manifest.json'),
     enabled: !!activeSolve && activeSolve.status === 'done',
     staleTime: Infinity,
   })
