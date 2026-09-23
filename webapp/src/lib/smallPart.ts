@@ -209,8 +209,8 @@ export interface SmallPartEstimate {
 
 /**
  * What a part will cost. Cells come from a fit to meshed coupons (per preset, per mm² of
- * region, per millimetre of stack), and the timestep from the preset's smallest cell, a
- * quarter of dx, which the mesher reaches wherever two copper edges are close.
+ * region, and per copper layer past two), and the timestep from the smallest cell the mesher
+ * will make for a small part.
  */
 export function estimateSmallPart(
   roi: Roi, preset: (typeof PRESETS)[number], band: (typeof BANDS)[number], doc: BoardDoc,
@@ -219,7 +219,12 @@ export function estimateSmallPart(
   const area = Math.max(0, roi[2] - roi[0]) * Math.max(0, roi[3] - roi[1])
   const layers = doc.layers.length || 2
   const cells = Math.ceil(fit.per_mm2 * area * (1 + fit.per_layer * (layers - 2)))
-  const dMin = Math.min(preset.dx / 4, preset.dz) * 1e-6
+  // The smallest cell: half of dx in plane (copper lines closer than that merge, and a routed
+  // board always has some that close), or the thinnest slice of a dielectric at dz.
+  const slices = doc.stackup
+    .filter((s) => s.role === 'dielectric' && s.thickness_mm > 0)
+    .map((s) => (s.thickness_mm * 1000) / Math.ceil((s.thickness_mm * 1000) / preset.dz))
+  const dMin = Math.min(preset.dx / 2, preset.dz, ...slices) * 1e-6
   const dt = dMin / (299_792_458 * Math.sqrt(3))
   const needed = Math.ceil(3 / band.lo / dt)
   const affordable = Math.floor(MAX_CELL_STEPS / Math.max(cells, 1))
