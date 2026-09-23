@@ -138,7 +138,7 @@ func (s *Service) pendingFor(ctx context.Context, orgID string, caps Capabilitie
 	}
 	var out []*Run
 	for _, run := range runs {
-		if !s.deps.Features.allows(run.Kind) {
+		if !s.deps.Features.allows(run.Kind, run.Params) {
 			continue
 		}
 		var cells int64

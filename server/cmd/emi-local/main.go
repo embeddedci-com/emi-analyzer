@@ -81,7 +81,7 @@ func main() {
 		workerURL   = flag.String("worker-url", envOr("EMI_LOCAL_WORKER_URL", ""), "URL the worker container dials to reach this server (default: detected from the Docker engine)")
 		concurrent  = flag.Int("worker-concurrency", 1, "runs the worker takes at once; a solve is memory-bound, so more is rarely faster")
 		webDir      = flag.String("webapp", envOr("EMI_LOCAL_WEBAPP", ""), "serve the webapp from this directory instead of the embedded copy (development)")
-		experiment  = flag.String("experimental", envOr("EMI_EXPERIMENTAL", ""), `comma-separated experimental features to enable: "full-wave" (openEMS solves with their far field and cable emissions, and compliance estimates; unverified on real boards; the standalone cable budget is always on)`)
+		experiment  = flag.String("experimental", envOr("EMI_EXPERIMENTAL", ""), `comma-separated experimental features to enable: "small-part-solve" (openEMS solves of one net or a small region, with near-field maps and port impedance, under a size budget) and "full-wave" (all openEMS solves, with their far field and cable emissions, and compliance estimates; unverified on real boards; includes small-part-solve; the standalone cable budget is always on)`)
 		shell       = flag.String("shell", "", `the program holding a window on this server: "desktop" for the app, empty when there is none`)
 		endpoint    = flag.String("endpoint-file", envOr("EMI_LOCAL_ENDPOINT_FILE", defaultEndpointFile()), "file left behind so other programs on this computer (the KiCad plugin) can find this app; empty to write none")
 		issueKey    = flag.Bool("issue-key", false, "print a key for a worker you run yourself (with -worker=none), and exit")
@@ -184,10 +184,12 @@ func run(logger *slog.Logger, o options) error {
 
 	features, unknown := emi.ParseExperimental(o.experimental)
 	if len(unknown) > 0 {
-		return fmt.Errorf("unknown experimental feature %q (known: %s)", strings.Join(unknown, ","), emi.FeatureFullWave)
+		return fmt.Errorf("unknown experimental feature %q (known: %s)", strings.Join(unknown, ","), strings.Join(emi.KnownFeatures, ", "))
 	}
 	if features.FullWave {
 		logger.Warn("experimental full-wave solving is enabled: it runs, but nothing it produces has been verified on a real board")
+	} else if features.SmallPartSolve {
+		logger.Warn("experimental small-part solving is enabled: see docs/verification/small-part-solve.md for what it was checked against")
 	}
 
 	blob.MaxBytes = o.maxUploadBytes

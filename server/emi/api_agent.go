@@ -99,7 +99,7 @@ func (s *Service) handleWorkerListRuns(w http.ResponseWriter, r *http.Request) {
 	out := make([]map[string]any, 0, len(runs))
 	for _, run := range runs {
 		// A run queued while a feature was on is not handed out after it is switched off.
-		if !s.deps.Features.allows(run.Kind) {
+		if !s.deps.Features.allows(run.Kind, run.Params) {
 			continue
 		}
 		out = append(out, runEnvelope(run))
@@ -122,8 +122,8 @@ func (s *Service) handleMintRunToken(w http.ResponseWriter, r *http.Request) {
 		writeStoreErr(w, err)
 		return
 	}
-	if !s.deps.Features.allows(run.Kind) {
-		writeErr(w, http.StatusForbidden, s.deps.Features.refusal(run.Kind))
+	if !s.deps.Features.allows(run.Kind, run.Params) {
+		writeErr(w, http.StatusForbidden, s.deps.Features.refusal(run.Kind, run.Params))
 		return
 	}
 	proj, err := s.deps.Store.GetProject(r.Context(), run.ProjectID)
