@@ -100,6 +100,17 @@ export function CableEmissionPanel({ api, runId, projectId, manifest }: CableEmi
 
   if (!hasPorts) return null
 
+  if (manifest.run?.converged === false) {
+    return (
+      <Alert color="gray" variant="light" title="No cable emissions for this result">
+        <Text size="xs">
+          This solve hit its timestep limit before its fields settled, so its transfer functions
+          are not used.
+        </Text>
+      </Alert>
+    )
+  }
+
   if (!hasAntenna) {
     return (
       <Alert color="gray" variant="light" title="No cable emissions for this result">

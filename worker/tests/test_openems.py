@@ -106,7 +106,7 @@ def test_a_healthy_run_is_not_called_unstable():
     reported as a divergence by a factor of 1.07e6 -- the exact number users were shown. Every
     long solve was refused this way, and the refusal was read as a property of the mesher.
 
-    openEMS ran this one to completion and stopped on its own -50 dB end-criterion.
+    openEMS ran this one to completion and stopped on its own -40 dB end-criterion.
     """
     ratio = divergence_ratio(REAL_RUN_ENERGY)
     assert ratio < DIVERGENCE_RATIO, f"a healthy run scored {ratio:.3g}"

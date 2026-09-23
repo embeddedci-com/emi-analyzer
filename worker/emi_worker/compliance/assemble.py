@@ -240,6 +240,19 @@ def assemble(art: SolveArtifacts, attached: AttachedDriver | None,
     resistance = {p["name"]: float(p.get("resistance_ohm", 50.0)) for p in ports_meta}
     asm.excited_ports = [p["name"] for p in ports_meta if p.get("excited")]
 
+    # A run that stopped on its timestep cap transformed fields that were still ringing. Its
+    # artifacts mark every point unusable, but a result from before they did says so only
+    # here, so this is where it is refused: no path at all, and the gate says why.
+    if run_meta.get("converged") is False:
+        energy = run_meta.get("final_energy_db")
+        down = f" only {abs(float(energy)):.0f} dB down" if energy is not None else ""
+        asm.problems.append((
+            "solve-unconverged",
+            f"The solve hit its timestep limit with its energy{down}, before its fields "
+            f"settled, so none of its levels are used. Run it again over a smaller region.",
+        ))
+        return asm
+
     if attached is not None:
         d = attached.driver
         asm.shared_sigma[f"driver provenance ({d.weakest_source()})"] = d.sigma_db()

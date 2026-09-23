@@ -307,8 +307,14 @@ def build_artifacts(
     modelled_parts: list[dict] | None = None,
     cable_ports: list[dict] | None = None,
 ) -> PostResult:
-    """Collect openEMS output into the browser-facing artifact set."""
+    """Collect openEMS output into the browser-facing artifact set.
+
+    ``run_meta["converged"] is False`` marks every derived number unusable: the cable transfer
+    functions point by point, the port spectra as a whole. The field maps are still written,
+    since they are what the run's own status is shown beside.
+    """
     result = PostResult()
+    converged = (run_meta or {}).get("converged") is not False
     layers: list[dict] = []
 
     # One shared dB reference across every layer and frequency, so the maps are comparable
@@ -386,6 +392,8 @@ def build_artifacts(
             u, i = read_probe(u_path), read_probe(i_path)
             ports.append({
                 "port": port,
+                # A driver attached to an unconverged run would re-weight a transient.
+                "usable": converged,
                 "at_dump_frequencies": port_spectra(u, i, frequencies),
                 "dense": port_spectra(u, i, dense) if dense else None,
             })
@@ -411,11 +419,14 @@ def build_artifacts(
                 log.warning("cable port %s has no probe output", meta.get("ref"))
                 continue
             try:
+                transfer = cable_transfer(
+                    read_probe(gap_path), read_probe(u_path), read_probe(i_path), dense)
+                if not converged:
+                    transfer["usable"] = [False] * len(transfer["usable"])
                 cable_transfers.append({
                     **{k: v for k, v in meta.items() if k != "probe"},
                     "driven_by": driver_port,
-                    "transfer": cable_transfer(
-                        read_probe(gap_path), read_probe(u_path), read_probe(i_path), dense),
+                    "transfer": transfer,
                 })
             except (OSError, ValueError) as exc:
                 log.warning("could not read cable port %s: %s", meta.get("ref"), exc)

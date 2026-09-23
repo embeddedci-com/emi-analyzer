@@ -114,12 +114,21 @@ class BuiltModel:
     cable_ports: list[dict] = field(default_factory=list)
     #: Where the NF2FF box went and at which frequencies (§16.2). ``None`` when not recorded.
     far_field: dict | None = None
+    #: The timestep after which the excitation has certainly finished. From here on nothing
+    #: feeds the structure, so its energy may only fall; ``run.divergence_ratio`` holds it to
+    #: that. 0 when unknown.
+    source_ends_at_step: int = 0
 
 
 #: openEMS's Gaussian pulse has support of roughly this many time constants, measured
 #: against the solver's own report: it asked for 26811 timesteps at fc = 1 GHz with
 #: dt = 1.069e-13 s, which is 2.86 ns, or 2.86/fc.
 GAUSSIAN_SUPPORT_OVER_FC = 2.86
+
+#: Where the divergence check starts holding the energy to a decay, as a multiple of the pulse's
+#: support. The margin is for the support being measured rather than derived; past the pulse
+#: nothing enters the structure at all.
+SOURCE_END_MARGIN = 1.25
 
 #: The resistance across a cable gap port (§7). An open circuit in all but name: against a
 #: cable's antenna impedance of a few hundred ohms this loads the gap by about 0.016 dB, which
@@ -890,6 +899,8 @@ def build_model(model: BoardModel, transform, params: SolveParams) -> BuiltModel
     return BuiltModel(
         doc=doc, mesh=mesh, dump_names=dump_names, port_names=port_names, notes=notes,
         modelled_parts=modelled, cable_ports=cable_port_meta, far_field=far_field_meta,
+        source_ends_at_step=int(math.ceil(
+            SOURCE_END_MARGIN * GAUSSIAN_SUPPORT_OVER_FC / fc / dt)),
     )
 
 

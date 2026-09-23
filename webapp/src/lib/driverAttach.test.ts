@@ -44,6 +44,13 @@ describe('canAttachDriver', () => {
     expect(whyNoDriver(none)).toMatch(/no excited port/)
   })
 
+  it('refuses a run that hit its timestep limit', () => {
+    const capped = manifest({ run: { converged: false, final_energy_db: -24 } })
+    expect(canAttachDriver(capped)).toBe(false)
+    expect(whyNoDriver(capped)).toMatch(/timestep limit/)
+    expect(canAttachDriver(manifest({ run: { converged: true } }))).toBe(true)
+  })
+
   it('accepts a future format version', () => {
     expect(canAttachDriver(manifest({ format_version: 3 }))).toBe(true)
   })

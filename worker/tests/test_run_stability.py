@@ -14,7 +14,12 @@ from __future__ import annotations
 
 import pytest
 
-from emi_worker.openems.run import DIVERGENCE_RATIO, divergence_ratio
+from emi_worker.openems.run import (
+    DIVERGENCE_RATIO,
+    TIMESTEP_LIMIT_NEEDLE,
+    RunResult,
+    divergence_ratio,
+)
 
 
 def _decay(peak_at: int, n: int, per_step: float) -> list[float]:
@@ -74,3 +79,67 @@ def test_the_progress_line_carries_the_absolute_energy():
     assert m is not None
     assert float(m.group("energy")) == pytest.approx(3.2e-12)
     assert float(m.group("db").replace(" ", "")) == pytest.approx(-0.06)
+
+
+# ---- a run that grows from the start ---------------------------------------------------
+
+def _growing(n: int = 60, per_sample: float = 1.8) -> tuple[list[float], list[int]]:
+    """Energy that never turns around: the shape the 20 dB gate alone cannot see."""
+    energies = [1e-20 * per_sample ** k for k in range(n)]
+    steps = [1000 * (k + 1) for k in range(n)]
+    return energies, steps
+
+
+def test_growth_from_the_start_is_invisible_without_the_source_length():
+    """The limit the gate had: a run that never decays 20 dB never arms it."""
+    energies, _ = _growing()
+    assert divergence_ratio(energies) == 1.0
+
+
+def test_growth_after_the_source_has_finished_is_caught():
+    energies, steps = _growing()
+    assert divergence_ratio(energies, steps, source_ends_at_step=10_000) >= DIVERGENCE_RATIO
+
+
+def test_growth_while_the_source_is_still_on_is_not_divergence():
+    """The whole series is the excitation arriving, so nothing may be called unstable."""
+    energies, steps = _growing()
+    assert divergence_ratio(energies, steps, source_ends_at_step=steps[-1]) == 1.0
+
+
+def test_the_source_length_does_not_disturb_a_healthy_run():
+    from tests.test_openems import REAL_RUN_ENERGY
+
+    steps = [1500 * (k + 1) for k in range(len(REAL_RUN_ENERGY))]
+    # Its energy peaks at sample 34, so the source was still on until then; after it the
+    # energy still wobbles 2.5x (3.21e-14 to 8.04e-14), which is the ripple the ratio allows.
+    assert divergence_ratio(REAL_RUN_ENERGY, steps, source_ends_at_step=steps[34]) < 10
+
+
+def test_a_ringing_tail_after_the_source_is_not_divergence():
+    """After the source, a structure exchanging energy between E and H wobbles a few dB."""
+    ramp = [1e-20 * 10 ** k for k in range(8)]
+    tail = [ramp[-1] * (0.9 ** k) * (1.0 + 0.5 * (k % 2)) for k in range(40)]
+    steps = [100 * (k + 1) for k in range(len(ramp) + len(tail))]
+    assert divergence_ratio(ramp + tail, steps, source_ends_at_step=steps[7]) < 10
+
+
+# ---- convergence and the warnings that mean the model is not the one asked for ---------
+
+def _result(log_text: str, energy_db: float = -41.0) -> RunResult:
+    return RunResult(returncode=0, cells=1, dt_seconds=1e-13, max_timesteps=358_695,
+                     final_timestep=358_695, final_energy_db=energy_db, elapsed_s=1.0,
+                     warnings=[], log_text=log_text)
+
+
+def test_a_run_that_hit_its_cap_is_not_converged_and_says_why():
+    r = _result(f"...\n{TIMESTEP_LIMIT_NEEDLE}!\n", energy_db=-22.7)
+    assert r.converged is False
+    why = r.unconverged_reason()
+    assert "358,695 timesteps" in why and "22.7 dB" in why
+
+
+def test_a_run_that_stopped_on_its_end_criterion_is_converged():
+    r = _result("Time for 84987 iterations with 1.89e+06 cells : 402 sec")
+    assert r.converged is True
+    assert r.unconverged_reason() is None

@@ -36,6 +36,9 @@ _TIMESTEP_LINE = re.compile(r"FDTD timestep is:\s*(?P<dt>[\d.eE+-]+)\s*s")
 _MAXSTEPS_LINE = re.compile(r"Max\. number of timesteps:\s*(?P<n>\d+)")
 _CELLS_LINE = re.compile(r"FDTD simulation size:.*?-->\s*(?P<cells>[\d.]+)\s*FDTD cells")
 
+#: What openEMS prints when a run stops on its timestep cap rather than its end criterion.
+TIMESTEP_LIMIT_NEEDLE = "Max. number of timesteps was reached before the end-criteria"
+
 #: Warnings openEMS prints and then carries on regardless. Each one means the model that
 #: was solved is not the model that was asked for, so they are surfaced rather than logged.
 _SIGNIFICANT_WARNINGS = (
@@ -44,9 +47,9 @@ _SIGNIFICANT_WARNINGS = (
     ("Not enough lines in direction",
      "an absorbing boundary fell back to a reflecting wall; the result contains "
      "reflections that are not on the board"),
-    ("Max. number of timesteps was reached before the end-criteria",
-     "the run hit its timestep limit before the energy decayed; the result is "
-     "under-resolved at the low end of the band"),
+    (TIMESTEP_LIMIT_NEEDLE,
+     "the run hit its timestep limit before the energy decayed, so its fields had not "
+     "settled; no level, impedance or transfer function from it is used"),
     ("Unknown Property found",
      "part of the model was not understood by the solver"),
 )
@@ -67,8 +70,9 @@ DIVERGENCE_RATIO = 1e3
 
 #: How far the energy must fall below its own peak before a rise counts as divergence rather
 #: than as the excitation still arriving. The ripple measured on the way up is 3-5 dB; a real
-#: run ends 50 dB down, which is openEMS's own end criterion. 20 dB sits between the two with
-#: room to spare, and it is the number that stops a healthy ramp being read as a blow-up.
+#: run ends 40 dB down, which is the end criterion every solve is given (``end_criteria`` =
+#: 1e-4 of the peak energy). 20 dB sits between the two with room to spare, and it is the
+#: number that stops a healthy ramp being read as a blow-up.
 DECAY_MARGIN_DB = 20.0
 
 
@@ -96,7 +100,18 @@ class RunResult:
     @property
     def converged(self) -> bool:
         """Whether the run reached its energy cutoff rather than its timestep cap."""
-        return not any("under-resolved" in w for w in self.warnings)
+        return TIMESTEP_LIMIT_NEEDLE not in self.log_text
+
+    def unconverged_reason(self) -> str | None:
+        """Why nothing derived from this run may be used, in the user's words. None if it may."""
+        if self.converged:
+            return None
+        return (
+            f"the run reached its limit of {self.max_timesteps:,} timesteps with its energy "
+            f"only {abs(self.final_energy_db):.1f} dB down, before the fields settled. A "
+            f"transform of fields that are still ringing is not the board's response, so no "
+            f"level, impedance or transfer function from this run is used"
+        )
 
 
 class OpenEMSError(RuntimeError):
@@ -115,11 +130,16 @@ def run_openems(
     on_progress: Callable[[RunProgress], None] | None = None,
     should_stop: Callable[[], bool] | None = None,
     poll_interval: float = 0.25,
+    source_ends_at_step: int | None = None,
 ) -> RunResult:
     """Run openEMS to completion, streaming progress.
 
     ``should_stop`` is polled between output lines. A solve runs for hours, so a cancel
     that only takes effect at the end is not a cancel.
+
+    ``source_ends_at_step`` is the timestep after which the excitation has finished. Given it,
+    the divergence check also catches a run that grows from the start (see
+    ``divergence_ratio``).
     """
     env = dict(os.environ)
     if threads and threads > 0:
@@ -154,6 +174,7 @@ def run_openems(
     max_steps = 0
     last = RunProgress(0, 0, 0.0, 0.0, 0.0)
     energies: list[float] = []
+    energy_steps: list[int] = []
     cancelled = False
 
     assert proc.stdout is not None
@@ -192,6 +213,7 @@ def run_openems(
                 )
                 try:
                     energies.append(float(m.group("energy")))
+                    energy_steps.append(last.timestep)
                 except ValueError:
                     pass
                 if on_progress:
@@ -208,7 +230,7 @@ def run_openems(
     log_text = "\n".join(lines)
     warnings = [msg for needle, msg in _SIGNIFICANT_WARNINGS if needle in log_text]
 
-    rise = divergence_ratio(energies)
+    rise = divergence_ratio(energies, energy_steps, source_ends_at_step)
     if rise >= DIVERGENCE_RATIO:
         raise OpenEMSError(
             f"the simulation went unstable: after the excitation passed, its energy climbed "
@@ -251,7 +273,11 @@ def _terminate(proc: subprocess.Popen) -> None:
             pass
 
 
-def divergence_ratio(energies: list[float]) -> float:
+def divergence_ratio(
+    energies: list[float],
+    steps: list[int] | None = None,
+    source_ends_at_step: int | None = None,
+) -> float:
     """How far the energy climbed back after the run had really started to decay.
 
     1.0 for a healthy run. A diverging FDTD grid pumps energy, so its stored energy turns
@@ -275,26 +301,33 @@ def divergence_ratio(energies: list[float]) -> float:
     Comparing against the global peak instead would find nothing at all: a diverging run's
     largest energy is its last one.
 
-    The limit of this: a grid that blew up before its energy had fallen that far would not be
-    reported. Every divergence on record has the same shape -- the excitation passes, the
-    energy decays, and only then does the grid start feeding it -- so the gate is where the
-    evidence says it should be, and openEMS's own end-criterion stops a healthy run 50 dB
-    down, which is well past it.
+    **A run that grows from the start never decays 20 dB**, so on the energy alone the floor
+    never arms and nothing is reported: the fields grow, openEMS prints "- 0.0 dB" to the end,
+    and the result is published. Every divergence on record had the other shape, but that is
+    no reason to be blind to this one. So when the caller knows when the source stops
+    (``steps`` and ``source_ends_at_step``), the floor also arms at the first sample after
+    that, decayed or not. Once the excitation has finished nothing feeds a passive structure,
+    so its energy can only ring down, and a thousandfold climb from there is the grid.
+
+    openEMS's end criterion stops a healthy run 40 dB down, well past the 20 dB gate.
     """
     if len(energies) < 3:
         return 1.0
 
     decay_factor = 10.0 ** (DECAY_MARGIN_DB / 10.0)
+    quiet_from = source_ends_at_step if steps is not None else None
+    if quiet_from is not None and len(steps) != len(energies):
+        raise ValueError("steps and energies must be the same length")
     peak = 0.0
     floor: float | None = None
     worst = 1.0
-    for e in energies:
+    for k, e in enumerate(energies):
         if e <= 0:
             continue
         peak = max(peak, e)
         if floor is None:
             # Still rising, or not yet clearly past the excitation.
-            if e * decay_factor <= peak:
+            if e * decay_factor <= peak or (quiet_from is not None and steps[k] > quiet_from):
                 floor = e
             continue
         floor = min(floor, e)

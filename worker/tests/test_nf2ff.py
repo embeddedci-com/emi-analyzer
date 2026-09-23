@@ -336,6 +336,19 @@ def test_the_far_field_document_is_per_volt_and_refuses_an_empty_source():
     assert "e_max_v_per_m" not in doc, "the raw pulse units must not look like V/m"
 
 
+def test_an_unconverged_run_has_no_usable_far_field():
+    from emi_worker.openems.model import Port
+    from emi_worker.stages.solve import far_field_document
+
+    field = {"frequencies_hz": [100e6, 200e6], "e_max_v_per_m": [2e-3, 1e-3],
+             "theta_deg": [30.0], "e_by_theta_v_per_m": [[2e-3], [1e-3]]}
+    source = {"v_src": np.array([4.0 + 0j, 2.0 + 0j]), "z_in": np.array([30 + 40j, 30 + 0j])}
+    meta = {"faces_mm": [0, 0, 0, 1, 1, 1], "sub_sampling": 4}
+    doc = far_field_document(field, source, [Port("p1", 0, 0, "F.Cu")], meta, converged=False)
+    assert doc["usable"] == [False, False]
+    assert doc["e_per_volt"] == [0.0, 0.0]
+
+
 def test_the_job_names_frequencies_exactly_as_the_dumps_recorded_them(tmp_path):
     """nf2ff looks each frequency up in the dump by value. The dumps record FD_Samples at nine
     significant figures, and a job written with repr() asked for 31837045.556580506 where the

@@ -174,3 +174,18 @@ def test_a_solve_that_modelled_nothing_says_so_with_an_empty_list(solved):
     predates the list', and format_version already answers the second question."""
     art = post.build_artifacts(str(solved), {"F.Cu": "Hf_F_Cu"}, [200e6, 400e6], ["p1"])
     assert art.manifest["modelled_parts"] == []
+
+
+def test_an_unconverged_run_marks_every_derived_number_unusable(solved):
+    """The maps are still written; the port spectra and cable transfers are not usable."""
+    t, v = _tone(200e6, 0.5)
+    _write_probe(solved / "cable_J1_ut", t, v)
+    cable = [{"ref": "J1", "probe": "cable_J1_ut"}]
+    for converged in (True, False):
+        art = post.build_artifacts(str(solved), {"F.Cu": "Hf_F_Cu"}, [200e6, 400e6], ["p1"],
+                                   cable_ports=cable, run_meta={"converged": converged})
+        ports = json.loads(art.files["ports.json"])["ports"]
+        transfer = json.loads(art.files["cable_ports.json"])["ports"][0]["transfer"]
+        assert ports[0]["usable"] is converged
+        assert all(u is converged for u in transfer["usable"])
+        assert art.manifest["layers"], "the field maps are written either way"

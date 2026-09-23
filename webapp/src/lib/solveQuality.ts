@@ -89,12 +89,17 @@ export type Convergence = 'converged' | 'partial' | 'unusable' | 'unknown'
  * Decided from the energy itself as well as the run's flag. The flag alone called a run that
  * stopped at -4.5 dB "not fully converged — still informative", when its fields were still
  * ringing and the map was a snapshot of a transient.
+ *
+ * A run whose flag says it hit its timestep limit is unusable whatever its energy: the worker
+ * marks every level, impedance and transfer function from it unusable and the compliance
+ * estimate refuses it, so the map must not be the one place it still looks like a result.
  */
 export function convergence(finalEnergyDb?: number | null, converged?: boolean | null): Convergence {
+  if (converged === false) return 'unusable'
   if (finalEnergyDb === undefined || finalEnergyDb === null || !Number.isFinite(finalEnergyDb)) {
-    return converged === false ? 'partial' : converged ? 'converged' : 'unknown'
+    return converged ? 'converged' : 'unknown'
   }
   if (finalEnergyDb > UNUSABLE_ENERGY_DB) return 'unusable'
-  if (converged === false || finalEnergyDb > SETTLED_ENERGY_DB) return 'partial'
+  if (finalEnergyDb > SETTLED_ENERGY_DB) return 'partial'
   return 'converged'
 }
