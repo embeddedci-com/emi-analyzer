@@ -320,6 +320,18 @@ func (s *Service) handleRunInputURL(w http.ResponseWriter, r *http.Request) {
 			out["model_urls"] = urls
 		}
 	}
+	// A compliance run reads another run's results; compliance.go decides which, and only
+	// ever within this run's project and board.
+	if run.Kind == RunKindCompliance {
+		extra, err := s.complianceInputs(r.Context(), run)
+		if err != nil {
+			writeStoreErr(w, err)
+			return
+		}
+		for k, v := range extra {
+			out[k] = v
+		}
+	}
 	out["expires_in"] = int(presignTTL.Seconds())
 	writeJSON(w, http.StatusOK, out)
 }
