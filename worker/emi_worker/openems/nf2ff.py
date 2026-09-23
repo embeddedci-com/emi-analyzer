@@ -3,13 +3,17 @@
 A solve produces fields on copper. A radiated scan measures volts per metre at three metres,
 from an antenna that sees the whole board at once. Surface equivalence is what connects them:
 the tangential E and H on any closed surface around the structure determine the field
-everywhere outside it, exactly. openEMS writes those six faces as frequency-domain dumps, and
-the `nf2ff` CLI shipped in the image does the transform.
+everywhere outside it, exactly. openEMS writes those six faces as frequency-domain dumps. This
+module places the box and writes the dumps; ``scan`` turns them into the field a radiated scan
+reads. The `nf2ff` CLI shipped in the image no longer sets the level: it only exists in the
+far-field limit, which a 3 m scan is not, and its PEC ``Mirror`` images horizontal currents
+wrongly (19 dB high at 30 MHz on a horizontal dipole, measured against nec2c). It still runs,
+without a mirror, as a check that ``scan`` read the dumps right.
 
-M0 measured that this works — a half-wave dipole's directivity comes back 2.13 dBi against a
-textbook 2.15, and a PEC `Mirror` reproduces image theory to 0.08 dB median — and it also met
-three ways to get a confident wrong answer out of it. Each has a guard here rather than a
-comment:
+M0 measured that the transform works in free space — a half-wave dipole's directivity comes back
+2.13 dBi against a textbook 2.15 (the mirror it also checked was a vertical dipole's, the one
+case the mirror gets right) — and it also met three ways to get a confident wrong answer out of
+it. Each has a guard here rather than a comment:
 
 * **`nf2ff` takes radians and metres.** Degrees are accepted silently and produce a plausible
   pattern; so is a mirror position in millimetres, which puts the image plane a thousand
@@ -58,27 +62,32 @@ FACES: tuple[tuple[str, int, int], ...] = (
 #: over the outermost eight, and a face among them samples the absorber, not the field.
 MIN_LINES_OUTSIDE = 10
 
-#: Record every Nth grid line on each face.
+#: How far apart the recorded samples on a face are, at most, in mm.
 #:
-#: The transform needs the surface sampled against the wavelength, not against the copper: at
-#: 1 GHz a wavelength is 300 mm in air, and a quarter of even a 50 µm board mesh is 200 µm.
-#: M0 measured what it saves — six faces of E and H at 60 frequencies are 1.1–4.0 GB at full
-#: resolution and 0.07–0.25 GB at a quarter, which is the difference between an artifact that
-#: can be served over HTTP and one that cannot.
-FACE_SUB_SAMPLING = 4
+#: The transform needs the surface sampled against the field, not against the copper: the
+#: board mesh packs lines tens of micrometres apart that the box, 25 mm or more away, has no use
+#: for. The faces used to be recorded every 4th grid line, which had two faults. It kept the
+#: packed lines packed and left 60 mm between samples in the coarse air; and openEMS strides
+#: from a box's first line, so whatever did not fit the stride at the far end was dropped and
+#: the box came back open (see ``plan_faces``). ``OptResolution`` thins to a spacing instead
+#: and keeps both ends. On a short dipole 5 mm agreed with the full grid to 0.03 dB, where the
+#: 4th-line stride read 0.35 dB high; 10 mm was 0.1 dB low.
+FACE_RESOLUTION_MM = 5.0
 
-#: Elevation angles of the scan, in degrees. A radiated scan sweeps the receiving antenna in
-#: height, which for a fixed 3 m distance is a sweep in elevation: 1–4 m at 3 m is roughly
-#: 18–53° above the horizon, and the horizon itself is the table plane.
+
+def face_resolution_mm(f_top_hz: float) -> float:
+    """Sample spacing on the faces: 5 mm, or a twentieth of the shortest wavelength if finer."""
+    return min(FACE_RESOLUTION_MM, 299_792_458.0 / f_top_hz * 1000.0 / 20.0)
+
+#: Angles the `nf2ff` guard compares at, in degrees from the zenith. The scan itself is in
+#: ``scan``; these only need to cover the directions a scan looks from.
 THETA_DEG = np.arange(30.0, 90.1, 2.5)
 
-#: Azimuths, in degrees. A scan turns the product on a turntable, so every azimuth is sampled
-#: and the reported level is the maximum. 15° steps resolve a board-sized radiator's pattern:
-#: the first sidelobe of a 100 mm aperture at 1 GHz is tens of degrees wide.
+#: Azimuths the guard compares at, in degrees.
 PHI_DEG = np.arange(0.0, 360.0, 15.0)
 
 #: Where the table top is, in metres, relative to the board. The measurement standards put the
-#: product on a 0.8 m table over a ground plane, and the plane is what the mirror models.
+#: product on a 0.8 m table over a ground plane; ``scan`` images the box in it.
 TABLE_HEIGHT_M = 0.8
 
 
@@ -120,26 +129,36 @@ def plan_faces(mesh, copper: tuple[float, float, float, float, float, float],
     outermost grid lines, inside the absorbing layer; and vertically 0.8 of the default 5 mm
     air put them 4 mm from the copper. Placing the box from the copper and checking the grid
     has room outside it turns both into refusals rather than quiet errors.
+
+    **Every face lies on a grid line**, snapped outward so the clearance is never less than
+    asked for. openEMS snaps a dump box to the nearest lines anyway; doing it here means the
+    positions recorded in the result are the ones the dumps actually sampled.
     """
     x0, y0, x1, y1, z0, z1 = copper
-    faces = Faces(x0=x0 - clearance_mm, y0=y0 - clearance_mm, z0=z0 - clearance_mm,
-                  x1=x1 + clearance_mm, y1=y1 + clearance_mm, z1=z1 + clearance_mm)
+    want = ((x0 - clearance_mm, x1 + clearance_mm), (y0 - clearance_mm, y1 + clearance_mm),
+            (z0 - clearance_mm, z1 + clearance_mm))
 
-    for axis, lines, lo, hi in ((0, mesh.x, faces.x0, faces.x1), (1, mesh.y, faces.y0, faces.y1),
-                                (2, mesh.z, faces.z0, faces.z1)):
-        lines = np.asarray(lines)
-        below = int(np.sum(lines < lo))
-        above = int(np.sum(lines > hi))
+    placed = []
+    for axis, (lines, (lo, hi)) in enumerate(zip((mesh.x, mesh.y, mesh.z), want)):
+        lines = np.asarray(lines, dtype=float)
+        # Outward to the nearest line, so the clearance is at least what was asked for. A
+        # micrometre of slack: the mesh writes positions to a handful of places.
+        i0 = int(np.searchsorted(lines, lo + 1e-6, side="right")) - 1
+        i1 = int(np.searchsorted(lines, hi - 1e-6, side="left"))
+        below, above = i0, len(lines) - 1 - i1
         if min(below, above) < MIN_LINES_OUTSIDE:
             raise NF2FFError(
                 f"the far-field box does not fit inside the grid along {'xyz'[axis]}: it needs "
                 f"{MIN_LINES_OUTSIDE} grid lines outside each face so the absorbing boundary "
-                f"stays clear of it, and has {min(below, above)}"
+                f"stays clear of it, and has {max(0, min(below, above))}"
             )
-    return faces
+        placed.append((float(lines[i0]), float(lines[i1])))
+    (fx0, fx1), (fy0, fy1), (fz0, fz1) = placed
+    return Faces(x0=fx0, y0=fy0, z0=fz0, x1=fx1, y1=fy1, z1=fz1)
 
 
-def add_dumps(doc: csx.CSXDocument, faces: Faces, frequencies: list[float]) -> list[str]:
+def add_dumps(doc: csx.CSXDocument, faces: Faces, frequencies: list[float], *,
+              resolution_mm: float = FACE_RESOLUTION_MM) -> list[str]:
     """Add the twelve frequency-domain dumps the transform reads. Returns their names."""
     if not frequencies:
         raise NF2FFError("the far field needs at least one frequency")
@@ -149,7 +168,7 @@ def add_dumps(doc: csx.CSXDocument, faces: Faces, frequencies: list[float]) -> l
         for kind, dump_type in (("E", csx.DUMP_E_FREQ), ("H", csx.DUMP_H_FREQ)):
             dump = f"nf2ff_{kind}_{name}"
             doc.add(csx.DumpBox(name=dump, dump_type=dump_type, dump_mode=1,
-                                frequencies=frequencies, sub_sampling=FACE_SUB_SAMPLING,
+                                frequencies=frequencies, opt_resolution_mm=resolution_mm,
                                 primitives=[box]))
             names.append(dump)
     return names

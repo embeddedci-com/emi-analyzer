@@ -868,12 +868,16 @@ def build_model(model: BoardModel, transform, params: SolveParams) -> BuiltModel
                 faces = nf2ff_mod.plan_faces(mesh, copper, ff_clearance)
             except nf2ff_mod.NF2FFError as exc:
                 raise ModelError(str(exc)) from exc
-            nf2ff_mod.add_dumps(doc, faces, ff_freqs)
+            resolution = nf2ff_mod.face_resolution_mm(f_max)
+            nf2ff_mod.add_dumps(doc, faces, ff_freqs, resolution_mm=resolution)
             far_field_meta = {
                 "frequencies_hz": ff_freqs,
+                # What the scan is measured from: the board sits on the table by its bottom
+                # copper, and the turntable circle is drawn around the copper in plan.
+                "copper_mm": list(copper),
                 "faces_mm": [faces.x0, faces.y0, faces.z0, faces.x1, faces.y1, faces.z1],
                 "centre_mm": list(faces.centre()),
-                "sub_sampling": nf2ff_mod.FACE_SUB_SAMPLING,
+                "face_resolution_mm": resolution,
                 "clearance_mm": ff_clearance,
                 # Where the box is a tenth of a wavelength out. Below this it sits closer, in
                 # the reactive near field, and nothing has measured how far down the

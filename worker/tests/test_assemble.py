@@ -42,7 +42,7 @@ def _clock(period=4e-8, z=50.0):
 def _art(fs, e, z_in=50.0, usable=None) -> SolveArtifacts:
     return SolveArtifacts(
         manifest={"run": {"ports": [{"name": "p1", "resistance_ohm": 50.0, "excited": True}]}},
-        farfield={"format_version": 2, "frequencies_hz": fs, "e_per_volt": e,
+        farfield={"format_version": 3, "frequencies_hz": fs, "e_per_volt": e,
                   "usable": usable or [True] * len(fs),
                   "z_in_real": [z_in] * len(fs), "z_in_imag": [0.0] * len(fs),
                   "driven_by": "p1", "source_impedance_ohm": 50.0, "excited_ports": ["p1"],

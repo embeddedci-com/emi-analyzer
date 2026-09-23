@@ -48,8 +48,10 @@ from emi_worker.drivers.document import Driver
 from emi_worker.drivers.resolve import resolve
 from emi_worker.drivers.spectrum import DriverError
 
-#: Far-field documents older than this are in the solve pulse's units and cannot take a driver.
-FAR_FIELD_VERSION = 2
+#: Far-field documents older than this cannot take a driver: version 1 is in the solve pulse's
+#: units, and version 2 was read on a far-field sphere through a mirror that images horizontal
+#: currents wrongly (docs/verification/far-field.md).
+FAR_FIELD_VERSION = 3
 
 #: A clock's harmonics are evaluated one by one. A 10 kHz regulator to 1 GHz is 100,000 of
 #: them; past this the estimate says so rather than spending minutes on arithmetic.
@@ -253,8 +255,8 @@ def assemble(art: SolveArtifacts, attached: AttachedDriver | None,
         if int(ff.get("format_version") or 1) < FAR_FIELD_VERSION:
             asm.problems.append((
                 "far-field-format",
-                "This solve's far field is in the solver's own pulse units, not per volt of "
-                "source, so a driver cannot be applied to it. Run the solve again.",
+                "This solve's far field was computed by an older method that is known to be "
+                "wrong, so a driver cannot be applied to it. Run the solve again.",
             ))
         elif len(ff.get("excited_ports") or []) > 1:
             asm.problems.append((

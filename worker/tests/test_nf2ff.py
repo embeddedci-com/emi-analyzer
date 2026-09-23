@@ -44,7 +44,21 @@ COPPER = (0.0, 0.0, 20.0, 20.0, 0.0, 1.6)
 def test_faces_sit_the_clearance_outside_the_copper():
     f = plan_faces(_mesh(), COPPER, 25.0)
     assert (f.x0, f.y0, f.z0) == pytest.approx((-25.0, -25.0, -25.0))
-    assert (f.x1, f.y1, f.z1) == pytest.approx((45.0, 45.0, 26.6))
+    # 26.6 is between grid lines; the face goes out to the next one, never in.
+    assert (f.x1, f.y1, f.z1) == pytest.approx((45.0, 45.0, 27.0))
+
+
+def test_faces_lie_on_grid_lines():
+    """openEMS snaps a dump to the nearest line anyway, possibly inward. Snapping here, outward,
+    means the clearance is never less than asked for and the result records where the faces
+    really were."""
+    m = FakeMesh(np.linspace(-60.0, 80.0, 71), np.linspace(-60.0, 80.0, 57),
+                 np.linspace(-60.0, 62.0, 45))
+    f = plan_faces(m, COPPER, 25.0)
+    for value, lines in ((f.x0, m.x), (f.x1, m.x), (f.y0, m.y), (f.y1, m.y), (f.z0, m.z),
+                         (f.z1, m.z)):
+        assert np.min(np.abs(lines - value)) < 1e-9
+    assert f.x0 <= -25.0 and f.x1 >= 45.0 and f.z1 >= 26.6
 
 
 def test_a_face_in_the_absorbing_boundary_is_refused():
@@ -67,8 +81,9 @@ def test_faces_follow_an_asymmetric_copper_extent():
     m = FakeMesh(np.linspace(-600.0, 80.0, 700), np.linspace(-60.0, 80.0, 141),
                  np.linspace(-60.0, 62.0, 123))
     f = plan_faces(m, (-500.0, 0.0, 20.0, 20.0, 0.0, 1.6), 25.0)
-    assert f.x0 == pytest.approx(-525.0)
-    assert f.x1 == pytest.approx(45.0)
+    cell = 680.0 / 699
+    assert -525.0 - cell < f.x0 <= -525.0
+    assert 45.0 <= f.x1 < 45.0 + cell
 
 
 def test_every_face_is_a_plane_and_the_box_is_closed():
@@ -203,14 +218,14 @@ def test_faces_box_corners_are_ordered_for_every_face():
             assert box.p1[k] <= box.p2[k]
 
 
-def test_faces_are_sub_sampled():
-    """Full face resolution is gigabytes; a quarter is tens of megabytes and costs nothing.
+def test_faces_are_thinned_to_a_spacing_not_strided():
+    """Full face resolution is gigabytes, so the faces are thinned -- by spacing, not by stride.
 
-    The NF2FF surface has to resolve the *wavelength*, not the copper. M0 measured both halves
-    of that: 1.1-4.0 GB full against 0.07-0.25 GB at a quarter, and a quarter of even a 50 um
-    board mesh is 200 um against the 300 mm a wavelength is at 1 GHz.
+    A stride of every 4th line counts from the box's first line and drops whatever does not fit
+    at the far end, which left the production box with a 14 mm slot around its rim on the
+    fixture board. ``OptResolution`` keeps both ends (``scan.read_surface`` checks that it did).
     """
-    from emi_worker.openems.nf2ff import FACE_SUB_SAMPLING
+    from emi_worker.openems.nf2ff import FACE_RESOLUTION_MM, face_resolution_mm
 
     doc = csx.CSXDocument(excitation=csx.Excitation(type=0, f0=5e8, fc=4e8),
                           x_lines=[0, 1], y_lines=[0, 1], z_lines=[0, 1], f_max=9e8)
@@ -219,7 +234,19 @@ def test_faces_are_sub_sampled():
     dumps = [d for d in xml.iter("DumpBox") if d.get("Name", "").startswith("nf2ff_")]
     assert dumps
     for d in dumps:
-        assert d.get("SubSampling") == f"{FACE_SUB_SAMPLING},{FACE_SUB_SAMPLING},{FACE_SUB_SAMPLING}"
+        assert "SubSampling" not in d.attrib
+        assert d.get("OptResolution") == "5,5,5"
+    assert FACE_RESOLUTION_MM == 5.0
+    assert face_resolution_mm(1e9) == 5.0
+    # A twentieth of the wavelength once that is finer.
+    assert face_resolution_mm(6e9) == pytest.approx(2.498, abs=1e-3)
+
+
+def test_a_resolution_that_is_not_positive_is_refused():
+    with pytest.raises(ValueError, match="resolution"):
+        csx.DumpBox(name="bad", dump_type=csx.DUMP_E_FREQ, frequencies=[1e9],
+                    opt_resolution_mm=0.0,
+                    primitives=[csx.Box(p1=(0, 0, 0), p2=(1, 1, 0))]).to_xml()
 
 
 def test_a_stride_below_one_is_refused():
@@ -233,6 +260,7 @@ def test_an_ordinary_dump_still_writes_no_sub_sampling_attribute():
     el = csx.DumpBox(name="Jf_F_Cu", dump_type=csx.DUMP_J_FREQ, frequencies=[1e9],
                      primitives=[csx.Box(p1=(0, 0, 0), p2=(1, 1, 0))]).to_xml()
     assert "SubSampling" not in el.attrib
+    assert "OptResolution" not in el.attrib
 
 
 # ---- the grid the far field is evaluated on -------------------------------------------
@@ -321,14 +349,15 @@ def test_the_far_field_document_is_per_volt_and_refuses_an_empty_source():
     from emi_worker.stages.solve import FAR_FIELD_FORMAT_VERSION, far_field_document
 
     field = {"frequencies_hz": [100e6, 200e6], "e_max_v_per_m": [2e-3, 1e-3],
-             "theta_deg": [30.0], "e_by_theta_v_per_m": [[2e-3], [1e-3]]}
+             "e_by_height_v_per_m": [[2e-3, 1e-3], [1e-3, 1e-3]]}
     source = {"v_src": np.array([4.0 + 0j, 0.0 + 0j]),
               "z_in": np.array([30 + 40j, np.nan + 0j])}
-    meta = {"faces_mm": [0, 0, 0, 1, 1, 1], "sub_sampling": 4, "clearance_mm": 30.0,
+    meta = {"faces_mm": [0, 0, 0, 1, 1, 1], "face_resolution_mm": 5.0, "clearance_mm": 30.0,
             "tenth_wavelength_above_hz": 1e9}
     doc = far_field_document(field, source, [Port("p1", 0, 0, "F.Cu", resistance=50.0)], meta)
-    assert doc["format_version"] == FAR_FIELD_FORMAT_VERSION == 2
+    assert doc["format_version"] == FAR_FIELD_FORMAT_VERSION == 3
     assert doc["e_per_volt"] == pytest.approx([5e-4, 0.0])
+    assert doc["e_by_height_per_volt"][0] == pytest.approx([5e-4, 2.5e-4])
     assert doc["usable"] == [True, False]
     assert doc["z_in_real"][0] == 30.0 and doc["z_in_imag"][0] == 40.0
     assert doc["source_impedance_ohm"] == 50.0
