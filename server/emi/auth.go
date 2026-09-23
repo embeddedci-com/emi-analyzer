@@ -83,24 +83,43 @@ func bearer(r *http.Request) string {
 // requireWorkerKey authenticates a long-lived EMI worker API key.
 func (s *Service) requireWorkerKey(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		raw := bearer(r)
-		if raw == "" {
-			writeErr(w, http.StatusUnauthorized, "missing agent key")
-			return
-		}
-		key, err := s.deps.Keys.VerifyAgentKey(r.Context(), raw)
-		if err != nil {
-			// One status for "no such key", "revoked" and "wrong secret" so the endpoint
-			// cannot be used to enumerate valid key ids.
-			writeErr(w, http.StatusForbidden, "invalid agent key")
-			return
-		}
-		if key.AgentType != AgentTypeEMI {
-			writeErr(w, http.StatusForbidden, "key is not an emi worker key")
+		key, ok := s.workerKey(w, r)
+		if !ok {
 			return
 		}
 		next(w, r.WithContext(context.WithValue(r.Context(), ctxKeyAgent, key)))
 	}
+}
+
+// workerKey verifies the worker key on a request, or writes the refusal and returns false.
+//
+// A key that does not verify is 401: the caller did not authenticate. A key that verifies but
+// is not a worker key is 403. A store failure is 500 and logged, never a 401 or 403: telling a
+// worker its key is bad because the database blinked makes an operator go and rotate a key
+// that was fine. There is no anonymous fallback in any of these cases.
+func (s *Service) workerKey(w http.ResponseWriter, r *http.Request) (AgentKey, bool) {
+	raw := bearer(r)
+	if raw == "" {
+		writeErr(w, http.StatusUnauthorized, "missing agent key")
+		return AgentKey{}, false
+	}
+	key, err := s.deps.Keys.VerifyAgentKey(r.Context(), raw)
+	switch {
+	case errors.Is(err, ErrKeyNotFound):
+		// One answer for "no such key", "revoked" and "wrong secret" so the endpoint cannot
+		// be used to enumerate valid key ids.
+		writeErr(w, http.StatusUnauthorized, "invalid agent key")
+		return AgentKey{}, false
+	case err != nil:
+		s.deps.log().Error("emi: agent key lookup failed", "err", err)
+		writeErr(w, http.StatusInternalServerError, "internal error")
+		return AgentKey{}, false
+	}
+	if key.AgentType != AgentTypeEMI {
+		writeErr(w, http.StatusForbidden, "key is not an emi worker key")
+		return AgentKey{}, false
+	}
+	return key, true
 }
 
 // runClaims is the payload of a short-lived run token.
@@ -142,7 +161,7 @@ func (s *Service) parseRunToken(raw string) (*runClaims, error) {
 			return nil, errBadRunToken
 		}
 		return s.deps.TokenSecret, nil
-	}, jwt.WithValidMethods([]string{"HS256"}))
+	}, jwt.WithValidMethods([]string{"HS256"}), jwt.WithTimeFunc(s.deps.now), jwt.WithExpirationRequired())
 	if err != nil {
 		return nil, err
 	}
@@ -164,7 +183,7 @@ func (s *Service) requireRunToken(next http.HandlerFunc) http.HandlerFunc {
 		}
 		claims, err := s.parseRunToken(raw)
 		if err != nil {
-			writeErr(w, http.StatusForbidden, "invalid run token")
+			writeErr(w, http.StatusUnauthorized, "invalid run token")
 			return
 		}
 		pathRun := r.PathValue("run_id")
@@ -176,12 +195,14 @@ func (s *Service) requireRunToken(next http.HandlerFunc) http.HandlerFunc {
 		// The token proves "whoever minted this owns the run", but ownership can have
 		// moved on since — a retry re-mints with a new jti. Checking jti_key here is what
 		// stops a worker that was superseded from writing results over the new one's.
+		// A run nobody holds (jti_key cleared by a retry) accepts no token at all, or the
+		// superseded worker could still upload into a run that is waiting for someone else.
 		run, err := s.deps.Store.GetRun(r.Context(), pathRun)
 		if err != nil {
 			writeStoreErr(w, err)
 			return
 		}
-		if run.JTIKey != "" && run.JTIKey != claims.ID {
+		if run.JTIKey == "" || run.JTIKey != claims.ID {
 			writeErr(w, http.StatusConflict, "run has been reassigned to another worker")
 			return
 		}

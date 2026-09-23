@@ -25,20 +25,10 @@ const (
 )
 
 func (s *Service) handleWorkerWS(w http.ResponseWriter, r *http.Request) {
-	// Authenticate before upgrading, so a bad key gets a plain 403 rather than a socket
+	// Authenticate before upgrading, so a bad key gets a plain 401 rather than a socket
 	// that closes immediately for reasons the worker has to guess at.
-	raw := bearer(r)
-	if raw == "" {
-		writeErr(w, http.StatusUnauthorized, "missing agent key")
-		return
-	}
-	key, err := s.deps.Keys.VerifyAgentKey(r.Context(), raw)
-	if err != nil {
-		writeErr(w, http.StatusForbidden, "invalid agent key")
-		return
-	}
-	if key.AgentType != AgentTypeEMI {
-		writeErr(w, http.StatusForbidden, "key is not an emi worker key")
+	key, ok := s.workerKey(w, r)
+	if !ok {
 		return
 	}
 
