@@ -24,6 +24,7 @@ from .model import (
     dedupe,
 )
 from .planes import plane_layers
+from .settings import RULE_CATALOGUE
 
 log = logging.getLogger(__name__)
 
@@ -429,8 +430,9 @@ def check_plane_gaps(ctx: RuleContext) -> Iterator[Finding]:
     unknown = sorted(p for p in set(pairs.values()) if p not in rasters)
     if unknown:
         ctx.notes.append(
-            "no filled copper was found on " + ", ".join(unknown)
-            + ", so traces over it were not checked for plane gaps"
+            "No filled copper on " + ", ".join(unknown)
+            + ", so traces over it were not checked for plane gaps. Refill zones in KiCad (B) "
+            "and save."
         )
     if not rasters:
         return
@@ -548,7 +550,9 @@ def run_rules(ctx: RuleContext, progress: Callable[[str, float], None] | None = 
             findings.extend(fn(ctx))
         except Exception:
             log.exception("rule %s failed", name)
-            ctx.notes.append(f"the {name} check failed to run; other checks are unaffected")
+            ctx.notes.append(
+                f"The {RULE_CATALOGUE.get(name, {}).get('title', name)} check failed to run. "
+                "Other checks are unaffected.")
 
     # Severity overrides, applied the same way to every rule for the same reason.
     if ctx.settings is not None:
@@ -590,8 +594,8 @@ def check_length_matching(ctx: RuleContext) -> Iterator[Finding]:
         ref_delay = _group_delay(ctx, group.reference)
         if ref_delay is None:
             ctx.notes.append(
-                f"{group.name}: no routed path found for {group.reference}, so the group "
-                "could not be compared against it"
+                f"{group.name}: no routed path for {group.reference}, so the group was not "
+                "compared against it."
             )
             continue
 

@@ -241,15 +241,15 @@ def _stackup_from_job(job_text: str | None, layers: list[str],
             total += thickness
         if entries:
             warnings.append(
-                "Gerber job files carry layer thicknesses but never permittivity, so "
-                f"epsilon_r {ASSUMED_EPSILON_R} and tan_d {ASSUMED_LOSS_TANGENT} were "
-                "assumed for every dielectric. A wrong epsilon_r shifts every resonance."
+                "Gerbers carry no permittivity, so epsilon_r "
+                f"{ASSUMED_EPSILON_R} and tan_d {ASSUMED_LOSS_TANGENT} were assumed. Set "
+                "epsilon_r in your rules if you know it."
             )
             return entries, (total or 1.6)
 
     warnings.append(
-        "no Gerber job file was found, so the stackup was invented: 1.6 mm FR-4 with 35 um "
-        "copper. Solve results will be wrong until this is corrected."
+        "No Gerber job file, so a 1.6 mm FR-4 stackup with 35 um copper was assumed. Add "
+        "the .gbrjob to the zip."
     )
     n = max(2, len(layers))
     each = max(0.05, (1.6 - 0.035 * n) / max(1, n - 1))
@@ -592,13 +592,13 @@ def _read_layer(text: str, layer: str, warnings: list[str],
 
     if uncut:
         warnings.append(
-            f"{layer}: {uncut} clear (cut-out) shapes could not be applied, so some copper "
-            f"there is overstated"
+            f"{layer}: {uncut} cut-out shapes could not be applied, so copper there is "
+            f"overstated."
         )
     if approximated:
         warnings.append(
-            f"{approximated} shapes on {layer} use aperture macros and were approximated by "
-            f"their bounding box; they are slightly larger than the real copper"
+            f"{layer}: {approximated} aperture-macro shapes were drawn as boxes, so copper "
+            f"there is slightly overstated."
         )
     return tracks, pads, zones
 

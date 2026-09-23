@@ -173,8 +173,8 @@ class Connectivity:
                  best_name, best_hits, len(netlist.points))
         if fraction < 0.9:
             self.warnings.append(
-                f"only {best_hits} of {len(netlist.points)} netlist points landed on copper; "
-                f"some nets may be unnamed or wrong"
+                f"Only {best_hits} of {len(netlist.points)} netlist points landed on "
+                f"copper, so some nets may be unnamed or wrong."
             )
         return best_fn
 
@@ -225,8 +225,7 @@ class Connectivity:
                     # a clearance violation into a wrong answer rather than an error.
                     self.warnings.append(
                         f"{existing} and {point.net} resolve to the same piece of copper on "
-                        f"{key[0]}; they may be shorted, or the raster may have bridged a "
-                        f"very fine clearance"
+                        f"{key[0]}. They may be shorted, or a very fine gap was merged."
                     )
 
             # A through-hole ties the islands it passes through into one net.
@@ -243,9 +242,8 @@ class Connectivity:
 
         if unplaced:
             self.warnings.append(
-                f"{len(unplaced)} netlist points did not land on any copper and were "
-                f"ignored; if many, check that the netlist and Gerbers came from the same "
-                f"revision"
+                f"{len(unplaced)} netlist points landed on no copper and were ignored. "
+                f"If that is many, export the netlist and Gerbers from the same revision."
             )
 
         named = len({v for v in self.net_of.values()})
@@ -442,7 +440,7 @@ def attach_parts(
     if wanted and matched < wanted:
         warnings.append(
             f"{wanted - matched} of {wanted} component pins in the netlist matched no pad, "
-            f"so checks that look for parts may miss them"
+            f"so part checks may miss them."
         )
     log.info("netlist named %d of %d component pins", matched, wanted)
     return [p for i, p in enumerate(pads) if i not in drop], vias, warnings

@@ -1,0 +1,25 @@
+# EMI Analyzer rules. Put this file next to the .kicad_pcb and upload the project as a zip.
+# Reference: docs/rules-file.md
+version: 1
+board:
+  max_frequency_hz: 1600000000
+rules:
+  plane-gap:
+    severity: info
+  via-stub:
+    params:
+      resonance_margin: 6
+  radiator: false
+  edge-proximity:
+    severity: info
+  ddr-skew:
+    params:
+      byte_lane_ps: 6
+groups:
+  - match: "DDR_DQ*"
+    params:
+      byte_lane_ps: 5
+suppress:
+  - rule: edge-proximity
+    net: GND
+    reason: "guard ring, intentional"

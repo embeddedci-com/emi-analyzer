@@ -76,11 +76,11 @@ def load_gerber_board(files: dict[str, bytes]) -> BoardModel:
             warnings.extend(drill_warnings)
         vias = holes_to_vias(holes, layers)
         if not vias:
-            warnings.append("the drill files contained no plated holes")
+            warnings.append("The drill files have no plated holes, so the board has no vias.")
     else:
         warnings.append(
-            "no drill file was found, so vias are missing from the model. Layer transitions "
-            "will not be simulated and the return-via check cannot run."
+            "No drill file in the upload, so vias are missing and the return-via check "
+            "cannot run. Add the drill file to the zip."
         )
 
     stackup, thickness = _stackup_from_job(gset.job, layers, warnings)
@@ -101,8 +101,8 @@ def load_gerber_board(files: dict[str, bytes]) -> BoardModel:
     total = len(tracks) + len(zones)
     if total and named / total < 0.5:
         warnings.append(
-            f"only {named} of {total} copper features could be matched to a net. The "
-            f"netlist and the Gerbers may be from different revisions of the board."
+            f"Only {named} of {total} copper shapes matched a net. Export the netlist and "
+            f"the Gerbers from the same revision."
         )
 
     # Nets in netlist order, so the most meaningful names come first.
@@ -137,15 +137,17 @@ def load_gerber_board(files: dict[str, bytes]) -> BoardModel:
 def _read_outline(text: str | None, warnings: list[str]) -> list[list[tuple[float, float]]]:
     if not text:
         warnings.append(
-            "no board outline (profile) Gerber was found; the board extent was inferred "
-            "from the copper, so it may be slightly smaller than the real board"
+            "No board outline Gerber, so the board edge was taken from the copper. Add the "
+            "Edge.Cuts (profile) layer to the zip."
         )
         return []
     try:
         from gerbonara import GerberFile
         gf = GerberFile.from_string(text)
     except Exception as exc:  # noqa: BLE001
-        warnings.append(f"the board outline could not be read ({exc}); using the copper extent")
+        warnings.append(
+            f"The board outline could not be read ({exc}), so the board edge was taken from "
+            "the copper.")
         return []
 
     from .reader import _arc_points, _to_mm

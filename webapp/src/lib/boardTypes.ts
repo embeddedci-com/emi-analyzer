@@ -147,6 +147,13 @@ export interface RulesDoc {
   suppressed?: number
   /** Settings that could not be applied — a typo in a rules file, or a newer schema. */
   settings_warnings?: string[]
+  /**
+   * What came with the board and what did not: the rules file that was read, a missing
+   * project file, unfilled zones. Plain sentences from the worker; see lib/notices.ts.
+   */
+  notes?: string[]
+  /** The settings the checks ran with. Absent on boards analysed before it existed. */
+  settings?: import('./rulesSettings').RulesSettingsReport
   format_version: number
   findings: RuleFinding[]
   summary: {

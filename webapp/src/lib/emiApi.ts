@@ -441,8 +441,13 @@ export class EmiApi {
    * opens the existing project — so without this, a board analysed last week could never
    * gain this week's columns.
    */
-  reanalyse = (projectId: string, boardId: string) =>
-    this.call<Run>('POST', `/emi/projects/${projectId}/runs`, { board_id: boardId, kind: 'ingest' })
+  reanalyse = (projectId: string, boardId: string, settings?: Record<string, unknown> | null) =>
+    this.call<Run>('POST', `/emi/projects/${projectId}/runs`, {
+      board_id: boardId, kind: 'ingest',
+      // The settings edited in the app: the worker's "run" layer, on top of any rules file.
+      // Omitted when there are none, so a plain re-analysis looks exactly as it always did.
+      ...(settings && Object.keys(settings).length > 0 ? { params: { settings } } : {}),
+    })
 
   createSolveRun = (projectId: string, boardId: string, params: unknown, est: EstimateInput) =>
     this.call<Run>('POST', `/emi/projects/${projectId}/runs`, {

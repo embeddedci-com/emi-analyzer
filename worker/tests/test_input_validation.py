@@ -97,7 +97,7 @@ def test_a_deeply_nested_settings_file_is_refused_cleanly():
 def test_an_unreadable_project_file_means_no_netclasses(text):
     out = netclass.parse_project(text)
     assert not out.available
-    assert out.warnings and "netclasses unavailable" in out.warnings[0]
+    assert out.warnings and "net classes were not used" in out.warnings[0]
 
 
 @pytest.mark.parametrize("text", ["[]", '{"MaterialStackup": 3}', '{"FilesAttributes": ["x"]}', DEEP, "{"])
@@ -105,7 +105,7 @@ def test_an_unreadable_job_file_is_no_job_file(text):
     warnings: list[str] = []
     entries, total = reader._stackup_from_job(text, ["F.Cu", "B.Cu"], warnings)
     assert total == 1.6 and entries
-    assert any("stackup was invented" in w for w in warnings)
+    assert any("No Gerber job file" in w for w in warnings)
 
 
 def test_a_job_file_with_a_bad_thickness_keeps_the_rest():

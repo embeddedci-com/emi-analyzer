@@ -137,11 +137,28 @@ class Sidecars:
 
     project: bytes | None = None
     settings: dict | None = None
+    #: The rules file that was found, whether or not it could be read. The app says which
+    #: file was applied, and "built-in defaults" when this is empty or the file was refused.
+    settings_file: str = ""
+    settings_error: str = ""
     notes: list[str] = field(default_factory=list)
 
 
 #: Names recognised as a committed rules document, in preference order.
 SETTINGS_NAMES = ("emi.rules.yaml", "emi.rules.yml", "emi.rules.json", ".emi.yaml")
+
+
+def _short_error(exc: Exception) -> str:
+    """One line for a settings file that would not parse.
+
+    A YAML error runs to several lines with a caret diagram, which is unreadable in a note;
+    what it found and on which line is the part anyone can act on.
+    """
+    problem, mark = getattr(exc, "problem", None), getattr(exc, "problem_mark", None)
+    if problem and mark is not None:
+        return f"{problem} on line {mark.line + 1}"
+    msg = str(exc).strip()
+    return msg.splitlines()[0] if msg else type(exc).__name__
 
 
 def _read_sidecars(archive: _Archive) -> Sidecars:
@@ -156,8 +173,8 @@ def _read_sidecars(archive: _Archive) -> Sidecars:
         out.project = archive.read(projects[0])
     else:
         out.notes.append(
-            "no .kicad_pro in the upload, so netclasses and differential-pair geometry are "
-            "unavailable; groups and pairs were inferred from net names instead"
+            "No .kicad_pro in the upload, so net classes and pairs were guessed from net "
+            "names. Upload the zipped project folder to use them."
         )
 
     # Settings files may be dotfiles (.emi.yaml), which _skipped leaves out of the listing.
@@ -166,14 +183,19 @@ def _read_sidecars(archive: _Archive) -> Sidecars:
         hit = next((n for n in every if n.rsplit("/", 1)[-1].lower() == name), None)
         if hit:
             label = hit.rsplit("/", 1)[-1]
+            out.settings_file = label
             try:
                 out.settings = settings.parse_document(
                     archive.read(hit).decode("utf-8", "replace"))
-                out.notes.append(f"rules read from {label}")
+                out.notes.append(f"Rules read from {label}.")
             except StageError:
                 raise
             except Exception as exc:  # noqa: BLE001
-                out.notes.append(f"{label} could not be read ({exc}); built-in defaults used")
+                out.settings_error = _short_error(exc)
+                out.notes.append(
+                    f"{label} could not be read ({out.settings_error}), so built-in defaults "
+                    "were used. Fix the file and upload again."
+                )
             break
     return out
 
@@ -374,6 +396,18 @@ def run_ingest(ctx: StageContext) -> StageResult:
     rules_doc["findings"] = kept
     rules_doc["suppressed"] = hidden
     rules_doc["settings_warnings"] = cfg.warnings
+    # What each check ran with and where every value came from, and the same without this
+    # run's own layer: the app edits that layer, so it needs to know what is underneath to
+    # show a value the user has just cleared, and to export an equivalent emi.rules.yaml.
+    rules_doc["settings"] = {
+        "file": "" if sidecars.settings_error else sidecars.settings_file,
+        "file_error": sidecars.settings_error,
+        "applied": settings.snapshot(cfg),
+        "base": settings.snapshot(settings.load(
+            ("project", ctx.params.get("project_settings")),
+            ("file", sidecars.settings),
+        )),
+    }
     # What came with the board, and what did not. "No .kicad_pro, so groups were inferred from
     # names" is exactly the sentence that explains a missing netclass column, and it was being
     # collected and then dropped on the floor.
@@ -387,7 +421,7 @@ def run_ingest(ctx: StageContext) -> StageResult:
     )
     if hidden:
         rules_doc["notes"].append(
-            f"{hidden} finding{'s' if hidden != 1 else ''} hidden by suppressions in your settings"
+            f"{hidden} finding{'s' if hidden != 1 else ''} hidden by suppressions in your rules file."
         )
 
     ctx.progress("upload", 80, "uploading normalised board")

@@ -294,8 +294,8 @@ def _parse_stackup(root: Node, copper: list[CopperLayer], warnings: list[str]) -
         # viewed, and flag it loudly. Everything downstream keys off from_file=False to tell
         # the user these numbers are ours, not theirs.
         warnings.append(
-            "no stackup in the board file; assuming 1.6 mm FR-4 with 35 um copper "
-            "(epsilon_r 4.4, tan_d 0.02). Solve results will be wrong until this is corrected."
+            "No stackup in the board file, so 1.6 mm FR-4 with 35 um copper was assumed. "
+            "Set it in KiCad under Board Setup, Physical Stackup, for delays and impedances you can trust."
         )
         out = []
         n = max(2, len(copper))
@@ -317,8 +317,8 @@ def _parse_stackup(root: Node, copper: list[CopperLayer], warnings: list[str]) -
         ]
         if missing:
             warnings.append(
-                f"dielectric layers {', '.join(missing)} have no epsilon_r; "
-                "assuming 4.4. A wrong epsilon_r shifts every resonance."
+                f"Dielectric layers {', '.join(missing)} have no permittivity, so 4.4 was "
+                "assumed. Set epsilon_r in the KiCad stackup."
             )
             for s in out:
                 if s.is_dielectric and s.thickness_mm > 0 and s.epsilon_r <= 0:
@@ -326,6 +326,24 @@ def _parse_stackup(root: Node, copper: list[CopperLayer], warnings: list[str]) -
                     s.loss_tangent = s.loss_tangent or 0.02
                     s.from_file = False
     return out
+
+
+#: Marks a pad drawn from an approximation, one entry per pad until _summarise_odd_pads folds
+#: them into one sentence. A board with a hundred custom pads used to show a hundred warnings.
+_ODD_PAD = "\x00odd-pad:"
+
+
+def _summarise_odd_pads(warnings: list[str]) -> None:
+    odd = [w[len(_ODD_PAD):] for w in warnings if w.startswith(_ODD_PAD)]
+    if not odd:
+        return
+    warnings[:] = [w for w in warnings if not w.startswith(_ODD_PAD)]
+    shown = ", ".join(odd[:5]) + (f" and {len(odd) - 5} more" if len(odd) > 5 else "")
+    many = len(odd) != 1
+    warnings.append(
+        f"{len(odd)} pad{'s' if many else ''} with a custom shape ({shown}) "
+        f"{'were' if many else 'was'} drawn as a rectangle, so copper there is approximate."
+    )
 
 
 def _pad_ring(pad: Node, px: float, py: float, angle: float,
@@ -354,14 +372,10 @@ def _pad_ring(pad: Node, px: float, py: float, angle: float,
         # Custom pads are an arbitrary set of primitives. Approximating by the bounding
         # rectangle of the anchor is wrong in detail but never *smaller* than the real pad,
         # which is the safe direction for connectivity. Flagged so it is not silent.
-        warnings.append(
-            f"pad {label or '?'} uses a custom shape; approximated by its anchor"
-        )
+        warnings.append(f"{_ODD_PAD}{label or '?'}")
         return g.rect(px, py, max(w, 0.1), max(h, 0.1), angle)
 
-    warnings.append(
-        f"pad {label or '?'} has unknown shape {shape!r}; approximated as a rectangle"
-    )
+    warnings.append(f"{_ODD_PAD}{label or '?'}")
     return g.rect(px, py, max(w, 0.1), max(h, 0.1), angle)
 
 
@@ -547,7 +561,8 @@ def _parse_outline(root: Node, warnings: list[str]) -> list[list[tuple[float, fl
 
     if not out:
         warnings.append(
-            "no Edge.Cuts outline found; the board extent was inferred from the copper"
+            "No Edge.Cuts outline, so the board edge was taken from the copper. Edge checks "
+            "may be off. Draw the outline on Edge.Cuts."
         )
     return out
 
@@ -623,6 +638,7 @@ def parse_board(root: Node) -> BoardModel:
         ))
 
     model.pads = _parse_footprints(root, nets, warnings)
+    _summarise_odd_pads(warnings)
 
     unfilled = 0
     for zone in children(root, "zone"):

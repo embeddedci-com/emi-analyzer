@@ -1,0 +1,22 @@
+[
+  {
+    "key": "max_frequency_hz",
+    "default": 1000000000.0,
+    "positive": true
+  },
+  {
+    "key": "epsilon_r",
+    "default": 0.0,
+    "positive": false
+  },
+  {
+    "key": "epsilon_r_at_hz",
+    "default": 1000000000.0,
+    "positive": true
+  },
+  {
+    "key": "via_ps",
+    "default": 2.0,
+    "positive": false
+  }
+]
