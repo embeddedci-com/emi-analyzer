@@ -104,6 +104,7 @@ def run_cable(ctx: StageContext) -> StageResult:
 
     results = []
     unassigned = []
+    notes: list[str] = []
     grid = _grid()
     for i, suggestion in enumerate(suggestions):
         spec = assignments.get(suggestion.ref)
@@ -129,6 +130,13 @@ def run_cable(ctx: StageContext) -> StageResult:
                      f"{suggestion.ref}: {cable.name} at {cable.length_m:g} m")
         budget = solver_budget(cable, grid, standard_id)
         tightest = budget.tightest()
+        if cable.cm_choke and not cable.cm_choke.from_curve:
+            notes.append(
+                f"{suggestion.ref}: the choke on {cable.name} is described by one number, so it "
+                f"is modelled as a resistance of {cable.cm_choke.z_ohm_at_100mhz:g} ohm at "
+                f"100 MHz rising with frequency. Above the ferrite's peak that overstates it. "
+                f"Give its datasheet impedance curve for R and X."
+            )
         results.append({
             "ref": suggestion.ref,
             "cable_id": cable.id,
@@ -168,7 +176,7 @@ def run_cable(ctx: StageContext) -> StageResult:
         "assumptions": ASSUMPTIONS,
         "cables": results,
         "unassigned": unassigned,
-        "notes": [],
+        "notes": notes,
     }
     if unassigned:
         document["notes"].append(

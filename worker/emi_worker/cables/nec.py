@@ -138,9 +138,15 @@ class Deck:
     #: They are different structures and resonate at different frequencies. Conflating them
     #: is how a solver gets validated against a prediction for something else.
     feed: str = "board"
-    #: Common-mode choke impedance at this frequency, as a series load on the first segment.
-    choke_ohm: float | None = None
-    #: A ground strap: an inductance to ground at the board end, which SHORTENS the antenna.
+    #: Common-mode choke impedance at this frequency, R + jX ohms, as a series load on the
+    #: first segment of the cable. ``library.Choke.z_at`` gives it from a datasheet curve.
+    choke_z: complex | None = None
+    #: A bond: the board strapped to the ground plane at the connector, through this
+    #: inductance. ``None`` leaves the board floating; 0 is a strap with no added inductance.
+    #:
+    #: It is a wire, not a load. It was once a load on segment 1 of the board arm, which is the
+    #: arm's open far end: a series element in a wire carrying no current, which moved nothing
+    #: and so passed any test of which way a bond moves the resonance.
     bond_nh: float | None = None
     #: Whether a perfect ground plane sits at z = 0.
     #:
@@ -183,11 +189,20 @@ class Deck:
         #   open       the wire ends in air; a dipole against the board arm
         #   ground     a drop wire to z = 0, which GE 1 treats as bonded to the plane
         #   equipment  the same drop, carrying CISPR 16-1-2's 150 ohm common-mode impedance
+        drop_segments = max(3, segments_for(self.height_m, self.frequency_hz) | 1)
         if self.far_end in ("ground", "equipment") and self.ground:
-            drop_segments = max(3, segments_for(self.height_m, self.frequency_hz) | 1)
             lines.append(
                 f"GW 3 {drop_segments} {self.length_m:.6f} 0 {self.height_m:.6f} "
                 f"{self.length_m:.6f} 0 0 {self.radius_m:.6f}")
+
+        # The bond: a strap from the junction, the board side of the feed, down to the plane.
+        # The feed is segment 1 of the cable, so the source then drives the cable against a
+        # grounded board. Its own length is the table height, and at 0.8 m that wire is about
+        # a microhenry by itself: a bond inductance well under that changes little, which is
+        # what a bond to a floor plane can do and no more.
+        if self.bond_nh is not None and self.ground and self.feed == "board":
+            lines.append(
+                f"GW 4 {drop_segments} 0 0 {self.height_m:.6f} 0 0 0 {self.radius_m:.6f}")
 
         # GE 1: a ground plane is present, which every measurement standard specifies. It has
         # to come after every GW, which is why the far end is decided above rather than below.
@@ -201,13 +216,15 @@ class Deck:
             # The 150 ohm sits in the drop, between the cable and the plane.
             lines.append("LD 4 3 1 1 150.0 0.0")
 
-        if self.choke_ohm:
-            # A choke is a series impedance at the board end. It can only ever reduce the
-            # current, which is what cable test 3 checks.
-            lines.append(f"LD 4 1 1 1 {self.choke_ohm:.6f} 0.0")
-        if self.bond_nh:
+        if self.choke_z:
+            # A choke is a series impedance at the board end. With a non-negative real part it
+            # can only ever reduce the current, which is what cable test 3 checks.
+            z = complex(self.choke_z)
+            lines.append(f"LD 4 1 1 1 {z.real:.6f} {z.imag:.6f}")
+        if self.bond_nh and self.ground and self.feed == "board":
+            # In the strap's top segment, at the board: where a bond's inductance is.
             reactance = 2 * math.pi * self.frequency_hz * self.bond_nh * 1e-9
-            lines.append(f"LD 4 2 1 1 0.0 {reactance:.6f}")
+            lines.append(f"LD 4 4 1 1 0.0 {reactance:.6f}")
 
         # The feed sits on the junction between the two arms: segment 1 of the cable.
         lines.append("EX 0 1 1 0 1.0 0.0")

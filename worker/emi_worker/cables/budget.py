@@ -223,7 +223,7 @@ def solver_budget(
         deck = nec.Deck(
             length_m=cable.length_m, frequency_hz=f, height_m=height_m,
             board_span_m=board_span_m, far_end=cable.far_end, ring=ring,
-            choke_ohm=(cable.cm_choke.z_ohm_at_100mhz * f / 100e6) if cable.cm_choke else None,
+            choke_z=cable.cm_choke.z_at(f) if cable.cm_choke else None,
         )
         results.append((f, nec.run(deck)))
 

@@ -155,9 +155,12 @@ def antenna_terms(
     z_imag: list[float] = []
     e_per_amp: list[float] = []
     for f in frequencies_hz:
+        # The choke too, as the budget has it. Leaving it out made a choked cable's Tier B
+        # emission identical to an unchoked one's.
         r = nec.run(nec.Deck(
             length_m=length_m, frequency_hz=float(f), height_m=height_m,
             board_span_m=board_span_m, far_end=cable.far_end, ring=ring,
+            choke_z=cable.cm_choke.z_at(float(f)) if cable.cm_choke else None,
         ))
         z_real.append(r.z_in.real)
         z_imag.append(r.z_in.imag)

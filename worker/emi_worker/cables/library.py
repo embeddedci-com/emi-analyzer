@@ -5,14 +5,18 @@ how that shield is bonded, and what the far end looks like. The far end is the p
 people expect least and it matters most — open or grounded moves a 1 m cable's first resonance
 by about a factor of two.
 
-**A ground strap is a bond, not a cable.** It is an inductance to ground that shortens the
-antenna, and modelling it as a radiating wire would get the sign of its effect wrong.
+**A ground strap is a bond, not a cable.** It ties the board to the ground plane at the
+connector, and that turns the cable from a dipole against the board into a line over the plane.
+Which way the first resonance moves depends on the far end: down for an open one (a half wave
+becomes a quarter wave), up for a grounded one (both ends on the plane). ``nec.Deck.bond_nh``
+models it as the strap it is.
 """
 
 from __future__ import annotations
 
 import functools
 import json
+import math
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -37,7 +41,45 @@ class CableError(ValueError):
 
 @dataclass(frozen=True)
 class Choke:
-    z_ohm_at_100mhz: float
+    """A common-mode choke at the board end of the cable, as a series impedance.
+
+    **From a datasheet curve**, ``impedance``: (frequency, R, X) points, the common-mode
+    columns of a ferrite's impedance table. A ferrite is inductive below its peak, resistive
+    at it and capacitive above, so X changes sign across the band and the curve is the only
+    honest description. R and X are interpolated linearly in log frequency between points and
+    held at the end values outside them, which the budget states.
+
+    **From one number**, ``z_ohm_at_100mhz`` alone: a simplification, not a model. The choke is
+    taken as a pure resistance of that value at 100 MHz, scaled linearly with frequency. That
+    is roughly right for the rising, inductive side of a ferrite and wrong above its peak,
+    where a real part falls and this keeps climbing (10x the 100 MHz figure at 1 GHz). A
+    curve replaces it whenever one is given.
+    """
+
+    z_ohm_at_100mhz: float | None = None
+    #: (f_hz, r_ohm, x_ohm), sorted by frequency.
+    impedance: tuple[tuple[float, float, float], ...] = ()
+
+    @property
+    def from_curve(self) -> bool:
+        return bool(self.impedance)
+
+    def z_at(self, frequency_hz: float) -> complex:
+        """The choke's series impedance at one frequency, ohms."""
+        if frequency_hz <= 0:
+            raise ValueError("frequency must be positive")
+        pts = self.impedance
+        if not pts:
+            return complex((self.z_ohm_at_100mhz or 0.0) * frequency_hz / 100e6, 0.0)
+        if frequency_hz <= pts[0][0]:
+            return complex(pts[0][1], pts[0][2])
+        if frequency_hz >= pts[-1][0]:
+            return complex(pts[-1][1], pts[-1][2])
+        for (f0, r0, x0), (f1, r1, x1) in zip(pts, pts[1:]):
+            if f0 <= frequency_hz <= f1:
+                t = math.log(frequency_hz / f0) / math.log(f1 / f0)
+                return complex(r0 + t * (r1 - r0), x0 + t * (x1 - x0))
+        raise AssertionError("unreachable: the curve is sorted and brackets the frequency")
 
 
 @dataclass(frozen=True)
@@ -121,10 +163,7 @@ def parse(doc: dict) -> Cable:
     choke_raw = doc.get("cm_choke")
     choke = None
     if choke_raw is not None:
-        z = (choke_raw or {}).get("z_ohm_at_100mhz")
-        if not isinstance(z, (int, float)) or isinstance(z, bool) or z <= 0:
-            raise CableError(f"{doc['id']}: cm_choke needs a positive z_ohm_at_100mhz")
-        choke = Choke(z_ohm_at_100mhz=float(z))
+        choke = _parse_choke(doc["id"], choke_raw)
 
     lcl = doc.get("balance_lcl_db")
     if lcl is not None and (not isinstance(lcl, (int, float)) or isinstance(lcl, bool)):
@@ -144,6 +183,41 @@ def parse(doc: dict) -> Cable:
         balance_lcl_db=None if lcl is None else float(lcl),
         cm_choke=choke,
     )
+
+
+def _is_number(v) -> bool:
+    return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+
+
+def _parse_choke(cable_id: str, raw) -> Choke:
+    """``{"impedance": [{"f_hz", "r_ohm", "x_ohm"}, ...]}`` or ``{"z_ohm_at_100mhz"}``."""
+    if not isinstance(raw, dict):
+        raise CableError(f"{cable_id}: cm_choke must be an object")
+    curve = raw.get("impedance")
+    if curve is not None:
+        if not isinstance(curve, list) or len(curve) < 2:
+            raise CableError(
+                f"{cable_id}: cm_choke.impedance needs at least two points from the datasheet")
+        pts = []
+        for p in curve:
+            if not isinstance(p, dict) or not all(_is_number(p.get(k))
+                                                  for k in ("f_hz", "r_ohm", "x_ohm")):
+                raise CableError(
+                    f"{cable_id}: every cm_choke.impedance point needs f_hz, r_ohm and x_ohm")
+            if p["f_hz"] <= 0 or p["r_ohm"] < 0:
+                raise CableError(
+                    f"{cable_id}: a choke point needs a positive frequency and a resistance of "
+                    f"zero or more; a negative resistance would add energy")
+            pts.append((float(p["f_hz"]), float(p["r_ohm"]), float(p["x_ohm"])))
+        pts.sort()
+        if any(b[0] == a[0] for a, b in zip(pts, pts[1:])):
+            raise CableError(f"{cable_id}: cm_choke.impedance repeats a frequency")
+        return Choke(impedance=tuple(pts))
+    z = raw.get("z_ohm_at_100mhz")
+    if not _is_number(z) or z <= 0:
+        raise CableError(
+            f"{cable_id}: cm_choke needs an impedance curve or a positive z_ohm_at_100mhz")
+    return Choke(z_ohm_at_100mhz=float(z))
 
 
 @functools.lru_cache(maxsize=1)
