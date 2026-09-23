@@ -101,6 +101,7 @@ func (s *Service) Mount(mux *http.ServeMux, prefix string, userAuth func(http.Ha
 	handle("POST "+p+"/emi-agent/deregister", s.requireWorkerKey(s.handleWorkerDeregister))
 	handle("GET "+p+"/emi-agent/runs", s.requireWorkerKey(s.handleWorkerListRuns))
 	handle("POST "+p+"/emi-agent/runs/{run_id}/token", s.requireWorkerKey(s.handleMintRunToken))
+	handle("POST "+p+"/emi-agent/runs/{run_id}/token/refresh", s.requireWorkerKey(s.handleRefreshRunToken))
 
 	// --- Run-scoped (short-lived run token) ---
 	handle("POST "+p+"/emi-agent/runs/{run_id}/claim", s.requireRunToken(s.handleClaimRun))

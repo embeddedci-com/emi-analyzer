@@ -22,8 +22,9 @@ const (
 // embeddedci-server's "agent_job" token type for build jobs.
 const TokenTypeEMIRun = "emi_run"
 
-// RunTokenTTL matches the 6 h default of build-job tokens. A solve can outlive this, which
-// is intentional: the worker re-mints, and a stale token cannot be replayed for a day.
+// RunTokenTTL is how long one run token lasts. A solve can outlive it, which is intentional:
+// the worker asks for a fresh one at POST .../token/refresh (see handleRefreshRunToken), and a
+// stale token cannot be replayed for a day.
 const RunTokenTTL = 6 * time.Hour
 
 // UserIdentity is the authenticated human behind a request. The host supplies it; in

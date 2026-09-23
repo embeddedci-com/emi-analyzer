@@ -144,34 +144,91 @@ func (s *Service) handleMintRunToken(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusConflict, "run has already finished")
 		return
 	}
-	if run.OwnerAPIKeyKid != "" && run.OwnerAPIKeyKid != key.Kid && run.Status == StatusInProgress {
+	// Minting again for a run this key already holds is a refresh, not a second claim.
+	if heldBy(run, key.Kid) {
+		s.writeRunToken(w, run.ID, proj.OrganizationID, run.JTIKey)
+		return
+	}
+	if run.OwnerAPIKeyKid != "" && run.OwnerAPIKeyKid != key.Kid && !run.Status.Claimable() {
 		writeErr(w, http.StatusConflict, "run is owned by another worker")
 		return
 	}
 
+	// ClaimRun is the atomic step: of two workers minting for one run, exactly one changes
+	// the row, and only that one is handed a token. The jti is chosen first because the row
+	// records it, and a token is only worth anything once it matches the row.
 	jti := newID()
-	tok, exp, err := s.mintRunToken(run.ID, proj.OrganizationID, jti)
+	if _, err := s.deps.Store.ClaimRun(r.Context(), run.ID, key.Kid, jti, s.deps.now()); err != nil {
+		writeStoreErr(w, err)
+		return
+	}
+	s.writeRunToken(w, run.ID, proj.OrganizationID, jti)
+}
+
+// handleRefreshRunToken hands the worker that holds a run a fresh token for it.
+//
+// A run token lives RunTokenTTL and a solve can take longer. Minting again used to be the
+// answer, and it never worked: ClaimRun refuses a run that is already in progress, and the
+// token that came back carried a new jti the row did not have, so every call made with it was
+// answered 409 as if the run had been reassigned.
+//
+// The new token carries the jti the run already has, and only its expiry is new. So the old
+// token keeps working until it expires on its own: a progress post already in flight when the
+// worker swaps tokens is not refused, which rotating the jti would do, and the worker would
+// read that 409 as "reassigned" and abandon a solve hours in. Taking a run away from a worker
+// is still what changes the jti (a retry clears it, the next claim sets a new one), and a
+// refresh never succeeds for a run this key does not hold at that moment.
+//
+// Authenticated by the worker key, not the run token, so a worker whose token has already
+// lapsed can still recover the run it is working on.
+func (s *Service) handleRefreshRunToken(w http.ResponseWriter, r *http.Request) {
+	key, _ := agentFrom(r.Context())
+	run, err := s.deps.Store.GetRun(r.Context(), r.PathValue("run_id"))
 	if err != nil {
+		writeStoreErr(w, err)
+		return
+	}
+	proj, err := s.deps.Store.GetProject(r.Context(), run.ProjectID)
+	if err != nil {
+		writeStoreErr(w, err)
+		return
+	}
+	if key.OrganizationID != "" && proj.OrganizationID != key.OrganizationID {
+		writeErr(w, http.StatusNotFound, "not found")
+		return
+	}
+	if run.Status.Terminal() {
+		writeErr(w, http.StatusConflict, "run has already finished")
+		return
+	}
+	if !heldBy(run, key.Kid) {
+		writeErr(w, http.StatusConflict, "run is not held by this worker")
+		return
+	}
+	s.writeRunToken(w, run.ID, proj.OrganizationID, run.JTIKey)
+}
+
+// heldBy reports whether the worker key kid currently holds run: it claimed it, nothing has
+// taken it away since, and the run is still being worked on.
+func heldBy(run *Run, kid string) bool {
+	return kid != "" && run.OwnerAPIKeyKid == kid && run.JTIKey != "" &&
+		(run.Status == StatusInProgress || run.Status == StatusStopping)
+}
+
+// writeRunToken signs a run token and writes the response both mint and refresh return.
+func (s *Service) writeRunToken(w http.ResponseWriter, runID, orgID, jti string) {
+	tok, exp, err := s.mintRunToken(runID, orgID, jti)
+	if err != nil {
+		s.deps.log().Error("emi: signing a run token failed", "err", err)
 		writeErr(w, http.StatusInternalServerError, "failed to mint run token")
 		return
 	}
-
-	// Record intent to own before handing out the token. ClaimRun then flips the status.
-	if _, err := s.deps.Store.ClaimRun(r.Context(), run.ID, key.Kid, jti, s.deps.now()); err != nil {
-		// Not fatal for the mint itself when the run is already ours and in progress
-		// (a worker re-minting after a token expiry mid-solve).
-		if !(run.OwnerAPIKeyKid == key.Kid && run.Status == StatusInProgress) {
-			writeStoreErr(w, err)
-			return
-		}
-	}
-
 	writeJSON(w, http.StatusOK, map[string]any{
 		"token":      tok,
-		"run_id":     run.ID,
+		"run_id":     runID,
 		"jti":        jti,
 		"expires_at": exp.UTC().Format(time.RFC3339),
-		"expires_in": int(time.Until(exp).Seconds()),
+		"expires_in": int(exp.Sub(s.deps.now()).Seconds()),
 	})
 }
 
