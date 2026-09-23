@@ -52,14 +52,19 @@ boundaries — then fills, grades and pads for the PML.
 
 - **`dx_um` is a floor on cell size, not the spacing.** The mesher puts a line at every copper
   edge, and a routed board has edges far closer together than any preset. The spikes measured the
-  consequence: the in-plane axes come out 2.7–4.0× *denser* than a uniform grid over the same
-  box, not sparser. The cost estimator's "fill factor" is therefore greater than one — 3.55 to
-  8.75 at the coarse preset — and the UI passes the per-preset **minimum**, because the panel
-  says "At least".
+  consequence: the in-plane axes come out 2.0–4.0× *denser* than a uniform grid over the same
+  box, not sparser. The cost estimator's "fill factor" is therefore greater than one — 4.67 to
+  8.65 at the coarse preset on four real boards (September 2026) — and the UI passes the
+  per-preset **minimum**, because the panel says "At least".
 - **`merge_close` collapses lines closer than `dx_um / 4`**, which makes the smallest in-plane
-  cell exactly `dx_um / 4`. Since the timestep is set by the smallest cell anywhere, the
-  in-plane preset sets the timestep — *unless* `dz` is fine enough to win, which on a real
-  stackup it usually is.
+  cell `dx_um / 4` on any routed board. Since the timestep is set by the smallest cell anywhere,
+  the in-plane preset usually sets the timestep, not `dz`: 37.5 um against 100 um at coarse. The
+  estimator assumed `min(dx, dy, dz)` until September 2026, which put step counts 2–3× low.
+- **Copper is a zero-thickness sheet on the face of its copper that touches the dielectric**, so
+  each dielectric between two sheets is its stated thickness, and **straight trace edges get
+  the thirds rule**: a line a third of a cell inside the copper, two thirds outside, none on the
+  edge. Without either, a 50 ohm microstrip came out at 40 or 56 ohm
+  ([verification](verification/solver-and-components.md)).
 
 ### 2.2 Excitation band
 
@@ -86,6 +91,26 @@ Both halves of that definition were necessary: counting from the first sample ca
 unstable, because the rise into the excitation peak is enormous by construction; comparing
 against the global peak finds nothing, because a diverging run's largest energy is its last.
 
+The series is judged from the step the source has finished, which openEMS prints (the model's
+2.86/fc is the fallback). Before that, energy may do anything: a wideband pulse is one cycle of
+its carrier and dips more than 20 dB between lobes. After it, a passive structure can only ring
+down, so the floor arms at the first sample past the source and a run that grows from the start
+is caught too.
+
+### 2.5 A finished run is not always a settled one
+
+**The end criterion is the runner's, not openEMS's.** openEMS checks its own (`end_criteria =
+1e-4`, an energy ratio, -40 dB) against the running maximum while the pulse is still on, so a
+dip between two lobes can end a run early: it did on a 6 mm region of a real board, 51k steps
+into a 67k-step pulse, and the current openEMS build does the same. The solve therefore gives
+openEMS an unreachable criterion and `run_openems(stop_below_db=-40)` writes the `ABORT` file
+openEMS polls for once the source has finished and the energy is 40 dB down; openEMS then ends
+normally and writes every dump.
+
+`RunResult.converged` is false when openEMS reached its timestep cap, and when it stopped before
+its own source had finished. Either way the solve publishes the maps with `run.unusable_reason`,
+marks every derived number unusable, and the compliance estimate refuses it.
+
 ---
 
 ## 3. Components
@@ -95,9 +120,12 @@ against the global peak finds nothing, because a diverging run's largest energy 
 - **`mlcc_family`** rather than enumerated parts. ESL is a property of the package; ESR is
   interpolated log-log over C. This took library coverage on the four real boards from 46 % to
   99 %.
-- **Three single-value elements in adjacent cells, not one R-L-C.** CSXCAD 0.6.2 has no
-  `LEtype`, so a lumped element's R, C and L are in **parallel**. A series model has to be built
-  from three cells.
+- **One series element (`LEtype="1"`) across the pad gap, and only on a solver that models an
+  inductor.** openEMS 0.0.35, the Debian package the released image uses, models a lumped R or
+  C and skips an element with only L. The earlier construction, R, L and C in three adjacent
+  cells, was therefore an open circuit. `run.solver_has_series_rlc` asks the binary; on 0.0.35 no
+  capacitor is placed and the result says so. An image built with `OPENEMS_SOURCE=build` models
+  them ([verification](verification/solver-and-components.md)).
 - **Off by default.** With `model_components` unset a solve is bit-for-bit what it was before
   component models existed.
 - Every run carries **resolved copies** of the components it used, so editing one later never

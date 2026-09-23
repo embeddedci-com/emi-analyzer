@@ -15,7 +15,9 @@ import pytest
 
 from emi_worker.estimate import (
     BYTES_PER_CELL,
+    IN_PLANE_MIN_CELL_FRACTION,
     MAX_FILL_FACTOR,
+    MESH_MULTIPLIER_FLOOR,
     EstimateError,
     EstimateInput,
     estimate,
@@ -38,6 +40,12 @@ def test_matches_shared_fixtures(name, inp, expected):
     assert got.dt_seconds == pytest.approx(expected["dt_seconds"], rel=1e-12)
     assert got.sim_time_seconds == pytest.approx(expected["sim_time_seconds"], rel=1e-12)
     assert got.eta_seconds == pytest.approx(expected["eta_seconds"], rel=1e-12)
+
+
+def test_shared_constants_match_the_fixtures():
+    doc = json.loads(FIXTURES.read_text())
+    assert doc["in_plane_min_cell_fraction"] == IN_PLANE_MIN_CELL_FRACTION
+    assert doc["mesh_multiplier_floor"] == MESH_MULTIPLIER_FLOOR
 
 
 def test_vertical_mesh_sets_the_timestep():
@@ -89,7 +97,9 @@ def test_whole_board_headline_numbers():
     ))
     assert est.cells == 1_920_000_000
     assert est.ram_bytes / 1e9 == pytest.approx(138.24, rel=1e-3)
-    assert est.eta_seconds / 86400 == pytest.approx(69.2, rel=0.02)
+    # 69 days while the timestep came from the 25 um vertical cell; the in-plane 12.5 um the
+    # mesher really makes doubles it.
+    assert est.eta_seconds / 86400 == pytest.approx(138.5, rel=0.02)
 
 
 def test_roi_headline_numbers():
@@ -99,7 +109,26 @@ def test_roi_headline_numbers():
     ))
     assert est.cells == pytest.approx(12e6, rel=0.01)
     assert est.ram_bytes / 1e9 == pytest.approx(0.86, rel=0.02)
-    assert est.eta_seconds / 3600 == pytest.approx(10.4, rel=0.02)
+    # 10.4 h before the timestep followed the mesher's quarter-cell minimum; 12.5 um in
+    # plane now sets it rather than the 25 um vertical cell.
+    assert est.eta_seconds / 3600 == pytest.approx(20.8, rel=0.02)
+
+
+def test_the_in_plane_fraction_is_the_meshers():
+    """The estimator's smallest cell is the mesher's merge distance, or the two disagree."""
+    from emi_worker.estimate import IN_PLANE_MIN_CELL_FRACTION
+    from emi_worker.openems.mesh import MERGE_FRACTION
+
+    assert IN_PLANE_MIN_CELL_FRACTION == MERGE_FRACTION
+
+
+def test_a_coarse_in_plane_cell_still_sets_the_timestep_through_its_quarter():
+    """dx 150 um meshes down to 37.5 um cells, which beat a 100 um vertical cell."""
+    est = estimate(EstimateInput(
+        roi_x_mm=10, roi_y_mm=10, roi_z_mm=11.6,
+        dx_um=150, dy_um=150, dz_um=100, f_min_hz=30e6,
+    ))
+    assert est.dt_seconds == pytest.approx(37.5e-6 / (299_792_458.0 * math.sqrt(3)), rel=1e-12)
 
 
 def test_courant_limit_is_exact():

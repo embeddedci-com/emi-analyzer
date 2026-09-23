@@ -174,3 +174,44 @@ def test_a_solve_that_modelled_nothing_says_so_with_an_empty_list(solved):
     predates the list', and format_version already answers the second question."""
     art = post.build_artifacts(str(solved), {"F.Cu": "Hf_F_Cu"}, [200e6, 400e6], ["p1"])
     assert art.manifest["modelled_parts"] == []
+
+
+def test_an_unconverged_run_marks_every_derived_number_unusable(solved):
+    """The maps are still written; the port spectra and cable transfers are not usable."""
+    t, v = _tone(200e6, 0.5)
+    _write_probe(solved / "cable_J1_ut", t, v)
+    cable = [{"ref": "J1", "probe": "cable_J1_ut"}]
+    for converged in (True, False):
+        art = post.build_artifacts(str(solved), {"F.Cu": "Hf_F_Cu"}, [200e6, 400e6], ["p1"],
+                                   cable_ports=cable, run_meta={"converged": converged})
+        ports = json.loads(art.files["ports.json"])["ports"]
+        transfer = json.loads(art.files["cable_ports.json"])["ports"][0]["transfer"]
+        assert ports[0]["usable"] is converged
+        assert all(u is converged for u in transfer["usable"])
+        assert art.manifest["layers"], "the field maps are written either way"
+
+
+def test_a_dump_from_a_current_openems_reads_the_same(tmp_path: Path):
+    """The build writes one complex dataset per frequency, (3, x, y, z), and says so."""
+    import h5py
+
+    x, y = np.linspace(0, 1e-3, 4), np.linspace(0, 2e-3, 3)
+    field = np.arange(3 * 4 * 3, dtype=np.float32).reshape(3, 4, 3, 1)
+    old, new = tmp_path / "old.h5", tmp_path / "new.h5"
+    with h5py.File(old, "w") as f:
+        for k, v in (("x", x), ("y", y), ("z", [5e-4])):
+            f[f"Mesh/{k}"] = v
+        fd = f.create_group("FieldData/FD")
+        fd.attrs["frequency"] = [1e8]
+        fd["f0_real"] = field.transpose(0, 3, 2, 1)
+        fd["f0_imag"] = np.zeros_like(field.transpose(0, 3, 2, 1))
+    with h5py.File(new, "w") as f:
+        for k, v in (("x", x), ("y", y), ("z", [5e-4])):
+            f[f"Mesh/{k}"] = v
+        fd = f.create_group("FieldData/FD")
+        fd.attrs["frequency"] = [1e8]
+        fd["f0"] = field.astype(np.complex64)
+        fd["f0"].attrs["d_order"] = "NXYZ"
+    a, b = post.read_fd_dump(str(old))[0], post.read_fd_dump(str(new))[0]
+    assert b.magnitude.shape == (3, 4)
+    np.testing.assert_allclose(a.magnitude, b.magnitude)

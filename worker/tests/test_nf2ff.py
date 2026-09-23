@@ -366,6 +366,16 @@ def test_the_far_field_document_is_per_volt_and_refuses_an_empty_source():
     assert "e_max_v_per_m" not in doc, "the raw pulse units must not look like V/m"
 
 
+def test_an_unconverged_run_has_no_usable_far_field():
+    from emi_worker.openems.model import Port
+    from emi_worker.stages.solve import far_field_document
+
+    field = {"frequencies_hz": [100e6, 200e6], "e_max_v_per_m": [2e-3, 1e-3]}
+    source = {"v_src": np.array([4.0 + 0j, 2.0 + 0j]), "z_in": np.array([30 + 40j, 30 + 0j])}
+    doc = far_field_document(field, source, [Port("p1", 0, 0, "F.Cu")],
+                             {"faces_mm": [0, 0, 0, 1, 1, 1]}, converged=False)
+    assert doc["usable"] == [False, False]
+    assert doc["e_per_volt"] == [0.0, 0.0]
 def test_a_port_reading_negative_resistance_is_truncation_not_a_result():
     """A passive port cannot have a negative resistance. On a real board stopped at -40 dB the
     port read -25 kOhm against |Z| = 25.5 kOhm at 30 MHz: the record ended before the board

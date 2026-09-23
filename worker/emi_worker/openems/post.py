@@ -11,7 +11,9 @@ openEMS's frequency-domain dump layout, verified against a real run:
     /FieldData/FD/f<N>_imag           same
     /Mesh/x, /Mesh/y, /Mesh/z         line coordinates, in **metres**
 
-The mesh in the file is the *dump box's* subgrid, not the whole simulation grid.
+The mesh in the file is the *dump box's* subgrid, not the whole simulation grid. A current
+openEMS build writes ``/FieldData/FD/f<N>`` instead, one complex dataset of shape
+(3, nx, ny, nz) with ``d_order = "NXYZ"``; ``read_fd_dump`` reads both.
 """
 
 from __future__ import annotations
@@ -85,8 +87,20 @@ def read_fd_dump(path: str) -> list[FieldGrid]:
         z_mm = np.asarray(f["Mesh/z"][:], dtype=np.float64) * 1000.0
 
         for i, freq in enumerate(freqs):
-            re = np.asarray(fd[f"f{i}_real"][:], dtype=np.float64)
-            im = np.asarray(fd[f"f{i}_imag"][:], dtype=np.float64)
+            if f"f{i}_real" in fd:
+                re = np.asarray(fd[f"f{i}_real"][:], dtype=np.float64)
+                im = np.asarray(fd[f"f{i}_imag"][:], dtype=np.float64)
+            else:
+                # A current openEMS (OPENEMS_SOURCE=build) writes one complex dataset per
+                # frequency, ordered (components, x, y, z) and saying so in ``d_order``. The
+                # first run on that build failed here, on "object 'f0_real' doesn't exist".
+                ds = fd[f"f{i}"]
+                order = ds.attrs.get("d_order", b"NXYZ")
+                order = order.decode() if isinstance(order, bytes) else str(order)
+                if order != "NXYZ":
+                    raise ValueError(f"{os.path.basename(path)} has an unknown order {order!r}")
+                c = np.asarray(ds[:]).transpose(0, 3, 2, 1)
+                re, im = c.real.astype(np.float64), c.imag.astype(np.float64)
             # (components, nz, ny, nx) -> magnitude of the complex vector, per cell.
             mag = np.sqrt((re ** 2 + im ** 2).sum(axis=0))
             if mag.ndim == 3:
@@ -307,8 +321,14 @@ def build_artifacts(
     modelled_parts: list[dict] | None = None,
     cable_ports: list[dict] | None = None,
 ) -> PostResult:
-    """Collect openEMS output into the browser-facing artifact set."""
+    """Collect openEMS output into the browser-facing artifact set.
+
+    ``run_meta["converged"] is False`` marks every derived number unusable: the cable transfer
+    functions point by point, the port spectra as a whole. The field maps are still written,
+    since they are what the run's own status is shown beside.
+    """
     result = PostResult()
+    converged = (run_meta or {}).get("converged") is not False
     layers: list[dict] = []
 
     # One shared dB reference across every layer and frequency, so the maps are comparable
@@ -386,6 +406,8 @@ def build_artifacts(
             u, i = read_probe(u_path), read_probe(i_path)
             ports.append({
                 "port": port,
+                # A driver attached to an unconverged run would re-weight a transient.
+                "usable": converged,
                 "at_dump_frequencies": port_spectra(u, i, frequencies),
                 "dense": port_spectra(u, i, dense) if dense else None,
             })
@@ -411,11 +433,14 @@ def build_artifacts(
                 log.warning("cable port %s has no probe output", meta.get("ref"))
                 continue
             try:
+                transfer = cable_transfer(
+                    read_probe(gap_path), read_probe(u_path), read_probe(i_path), dense)
+                if not converged:
+                    transfer["usable"] = [False] * len(transfer["usable"])
                 cable_transfers.append({
                     **{k: v for k, v in meta.items() if k != "probe"},
                     "driven_by": driver_port,
-                    "transfer": cable_transfer(
-                        read_probe(gap_path), read_probe(u_path), read_probe(i_path), dense),
+                    "transfer": transfer,
                 })
             except (OSError, ValueError) as exc:
                 log.warning("could not read cable port %s: %s", meta.get("ref"), exc)

@@ -32,11 +32,12 @@ type EstimateInput struct {
 	ROIYmm float64 `json:"roi_y_mm"`
 	ROIZmm float64 `json:"roi_z_mm"`
 
-	// Smallest cell per axis, in micrometres.
+	// Requested cell size per axis, in micrometres: the mesh preset.
 	//
-	// DZum is usually the one that hurts: several cells have to fit through a 0.1 mm
-	// dielectric, so it lands around 20-25 um while the in-plane resolution is 50 um --
-	// and the Courant limit keys off the smallest cell in *any* axis.
+	// The Courant limit keys off the smallest cell in *any* axis, and in plane that is a
+	// quarter of the request (InPlaneMinCellFraction), because copper edges put grid lines
+	// that close on any routed board. So it is usually dx, not dz, that sets the timestep:
+	// 12.5 um in plane against 25 um vertically at the fine preset.
 	DXum float64 `json:"dx_um"`
 	DYum float64 `json:"dy_um"`
 	DZum float64 `json:"dz_um"`
@@ -53,14 +54,14 @@ type EstimateInput struct {
 	// It is usually GREATER than 1, which is the opposite of what this field originally
 	// assumed and of what its name suggests. DXum and friends are a floor on cell size, not
 	// the spacing: the mesher puts a line at every copper edge, and a routed board has edges
-	// far closer together than any preset. Measured on four real boards
-	// (worker/scripts/measure_fill_factor.py), the in-plane axes come out 2.7-4.0x denser
-	// than uniform while the vertical axis, whose air is graded coarsely, comes out
-	// 0.27-0.58x. In-plane wins:
+	// far closer together than any preset. Measured on four real boards in 4-10 mm regions, the
+	// size of a coupon (worker/scripts/measure_fill_factor.py, September 2026), the in-plane
+	// axes come out 2.2-4.4x denser than uniform while the vertical axis, whose air is graded
+	// coarsely, comes out 0.23-0.46x. In-plane wins:
 	//
-	//	coarse  min 3.55  median 6.11  max 8.75
-	//	normal  min 1.49  median 2.99  max 4.79
-	//	fine    min 0.70  median 1.64  max 2.89
+	//	coarse  min 4.85  median 6.93  max 8.74
+	//	normal  min 2.33  median 4.11  max 4.63
+	//	fine    min 1.23  median 2.65  max 3.03
 	//
 	// The preset dependence is not noise: feature spacing is set by the board, so the coarser
 	// the request, the more the copper dominates.
@@ -82,6 +83,7 @@ var errBadEstimateInput = errors.New("emi: estimate input must have positive ext
 //
 // Every number here follows from four facts and nothing else:
 //
+//	dmin    = min(dx/4, dy/4, dz)    the smallest cell the mesher makes
 //	dt      = dmin / (c * sqrt(3))   Courant limit, set by the SMALLEST cell in any axis
 //	T_sim   = periods / f_min        long enough to resolve the lowest frequency
 //	steps   = T_sim / dt
@@ -90,6 +92,12 @@ var errBadEstimateInput = errors.New("emi: estimate input must have positive ext
 // It is intentionally not clever. A user who is told "1.9 billion cells" should be able to
 // reproduce that on paper, because the alternative is a black box telling them their board
 // will take fifty days.
+// InPlaneMinCellFraction is the smallest in-plane cell as a fraction of the requested one.
+// The mesher merges lines closer than a quarter of dx, and copper puts lines that close
+// everywhere on a routed board, so the cell that sets the timestep is dx/4, not dx. Taking
+// min(dx, dy, dz) put the step count 2.0-2.7x low on four real boards.
+const InPlaneMinCellFraction = 0.25
+
 // MaxFillFactor is an upper bound on FillFactor, to catch a caller passing a cell count by
 // mistake rather than a ratio. The largest value measured on a real board is 8.75.
 const MaxFillFactor = 50.0
@@ -132,8 +140,10 @@ func (in EstimateInput) Estimate() (Estimate, error) {
 	nz := int64(math.Ceil(in.ROIZmm * 1000.0 / in.DZum))
 	cells := int64(math.Ceil(float64(nx) * float64(ny) * float64(nz) * fill))
 
-	// Courant limit, from the smallest cell in any axis, converted um -> m.
-	dminM := math.Min(in.DXum, math.Min(in.DYum, in.DZum)) * 1e-6
+	// Courant limit, from the smallest cell in any axis, converted um -> m. In plane that is a
+	// quarter of the requested cell: see InPlaneMinCellFraction.
+	dminM := math.Min(in.DXum*InPlaneMinCellFraction,
+		math.Min(in.DYum*InPlaneMinCellFraction, in.DZum)) * 1e-6
 	dt := dminM / (speedOfLight * math.Sqrt(3))
 
 	simTime := periods / in.FMinHz

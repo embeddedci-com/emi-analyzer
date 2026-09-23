@@ -34,7 +34,15 @@ MAX_FILL_FACTOR = 50.0
 #: Per-preset lower bounds on the mesh multiplier, from the measurements above, rounded down.
 #: These are the *minimum* observed rather than the median on purpose: the panel that shows
 #: this says "At least", and a median would be wrong for half of all boards.
-MESH_MULTIPLIER_FLOOR = {"coarse": 3.5, "normal": 1.4, "fine": 0.7}
+MESH_MULTIPLIER_FLOOR = {"coarse": 4.8, "normal": 2.3, "fine": 1.2}
+
+#: The smallest in-plane cell as a fraction of the requested one. The mesher merges lines
+#: closer than this (``mesh.MERGE_FRACTION``), and on a routed board copper edges put lines
+#: that close everywhere, so the smallest cell -- which sets the timestep -- is a quarter of
+#: dx, not dx. Measured on four real boards, 36 regions of 4-10 mm: the smallest cell was
+#: within 0.4 % of dx/4 in every one. Taking min(dx, dy, dz), as this did, put the step count
+#: 2.0x low at the fine preset and 2.7x low at the others.
+IN_PLANE_MIN_CELL_FRACTION = 0.25
 
 
 @dataclass(frozen=True)
@@ -44,9 +52,10 @@ class EstimateInput:
     Extents are in millimetres and include the air box above and below the board.
     Resolutions are in micrometres.
 
-    ``dz_um`` is usually the one that hurts: several cells have to fit through a 0.1 mm
-    dielectric, so it lands around 20-25 um while the in-plane resolution is 50 um -- and
-    the Courant limit keys off the smallest cell in *any* axis.
+    The Courant limit keys off the smallest cell in *any* axis, and in plane that is a
+    quarter of the requested resolution (``IN_PLANE_MIN_CELL_FRACTION``), because copper edges
+    put grid lines that close on any routed board. So it is usually ``dx_um``, not ``dz_um``,
+    that sets the timestep: 12.5 um in plane against 25 um vertically at the fine preset.
     """
 
     roi_x_mm: float
@@ -65,14 +74,19 @@ class EstimateInput:
     #: **This is usually greater than 1**, which is the opposite of what the name suggests
     #: and of what this model originally assumed. ``dx_um`` is a *floor* on cell size, not
     #: the spacing: the mesher puts a line at every copper edge, and a routed board has
-    #: edges far closer together than any preset. Measured on the four boards in
-    #: real boards (``scripts/measure_fill_factor.py``), the in-plane axes come out
-    #: 2.7-4.0x denser than uniform while the vertical axis, whose air is graded coarsely,
-    #: comes out 0.27-0.58x. In-plane wins:
+    #: edges far closer together than any preset. Measured on four real boards in regions of
+    #: 4, 6 and 10 mm, the size of a coupon rather than a board
+    #: (``scripts/measure_fill_factor.py``, September 2026, after the mesher's grading fixes and
+    #: the thirds rule), the in-plane axes come out 2.2-4.4x denser than uniform while the
+    #: vertical axis, whose air is graded coarsely, comes out 0.23-0.46x. In-plane wins:
     #:
-    #:     coarse  min 3.55  median 6.11  max 8.75
-    #:     normal  min 1.49  median 2.99  max 4.79
-    #:     fine    min 0.70  median 1.64  max 2.89
+    #:     coarse  min 4.85  median 6.93  max 8.74
+    #:     normal  min 2.33  median 4.11  max 4.63
+    #:     fine    min 1.23  median 2.65  max 3.03
+    #:
+    #: The first calibration (3.55 / 1.49 / 0.70 at the minimum, 10-40 mm regions) was made
+    #: against the mesher before it enforced its grading bound. Smaller regions are denser: at
+    #: 40 mm the floors were 10-25 % below these.
     #:
     #: The preset dependence is not noise. Feature spacing is set by the board, so the
     #: coarser the request, the more the copper dominates -- which is why one constant
@@ -107,6 +121,7 @@ def estimate(inp: EstimateInput) -> Estimate:
 
     Every number follows from four facts and nothing else::
 
+        dmin   = min(dx/4, dy/4, dz)    the smallest cell the mesher makes (see below)
         dt     = dmin / (c * sqrt(3))   Courant limit, set by the SMALLEST cell, any axis
         T_sim  = periods / f_min        long enough to resolve the lowest frequency
         steps  = T_sim / dt
@@ -136,8 +151,10 @@ def estimate(inp: EstimateInput) -> Estimate:
     nz = math.ceil(inp.roi_z_mm * 1000.0 / inp.dz_um)
     cells = math.ceil(nx * ny * nz * inp.fill_factor)
 
-    # Courant limit, from the smallest cell in any axis, converted um -> m.
-    dmin_m = min(inp.dx_um, inp.dy_um, inp.dz_um) * 1e-6
+    # Courant limit, from the smallest cell in any axis, converted um -> m. In plane that is a
+    # quarter of the requested cell, not the cell itself: see IN_PLANE_MIN_CELL_FRACTION.
+    dmin_m = min(inp.dx_um * IN_PLANE_MIN_CELL_FRACTION,
+                 inp.dy_um * IN_PLANE_MIN_CELL_FRACTION, inp.dz_um) * 1e-6
     dt = dmin_m / (SPEED_OF_LIGHT * math.sqrt(3))
 
     sim_time = periods / inp.f_min_hz

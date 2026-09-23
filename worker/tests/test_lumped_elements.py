@@ -1,9 +1,8 @@
-"""In-plane R, C and L elements, and the series composition K1 forced (§18.2, M1 P1).
+"""In-plane R, C and L elements, and the series element a capacitor model is.
 
-M0 established that the shipped CSXCAD 0.6.2 has no LEtype, so R, C and L on one element are
-wired in *parallel*. A capacitor model is a series R-L-C, which is a different circuit at
-every frequency — not an approximation of the right one. These tests pin both halves: what a
-single element writes, and that the series form is really three elements.
+A capacitor is a series R-L-C: one element with ``LEtype="1"``, which only an openEMS with the
+lumped-RLC extension models (research/verify_lumped_rlc.py). These tests pin what each element
+writes; whether the solver can use it is ``run.solver_has_series_rlc``'s question.
 """
 
 from __future__ import annotations
@@ -55,63 +54,27 @@ def test_direction_can_be_in_plane():
         assert a["Direction"] == str(direction)
 
 
-# ---- the series composition ------------------------------------------------------------
+# ---- the series element ----------------------------------------------------------------
 
-CELLS = [
-    ((0.0, 0.0, 0.0), (0.05, 0.5, 0.0)),
-    ((0.05, 0.0, 0.0), (0.10, 0.5, 0.0)),
-    ((0.10, 0.0, 0.0), (0.15, 0.5, 0.0)),
-]
+BOX = ((0.0, 0.0, 0.0), (0.15, 0.5, 0.0))
 
 
-def test_series_rlc_is_three_single_value_elements():
-    parts = csx.series_rlc(
-        "c1", direction=0, resistance=0.02, inductance=0.5e-9, capacitance=100e-9,
-        cells=CELLS)
-    assert [p.name for p in parts] == ["c1_r", "c1_l", "c1_c"]
-    for part in parts:
-        a = attrs(part)
-        set_values = [k for k in ("R", "C", "L") if k in a]
-        assert len(set_values) == 1, f"{part.name} sets {set_values}, which openEMS parallels"
+def test_a_series_element_writes_all_three_values_and_letype():
+    """One element, LEtype 1. The three-cell R, L, C construction it replaced was an open
+    circuit on openEMS 0.0.35, which skips an element with only L (verify_lumped_rlc.py)."""
+    el = csx.series_rlc_element("c1", 0, resistance=0.02, inductance=0.5e-9,
+                                capacitance=100e-9, box=BOX)
+    a = attrs(el)
+    assert a["LEtype"] == "1"
+    assert float(a["R"]) == pytest.approx(0.02)
+    assert float(a["L"]) == pytest.approx(0.5e-9)
+    assert float(a["C"]) == pytest.approx(100e-9)
+    assert (el.primitives[0].p1, el.primitives[0].p2) == BOX
 
 
-def test_series_rlc_carries_the_values_through():
-    parts = csx.series_rlc(
-        "c1", direction=0, resistance=0.02, inductance=0.5e-9, capacitance=100e-9,
-        cells=CELLS)
-    by_name = {p.name: p for p in parts}
-    assert by_name["c1_r"].resistance == pytest.approx(0.02)
-    assert by_name["c1_l"].inductance == pytest.approx(0.5e-9)
-    assert by_name["c1_c"].capacitance == pytest.approx(100e-9)
-
-
-def test_series_rlc_places_the_cells_in_order_along_the_direction():
-    parts = csx.series_rlc(
-        "c1", direction=0, resistance=0.02, inductance=0.5e-9, capacitance=100e-9,
-        cells=CELLS)
-    starts = [p.primitives[0].p1[0] for p in parts]
-    assert starts == sorted(starts)
-
-
-def test_series_rlc_needs_exactly_three_cells():
-    """Fewer means collapsing into a parallel element, which is wrong at every frequency."""
-    with pytest.raises(ValueError, match="exactly three adjacent cells"):
-        csx.series_rlc("c1", direction=0, resistance=0.02, inductance=0.5e-9,
-                       capacitance=100e-9, cells=CELLS[:2])
-
-
-def test_series_rlc_elements_validate_in_a_document():
-    doc = csx.CSXDocument(
-        excitation=csx.Excitation(type=0, f0=1e9, fc=1e9),
-        x_lines=[0.0, 0.05, 0.10, 0.15, 0.2], y_lines=[0.0, 0.25, 0.5],
-        z_lines=[0.0, 0.1], f_max=2e9,
-    )
-    for part in csx.series_rlc("c1", direction=0, resistance=0.02, inductance=0.5e-9,
-                               capacitance=100e-9, cells=CELLS):
-        doc.add(part)
-    xml = doc.to_string()
-    assert xml.count("<LumpedElement") == 3
-    assert 'Name="c1_c"' in xml
+def test_letype_is_written_only_when_asked_for():
+    """0.0.35 ignores the attribute; a port's resistor must stay exactly as it was."""
+    assert "LEtype" not in attrs(csx.LumpedElement(name="port", direction=2, resistance=50.0))
 
 
 # ---- frequency formatting in findings ---------------------------------------------------

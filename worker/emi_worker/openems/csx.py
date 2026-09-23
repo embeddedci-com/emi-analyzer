@@ -214,16 +214,11 @@ class LumpedElement(Property):
     ``Caps=1`` adds PEC caps so the element actually connects to the metal either side of
     it; without them it floats and the port impedance is meaningless.
 
-    **The shipped solver has no series R-L-C.** M0 established this against the source and
-    against the shipped binary: CSXCAD 0.6.2 reads ``R``, ``C``, ``L``, ``Direction`` and
-    ``Caps`` and nothing else, so whatever combination of the three is set is wired in
-    **parallel**. Upstream master adds ``LEtype`` with ``PARALLEL = 0`` and ``SERIES = 1``.
-
-    That matters because a capacitor model is a *series* R-L-C -- ESR and ESL in series with
-    C -- and a parallel element with all three set is a different circuit at every frequency,
-    not an approximation of the right one. Only one value is written here unless the caller
-    explicitly asks for more, and ``series_rlc`` composes the real thing from three
-    single-value elements in adjacent cells.
+    **The shipped solver has no series R-L-C, and no inductor either.** CSXCAD 0.6.2 reads
+    ``R``, ``C``, ``L``, ``Direction`` and ``Caps``, but openEMS 0.0.35 models only R and C
+    (in parallel) and skips an element with neither, warning "R or C not specified". Upstream
+    adds ``LEtype`` with ``PARALLEL = 0`` and ``SERIES = 1`` and a lumped-RLC extension that
+    models L; the ``OPENEMS_SOURCE=build`` image has it. ``series_rlc_element`` uses it.
 
     A value left at ``None`` is omitted rather than written as zero: CSXCAD treats a missing
     attribute as "not this kind of element", while ``C="0"`` is a capacitor of zero farads,
@@ -237,6 +232,9 @@ class LumpedElement(Property):
     inductance: float | None = None
     caps: bool = True
     primitives: list[Primitive] = field(default_factory=list)
+    #: ``LEtype``: 0 parallel, 1 series. Only openEMS builds with the lumped-RLC extension
+    #: read it; 0.0.35 ignores the attribute. ``None`` writes nothing.
+    le_type: int | None = None
 
     def to_xml(self) -> ET.Element:
         attrs = {
@@ -255,50 +253,41 @@ class LumpedElement(Property):
                 f"lumped element {self.name!r} sets no R, C or L, so it is not an element at "
                 f"all; openEMS would read it and change nothing"
             )
+        if self.le_type is not None:
+            attrs["LEtype"] = str(int(self.le_type))
         el = ET.Element("LumpedElement", attrs)
         return self._with_primitives(el, self.primitives)
 
 
-def series_rlc(
+#: ``LEtype`` for a series R-L-C. Read only by openEMS builds with the lumped-RLC extension.
+LE_SERIES = 1
+
+
+def series_rlc_element(
     name: str,
     direction: int,
     *,
     resistance: float,
     inductance: float,
     capacitance: float,
-    cells: Sequence[tuple[tuple[float, float, float], tuple[float, float, float]]],
+    box: tuple[tuple[float, float, float], tuple[float, float, float]],
     caps: bool = True,
-) -> list["LumpedElement"]:
-    """A series R-L-C built from three single-value elements in adjacent cells.
+) -> "LumpedElement":
+    """A capacitor model: ESR, ESL and C in series, as one element across the pad gap.
 
-    The shipped CSXCAD wires R, C and L in parallel (see ``LumpedElement``), so a real
-    capacitor model -- ESR and ESL in series with C -- cannot be one element. Three elements
-    in series along the gap between the pads are the same circuit, and they work on the
-    solver that is actually installed rather than one that has to be built from source.
-
-    ``cells`` gives the three (p1, p2) boxes, in order, along ``direction``. They must be
-    adjacent: a gap between them is PEC and shorts nothing, but an overlap makes two elements
-    share a cell and openEMS applies only one of them.
-
-    A 0402 pad gap is around 0.5 mm against an in-plane mesh near 50 um, so there is room for
-    three cells; a caller that cannot find three should refine the mesh rather than collapse
-    the model into a parallel element that is wrong everywhere.
+    Needs an openEMS with the lumped-RLC extension (``LEtype``), which is what
+    ``run.solver_has_series_rlc`` checks. openEMS 0.0.35 has none: it models a lumped R or C
+    and skips anything else. Checked with research/verify_lumped_rlc.py on both builds: on
+    0.0.35 a 10 nH element was skipped with "R or C not specified" and measured as an open
+    gap (-j9921 ohm at 100 MHz); on the build a series 1 ohm, 10 nH, 10 pF element came out
+    within 0.25 dB of the circuit away from its resonance.
     """
-    if len(cells) != 3:
-        raise ValueError(
-            f"a series R-L-C needs exactly three adjacent cells, got {len(cells)}. Refine "
-            f"the mesh across the pad gap rather than approximating it with fewer"
-        )
-    values = (("r", resistance), ("l", inductance), ("c", capacitance))
-    out: list[LumpedElement] = []
-    for (suffix, value), (p1, p2) in zip(values, cells):
-        kwargs: dict = {"resistance": None, "capacitance": None, "inductance": None}
-        kwargs[{"r": "resistance", "l": "inductance", "c": "capacitance"}[suffix]] = value
-        out.append(LumpedElement(
-            name=f"{name}_{suffix}", direction=direction, caps=caps,
-            primitives=[Box(p1=p1, p2=p2, priority=PRIORITY_PORT)], **kwargs,
-        ))
-    return out
+    p1, p2 = box
+    return LumpedElement(
+        name=name, direction=direction, caps=caps, le_type=LE_SERIES,
+        resistance=resistance, inductance=inductance, capacitance=capacitance,
+        primitives=[Box(p1=p1, p2=p2, priority=PRIORITY_PORT)],
+    )
 
 
 @dataclass

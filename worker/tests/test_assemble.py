@@ -142,6 +142,28 @@ def test_an_old_solve_asks_for_a_rerun():
     assert asm.problems and asm.problems[0][0] == "solve-format"
 
 
+def test_an_unconverged_solve_contributes_nothing():
+    """A run that hit its timestep cap is refused whatever its artifacts say.
+
+    Its far field here is marked usable, as every result was before the solve stage marked
+    unconverged runs, and it still contributes no path.
+    """
+    art = _art([30e6, 100e6, 300e6, 1e9], [1e-3] * 4)
+    art.manifest["run"].update({"converged": False, "final_energy_db": -12.4})
+    asm = assemble(art, _clock(), STD)
+    assert asm.paths == []
+    assert asm.far_field_ports == []
+    assert [k for k, _ in asm.problems] == ["solve-unconverged"]
+    assert "12 dB" in asm.problems[0][1]
+
+
+def test_a_converged_solve_is_used():
+    art = _art([30e6, 100e6, 300e6, 1e9], [1e-3] * 4)
+    art.manifest["run"].update({"converged": True, "final_energy_db": -40.2})
+    asm = assemble(art, _clock(), STD)
+    assert asm.paths and not asm.problems
+
+
 def test_the_mesh_term_follows_the_requested_cell_and_is_coarse_when_unknown():
     assert mesh_preset({"run": {"mesh_request": {"dx_um": 50}}}) == "fine"
     assert mesh_preset({"run": {"mesh_request": {"dx_um": 75}}}) == "normal"

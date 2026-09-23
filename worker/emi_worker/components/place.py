@@ -1,13 +1,14 @@
 """Putting a resolved component into the mesh (§12).
 
 A capacitor is a series R-L-C bridging the facing edges of its two pads, in the board plane,
-at the copper height. §2.4 and K1 established why it has to be three elements rather than one:
-the shipped CSXCAD wires R, C and L in parallel, and a capacitor is ESR and ESL in series with
-C.
+at the copper height: one series element (``csx.series_rlc_element``) across the gap. It used to
+be three single-value elements in adjacent cells, which openEMS 0.0.35 turned into an open
+circuit by skipping the inductor (research/verify_lumped_rlc.py).
 
-Three elements need three adjacent cells, which need four grid lines across the pad gap — so
-placement cannot be decided after meshing. It runs first, contributes the lines it needs, and
-then builds the elements once the mesh exists. That is the whole shape of this module.
+The gap is still divided into three cells, four grid lines, so the element spans several
+edges rather than one -- and that cannot be arranged after meshing. Placement runs first,
+contributes the lines it needs, and then builds the element once the mesh exists. That is the
+whole shape of this module.
 
 **Nothing is placed where anything is uncertain.** A part straddling the region boundary, pads
 on different layers, an off-axis rotation, a gap too small to divide — each is skipped and

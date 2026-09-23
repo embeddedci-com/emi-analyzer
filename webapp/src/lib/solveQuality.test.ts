@@ -60,12 +60,16 @@ describe('convergence', () => {
   })
   it('separates partly settled from settled', () => {
     expect(convergence(-25, true)).toBe('partial')
-    expect(convergence(-42.28, false)).toBe('partial')
+    expect(convergence(-25, undefined)).toBe('partial')
     expect(convergence(-42.28, true)).toBe('converged')
+  })
+  it('treats a run that hit its timestep limit as unusable, however far it decayed', () => {
+    expect(convergence(-42.28, false)).toBe('unusable')
+    expect(convergence(-35, false)).toBe('unusable')
+    expect(convergence(null, false)).toBe('unusable')
   })
   it('falls back to the flag when there is no energy', () => {
     expect(convergence(undefined, true)).toBe('converged')
-    expect(convergence(null, false)).toBe('partial')
     expect(convergence(undefined, undefined)).toBe('unknown')
   })
 })

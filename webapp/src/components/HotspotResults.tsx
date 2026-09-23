@@ -86,13 +86,22 @@ export interface SolveManifest {
 export const PORT_SPECTRA_FORMAT_VERSION = 2
 
 export function canAttachDriver(manifest: SolveManifest): boolean {
-  return manifest.format_version >= PORT_SPECTRA_FORMAT_VERSION && !!manifest.has_port_spectra
+  return (
+    manifest.format_version >= PORT_SPECTRA_FORMAT_VERSION &&
+    !!manifest.has_port_spectra &&
+    // A run that hit its timestep limit transformed fields that were still ringing, so
+    // re-weighting its port spectra would put a level on a transient.
+    manifest.run?.converged !== false
+  )
 }
 
 export function whyNoDriver(manifest: SolveManifest): string | null {
   if (canAttachDriver(manifest)) return null
   if (manifest.format_version < PORT_SPECTRA_FORMAT_VERSION) {
     return 'Re-run this solve to attach a driver: it predates the port spectra drivers need.'
+  }
+  if (manifest.run?.converged === false) {
+    return 'This solve stopped before its fields settled, so a driver would put a level on noise.'
   }
   return 'This solve recorded no excited port, so there is nothing for a driver to drive.'
 }
@@ -264,10 +273,12 @@ export function HotspotResults({
       <Experimental why={smallPart ? EXPERIMENTAL.smallPart : EXPERIMENTAL.hotspotMap} mb={0} />
       {state === 'unusable' && (
         <Alert color="red" variant="light" title="This run stopped before its fields settled">
-          Energy only fell to {energyDb?.toFixed(1)} dB, so this is a snapshot of fields still
-          ringing, not the steady state a hotspot map needs. The map is hidden unless you turn it
-          on. Run the solve again — the timestep limit is now worked out from the excitation, so
-          it runs until the fields settle.
+          {typeof manifest.run?.unusable_reason === 'string'
+            ? `The solver says ${manifest.run.unusable_reason}. `
+            : `Energy only fell to ${energyDb?.toFixed(1)} dB, so this is a snapshot of fields ` +
+              'still ringing, not the steady state a hotspot map needs. '}
+          No level, impedance or driver is offered from it, and the map is hidden unless you
+          turn it on.
         </Alert>
       )}
       {state === 'partial' && (
