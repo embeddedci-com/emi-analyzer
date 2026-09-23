@@ -21,8 +21,6 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -36,6 +34,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -82,11 +81,12 @@ func main() {
 		workerURL   = flag.String("worker-url", envOr("EMI_LOCAL_WORKER_URL", ""), "URL the worker container dials to reach this server (default: detected from the Docker engine)")
 		concurrent  = flag.Int("worker-concurrency", 1, "runs the worker takes at once; a solve is memory-bound, so more is rarely faster")
 		webDir      = flag.String("webapp", envOr("EMI_LOCAL_WEBAPP", ""), "serve the webapp from this directory instead of the embedded copy (development)")
-		experiment  = flag.String("experimental", envOr("EMI_EXPERIMENTAL", ""), `comma-separated experimental features to enable: "full-wave" (openEMS solves, far field, cable emissions, compliance; unverified on real boards)`)
+		experiment  = flag.String("experimental", envOr("EMI_EXPERIMENTAL", ""), `comma-separated experimental features to enable: "full-wave" (openEMS solves with their far field and cable emissions, and compliance estimates; unverified on real boards; the standalone cable budget is always on)`)
 		shell       = flag.String("shell", "", `the program holding a window on this server: "desktop" for the app, empty when there is none`)
 		endpoint    = flag.String("endpoint-file", envOr("EMI_LOCAL_ENDPOINT_FILE", defaultEndpointFile()), "file left behind so other programs on this computer (the KiCad plugin) can find this app; empty to write none")
 		issueKey    = flag.Bool("issue-key", false, "print a key for a worker you run yourself (with -worker=none), and exit")
 		showVersion = flag.Bool("version", false, "print the version and exit")
+		maxUploadMB = flag.Int64("max-upload-mb", envInt64("EMI_MAX_UPLOAD_MB", emi.DefaultMaxUploadBytes>>20), "largest board file or result the app stores, in MB")
 	)
 	flag.Parse()
 	if *showVersion {
@@ -109,7 +109,7 @@ func main() {
 		addr: *addr, dataDir: *dataDir, open: *open, lifeline: *lifeline,
 		workerMode: *workerMode, workerImage: *workerImage, workerURL: *workerURL,
 		concurrency: *concurrent, webDir: *webDir, experimental: *experiment,
-		endpointFile: *endpoint, shell: *shell,
+		endpointFile: *endpoint, shell: *shell, maxUploadBytes: *maxUploadMB << 20,
 	}); err != nil {
 		logger.Error("emi-local failed", "err", err)
 		os.Exit(1)
@@ -127,6 +127,7 @@ type options struct {
 	experimental   string
 	endpointFile   string
 	shell          string
+	maxUploadBytes int64
 }
 
 func run(logger *slog.Logger, o options) error {
@@ -144,7 +145,7 @@ func run(logger *slog.Logger, o options) error {
 	if err := os.MkdirAll(o.dataDir, 0o700); err != nil {
 		return fmt.Errorf("data folder %s: %w", o.dataDir, err)
 	}
-	secret, err := loadSecret(filepath.Join(o.dataDir, "secret.key"))
+	sec, err := loadSecrets(filepath.Join(o.dataDir, "secret.key"))
 	if err != nil {
 		return err
 	}
@@ -171,12 +172,12 @@ func run(logger *slog.Logger, o options) error {
 		return err
 	}
 
-	keys := local.NewKeys(store.DB(), secret)
+	keys := local.NewKeys(store.DB(), sec.pepper)
 	if err := keys.RevokeNamed(ctx, autoKeyName); err != nil {
 		return err
 	}
 
-	blob, err := local.NewFileBlob(filepath.Join(o.dataDir, "blobs"), secret, "/blob", baseURL)
+	blob, err := local.NewFileBlob(filepath.Join(o.dataDir, "blobs"), sec.blob, "/blob", baseURL)
 	if err != nil {
 		return err
 	}
@@ -189,13 +190,15 @@ func run(logger *slog.Logger, o options) error {
 		logger.Warn("experimental full-wave solving is enabled: it runs, but nothing it produces has been verified on a real board")
 	}
 
+	blob.MaxBytes = o.maxUploadBytes
 	svc, err := emi.New(emi.Deps{
-		Store:       store,
-		Keys:        keys,
-		Blob:        blob,
-		TokenSecret: secret,
-		Logger:      logger,
-		Features:    features,
+		Store:          store,
+		Keys:           keys,
+		Blob:           blob,
+		TokenSecret:    sec.token,
+		Logger:         logger,
+		Features:       features,
+		MaxUploadBytes: o.maxUploadBytes,
 	})
 	if err != nil {
 		return err
@@ -360,7 +363,7 @@ func printKey(dataDir string) error {
 	if err := os.MkdirAll(dataDir, 0o700); err != nil {
 		return err
 	}
-	secret, err := loadSecret(filepath.Join(dataDir, "secret.key"))
+	sec, err := loadSecrets(filepath.Join(dataDir, "secret.key"))
 	if err != nil {
 		return err
 	}
@@ -369,30 +372,12 @@ func printKey(dataDir string) error {
 		return err
 	}
 	defer store.Close()
-	raw, err := local.NewKeys(store.DB(), secret).Issue(ctx, localUser.OrganizationID, "external worker")
+	raw, err := local.NewKeys(store.DB(), sec.pepper).Issue(ctx, localUser.OrganizationID, "external worker")
 	if err != nil {
 		return err
 	}
 	fmt.Println(raw)
 	return nil
-}
-
-// loadSecret returns the per-installation secret that signs run tokens, blob URLs and worker
-// key hashes, creating it on first start. It never leaves the data folder.
-func loadSecret(path string) ([]byte, error) {
-	if b, err := os.ReadFile(path); err == nil {
-		if s, err := hex.DecodeString(strings.TrimSpace(string(b))); err == nil && len(s) >= 32 {
-			return s, nil
-		}
-	}
-	s := make([]byte, 32)
-	if _, err := rand.Read(s); err != nil {
-		return nil, err
-	}
-	if err := os.WriteFile(path, []byte(hex.EncodeToString(s)+"\n"), 0o600); err != nil {
-		return nil, fmt.Errorf("write %s: %w", path, err)
-	}
-	return s, nil
 }
 
 func defaultDataDir() string {
@@ -415,6 +400,15 @@ func defaultImage() string {
 		tag = "dev"
 	}
 	return "ghcr.io/embeddedci-com/emi-worker:" + tag
+}
+
+// envInt64 reads a whole number from the environment, falling back to def when it is unset or
+// not a number.
+func envInt64(key string, def int64) int64 {
+	if n, err := strconv.ParseInt(strings.TrimSpace(os.Getenv(key)), 10, 64); err == nil && n > 0 {
+		return n
+	}
+	return def
 }
 
 func envOr(key, def string) string {

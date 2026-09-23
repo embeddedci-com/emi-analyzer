@@ -227,26 +227,37 @@ func (s *workerSupervisor) startOnce(ctx context.Context) bool {
 	// A container left behind by a crashed app, or by the previous start of this loop.
 	_, _ = s.dockerOut(ctx, 30*time.Second, "rm", "-f", s.name)
 
-	args := []string{"run", "-d", "--name", s.name,
-		"--label", "com.embeddedci.emi-local=1",
-		"--stop-timeout", "5",
-	}
 	netArgs, url := s.network(engine)
-	args = append(args, netArgs...)
-	args = append(args,
-		"-e", "EMBEDDEDCI_URL="+url,
-		"-e", "EMBEDDEDCI_API_KEY="+key,
-		"-e", "EMI_WORKER_NAME=local",
-		"-e", fmt.Sprintf("EMI_MAX_CONCURRENT=%d", max(1, s.cfg.concurrency)),
-		s.cfg.image,
-	)
-	if out, err := s.dockerOut(ctx, 60*time.Second, args...); err != nil {
+	args := runArgs(s.name, netArgs, url, s.cfg.concurrency, s.cfg.image)
+	// The key reaches the container through the docker CLI's own environment. On its
+	// command line it would be readable by every user of this computer through ps.
+	if out, err := s.dockerOutEnv(ctx, 60*time.Second, []string{workerKeyEnv + "=" + key}, args...); err != nil {
 		msg, detail := explainDocker(s.cfg.image, out, err)
 		s.setDetailed(stateError, msg, detail)
 		return false
 	}
 	s.set(stateRunning, fmt.Sprintf("The worker container is running and connects to this app at %s.", url))
 	return true
+}
+
+// workerKeyEnv is the variable the worker reads its key from.
+const workerKeyEnv = "EMBEDDEDCI_API_KEY"
+
+// runArgs is the docker run command line. It names the key variable without a value, which
+// makes docker copy it from its own environment: nothing secret is on the command line.
+func runArgs(name string, netArgs []string, url string, concurrency int, image string) []string {
+	args := []string{"run", "-d", "--name", name,
+		"--label", "com.embeddedci.emi-local=1",
+		"--stop-timeout", "5",
+	}
+	args = append(args, netArgs...)
+	return append(args,
+		"-e", "EMBEDDEDCI_URL="+url,
+		"-e", workerKeyEnv,
+		"-e", "EMI_WORKER_NAME=local",
+		"-e", fmt.Sprintf("EMI_MAX_CONCURRENT=%d", max(1, concurrency)),
+		image,
+	)
 }
 
 // network chooses how the container reaches this server, which listens on loopback only.
@@ -365,9 +376,17 @@ func (s *workerSupervisor) command(ctx context.Context, args ...string) *exec.Cm
 }
 
 func (s *workerSupervisor) dockerOut(ctx context.Context, timeout time.Duration, args ...string) (string, error) {
+	return s.dockerOutEnv(ctx, timeout, nil, args...)
+}
+
+// dockerOutEnv runs docker with extra environment variables, for values that must not appear
+// on a command line.
+func (s *workerSupervisor) dockerOutEnv(ctx context.Context, timeout time.Duration, env []string, args ...string) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	out, err := s.command(ctx, args...).CombinedOutput()
+	cmd := s.command(ctx, args...)
+	cmd.Env = append(cmd.Env, env...)
+	out, err := cmd.CombinedOutput()
 	return string(out), err
 }
 
