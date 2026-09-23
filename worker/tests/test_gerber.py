@@ -27,17 +27,23 @@ net agreeing to 0.0%.
 from __future__ import annotations
 
 import io
+import math
 import zipfile
 from pathlib import Path
 
 import pytest
 
+from emi_worker import topology
 from emi_worker.gerber import GerberError, load_gerber_board
-from emi_worker.gerber.drill import parse_drill
+from emi_worker.gerber.connectivity import _inside
+from emi_worker.gerber.drill import parse_drill, parse_holes
+from emi_worker.gerber.reader import _read_layer
+from emi_worker.kicad import geometry as g
 from emi_worker.gerber.ipcd356 import NetlistError, parse as parse_netlist
 from emi_worker.kicad import parse, parse_board
 from emi_worker.kicad.normalize import normalize
 from emi_worker.raster import label_components, rasterize_rings
+from emi_worker.rules import emc
 from emi_worker.stages.ingest import load_board
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -243,3 +249,180 @@ def test_archive_detection_prefers_a_kicad_file(gerber_files):
         z.writestr("tiny.kicad_pcb", (FIXTURES / "tiny.kicad_pcb").read_bytes())
     _, _, kind = load_board(buf.getvalue())
     assert kind == "kicad"
+
+
+# ---- units ---------------------------------------------------------------------------
+
+INCH_DIR = FIXTURES / "gerber_inch"
+
+
+def test_an_inch_gerber_set_is_read_in_millimetres():
+    """gerbonara returns the file's own unit; a %MOIN% board used to come back 25.4x small.
+
+    The fixture is hand-written in inches: a 2 x 1 inch board, a one-inch SIG trace 10 mil
+    wide between two 40 x 60 mil pads, and a GND pour with a via.
+    """
+    model = load_gerber_board({p.name: p.read_bytes() for p in INCH_DIR.iterdir()})
+
+    sig = [t for t in model.tracks if t.net == "SIG"]
+    assert len(sig) == 1
+    assert sig[0].length_mm == pytest.approx(25.4)
+    assert sig[0].width_mm == pytest.approx(0.254)
+
+    pads = {f"{p.ref}.{p.number}": p for p in model.pads}
+    assert set(pads) == {"U1.1", "U2.1"}
+    xs = [x for x, _ in pads["U1.1"].ring]
+    ys = [y for _, y in pads["U1.1"].ring]
+    assert max(xs) - min(xs) == pytest.approx(1.016)
+    assert max(ys) - min(ys) == pytest.approx(1.524)
+
+    outline = [p for ring in model.outline for p in ring]
+    assert max(x for x, _ in outline) - min(x for x, _ in outline) == pytest.approx(50.8)
+    assert max(y for _, y in outline) - min(y for _, y in outline) == pytest.approx(25.4)
+
+    gnd = [z for z in model.zones if z.net == "GND"]
+    assert gnd and abs(g.signed_area(gnd[0].ring)) == pytest.approx(45.72 * 6.35)
+    assert [v.net for v in model.vias] == ["GND"]
+    assert model.vias[0].drill_mm == pytest.approx(0.381)
+
+    topo = topology.build(model)
+    assert topo["SIG"].path("U1.1", "U2.1").length_mm == pytest.approx(25.4)
+
+
+# ---- parts from the netlist ------------------------------------------------------------
+
+def test_gerber_pads_are_named_after_the_netlist(gerber_board, kicad_board):
+    """Every ref-dependent check keyed on pads found nothing on a Gerber upload.
+
+    IPC-D-356 names the component and pin at each point; they now land on the pad there.
+    """
+    named = sorted((p.ref, p.number, p.net) for p in gerber_board.pads if p.ref)
+    assert named == [("J1", "1", "DATA"), ("U1", "1", "CLK"), ("U1", "2", "GND")]
+    assert all(p.ref for p in gerber_board.pads), "anonymous pads left over"
+
+    # J1 is through-hole: one pad on both layers, and its hole is not a via.
+    j1 = next(p for p in gerber_board.pads if p.ref == "J1")
+    assert j1.pad_type == "thru_hole"
+    assert set(j1.layers) == {"F.Cu", "B.Cu"}
+    assert len(gerber_board.vias) == len(kicad_board.vias)
+    # The via's annular ring, flashed on copper, becomes its size.
+    assert all(v.size_mm > v.drill_mm for v in gerber_board.vias)
+
+
+def test_gerber_topology_and_parts_match_kicad(gerber_board, kicad_board):
+    gt, kt = topology.build(gerber_board), topology.build(kicad_board)
+    for net in ("CLK", "DATA", "GND"):
+        assert (sorted(gt[net].pads), sorted(gt[net].unreachable)) == (
+            sorted(kt[net].pads), sorted(kt[net].unreachable)), net
+
+    # The EMC checks find connectors by reference designator.
+    assert set(emc._Parts(gerber_board).connectors) == {"J1"}
+    assert set(emc._Parts(gerber_board).connectors) == set(emc._Parts(kicad_board).connectors)
+
+
+# ---- drill files -------------------------------------------------------------------------
+
+_NPTH = """M48
+; DRILL file KiCad 10.0.5
+; #@! TF.FileFunction,NonPlated,1,2,NPTH
+FMAT,2
+METRIC
+; #@! TA.AperFunction,NonPlated,NPTH,ComponentDrill
+T1C3.200
+%
+G90
+G05
+T1
+X3.0Y-37.0
+M30
+"""
+
+
+@pytest.mark.parametrize("npth_first", [True, False])
+def test_every_drill_file_is_read_in_either_order(gerber_files, npth_first):
+    """KiCad writes PTH and NPTH separately. Keeping only the last one lost every via."""
+    files = {n: b for n, b in gerber_files.items() if not n.endswith(".drl")}
+    pth = ("tiny-PTH.drl", gerber_files["tiny.drl"])
+    npth = ("tiny-NPTH.drl", _NPTH.encode())
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        for name, blob in ([npth, pth] if npth_first else [pth, npth]):
+            z.writestr(name, blob)
+        for name, blob in files.items():
+            z.writestr(name, blob)
+    model, _, _ = load_board(buf.getvalue())
+
+    assert sorted((v.x, v.y) for v in model.vias) == [(6.0, 6.0), (16.0, 2.0), (25.0, 20.0)]
+    # The mounting hole is not a via, and is not a pad either: it has no copper.
+    assert all(math.dist((v.x, v.y), (3.0, 37.0)) > 1 for v in model.vias)
+
+
+def test_plating_is_read_per_tool_in_a_mixed_file():
+    text = (
+        "M48\n; #@! TF.FileFunction,MixedPlating,1,2\nMETRIC\n"
+        "; #@! TA.AperFunction,Plated,PTH,ViaDrill\nT1C0.300\n"
+        "; #@! TA.AperFunction,NonPlated,NPTH,ComponentDrill\nT2C3.200\n"
+        "%\nT1\nX1.0Y-1.0\nT2\nX5.0Y-5.0\nM30\n"
+    )
+    holes, _ = parse_holes(text)
+    assert [(h.plated, h.function) for h in holes] == [(True, "via"), (False, "component")]
+    vias, _ = parse_drill(text, ["F.Cu", "B.Cu"])
+    assert [(v.x, v.y) for v in vias] == [(1.0, 1.0)]
+
+
+def test_an_npth_file_alone_has_no_vias():
+    holes, _ = parse_holes(_NPTH)
+    assert len(holes) == 1 and not holes[0].plated
+
+
+# ---- clear polarity and negative images --------------------------------------------------
+
+_HEAD = "%FSLAX46Y46*%\n%MOMM*%\nG01*\n%ADD10C,2.000000*%\n%ADD11C,1.000000*%\n"
+_POUR = "G36*\nX0Y0D02*\nX10000000Y0D01*\nX10000000Y10000000D01*\nX0Y10000000D01*\nX0Y0D01*\nG37*\n"
+
+
+def _covered(zones, x, y):
+    """Whether a model point is copper, filling each zone ring even-odd like the raster."""
+    return any(_inside(x, y, z.ring) for z in zones)
+
+
+def test_clear_shapes_are_cut_out_of_a_pour():
+    """%LPC% anti-pads were filled in as copper, joining a via to the plane around it."""
+    text = (_HEAD + "%LPD*%\n" + _POUR
+            + "%LPC*%\nD10*\nX5000000Y5000000D03*\nX2000000Y2000000D03*\n"
+            + "%LPD*%\nD11*\nX5000000Y5000000D03*\nM02*\n")
+    warnings: list[str] = []
+    _, pads, zones = _read_layer(text, "In1.Cu", warnings)
+    assert len(zones) == 1 and len(pads) == 1
+    # Two holes of r = 1 mm cut from a 10 x 10 mm pour.
+    assert abs(g.signed_area(zones[0].ring)) == pytest.approx(100 - 2 * math.pi, rel=0.01)
+    assert not _covered(zones, 5.7, -5.0)      # inside the anti-pad, outside the via pad
+    assert _covered(zones, 5.0, -8.0)          # plane
+    assert not warnings
+
+    # The via pad sits in the hole as its own island, apart from the plane.
+    mask = rasterize_rings([z.ring for z in zones] + [pads[0].ring],
+                           (-1.0, -11.0), (240, 240), 0.05)
+    _, count = label_components(mask)
+    assert count == 2
+
+
+@pytest.mark.filterwarnings("ignore:.*IPNEG.*:DeprecationWarning")
+@pytest.mark.parametrize("marker", ["%TF.FilePolarity,Negative*%\n", "%IPNEG*%\n"])
+def test_a_negative_plane_is_copper_except_where_it_draws(marker):
+    text = marker + _HEAD + "%LPD*%\nD10*\nX5000000Y5000000D03*\nM02*\n"
+    _, pads, zones = _read_layer(text, "In1.Cu", [], extent=(0.0, -10.0, 10.0, 0.0))
+    assert not pads, "a drawn shape on a negative image is a clearance, not copper"
+    assert len(zones) == 1
+    assert abs(g.signed_area(zones[0].ring)) == pytest.approx(100 - math.pi, rel=0.01)
+    assert not _covered(zones, 5.0, -5.0)
+    assert _covered(zones, 1.0, -1.0)
+
+
+def test_a_clear_shape_that_cannot_be_cut_is_reported():
+    """A clear line splitting the pour needs polygon clipping; say so rather than be wrong."""
+    text = (_HEAD + "%LPD*%\n" + _POUR
+            + "%LPC*%\nD11*\nX5000000Y-1000000D02*\nX5000000Y11000000D01*\nM02*\n")
+    warnings: list[str] = []
+    _read_layer(text, "In1.Cu", warnings)
+    assert any("could not be applied" in w for w in warnings)

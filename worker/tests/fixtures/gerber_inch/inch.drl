@@ -1,0 +1,12 @@
+M48
+; Hand-written inch fixture
+; #@! TF.FileFunction,Plated,1,2,PTH
+INCH
+; #@! TA.AperFunction,Plated,PTH,ViaDrill
+T1C0.0150
+%
+G90
+G05
+T1
+X1.0000Y0.8000
+M30

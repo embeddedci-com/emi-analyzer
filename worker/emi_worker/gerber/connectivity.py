@@ -17,6 +17,7 @@ renders, the nets still list, and the ground plane is simply anonymous.
 from __future__ import annotations
 
 import logging
+import math
 from collections import defaultdict
 
 from ..kicad import geometry as g
@@ -73,6 +74,9 @@ class Connectivity:
         #: (layer, label) -> net name
         self.net_of: dict[tuple[str, int], str] = {}
         self.warnings: list[str] = []
+        #: Netlist coordinates -> model coordinates, once assign() has found it. Kept so that
+        #: netlist points can be matched to pads afterwards, not just to islands.
+        self.transform = None
 
     def build_rasters(self, rings_by_layer: dict[str, list[list[tuple[float, float]]]]) -> None:
         for layer in self.layers:
@@ -178,6 +182,7 @@ class Connectivity:
         """Name the islands, then propagate names through plated holes."""
         tolerance_px = max(1, int(POINT_TOLERANCE_MM / self.resolution))
         transform = self.align(netlist, tolerance_px, vias)
+        self.transform = transform
 
         # A through-hole point touches every layer; a surface point touches only its own.
         # Access codes are 1-based into the stack, and 0 means all layers.
@@ -310,3 +315,145 @@ def summarise(conn: Connectivity) -> dict[str, int]:
     for (_, _), net in conn.net_of.items():
         counts[net] += 1
     return dict(counts)
+
+
+#: How far a component's netlist point may sit from a pad's centre and still name it, in mm.
+#: IPC-D-356 records a surface pad's centre and a through-hole's drill centre, so the two
+#: agree to rounding; the point-in-pad test covers exporters that record an offset access
+#: point instead.
+REF_TOLERANCE_MM = 0.1
+
+#: Grid cell for finding pads near a point, in mm. A point inside a pad whose centre is more
+#: than a cell away is not found, which only a very large pad with an offset access point
+#: could do.
+_PAD_CELL_MM = 1.0
+
+
+def attach_parts(
+    conn: Connectivity, netlist: Netlist, pads: list[Pad], vias: list[Via],
+    layers: list[str],
+) -> tuple[list[Pad], list[Via], list[str]]:
+    """Name each flashed pad after the component pin the netlist puts on it.
+
+    Gerbers say where pads are and the netlist says whose they are. Without joining the two
+    every pad is anonymous, and every check that looks for parts (ESD protection, decoupling,
+    crystals, length matching by pin) found nothing to look at on a Gerber upload.
+
+    A through-hole pin is one pad flashed on every layer plus a hole in the drill file. It
+    becomes one through-hole pad, as a KiCad board would describe it, and its hole stops
+    being counted as a via.
+
+    Returns ``(pads, vias, warnings)``.
+    """
+    warnings: list[str] = []
+    if conn.transform is None:
+        return pads, vias, warnings
+
+    grid: dict[tuple[str, int, int], list[int]] = defaultdict(list)
+    for i, p in enumerate(pads):
+        for layer in p.layers:
+            grid[(layer, int(p.x // _PAD_CELL_MM), int(p.y // _PAD_CELL_MM))].append(i)
+
+    drop: set[int] = set()
+    holes: list[tuple[float, float]] = []
+    wanted = matched = 0
+
+    for point in netlist.points:
+        if point.is_via:
+            continue
+        wanted += 1
+        px, py = conn.transform(point.x_mm, point.y_mm)
+        targets = (
+            list(layers) if point.access == 0
+            else [layers[point.access - 1]] if 1 <= point.access <= len(layers)
+            else []
+        )
+        cx, cy = int(px // _PAD_CELL_MM), int(py // _PAD_CELL_MM)
+        hits: list[int] = []
+        for layer in targets:
+            best: tuple[float, int] | None = None
+            for dx in (-1, 0, 1):
+                for dy in (-1, 0, 1):
+                    for i in grid.get((layer, cx + dx, cy + dy), ()):
+                        pad = pads[i]
+                        if pad.ref or i in drop:
+                            continue  # already claimed by another pin
+                        d = math.hypot(pad.x - px, pad.y - py)
+                        if d <= REF_TOLERANCE_MM or (len(pad.ring) >= 3 and _inside(px, py, pad.ring)):
+                            if best is None or d < best[0]:
+                                best = (d, i)
+            if best is not None:
+                hits.append(best[1])
+        if not hits:
+            continue
+        matched += 1
+
+        keep = pads[hits[0]]
+        keep.ref, keep.number = point.ref, point.pin
+        keep.net = keep.net or point.net
+        if point.access == 0:
+            keep.layers = list(layers)
+            keep.pad_type = "thru_hole" if point.plated else "np_thru_hole"
+            keep.drill_mm = point.drill_mm
+            drop.update(hits[1:])
+            holes.append((keep.x, keep.y))
+        else:
+            for i in hits[1:]:
+                pads[i].ref, pads[i].number = point.ref, point.pin
+
+    if holes:
+        hole_grid: dict[tuple[int, int], list[tuple[float, float]]] = defaultdict(list)
+        for x, y in holes:
+            hole_grid[(int(x // _PAD_CELL_MM), int(y // _PAD_CELL_MM))].append((x, y))
+
+        def is_pin(v: Via) -> bool:
+            cx, cy = int(v.x // _PAD_CELL_MM), int(v.y // _PAD_CELL_MM)
+            return any(
+                math.hypot(v.x - x, v.y - y) <= REF_TOLERANCE_MM
+                for dx in (-1, 0, 1) for dy in (-1, 0, 1)
+                for x, y in hole_grid.get((cx + dx, cy + dy), ())
+            )
+
+        vias = [v for v in vias if not is_pin(v)]
+
+    # What is left unnamed on top of a via is the via's own annular ring, flashed once per
+    # layer. It is not a part's pad, and as a pad with no reference it showed up in every
+    # net's pin list as "". It becomes the via's size instead, which the drill file alone
+    # cannot give.
+    via_grid: dict[tuple[int, int], list[Via]] = defaultdict(list)
+    for v in vias:
+        via_grid[(int(v.x // _PAD_CELL_MM), int(v.y // _PAD_CELL_MM))].append(v)
+    for i, pad in enumerate(pads):
+        if pad.ref or i in drop:
+            continue
+        cx, cy = int(pad.x // _PAD_CELL_MM), int(pad.y // _PAD_CELL_MM)
+        via = next((
+            v for dx in (-1, 0, 1) for dy in (-1, 0, 1)
+            for v in via_grid.get((cx + dx, cy + dy), ())
+            if math.hypot(v.x - pad.x, v.y - pad.y) <= REF_TOLERANCE_MM
+        ), None)
+        if via is None or len(pad.ring) < 3:
+            continue
+        xs = [p[0] for p in pad.ring]
+        ys = [p[1] for p in pad.ring]
+        via.size_mm = max(via.size_mm, min(max(xs) - min(xs), max(ys) - min(ys)))
+        drop.add(i)
+
+    if wanted and matched < wanted:
+        warnings.append(
+            f"{wanted - matched} of {wanted} component pins in the netlist matched no pad, "
+            f"so checks that look for parts may miss them"
+        )
+    log.info("netlist named %d of %d component pins", matched, wanted)
+    return [p for i, p in enumerate(pads) if i not in drop], vias, warnings
+
+
+def _inside(x: float, y: float, ring: list[tuple[float, float]]) -> bool:
+    inside = False
+    n = len(ring)
+    for i in range(n):
+        x0, y0 = ring[i]
+        x1, y1 = ring[(i + 1) % n]
+        if (y0 > y) != (y1 > y) and x < x0 + (y - y0) * (x1 - x0) / (y1 - y0):
+            inside = not inside
+    return inside
