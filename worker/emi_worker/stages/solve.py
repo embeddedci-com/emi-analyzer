@@ -296,6 +296,7 @@ def run_solve(ctx: StageContext) -> StageResult:
             threads=ctx.cores,
             on_progress=on_progress,
             should_stop=ctx.should_stop,
+            excitation_s=emmodel.excitation_seconds(built.doc.excitation.fc),
         )
     except run.Stopped:
         from . import Stopped

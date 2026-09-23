@@ -33,6 +33,8 @@ _PROGRESS = re.compile(
 )
 
 _TIMESTEP_LINE = re.compile(r"FDTD timestep is:\s*(?P<dt>[\d.eE+-]+)\s*s")
+#: Excitation signal length is: 26811 timesteps (2.866e-09s)
+_EXCITATION_LINE = re.compile(r"Excitation signal length is:\s*(?P<n>\d+)\s*timesteps")
 _MAXSTEPS_LINE = re.compile(r"Max\. number of timesteps:\s*(?P<n>\d+)")
 _CELLS_LINE = re.compile(r"FDTD simulation size:.*?-->\s*(?P<cells>[\d.]+)\s*FDTD cells")
 
@@ -115,11 +117,16 @@ def run_openems(
     on_progress: Callable[[RunProgress], None] | None = None,
     should_stop: Callable[[], bool] | None = None,
     poll_interval: float = 0.25,
+    excitation_s: float | None = None,
 ) -> RunResult:
     """Run openEMS to completion, streaming progress.
 
     ``should_stop`` is polled between output lines. A solve runs for hours, so a cancel
     that only takes effect at the end is not a cancel.
+
+    ``excitation_s`` is how long the source runs, for the stability check to wait out. openEMS
+    reports its own figure in the log and that one wins; this is the fallback for a log that
+    lacks the line (``GAUSSIAN_SUPPORT_OVER_FC / fc`` for a Gaussian).
     """
     env = dict(os.environ)
     if threads and threads > 0:
@@ -152,8 +159,10 @@ def run_openems(
     cells = 0
     dt = 0.0
     max_steps = 0
+    excitation_steps: int | None = None
     last = RunProgress(0, 0, 0.0, 0.0, 0.0)
     energies: list[float] = []
+    energy_steps: list[int] = []
     cancelled = False
 
     assert proc.stdout is not None
@@ -175,6 +184,10 @@ def run_openems(
             if m:
                 dt = float(m.group("dt"))
                 continue
+            m = _EXCITATION_LINE.search(line)
+            if m:
+                excitation_steps = int(m.group("n"))
+                continue
             m = _MAXSTEPS_LINE.search(line)
             if m:
                 max_steps = int(m.group("n"))
@@ -192,6 +205,7 @@ def run_openems(
                 )
                 try:
                     energies.append(float(m.group("energy")))
+                    energy_steps.append(last.timestep)
                 except ValueError:
                     pass
                 if on_progress:
@@ -208,7 +222,9 @@ def run_openems(
     log_text = "\n".join(lines)
     warnings = [msg for needle, msg in _SIGNIFICANT_WARNINGS if needle in log_text]
 
-    rise = divergence_ratio(energies)
+    if excitation_steps is None and excitation_s and dt > 0:
+        excitation_steps = int(excitation_s / dt)
+    rise = divergence_ratio(energies, energy_steps, excitation_end=excitation_steps or 0)
     if rise >= DIVERGENCE_RATIO:
         raise OpenEMSError(
             f"the simulation went unstable: after the excitation passed, its energy climbed "
@@ -251,8 +267,16 @@ def _terminate(proc: subprocess.Popen) -> None:
             pass
 
 
-def divergence_ratio(energies: list[float]) -> float:
+def divergence_ratio(
+    energies: list[float],
+    timesteps: list[int] | None = None,
+    *,
+    excitation_end: int = 0,
+) -> float:
     """How far the energy climbed back after the run had really started to decay.
+
+    ``timesteps`` gives the timestep of each energy sample, and ``excitation_end`` the
+    timestep at which the source stops. No sample before that is judged at all.
 
     1.0 for a healthy run. A diverging FDTD grid pumps energy, so its stored energy turns
     around and grows without bound; that is what this has to catch, and nothing else.
@@ -275,6 +299,14 @@ def divergence_ratio(energies: list[float]) -> float:
     Comparing against the global peak instead would find nothing at all: a diverging run's
     largest energy is its last one.
 
+    **The margin alone is not enough on a wide-band pulse.** With f0 == fc the Gaussian has
+    lobes, and a small structure that empties fast (a board strip with a 10 mm cable stub and a
+    1 MOhm gap) loses more than 20 dB between them. The next lobe then refills it, and a real
+    run was refused at timestep ~14,000 (9.1 ns) with "climbed back by a factor of 2.95e+03"
+    while its 9 ns excitation was still running. So when the excitation length is known, the
+    margin only starts counting once the source has stopped; before that the samples only
+    raise the peak.
+
     The limit of this: a grid that blew up before its energy had fallen that far would not be
     reported. Every divergence on record has the same shape -- the excitation passes, the
     energy decays, and only then does the grid start feeding it -- so the gate is where the
@@ -283,15 +315,20 @@ def divergence_ratio(energies: list[float]) -> float:
     """
     if len(energies) < 3:
         return 1.0
+    if timesteps is not None and len(timesteps) != len(energies):
+        raise ValueError("divergence_ratio needs one timestep per energy sample")
 
     decay_factor = 10.0 ** (DECAY_MARGIN_DB / 10.0)
     peak = 0.0
     floor: float | None = None
     worst = 1.0
-    for e in energies:
+    for i, e in enumerate(energies):
         if e <= 0:
             continue
         peak = max(peak, e)
+        if timesteps is not None and timesteps[i] < excitation_end:
+            # The source is still driving the structure: a dip here is between two lobes.
+            continue
         if floor is None:
             # Still rising, or not yet clearly past the excitation.
             if e * decay_factor <= peak:

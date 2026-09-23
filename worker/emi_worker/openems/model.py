@@ -121,6 +121,11 @@ class BuiltModel:
 #: dt = 1.069e-13 s, which is 2.86 ns, or 2.86/fc.
 GAUSSIAN_SUPPORT_OVER_FC = 2.86
 
+def excitation_seconds(fc: float) -> float:
+    """How long openEMS's Gaussian pulse runs, in seconds (see GAUSSIAN_SUPPORT_OVER_FC)."""
+    return GAUSSIAN_SUPPORT_OVER_FC / max(fc, 1.0)
+
+
 #: The resistance across a cable gap port (§7). An open circuit in all but name: against a
 #: cable's antenna impedance of a few hundred ohms this loads the gap by about 0.016 dB, which
 #: M0 measured. openEMS still needs something in the cell for the probes to measure across.
@@ -200,7 +205,7 @@ def required_timesteps(dt_seconds: float, fc: float, f_min: float) -> tuple[int,
     if dt_seconds <= 0:
         raise ModelError("the mesh produced a non-positive timestep")
 
-    excitation_s = GAUSSIAN_SUPPORT_OVER_FC / max(fc, 1.0)
+    excitation_s = excitation_seconds(fc)
     # Three times the pulse: one to emit it, the rest for the structure to ring down.
     need_excitation = 3.0 * excitation_s
     need_bandwidth = 3.0 / max(f_min, 1.0)
