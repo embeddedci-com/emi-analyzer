@@ -37,9 +37,12 @@ then different antennas, and B against C measured the boundary as much as the co
 ``AIR_MM`` pads every side with air (no copper) the way the far-field box does, with the box
 itself left out. ``AIR_MM=0`` is the old domain.
 
-**The record** (``END_CRITERIA``). The run stops once the energy has fallen that far, and every
-transform is then repeated on the first 80 % of the record: a result that moves by more than a
-few tenths of a dB between the two was cut short, and says so in its ``record_db``.
+**The record** (``MAX_NS``). Every run is a fixed ``MAX_NS`` long, with openEMS's own end
+criterion off (``solve`` says why), and every transform
+is repeated on the first 80 % of the record: a result that moves by more than a few tenths of
+a dB between the two was cut short, and says so in its ``record_db``. Stability is judged from
+the energy instead: a run whose energy has not fallen 30 dB by the end of its record is
+refused.
 
     docker run --rm --cpus 3 -m 6g -v "$PWD/worker:/spike" -v <pcb>:/boards:ro \\
         -v <out>:/spike/spike_out -e SETUPS=<folder:ref:cable,...> -e AIR_MM=80 \\
@@ -82,7 +85,11 @@ DRIVER_SETBACK_MM = float(os.environ.get("SETBACK_MM", "15"))
 THREADS = int(os.environ.get("THREADS", "3"))
 #: Air on every side of the domain, in mm; see the docstring. 0 is the old 5 mm.
 AIR_MM = float(os.environ.get("AIR_MM", "80"))
-END_CRITERIA = float(os.environ.get("END_CRITERIA", "1e-6"))
+#: Effectively off: see solve(). The record is MAX_NS long instead.
+END_CRITERIA = float(os.environ.get("END_CRITERIA", "1e-12"))
+#: Length of every record, in ns. 40 ns is four times the excitation; the 80 % check says
+#: whether it was enough.
+MAX_NS = float(os.environ.get("MAX_NS", "40"))
 #: Height of the cable above the reference ground, for nec2c. The standard test setup.
 HEIGHT_M = float(os.environ.get("HEIGHT_M", "1.0"))
 
@@ -266,8 +273,43 @@ def _pad_with_air() -> None:
     nf2ff_mod.add_dumps = lambda *a, **k: None
 
 
+def _record_steps(doc) -> int:
+    """Timesteps for MAX_NS of record, from the Courant limit of the finished grid."""
+    d = [float(np.diff(np.asarray(v)).min()) * 1e-3
+         for v in (doc.x_lines, doc.y_lines, doc.z_lines)]
+    dt = 0.95 / (C * math.sqrt(sum(1.0 / x ** 2 for x in d)))
+    return int(math.ceil(MAX_NS * 1e-9 / dt))
+
+
+def _probe_decay_db(wd: Path) -> float:
+    """How far below its own peak the last tenth of the loudest-ending probe is, in dB.
+
+    run.divergence_ratio is switched off here (see solve), so this is the stability check
+    instead: a diverging grid ends loud, a healthy one ends quiet.
+    """
+    worst = -300.0
+    for f in wd.iterdir():
+        if f.suffix or f.name in ("et", "ht") or not f.is_file() or f.name.endswith(".xml"):
+            continue
+        try:
+            v = np.abs(post.read_probe(str(f)).values)
+        except (OSError, ValueError):
+            continue
+        if v.size < 20 or v.max() == 0:
+            continue
+        worst = max(worst, 20 * math.log10(v[-v.size // 10:].max() / v.max() + 1e-300))
+    return worst
+
+
 def solve(tag: str, built, freqs: np.ndarray) -> dict:
-    """Run one tier, or reuse a finished run of the same model."""
+    """Run one tier, or reuse a finished run of the same model.
+
+    openEMS's own end criterion is off (a fixed MAX_NS record instead): this study's 30-600 MHz
+    pulse is several lobes and about 9 ns long, a board strip with a 10 mm stub empties between
+    them, and the first run was stopped at 9 ns, inside the excitation. The worker's divergence
+    check was refusing the same run for the same reason; it now waits for the excitation to end
+    (``excitation_s``). Stability is judged on the energy at the end of the record as well.
+    """
     problems = built.doc.validate()
     if problems:
         raise SystemExit(f"{tag}: " + "; ".join(problems))
@@ -283,13 +325,23 @@ def solve(tag: str, built, freqs: np.ndarray) -> dict:
     t0 = time.time()
     r = run.run_openems(str(wd / "model.xml"), str(wd), threads=THREADS,
                         excitation_s=excitation_seconds(built.doc.excitation.fc))
+    tail = _probe_decay_db(wd)
     print(f"    {tag}: {r.final_timestep:,} steps, {time.time()-t0:.0f}s, "
-          f"energy {r.final_energy_db:.1f} dB", flush=True)
+          f"energy {r.final_energy_db:.1f} dB, loudest probe ends {tail:.0f} dB down",
+          flush=True)
     for w in r.warnings:
         print(f"      warning: {w}")
     done.write_text(json.dumps({"steps": r.final_timestep, "seconds": time.time() - t0,
-                                "energy_db": r.final_energy_db, "warnings": r.warnings}))
-    return {"wd": wd, "steps": r.final_timestep}
+                                "energy_db": r.final_energy_db, "warnings": r.warnings,
+                                "probe_tail_db": tail}))
+    # Judged on the energy. A probe alone is not evidence: the 1 MOhm gap holds the charge the
+    # pulse's DC content leaves on it and bleeds it off over ~100 ns, so its voltage can end
+    # 10 dB below peak in a run whose energy is 60 dB down. A cable still ringing is a short
+    # record, which the 80 % check prices.
+    if r.final_energy_db > -30.0:
+        raise SystemExit(f"{tag}: the energy is only {-r.final_energy_db:.0f} dB down at the "
+                         f"end of the record: this run is not decaying")
+    return {"wd": wd, "steps": r.final_timestep, "probe_tail_db": tail}
 
 
 def _head(trace, fraction: float = 0.8):
@@ -379,7 +431,9 @@ def main() -> None:
             b = build_model(board, transform, params)
             if b.cable_ports:
                 worst = regrade_along_cable(b, anchor)
-                print(f"  re-graded along the cable: worst cell ratio {worst:.2f}", flush=True)
+                b.doc.max_timesteps = _record_steps(b.doc)
+                print(f"  re-graded along the cable: worst cell ratio {worst:.2f}; "
+                      f"{b.doc.max_timesteps:,} steps for {MAX_NS:g} ns", flush=True)
             if not b.cable_ports:
                 print(f"  {tag}: no gap port — {'; '.join(b.notes)}")
                 continue
@@ -391,6 +445,7 @@ def main() -> None:
             rb = solve(f"{tag}_B", b, FREQS)
             c = build_model(board, transform, params)
             regrade_along_cable(c, anchor)
+            c.doc.max_timesteps = b.doc.max_timesteps
             add_cable(c, anchor, length_m)
             rc = solve(f"{tag}_C", c, FREQS)
 
