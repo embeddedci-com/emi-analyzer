@@ -54,14 +54,14 @@ type EstimateInput struct {
 	// It is usually GREATER than 1, which is the opposite of what this field originally
 	// assumed and of what its name suggests. DXum and friends are a floor on cell size, not
 	// the spacing: the mesher puts a line at every copper edge, and a routed board has edges
-	// far closer together than any preset. Measured on four real boards
-	// (worker/scripts/measure_fill_factor.py, September 2026), the in-plane axes come out
-	// 2.0-4.0x denser than uniform while the vertical axis, whose air is graded coarsely,
-	// comes out 0.26-0.55x. In-plane wins:
+	// far closer together than any preset. Measured on four real boards in 4-10 mm regions, the
+	// size of a coupon (worker/scripts/measure_fill_factor.py, September 2026), the in-plane
+	// axes come out 2.2-4.4x denser than uniform while the vertical axis, whose air is graded
+	// coarsely, comes out 0.23-0.46x. In-plane wins:
 	//
-	//	coarse  min 4.67  median 7.53  max 8.65
-	//	normal  min 2.31  median 4.66  max 5.08
-	//	fine    min 1.14  median 2.90  max 3.22
+	//	coarse  min 4.85  median 6.93  max 8.74
+	//	normal  min 2.33  median 4.11  max 4.63
+	//	fine    min 1.23  median 2.65  max 3.03
 	//
 	// The preset dependence is not noise: feature spacing is set by the board, so the coarser
 	// the request, the more the copper dominates.
@@ -94,8 +94,8 @@ var errBadEstimateInput = errors.New("emi: estimate input must have positive ext
 // will take fifty days.
 // InPlaneMinCellFraction is the smallest in-plane cell as a fraction of the requested one.
 // The mesher merges lines closer than a quarter of dx, and copper puts lines that close
-// everywhere on a routed board, so the cell that sets the timestep is dx/4, not dx. Taking dx
-// put the step count 2.0-4.5x low on four real boards.
+// everywhere on a routed board, so the cell that sets the timestep is dx/4, not dx. Taking
+// min(dx, dy, dz) put the step count 2.0-2.7x low on four real boards.
 const InPlaneMinCellFraction = 0.25
 
 // MaxFillFactor is an upper bound on FillFactor, to catch a caller passing a cell count by

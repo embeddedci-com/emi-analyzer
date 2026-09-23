@@ -35,7 +35,11 @@ from emi_worker.kicad.normalize import _board_extent
 from emi_worker.openems.model import Port, SolveParams, build_model
 
 PRESETS = {"coarse": (150, 150, 100), "normal": (75, 75, 50), "fine": (50, 50, 25)}
-REGIONS_MM = (10.0, 20.0, 40.0)
+#: Square regions around the middle of the routed area, in mm. Small on purpose: full-wave
+#: solves are meant for coupons cut from a net, not whole boards, and a small region is denser
+#: than a large one (more of it is copper edges), so its multiplier is higher. Measured in
+#: September 2026, the 40 mm regions' floors were 10-25 % below the 10 mm ones'.
+REGIONS_MM = tuple(float(v) for v in os.environ.get("REGIONS_MM", "4,6,10").split(","))
 AIR_MM = 5.0
 
 

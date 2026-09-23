@@ -34,15 +34,14 @@ MAX_FILL_FACTOR = 50.0
 #: Per-preset lower bounds on the mesh multiplier, from the measurements above, rounded down.
 #: These are the *minimum* observed rather than the median on purpose: the panel that shows
 #: this says "At least", and a median would be wrong for half of all boards.
-MESH_MULTIPLIER_FLOOR = {"coarse": 4.6, "normal": 2.3, "fine": 1.1}
+MESH_MULTIPLIER_FLOOR = {"coarse": 4.8, "normal": 2.3, "fine": 1.2}
 
 #: The smallest in-plane cell as a fraction of the requested one. The mesher merges lines
 #: closer than this (``mesh.MERGE_FRACTION``), and on a routed board copper edges put lines
 #: that close everywhere, so the smallest cell -- which sets the timestep -- is a quarter of
-#: dx, not dx. Measured on four real boards, 36 regions: the smallest cell was 37.5 um in 11
-#: of 12 coarse regions (dx 150; 29.8 in the other), 18.75 um in every normal one (dx 75) and
-#: 8.7-12.5 um at fine (dx 50). Taking dx itself, as this did, put the step count 2.0-3.4x
-#: low; a quarter of dx leaves it at most 1.4x low, and never high.
+#: dx, not dx. Measured on four real boards, 36 regions of 4-10 mm: the smallest cell was
+#: within 0.4 % of dx/4 in every one. Taking min(dx, dy, dz), as this did, put the step count
+#: 2.0x low at the fine preset and 2.7x low at the others.
 IN_PLANE_MIN_CELL_FRACTION = 0.25
 
 
@@ -75,17 +74,19 @@ class EstimateInput:
     #: **This is usually greater than 1**, which is the opposite of what the name suggests
     #: and of what this model originally assumed. ``dx_um`` is a *floor* on cell size, not
     #: the spacing: the mesher puts a line at every copper edge, and a routed board has
-    #: edges far closer together than any preset. Measured on four real boards
-    #: (``scripts/measure_fill_factor.py``, September 2026, after the mesher's grading fix and
-    #: the thirds rule), the in-plane axes come out 2.0-4.0x denser than uniform while the
-    #: vertical axis, whose air is graded coarsely, comes out 0.26-0.55x. In-plane wins:
+    #: edges far closer together than any preset. Measured on four real boards in regions of
+    #: 4, 6 and 10 mm, the size of a coupon rather than a board
+    #: (``scripts/measure_fill_factor.py``, September 2026, after the mesher's grading fixes and
+    #: the thirds rule), the in-plane axes come out 2.2-4.4x denser than uniform while the
+    #: vertical axis, whose air is graded coarsely, comes out 0.23-0.46x. In-plane wins:
     #:
-    #:     coarse  min 4.67  median 7.53  max 8.65
-    #:     normal  min 2.31  median 4.66  max 5.08
-    #:     fine    min 1.14  median 2.90  max 3.22
+    #:     coarse  min 4.85  median 6.93  max 8.74
+    #:     normal  min 2.33  median 4.11  max 4.63
+    #:     fine    min 1.23  median 2.65  max 3.03
     #:
-    #: The first calibration (3.55 / 1.49 / 0.70 at the minimum) was made against the mesher
-    #: before it enforced its grading bound, which cost 30-60 % more cells.
+    #: The first calibration (3.55 / 1.49 / 0.70 at the minimum, 10-40 mm regions) was made
+    #: against the mesher before it enforced its grading bound. Smaller regions are denser: at
+    #: 40 mm the floors were 10-25 % below these.
     #:
     #: The preset dependence is not noise. Feature spacing is set by the board, so the
     #: coarser the request, the more the copper dominates -- which is why one constant

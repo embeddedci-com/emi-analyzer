@@ -42,12 +42,12 @@ CASES = [
         roi_x_mm=20, roi_y_mm=20, roi_z_mm=5,
         dx_um=200, dy_um=200, dz_um=20, f_min_hz=300e6, ports=1)),
     # A mesh multiplier above 1, which is what real boards actually produce: dx is a floor
-    # on cell size and copper edges force lines much closer. Measured medians are 7.53
-    # coarse, 4.66 normal, 2.90 fine. This case exists so all three implementations pin the
+    # on cell size and copper edges force lines much closer. Measured medians are 6.93
+    # coarse, 4.11 normal, 2.65 fine. This case exists so all three implementations pin the
     # widened range rather than only the old (0, 1].
     ("roi-20mm-measured-multiplier", dict(
         roi_x_mm=20, roi_y_mm=20, roi_z_mm=11.6,
-        dx_um=50, dy_um=50, dz_um=25, f_min_hz=100e6, ports=1, fill_factor=2.90)),
+        dx_um=50, dy_um=50, dz_um=25, f_min_hz=100e6, ports=1, fill_factor=2.65)),
     # The coarse preset at the radiated band's floor, with its floor multiplier: what the
     # browser shows for a first look at 30 MHz. dx/4 = 37.5 um sets the timestep, not dz.
     ("coarse-30mhz-floor-multiplier", dict(

@@ -2,9 +2,9 @@
   "_comment": "Shared fixtures for the FDTD cost model. The Go, Python and TypeScript implementations must all reproduce these exactly. Regenerate with `make fixtures`, never by hand.",
   "in_plane_min_cell_fraction": 0.25,
   "mesh_multiplier_floor": {
-    "coarse": 4.6,
+    "coarse": 4.8,
     "normal": 2.3,
-    "fine": 1.1
+    "fine": 1.2
   },
   "cases": [
     {
@@ -125,15 +125,15 @@
         "dz_um": 25,
         "f_min_hz": 100000000.0,
         "ports": 1,
-        "fill_factor": 2.9
+        "fill_factor": 2.65
       },
       "expected": {
-        "cells": 215296000,
-        "ram_bytes": 15501312000,
+        "cells": 196736000,
+        "ram_bytes": 14164992000,
         "timesteps": 1246214,
         "dt_seconds": 2.407291501933088e-14,
         "sim_time_seconds": 3e-08,
-        "eta_seconds": 1341524.44672
+        "eta_seconds": 1225875.78752
       }
     },
     {
@@ -147,15 +147,15 @@
         "dz_um": 100,
         "f_min_hz": 30000000.0,
         "ports": 1,
-        "fill_factor": 4.6
+        "fill_factor": 4.8
       },
       "expected": {
-        "cells": 853760,
-        "ram_bytes": 61470720,
+        "cells": 890880,
+        "ram_bytes": 64143360,
         "timesteps": 1384683,
         "dt_seconds": 7.221874505799264e-14,
         "sim_time_seconds": 1e-07,
-        "eta_seconds": 5910.9347904
+        "eta_seconds": 6167.9319552
       }
     },
     {

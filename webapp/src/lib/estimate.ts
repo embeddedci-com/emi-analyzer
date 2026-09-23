@@ -33,32 +33,32 @@ export const MAX_FILL_FACTOR = 50.0
 
 /**
  * Per-preset lower bounds on the mesh multiplier, measured on four real boards by
- * `worker/scripts/measure_fill_factor.py` (September 2026, after the mesher's grading fix
- * and the thirds rule).
+ * `worker/scripts/measure_fill_factor.py` in 4-10 mm regions, the size of a coupon rather than a
+ * board (September 2026, after the mesher's grading fixes and the thirds rule).
  *
  * These are usually **greater than 1**. `dx` and friends are a floor on cell size, not the
  * spacing: the mesher puts a line at every copper edge, and a routed board has edges far
- * closer than any preset. In-plane the mesh comes out 2.0–4.0× denser than uniform; the
- * vertical axis, whose air is graded coarsely, comes out 0.26–0.55×. In-plane wins.
+ * closer than any preset. In-plane the mesh comes out 2.2–4.4× denser than uniform; the
+ * vertical axis, whose air is graded coarsely, comes out 0.23–0.46×. In-plane wins.
  *
- *     coarse  min 4.67  median 7.53  max 8.65
- *     normal  min 2.31  median 4.66  max 5.08
- *     fine    min 1.14  median 2.90  max 3.22
+ *     coarse  min 4.85  median 6.93  max 8.74
+ *     normal  min 2.33  median 4.11  max 4.63
+ *     fine    min 1.23  median 2.65  max 3.03
  *
  * The *minimum* is used rather than the median because the panel says "At least". A median
  * would be wrong for half of all boards, in the direction that costs the user a day.
  */
 export const MESH_MULTIPLIER_FLOOR: Record<string, number> = {
-  coarse: 4.6,
+  coarse: 4.8,
   normal: 2.3,
-  fine: 1.1,
+  fine: 1.2,
 }
 
 /**
  * The smallest in-plane cell as a fraction of the requested one. The mesher merges lines
  * closer than a quarter of dx, and copper puts lines that close everywhere on a routed board,
- * so the cell that sets the timestep is dx / 4, not dx. Taking dx put the step count 2.0–4.5×
- * low on four real boards. Same constant in `estimate.py` and `estimate.go`.
+ * so the cell that sets the timestep is dx / 4, not dx. Taking min(dx, dy, dz) put the step
+ * count 2.0–2.7× low on four real boards. Same constant in `estimate.py` and `estimate.go`.
  */
 export const IN_PLANE_MIN_CELL_FRACTION = 0.25
 
