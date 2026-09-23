@@ -20,10 +20,10 @@ interface CatalogueRule {
  * Emissions first, ordered by how often each family is behind a real emissions failure, then
  * immunity -- the other half of an EMC test.
  */
-const CATEGORY_ORDER = [
+export const CATEGORY_ORDER = [
   'Return path', 'Power integrity', 'Signal integrity', 'Radiation', 'Conducted emissions', 'Immunity',
 ]
-const CATEGORY_COLOR: Record<string, string> = {
+export const CATEGORY_COLOR: Record<string, string> = {
   'Return path': 'blue',
   'Power integrity': 'grape',
   'Signal integrity': 'teal',
@@ -49,8 +49,8 @@ export function ChecksTable() {
             stackup: what the board radiates and conducts out through its cables, and where ESD
             and fast transients get in. They say where to look. A solve on a selected region, or
             a near-field scan loaded onto the board, confirms what is actually radiating. Thresholds and
-            which checks run can be set per board in an <code>emi.rules.yaml</code> placed next
-            to the <code>.kicad_pcb</code> and uploaded with it in a zip.
+            which checks run are set per board under Findings, Checks, or in an{' '}
+            <code>emi.rules.yaml</code> uploaded next to the <code>.kicad_pcb</code> in a zip.
           </Text>
         </div>
         <Table.ScrollContainer minWidth={560}>

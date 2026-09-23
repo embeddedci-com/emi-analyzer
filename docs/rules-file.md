@@ -53,9 +53,14 @@ suppress:
 Most general first; the last one to set a value wins, and every finding can say which:
 
 1. built-in defaults
-2. project settings in the UI
+2. project settings (reserved; nothing sets them yet)
 3. this file
-4. the run's own parameters
+4. settings edited in the app, under Findings, Checks
+
+The app shows every value with its source, and saves its edits with the analysis run they
+were applied by (the ingest run's `params.settings`, in this file's format). Its **Export
+emi.rules.yaml** button writes all of it, including the groups and suppressions from this
+file, as one file that gives the same analysis without the app.
 
 ## Notes
 
