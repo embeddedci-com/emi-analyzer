@@ -18,12 +18,14 @@ import hashlib
 import io
 import json
 import logging
+import re
 import zipfile
 from dataclasses import dataclass, field
 
 from .. import stackup, topology
 from ..gerber import GerberError, NetlistError, load_gerber_board
 from ..kicad import netclass, parse, parse_board
+from ..kicad.board import ZONES_UNFILLED_NOTE
 from ..kicad.normalize import _board_extent, normalize, to_json
 from ..rules import run_rules, settings
 from ..rules import matching, netreport
@@ -40,28 +42,87 @@ DEFAULT_MAX_FREQUENCY_HZ = 1e9
 #: codebase is 12 MB; 200 MB is not a PCB, it is either a mistake or an attack.
 MAX_BOARD_BYTES = 200 * 1024 * 1024
 
+#: Archive limits. The per-member cap alone let a zip of many 199 MB members through, each
+#: read into memory (twice: once for the board, once for the sidecars). So there is also a
+#: cap on the members read in total, one on what the archive claims to hold altogether, and
+#: one on how many entries it may list. A KiCad project with its fabrication output is a
+#: few dozen files and a few MB.
+MAX_ARCHIVE_MEMBERS = 5_000
+MAX_ARCHIVE_READ_BYTES = 300 * 1024 * 1024
+MAX_ARCHIVE_TOTAL_BYTES = 2 * 1024 * 1024 * 1024
+
 
 #: Extensions that mark a file as part of a Gerber set.
 GERBER_SUFFIXES = (".gbr", ".gbrjob", ".drl", ".gtl", ".gbl", ".gm1", ".d356")
 
+#: Everything the Gerber reader might use: copper, outline, drill, netlist and job files,
+#: under the names KiCad and the usual Protel-style exporters give them. Silkscreen, mask,
+#: paste and 3D models are never read.
+_GERBER_SET = re.compile(
+    r"\.(gbr|gbrjob|drl|xln|exc|txt|d356|ipc|net|gtl|gbl|gko|gm\d*|g\d+)$", re.IGNORECASE,
+)
 
-def _archive_members(data: bytes) -> dict[str, bytes]:
-    """Read a zip into {name: bytes}, skipping directories and archiver noise."""
-    zf = zipfile.ZipFile(io.BytesIO(data))
-    out: dict[str, bytes] = {}
-    for info in zf.infolist():
-        if info.is_dir() or "__MACOSX" in info.filename:
-            continue
+
+def _skipped(name: str) -> bool:
+    """Archiver noise and KiCad's own backup copies."""
+    base = name.rsplit("/", 1)[-1]
+    return "__MACOSX" in name or base.startswith((".", "_autosave-"))
+
+
+@dataclass
+class _Archive:
+    """An opened upload zip: its usable entries, checked against the limits, not yet read."""
+
+    zf: zipfile.ZipFile
+    infos: list[zipfile.ZipInfo]
+    read_bytes: int = 0
+
+    @classmethod
+    def open(cls, data: bytes) -> "_Archive":
+        try:
+            zf = zipfile.ZipFile(io.BytesIO(data))
+        except zipfile.BadZipFile as exc:
+            raise StageError("the upload looks like a zip file but could not be opened") from exc
+        infos = zf.infolist()
+        if len(infos) > MAX_ARCHIVE_MEMBERS:
+            raise StageError(
+                f"the archive lists {len(infos):,} files, more than the "
+                f"{MAX_ARCHIVE_MEMBERS:,} limit. Zip only the project folder."
+            )
+        total = sum(i.file_size for i in infos)
+        if total > MAX_ARCHIVE_TOTAL_BYTES:
+            raise StageError(
+                f"the archive unpacks to {total / 1e6:,.0f} MB, more than the "
+                f"{MAX_ARCHIVE_TOTAL_BYTES / 1e6:,.0f} MB limit"
+            )
+        return cls(zf, [i for i in infos if not i.is_dir() and not _skipped(i.filename)])
+
+    def names(self) -> list[str]:
+        return [i.filename for i in self.infos]
+
+    def read(self, name: str) -> bytes:
+        """One member, counted against the per-member and total limits before it is read.
+
+        The sizes checked are the ones the archive declares. zipfile stops at the declared
+        size and fails the CRC check on anything that lies about it, so a member cannot
+        inflate past what was checked here.
+        """
+        info = self.zf.getinfo(name)
         if info.file_size > MAX_BOARD_BYTES:
             raise StageError(
                 f"{info.filename} is {info.file_size / 1e6:.0f} MB, larger than the "
                 f"{MAX_BOARD_BYTES / 1e6:.0f} MB limit"
             )
-        name = info.filename.split("/")[-1]
-        if name.startswith((".", "_autosave-")):
-            continue
-        out[name] = zf.read(info)
-    return out
+        if self.read_bytes + info.file_size > MAX_ARCHIVE_READ_BYTES:
+            raise StageError(
+                f"the board files in the archive add up to more than the "
+                f"{MAX_ARCHIVE_READ_BYTES / 1e6:.0f} MB limit"
+            )
+        self.read_bytes += info.file_size
+        try:
+            return self.zf.read(info)
+        except zipfile.BadZipFile as exc:
+            raise StageError(f"{info.filename} in the archive is damaged ({exc})") from exc
 
 
 @dataclass
@@ -83,62 +144,64 @@ class Sidecars:
 SETTINGS_NAMES = ("emi.rules.yaml", "emi.rules.yml", "emi.rules.json", ".emi.yaml")
 
 
-def load_sidecars(data: bytes) -> Sidecars:
+def _read_sidecars(archive: _Archive) -> Sidecars:
     out = Sidecars()
-    if data[:2] != b"PK":
-        return out
-    try:
-        members = _archive_members(data)
-    except zipfile.BadZipFile:
-        return out
+    names = archive.names()
 
-    projects = sorted((n for n in members if n.lower().endswith(".kicad_pro")), key=len)
+    projects = sorted(
+        (n for n in names if n.lower().endswith(".kicad_pro")),
+        key=lambda n: len(n.rsplit("/", 1)[-1]),
+    )
     if projects:
-        out.project = members[projects[0]]
+        out.project = archive.read(projects[0])
     else:
         out.notes.append(
             "no .kicad_pro in the upload, so netclasses and differential-pair geometry are "
             "unavailable; groups and pairs were inferred from net names instead"
         )
 
+    # Settings files may be dotfiles (.emi.yaml), which _skipped leaves out of the listing.
+    every = [i.filename for i in archive.zf.infolist() if not i.is_dir()]
     for name in SETTINGS_NAMES:
-        hit = next((n for n in members if n.rsplit("/", 1)[-1].lower() == name), None)
+        hit = next((n for n in every if n.rsplit("/", 1)[-1].lower() == name), None)
         if hit:
+            label = hit.rsplit("/", 1)[-1]
             try:
-                out.settings = settings.parse_document(members[hit].decode("utf-8", "replace"))
-                out.notes.append(f"rules read from {hit}")
+                out.settings = settings.parse_document(
+                    archive.read(hit).decode("utf-8", "replace"))
+                out.notes.append(f"rules read from {label}")
+            except StageError:
+                raise
             except Exception as exc:  # noqa: BLE001
-                out.notes.append(f"{hit} could not be read ({exc}); built-in defaults used")
+                out.notes.append(f"{label} could not be read ({exc}); built-in defaults used")
             break
     return out
 
 
-def load_board(data: bytes) -> tuple[object, str, str]:
-    """Read an upload into a BoardModel, whichever format it is.
-
-    Returns ``(model, filename, source_kind)``. A bare file is KiCad; an archive is
-    whichever of the two it turns out to hold, decided by what is actually inside rather
-    than by what the project was labelled — a user who picks the wrong one in the UI should
-    still get their board.
-    """
+def load_sidecars(data: bytes) -> Sidecars:
     if data[:2] != b"PK":
-        text, filename = _extract_board(data)
-        return parse_board(parse(text)), filename, "kicad"
-
+        return Sidecars()
     try:
-        members = _archive_members(data)
-    except zipfile.BadZipFile as exc:
-        raise StageError("the upload looks like a zip file but could not be opened") from exc
+        return _read_sidecars(_Archive.open(data))
+    except StageError:
+        return Sidecars()
 
-    kicad = [n for n in members if n.lower().endswith(".kicad_pcb")]
-    gerber = [n for n in members if n.lower().endswith(GERBER_SUFFIXES)]
 
+def _board_from_archive(archive: _Archive) -> tuple[object, str, str]:
+    names = archive.names()
+    kicad = [n for n in names if n.lower().endswith(".kicad_pcb")]
     if kicad:
-        kicad.sort(key=len)
-        text = members[kicad[0]].decode("utf-8", errors="replace")
-        return parse_board(parse(text)), kicad[0], "kicad"
+        # Shallowest path wins: a project's own board sits above any imported one.
+        kicad.sort(key=lambda n: (n.count("/"), len(n)))
+        name = kicad[0]
+        text = archive.read(name).decode("utf-8", errors="replace")
+        return parse_board(parse(text)), name, "kicad"
 
-    if gerber:
+    if any(n.lower().endswith(GERBER_SUFFIXES) for n in names):
+        # Keyed by base name, which is what a job file's paths refer to.
+        members = {
+            n.rsplit("/", 1)[-1]: archive.read(n) for n in names if _GERBER_SET.search(n)
+        }
         try:
             return load_gerber_board(members), "gerber set", "gerber"
         except (GerberError, NetlistError) as exc:
@@ -153,43 +216,36 @@ def load_board(data: bytes) -> tuple[object, str, str]:
     )
 
 
-def _extract_board(data: bytes) -> tuple[str, str]:
-    """Return ``(text, filename)`` for a KiCad board file inside an upload.
+def read_upload(data: bytes) -> tuple[object, str, str, Sidecars]:
+    """The board and its sidecars from one pass over the upload.
 
-    Accepts either a bare ``.kicad_pcb`` or a zipped KiCad project, because both are things
-    a person will reasonably drag into a browser.
+    Returns ``(model, filename, source_kind, sidecars)``. Each member that is needed is read
+    once; anything else in the archive is never decompressed.
     """
-    if data[:2] == b"PK":
-        try:
-            zf = zipfile.ZipFile(io.BytesIO(data))
-        except zipfile.BadZipFile as exc:
-            raise StageError("the upload looks like a zip file but could not be opened") from exc
+    if data[:2] != b"PK":
+        text, filename = _extract_board(data)
+        return parse_board(parse(text)), filename, "kicad", Sidecars()
+    archive = _Archive.open(data)
+    model, filename, kind = _board_from_archive(archive)
+    return model, filename, kind, _read_sidecars(archive)
 
-        candidates = [
-            n for n in zf.namelist()
-            if n.lower().endswith(".kicad_pcb")
-            # Skip KiCad's autosave and backup copies, and anything a zip archiver added.
-            and not n.split("/")[-1].startswith(("_autosave-", "."))
-            and "__MACOSX" not in n
-        ]
-        if not candidates:
-            raise StageError(
-                "no .kicad_pcb file found in the archive. Zip the KiCad project folder, "
-                "or upload the .kicad_pcb file on its own."
-            )
-        if len(candidates) > 1:
-            # Shallowest path wins: a project's own board sits above any imported one.
-            candidates.sort(key=lambda n: (n.count("/"), len(n)))
 
-        name = candidates[0]
-        info = zf.getinfo(name)
-        if info.file_size > MAX_BOARD_BYTES:
-            raise StageError(
-                f"{name} is {info.file_size / 1e6:.0f} MB, larger than the "
-                f"{MAX_BOARD_BYTES / 1e6:.0f} MB limit"
-            )
-        return zf.read(name).decode("utf-8", errors="replace"), name
+def load_board(data: bytes) -> tuple[object, str, str]:
+    """Read an upload into a BoardModel, whichever format it is.
 
+    Returns ``(model, filename, source_kind)``. A bare file is KiCad; an archive is
+    whichever of the two it turns out to hold, decided by what is actually inside rather
+    than by what the project was labelled — a user who picks the wrong one in the UI should
+    still get their board.
+    """
+    if data[:2] != b"PK":
+        text, filename = _extract_board(data)
+        return parse_board(parse(text)), filename, "kicad"
+    return _board_from_archive(_Archive.open(data))
+
+
+def _extract_board(data: bytes) -> tuple[str, str]:
+    """Return ``(text, filename)`` for a bare ``.kicad_pcb`` upload."""
     if len(data) > MAX_BOARD_BYTES:
         raise StageError(
             f"the board file is {len(data) / 1e6:.0f} MB, larger than the "
@@ -221,13 +277,13 @@ def run_ingest(ctx: StageContext) -> StageResult:
     ctx.progress("parse", 15, "reading board file")
     ctx.check_stop()
     try:
-        model, filename, source_kind = load_board(data)
+        # One pass over the upload for the board and the files that came with it
+        # (netclasses, committed rules): each member is read once, and only if it is needed.
+        model, filename, source_kind, sidecars = read_upload(data)
     except StageError:
         raise
     except ValueError as exc:
         raise StageError(f"the board file could not be read: {exc}") from exc
-    # Files that came with the board but are not the board: netclasses, committed rules.
-    sidecars = load_sidecars(data)
 
     ctx.progress("parse", 35, "extracting geometry")
 
@@ -318,6 +374,9 @@ def run_ingest(ctx: StageContext) -> StageResult:
     # collected and then dropped on the floor.
     rules_doc["notes"] = (
         list(rules_doc.get("notes") or []) + list(sidecars.notes) + list(electrics.notes)
+        # Unfilled zones switch the plane checks off, so the note belongs with the findings
+        # as well as with the board's warnings.
+        + [w for w in model.warnings if w.endswith(ZONES_UNFILLED_NOTE.rsplit("}", 1)[-1])]
     )
     if hidden:
         rules_doc["notes"].append(
