@@ -308,6 +308,42 @@ def test_the_budget_shows_its_own_working(tmp_path):
     assert "placeholder" in doc["uncertainty_note"].lower()
 
 
+def test_an_assumed_driver_is_assumed_everywhere_in_the_result(tmp_path):
+    """The gate in docs/known-issues.md, end to end: a driver with one assumed value reads as
+    assumed on the result, carries the assumed sigma into the budget and so into the 80 %
+    range, and says which value it was."""
+    from emi_worker.drivers.document import SOURCE_SIGMA_DB
+
+    doc = _run(tmp_path, DECLARED, FakeClient(_solve()))["doc"]
+    drv = doc["inputs"]["driver"]
+    assert drv["weakest_source"] == "assumed"
+    assert drv["sigma_db"] == SOURCE_SIGMA_DB["assumed"]
+    assert drv["assumed"] == ["source_impedance_ohm"]
+    assert doc["sigma_terms"]["driver provenance (assumed)"] == SOURCE_SIGMA_DB["assumed"]
+    # The 80 % range is 1.28 sigma either side, and that sigma contains the 6 dB term.
+    assert doc["sigma_db"] >= SOURCE_SIGMA_DB["assumed"]
+    half = (doc["range_80_db"][1] - doc["range_80_db"][0]) / 2
+    assert half == pytest.approx(1.28 * doc["sigma_db"], rel=1e-9)
+
+    # And an incomplete estimate, which has no sigma at all, still says so.
+    params = {**DECLARED, "cable_assignments": {}}
+    partial = _run(tmp_path, params, FakeClient(_solve()))["doc"]
+    assert "sigma_db" not in partial
+    assert partial["inputs"]["driver"]["weakest_source"] == "assumed"
+
+
+def test_a_measured_driver_carries_its_own_smaller_term(tmp_path):
+    measured = json.loads(json.dumps(CLOCK))
+    for v in measured["trapezoid"].values():
+        v["source"] = "scope"
+    doc = _run(tmp_path, DECLARED, FakeClient(_solve(), drivers=[
+        {"id": "d1", "document": measured}]))["doc"]
+    assert doc["inputs"]["driver"]["weakest_source"] == "scope"
+    assert doc["inputs"]["driver"]["assumed"] == []
+    assert "driver provenance (scope)" in doc["sigma_terms"]
+    assert not any("assumed" in k for k in doc["sigma_terms"])
+
+
 def test_recommendations_come_from_findings_on_the_dominant_path(tmp_path):
     findings = [
         {"id": "plane-gap-1", "rule": "plane-gap", "severity": "critical",

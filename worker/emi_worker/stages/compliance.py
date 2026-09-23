@@ -233,9 +233,15 @@ def run_compliance(ctx: StageContext) -> StageResult:
         "inputs": {
             # What the gate was given, so a reader can check it rather than trust it.
             "solve_run_id": p.get("solve_run_id"),
+            # Its provenance travels with it, so an assumed driver reads as assumed on the
+            # result whether or not the estimate got as far as a margin and a sigma.
             "driver": None if attached is None else {
                 "id": attached.id, "name": attached.driver.name,
-                "kind": attached.driver.kind, "net": attached.driver.net},
+                "kind": attached.driver.kind, "net": attached.driver.net,
+                "weakest_source": attached.driver.weakest_source(),
+                "sigma_db": attached.driver.sigma_db(),
+                "assumed": sorted(k for k, v in attached.driver.values.items()
+                                  if v.source == "assumed")},
             "connectors": board["connectors"],
             "modelled_cables": asm.modelled_cables if asm else {},
             "excited_ports": asm.excited_ports if asm else [],

@@ -22,6 +22,7 @@ import {
   TERMINAL_STATUSES, type ComplianceParams, type EmiApi, type Run,
 } from '../lib/emiApi'
 import { complianceParams, runPhase } from '../lib/complianceRun'
+import { driverOptionLabel } from '../lib/driverDocument'
 import type { SolveManifest } from './HotspotResults'
 import { CompliancePanel } from './CompliancePanel'
 import { EXPERIMENTAL, Experimental } from './Experimental'
@@ -165,7 +166,9 @@ export function ComplianceTab({
   const phase = runPhase(run.data)
   const running = !!startedRunId && (phase.phase === 'running' || run.isLoading)
   const driverOptions = useMemo(
-    () => (drivers.data ?? []).map((d) => ({ value: d.id, label: `${d.name} (${d.kind})` })),
+    () => (drivers.data ?? []).map((d) => ({
+      value: d.id, label: driverOptionLabel(`${d.name} (${d.kind})`, d.document),
+    })),
     [drivers.data],
   )
 

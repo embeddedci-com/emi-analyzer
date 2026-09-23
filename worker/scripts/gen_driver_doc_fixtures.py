@@ -53,6 +53,22 @@ WAVEFORM = {
     },
 }
 
+#: A 100 MHz square wave captured at 20 samples a period, with its bandwidth just above the
+#: 4th harmonic: a null. The continuation above the join has to come from the lobes of the
+#: top octave, not from that null, or every harmonic above the bandwidth resolves to nothing.
+SQUARE_JOIN = {
+    "format": "emi-driver", "version": 1, "name": "captured square", "kind": "waveform",
+    "role": "signal",
+    "waveform": {
+        "sample_interval_s": 5e-10,
+        "samples_v": [0.0, 1.65] + [3.3] * 9 + [1.65] + [0.0] * 9,
+        "bandwidth_hz": 4.1e8,
+        "period_s": {"value": 1.0e-8, "source": "benchpod"},
+        "source_impedance_ohm": {"value": 33, "source": "datasheet"},
+        "rise_s": {"value": 1e-9, "source": "datasheet"},
+    },
+}
+
 SPECTRUM = {
     "format": "emi-driver", "version": 1, "name": "analyser trace", "kind": "spectrum",
     "role": "signal",
@@ -74,6 +90,7 @@ REGULATOR = {
 VALID = [
     ("trapezoid-spi-clock", trapezoid()),
     ("waveform-captured-edge", WAVEFORM),
+    ("waveform-join-on-a-null", SQUARE_JOIN),
     ("spectrum-analyser-trace", SPECTRUM),
     ("switching-regulator", REGULATOR),
     ("all-measured", trapezoid(
@@ -130,6 +147,7 @@ INVALID = [
 RESOLVE_AT = {
     "trapezoid-spi-clock": [25e6, 40e6, 50e6, 75e6, 125e6],
     "waveform-captured-edge": [1e9, 2e9, 3e9, 4e9],
+    "waveform-join-on-a-null": [1e8, 3e8, 4e8, 5e8, 7e8],
     "spectrum-analyser-trace": [10e6, 25e6, 43.301270189221924e6, 75e6, 500e6],
     "switching-regulator": [25e6, 75e6],
     "all-measured": [25e6, 75e6],

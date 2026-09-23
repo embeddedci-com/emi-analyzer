@@ -17,13 +17,13 @@ solver or a measurement — and passed. The gap between the two is most of this 
 | Geometric EMI/EMC rule checks and findings | ✅ | ✅ | on |
 | Run-cost estimator | ✅ | ✅ | on |
 | ESD transient simulation (ngspice) | ✅ | ⚠️ source, line and clamp models unit-checked; no bench comparison | on |
-| Cable budget, Tier A (`cable` run, nec2c) | ✅ | ⚠️ the solver matches transmission-line theory; the product setup (fed against the board, scanned 3 m out) has no second-solver comparison — §3 | on |
+| Cable budget, Tier A (`cable` run, nec2c) | ✅ | ✅ against openEMS on the product setup: 7 of 9 configurations within 1 dB below resonance, all within 2 dB at the peaks; the wire radius, not the solver, is the larger uncertainty — §3 | on |
 | Limits library and Limits page | ✅ | ⚠️ FCC Part 15 only; there is no CISPR 32 table | on |
 | **Full-wave solve (openEMS)** | ✅ | ⚠️ **a 50 ohm microstrip within 1 % of theory on every preset; solves end to end on the fixture board; long records on whole boards are out of scope — §2** | **off** (`full-wave`) |
-| Drivers (re-weighting a solve) | ✅ | ⚠️ partly | off, with full-wave |
+| Drivers (re-weighting a solve) | ✅ | ⚠️ every check in §3 passes; nothing against a measured source | off, with full-wave |
 | Components (MLCC models in a solve) | ✅ | ❌ the shipped openEMS 0.0.35 cannot model an inductor, so no capacitor is placed; on a current openEMS build a 100 pF 0402 resonates within 1.6 % but only with a -70 dB record (§3) | off, with full-wave |
 | Board far field (NF2FF) | ✅ | ⚠️ matches nec2c on dipoles over the ground plane as the product runs it, 30 MHz up (§3); no board checked against a measurement | off, with full-wave |
-| Cable emissions, Tier B | ✅ | ⚠️ synthetic board only | off, with full-wave |
+| Cable emissions, Tier B | ✅ | ❌ fails its real-board gate: 7-9 dB low on average on two boards below resonance; the third gave no result — §3 | off, with full-wave |
 | Compliance estimate | ✅ | ❌ runs end to end on the fixture board; never checked against a lab or a second solver (§3) | off, with full-wave |
 | Conducted emissions scan | ❌ | ❌ | — |
 | Report export | ❌ | ❌ | — |
@@ -111,13 +111,15 @@ after the energy has fallen 20 dB.
 |---|---|
 | Closed form vs solver | ✅ |
 | Wire over ground resonates within 5 % of transmission-line theory | ✅ open and shorted |
-| A choke never raises common-mode current; a bond never lengthens the first resonance | ✅ |
-| **Tier B against a fully coupled simulation on three real boards, ±6 dB below resonance** | ❌ was blocked by §2; unblocked and not yet run |
+| A resistive choke never raises common-mode current | ✅ |
+| A choke from a datasheet curve is R + jX | ✅ built and tested; no library cable has one, none compared with a measured choke |
+| A bond moves the first resonance where a line over the plane resonates | ✅ within 3.3 % (1 m), 6.7 % (2 m). The old check ("never lengthens") could not fail and was wrong for an open far end |
+| **Tier B against a fully coupled simulation on three real boards, ±6 dB below resonance** | ❌ board A: Tier B 6-15 dB low from 45 MHz to resonance (mean -8.9 dB); board B: did not decay in its record; board C: 2-11 dB low from 80 MHz to resonance (mean -7.5 dB from 45 MHz). Same shape on both: low where the cable's impedance is large, agreeing at resonance |
 | No diode package is mistaken for a connector | ✅ |
-| `nec2c` and a second antenna solver agree within 1 dB | ❌ there is no second solver |
+| `nec2c` and a second antenna solver agree within 1 dB | ✅ openEMS, 9 configurations: 7 within 1 dB below resonance, 1.14 and 2.48 dB for the other two (the second record-limited) |
+| The closed form is a conservative bound | ⚠️ for an open far end only; 4-26 dB low for grounded and equipment far ends |
 
-Tier B agreed to 1.2 dB typical and 2.2 dB worst on a synthetic board, and once on a real board
-at a cheap mesh preset. Neither is the full check.
+Numbers, method and what is still open: [`verification/cables-and-drivers.md`](verification/cables-and-drivers.md).
 
 ### Drivers
 
@@ -125,9 +127,11 @@ at a cheap mesh preset. Neither is the full check.
 |---|---|
 | Trapezoid harmonics within 0.1 dB | ✅ |
 | Re-weighting a result matches re-solving within 0.5 dB | ✅ |
-| An uploaded waveform joins the spectrum envelope within 1 dB | ❌ |
-| An *assumed* driver shows as assumed everywhere, including the uncertainty | ❌ end to end |
-| A result from an older format refuses a driver with a re-run message | ❌ |
+| An uploaded waveform joins the spectrum envelope within 1 dB | ✅ 0.22 dB worst; the join used to scale to a null and drop every harmonic above it |
+| An *assumed* driver shows as assumed everywhere, including the uncertainty | ✅ result, σ, 80 % range, Compliance panel and every driver picker |
+| A result from an older format refuses a driver with a re-run message | ✅ near field, estimate and Cables chart |
+
+Details and numbers: [`verification/cables-and-drivers.md`](verification/cables-and-drivers.md).
 
 ### Components
 
@@ -207,9 +211,6 @@ now one series element, placed only on a solver that models an inductor.
 - **Harmonics of two drivers are combined only when they coincide to 100 ppm.** A receiver sees
   everything inside its 120 kHz (or 1 MHz) bandwidth together; lines closer than that but not
   equal are shown separately.
-- **The Cables tab's emission chart is still composed on the solve's grid** and still assumes the
-  driver's source impedance equals the port's. The compliance estimate does neither (it evaluates
-  every harmonic and applies `|Z_s+Z_in|/|Z_d+Z_in|`); the chart has not been brought in line.
 - **The far field makes a solve much larger.** The box is kept 25 mm or λ/10 from the copper and
   the grid grows to hold it: 2.6x the cells on the fixture board. The browser's cost estimate
   does not know this; the worker republishes the real figure at the mesh stage.

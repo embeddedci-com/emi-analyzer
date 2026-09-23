@@ -1,96 +1,116 @@
 /**
  * The browser half of the cable-emission contract.
  *
- * The same fixtures are checked by `worker/tests/test_cable_emission.py`. If this file and
- * that one disagree, a user reading a margin in the browser is reading a different number
- * from the one a worker put in the result — and both will look equally confident.
+ * The same fixtures are checked by `worker/tests/test_cable_emission.py`, against
+ * `compose_cable`, the composition the compliance estimate uses. If this file and that one
+ * disagree, the Cables tab shows a different number from the estimate, and both look equally
+ * confident.
  */
 
 import { describe, expect, it } from 'vitest'
 import fixtures from '../../../server/emi/testdata/cable_emission_fixtures.json'
+import { parseDriverDocument } from './driverDocument'
 import {
-  composeEmission, currentDbua, fieldDbuv, marginDb, parseCablePorts, worstPoint,
-  type CableAntenna, type CableTransfer,
+  composeCable, interpComplex, marginDb, parseCablePorts, portImpedance, portResistance,
+  whyNoCableDriver,
+  worstPoint,
+  type CableAntenna, type CablePort, type PortSpectrum,
 } from './cableEmission'
-import type { Complex } from './driverSpectrum'
 
-const caseInput = (c: (typeof fixtures.cases)[number]) => {
-  const transfer = c.input.transfer as CableTransfer
-  const antenna = c.input.antenna as CableAntenna
-  const volts: (Complex | null)[] = (c.input.source_volts as (number[] | null)[]).map((v) =>
-    v === null ? null : { re: v[0], im: v[1] },
+type Case = (typeof fixtures.cases)[number]
+
+const compose = (c: Case) =>
+  composeCable(
+    c.input.port as CablePort,
+    c.input.antenna as CableAntenna,
+    c.input.spectrum as PortSpectrum,
+    c.input.z_s,
+    parseDriverDocument(c.input.driver),
+    c.input.standard_id,
   )
-  return { transfer, antenna, volts, standardId: c.input.standard_id }
-}
+
+const byName = (name: string) => fixtures.cases.find((c) => c.name === name)!
 
 describe('cable emission, against the shared fixtures', () => {
   for (const c of fixtures.cases) {
     it(c.name, () => {
-      const { transfer, antenna, volts, standardId } = caseInput(c)
-      const em = composeEmission(transfer, antenna, volts, standardId)
-
-      expect(em.points.map((p) => p.frequency_hz)).toEqual(
-        c.expected.points.map((p) => p.frequency_hz),
+      const got = compose(c)
+      const want = c.expected
+      expect(got.covered).toEqual(want.covered_hz)
+      expect(got.band).toEqual(want.band_hz)
+      expect(got.emission.line).toBe(want.line)
+      expect(got.emission.points.map((p) => p.frequency_hz)).toEqual(
+        want.points.map((p) => p.frequency_hz),
       )
-      em.points.forEach((got, k) => {
-        const want = c.expected.points[k]
-        expect(currentDbua(got)).toBeCloseTo(want.current_dbua, 9)
-        expect(fieldDbuv(got)).toBeCloseTo(want.field_dbuv_per_m, 9)
-        expect(got.limit_dbuv_per_m).toBeCloseTo(want.limit_dbuv_per_m, 9)
-        expect(marginDb(got)).toBeCloseTo(want.margin_db, 9)
+      got.emission.points.forEach((p, k) => {
+        const w = want.points[k]
+        if (w.current_a === 0) {
+          expect(p.current_a).toBe(0)
+          return
+        }
+        expect(p.current_a / w.current_a).toBeCloseTo(1, 12)
+        expect(p.field_v_per_m / w.field_v_per_m).toBeCloseTo(1, 12)
       })
-      expect([...em.undriven.keys()].sort((a, b) => a - b)).toEqual(
-        c.expected.undriven_hz,
+      expect([...got.emission.undriven.keys()].sort((a, b) => a - b)).toEqual(
+        want.undriven_hz,
       )
     })
   }
 })
 
 describe('cable emission', () => {
-  const base = fixtures.cases[0]
-
-  it('worst margin is the worst, not the highest field', () => {
-    const { transfer, antenna, volts, standardId } = caseInput(base)
-    const em = composeEmission(transfer, antenna, volts, standardId)
-    const worst = worstPoint(em)
-    expect(worst).not.toBeNull()
-    // 100 MHz is 14.9 dB over; 300 MHz radiates less but sits under a limit that steps up,
-    // so a chart that ranked by field alone would point at the wrong frequency.
-    expect(worst!.frequency_hz).toBe(100e6)
-    for (const p of em.points) expect(marginDb(p)).toBeGreaterThanOrEqual(marginDb(worst!))
-  })
-
-  it('refuses a driver resolved at a different number of frequencies', () => {
-    const { transfer, antenna, volts, standardId } = caseInput(base)
-    expect(() => composeEmission(transfer, antenna, volts.slice(1), standardId)).toThrow(
-      /resolved at 3 frequencies/,
+  it('evaluates every harmonic, not only the grid points', () => {
+    // A 25 MHz clock against a six-point grid: 37 harmonics in 30-960 MHz. Composed on the
+    // grid, as the chart used to be, it drove only 250 MHz.
+    const got = compose(byName('harmonics-between-grid-points'))
+    expect(got.emission.line).toBe(true)
+    expect(got.emission.points.map((p) => Math.round(p.frequency_hz / 25e6))).toEqual(
+      Array.from({ length: 37 }, (_, k) => k + 2),
     )
   })
 
-  it('multiplies the phases rather than the magnitudes', () => {
-    // H and V both at 45 degrees: the product is at 90 and its magnitude is the product of
-    // the two. Adding magnitudes, or dropping the imaginary parts, both give a different
-    // answer -- and on real data neither would look obviously wrong.
-    const r = Math.SQRT1_2
-    const transfer: CableTransfer = {
-      ref: 'X1', frequencies_hz: [100e6], h_real: [r * 0.02], h_imag: [r * 0.02],
-      usable: [true],
-    }
-    const antenna: CableAntenna = {
-      ref: 'X1', cable_id: 'dc-pigtail', length_m: 1, distance_m: 3,
-      frequencies_hz: [100e6], z_real: [100], z_imag: [0], e_per_amp: [10],
-    }
-    const em = composeEmission(transfer, antenna, [{ re: r * 2, im: r * 2 }])
-    expect(em.points).toHaveLength(1)
-    // |H| = 0.02*sqrt(2)*... -> |H||V|/|Z| = 0.02*2/100
-    expect(em.points[0].current_a).toBeCloseTo((0.02 * 2) / 100, 12)
+  it("applies the driver's own source impedance", () => {
+    const same = compose(byName('harmonics-between-grid-points')).emission
+    const other = compose(byName('driver-source-impedance-replaces-the-ports')).emission
+    // 275 MHz, the 11th harmonic (the 10th, on the grid, is a square wave's null). A 10 ohm
+    // driver pushes |50 + Z_in| / |10 + Z_in| more, with Z_in read between grid points.
+    const f = 275e6
+    const at = (e: typeof same) => e.points.find((p) => p.frequency_hz === f)!
+    const z = portImpedance(byName('harmonics-between-grid-points').input.spectrum as PortSpectrum)
+    const zIn = interpComplex(z.f, z.zr, z.zi, f)!
+    const factor = Math.hypot(50 + zIn.re, zIn.im) / Math.hypot(10 + zIn.re, zIn.im)
+    expect(at(other).current_a / at(same).current_a).toBeCloseTo(factor, 12)
   })
 
-  it('a frequency the antenna solver never saw is reported, not skipped', () => {
-    const { transfer, antenna, volts, standardId } = caseInput(fixtures.cases[1])
-    const em = composeEmission(transfer, antenna, volts, standardId)
-    expect(em.points).toHaveLength(0)
-    expect([...em.undriven.values()].filter((m) => /antenna solver/.test(m))).toHaveLength(1)
+  it('worst margin is the worst, not the highest field', () => {
+    const e = compose(byName('driver-source-impedance-replaces-the-ports')).emission
+    const worst = worstPoint(e)
+    expect(worst).not.toBeNull()
+    for (const p of e.points) {
+      if (Number.isFinite(marginDb(p))) expect(marginDb(p)).toBeGreaterThanOrEqual(marginDb(worst!))
+    }
+  })
+
+  it('names why a point is missing rather than dropping it', () => {
+    const e = compose(byName('every-way-a-point-goes-missing')).emission
+    expect(e.undriven.get(120e6)).toMatch(/no source energy/)
+    expect(e.undriven.get(250e6)).toMatch(/bandwidth/)
+  })
+})
+
+describe('an older solve', () => {
+  const spectrum = byName('harmonics-between-grid-points').input.spectrum as PortSpectrum
+  const run = { ports: [{ name: 'p1', resistance_ohm: 33, excited: true }] }
+
+  it('takes a driver when it recorded its ports and their spectra', () => {
+    expect(whyNoCableDriver({ format_version: 2, run }, spectrum)).toBeNull()
+    expect(portResistance({ run }, 'p1')).toBe(33)
+  })
+
+  it('refuses a driver with a re-run message when it predates them', () => {
+    expect(whyNoCableDriver({ format_version: 1 }, null)).toMatch(/Re-run this solve/)
+    expect(whyNoCableDriver({ format_version: 2, run: {} }, spectrum)).toMatch(/Re-run/)
+    expect(whyNoCableDriver({ format_version: 2, run }, null)).toMatch(/Re-run/)
   })
 })
 
@@ -101,30 +121,15 @@ describe('reading cable_ports.json', () => {
   const written = JSON.parse(
     '{"ports":[{"ref":"J1","anchor_mm":[12.5,3.0],"driven_by":"p1","transfer":' +
       '{"frequencies_hz":[1e8,2e8],"h_real":[0.01,0.02],"h_imag":[-0.005,0.0],' +
-      '"usable":[true,false]}},' +
-      '{"ref":"J2","anchor_mm":[40.0,3.0],"driven_by":"p1","transfer":' +
-      '{"frequencies_hz":[1e8,2e8],"h_real":[0.03,0.04],"h_imag":[0.001,0.002],' +
-      '"usable":[true,true]}}]}',
+      '"usable":[true,false]}}]}',
   )
 
-  it('flattens each port into a CableTransfer and keeps its ref', () => {
-    expect(parseCablePorts(written)).toEqual([
-      { ref: 'J1', frequencies_hz: [1e8, 2e8], h_real: [0.01, 0.02], h_imag: [-0.005, 0.0],
+  it('keeps each port with its ref, its driver port and its transfer function', () => {
+    expect(parseCablePorts(written)).toEqual([{
+      ref: 'J1', driven_by: 'p1',
+      transfer: { frequencies_hz: [1e8, 2e8], h_real: [0.01, 0.02], h_imag: [-0.005, 0.0],
         usable: [true, false] },
-      { ref: 'J2', frequencies_hz: [1e8, 2e8], h_real: [0.03, 0.04], h_imag: [0.001, 0.002],
-        usable: [true, true] },
-    ])
-  })
-
-  it('feeds composeEmission without further conversion', () => {
-    const [t] = parseCablePorts(written)
-    const antenna: CableAntenna = {
-      ref: 'J1', cable_id: 'usb2-shielded', length_m: 1, distance_m: 3,
-      frequencies_hz: [1e8, 2e8], z_real: [100, 100], z_imag: [0, 0], e_per_amp: [1, 1],
-    }
-    const em = composeEmission(t, antenna, [{ re: 1, im: 0 }, { re: 1, im: 0 }])
-    expect(em.points.map((p) => p.frequency_hz)).toEqual([1e8])
-    expect(em.undriven.has(2e8)).toBe(true)
+    }])
   })
 
   it('reads nothing from a missing or empty file', () => {

@@ -112,6 +112,23 @@ describe('uploaded spectrum', () => {
   })
 })
 
+describe('a capture above its bandwidth', () => {
+  it('joins the envelope from the top octave, not from a null at the join', () => {
+    // 400 MHz is the 4th harmonic of a 100 MHz square wave, a null, and the last one below
+    // the 410 MHz bandwidth. Scaled to it, everything above would resolve to nothing.
+    const r = resolveDriver(docOf('waveform-join-on-a-null'), [5e8, 7e8])
+    expect(abs(r.volts[0]!)).toBeGreaterThan(0.1)
+    expect(abs(r.volts[1]!)).toBeGreaterThan(0.05)
+  })
+
+  it('gives the same level whatever else was asked for', () => {
+    const d = docOf('waveform-join-on-a-null')
+    const alone = resolveDriver(d, [7e8]).volts[0]!
+    const withRest = resolveDriver(d, [1e8, 2e8, 3e8, 4e8, 7e8]).volts[4]!
+    expect(abs(alone) / abs(withRest)).toBeCloseTo(1, 12)
+  })
+})
+
 describe('the preview', () => {
   it('gets both corners for a trapezoid and none for a waveform', () => {
     const corners = describeCorners(docOf('trapezoid-spi-clock'))

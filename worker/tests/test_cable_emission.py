@@ -15,7 +15,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from emi_worker.cables.emission import compose
+from emi_worker.compliance.assemble import compose_cable, port_impedance
+from emi_worker.drivers.document import parse as parse_driver
 from emi_worker.openems.post import ProbeTrace, cable_transfer
 
 
@@ -58,137 +59,87 @@ def test_the_transfer_keeps_phase():
 
 
 # ---- the composition ----------------------------------------------------------------------
+#
+# The composition is compliance.assemble.compose_cable, which the estimate and (through its
+# TypeScript copy) the Cables tab's chart both use. It used to be a second function that ran
+# on the solve's grid and assumed the driver's source impedance was the port's.
 
-TRANSFER = {
-    "frequencies_hz": [100e6, 200e6],
-    "h_real": [0.01, 0.02], "h_imag": [0.0, 0.0],
-    "usable": [True, True],
-}
-SOURCE = {100e6: complex(1.0, 0), 200e6: complex(0.5, 0)}
-ANTENNA = {100e6: (complex(300, 0), 25.0), 200e6: (complex(200, 0), 40.0)}
-
-
-def test_the_composition_is_the_arithmetic_in_the_design_doc():
-    """I_cm = H * V_src / Z_ant, E = I_cm * E_per_amp, checked by hand:
-    0.01 * 1.0 / 300 = 33.3 uA, times 25 V/m/A = 833 uV/m."""
-    e = compose("USB1", "usb2-shielded", TRANSFER, SOURCE, ANTENNA)
-    first = e.points[0]
-    assert first.current_a == pytest.approx(33.33e-6, rel=1e-3)
-    assert first.field_v_per_m == pytest.approx(833e-6, rel=1e-3)
-    assert first.current_dbua == pytest.approx(30.5, abs=0.1)
-    assert first.field_dbuv_per_m == pytest.approx(58.4, abs=0.1)
+def _compose(case: dict):
+    inp = case["input"]
+    return compose_cable(inp["port"]["transfer"], inp["antenna"],
+                         port_impedance(inp["spectrum"]), inp["z_s"],
+                         parse_driver(inp["driver"]), inp["standard_id"],
+                         ref=inp["port"]["ref"])
 
 
-def test_the_margin_is_positive_when_under_the_limit():
-    e = compose("USB1", "usb2-shielded", TRANSFER, SOURCE, ANTENNA)
-    # 58.4 dBuV/m against a 43.5 limit at 100 MHz is a predicted failure.
-    assert e.points[0].margin_db == pytest.approx(43.5 - 58.4, abs=0.1)
-    assert e.points[0].margin_db < 0
+def _volts_at(case: dict, f: float) -> float:
+    from emi_worker.drivers.resolve import resolve
 
+    return abs(resolve(parse_driver(case["input"]["driver"]), [f]).volts[0])
 
-def test_the_worst_point_is_the_least_margin_not_the_largest_field():
-    """They differ whenever the limit steps, which it does at 88, 216 and 960 MHz."""
-    e = compose("USB1", "usb2-shielded", TRANSFER, SOURCE, ANTENNA)
-    worst = e.worst()
-    assert worst.margin_db == min(p.margin_db for p in e.points)
-
-
-@pytest.mark.parametrize("missing,expect", [
-    ("driver", "the driver says nothing"),
-    ("antenna", "antenna solver was not run"),
-    ("source", "no source energy"),
-])
-def test_a_silent_input_is_named_rather_than_dropped(missing, expect):
-    """§17.3's completeness gate reads this list. A quietly shorter set of points would look
-    like a cleaner result rather than an incomplete one."""
-    transfer = dict(TRANSFER)
-    source = dict(SOURCE)
-    antenna = dict(ANTENNA)
-    if missing == "driver":
-        source.pop(200e6)
-    elif missing == "antenna":
-        antenna.pop(200e6)
-    else:
-        transfer = {**TRANSFER, "usable": [True, False]}
-
-    e = compose("USB1", "usb2-shielded", transfer, source, antenna)
-    assert len(e.points) == 1
-    assert 200e6 in e.undriven
-    assert expect in e.undriven[200e6]
-
-
-def test_a_composition_with_nothing_usable_has_no_worst_point():
-    e = compose("USB1", "usb2-shielded", {**TRANSFER, "usable": [False, False]},
-                SOURCE, ANTENNA)
-    assert e.points == []
-    assert e.worst() is None
-    assert len(e.undriven) == 2
-
-
-# ---------------------------------------------------------------------------
-# The shared fixtures, asserted here and in webapp/src/lib/cableEmission.test.ts.
-# ---------------------------------------------------------------------------
 
 _FIXTURES = (Path(__file__).resolve().parents[2] / "server" / "emi" / "testdata"
              / "cable_emission_fixtures.json")
+_CASES = {c["name"]: c for c in json.loads(_FIXTURES.read_text())["cases"]}
 
 
-def _emission_cases():
-    doc = json.loads(_FIXTURES.read_text())
-    return [(c["name"], c) for c in doc["cases"]]
+@pytest.mark.parametrize("name", sorted(_CASES))
+def test_matches_shared_fixtures(name):
+    """Asserted here and in webapp/src/lib/cableEmission.test.ts."""
+    case = _CASES[name]
+    comp = _compose(case)
+    want = case["expected"]
+    assert [p.frequency_hz for p in comp.points] == \
+        [p["frequency_hz"] for p in want["points"]]
+    for got, exp in zip(comp.points, want["points"]):
+        assert got.current_a == pytest.approx(exp["current_a"], rel=1e-12)
+        assert got.field_v_per_m == pytest.approx(exp["field_v_per_m"], rel=1e-12)
+    assert sorted(comp.undriven) == want["undriven_hz"]
+    assert comp.line == want["line"]
 
 
-@pytest.mark.parametrize("name,case", _emission_cases(),
-                         ids=[c[0] for c in _emission_cases()])
-def test_matches_shared_fixtures(name, case):
-    inp = case["input"]
-    transfer = inp["transfer"]
-    freqs = transfer["frequencies_hz"]
-    ant = inp["antenna"]
-
-    source = {f: complex(v[0], v[1])
-              for f, v in zip(freqs, inp["source_volts"]) if v is not None}
-    antenna = {f: (complex(ant["z_real"][k], ant["z_imag"][k]), ant["e_per_amp"][k])
-               for k, f in enumerate(ant["frequencies_hz"])}
-
-    em = compose(transfer["ref"], ant["cable_id"], transfer, source, antenna,
-                 standard_id=inp["standard_id"])
-
-    expected = case["expected"]
-    assert [p["frequency_hz"] for p in expected["points"]] == \
-           [p.frequency_hz for p in em.points]
-    for want, got in zip(expected["points"], em.points):
-        assert got.current_dbua == pytest.approx(want["current_dbua"], abs=1e-9)
-        assert got.field_dbuv_per_m == pytest.approx(want["field_dbuv_per_m"], abs=1e-9)
-        assert got.limit_dbuv_per_m == pytest.approx(want["limit_dbuv_per_m"], abs=1e-9)
-        assert got.margin_db == pytest.approx(want["margin_db"], abs=1e-9)
-    assert sorted(em.undriven) == expected["undriven_hz"]
+def test_the_composition_is_the_arithmetic_in_the_design_doc():
+    """I_cm = |H| · |Z_s + Z_in| / |Z_d + Z_in| · V / |Z_ant| and E = I_cm · E_per_amp, by hand
+    at a harmonic that sits on a grid point, where nothing is interpolated."""
+    case = _CASES["driver-source-impedance-replaces-the-ports"]
+    point = next(p for p in _compose(case).points if p.frequency_hz == 250e6)
+    h = abs(complex(0.006, -0.002))
+    z_in = complex(55.0, 20.0)
+    factor = abs(50.0 + z_in) / abs(10.0 + z_in)
+    i_cm = h * factor * _volts_at(case, 250e6) / abs(complex(180.0, 120.0))
+    assert point.current_a == pytest.approx(i_cm, rel=1e-12)
+    assert point.field_v_per_m == pytest.approx(i_cm * 40.0, rel=1e-12)
 
 
-def test_every_reason_a_point_goes_missing_is_distinct():
-    """Four causes, four messages.
+def test_a_driver_with_the_ports_own_impedance_has_no_factor():
+    """Z_d = Z_s is the one case the old chart was right in; any other driver moves every
+    point by the factor it left out."""
+    case = _CASES["harmonics-between-grid-points"]
+    same = _compose(case)
+    other = _compose(_CASES["driver-source-impedance-replaces-the-ports"])
+    for a, b in zip(same.points, other.points):
+        if a.current_a > 0:          # even harmonics of a square wave are nulls in both
+            assert b.current_a != pytest.approx(a.current_a, rel=1e-3)
+    point = next(p for p in same.points if p.frequency_hz == 250e6)
+    h = abs(complex(0.006, -0.002))
+    assert point.current_a == pytest.approx(
+        h * _volts_at(case, 250e6) / abs(complex(180.0, 120.0)), rel=1e-12)
 
-    §17.3's completeness gate reads this list, and a user who sees "no result at 160 MHz"
-    needs to know whether their driver is silent there, the solve had no energy, or the
-    antenna solver simply was not asked — the fix is different in each case.
-    """
-    doc = json.loads(_FIXTURES.read_text())
-    case = next(c for c in doc["cases"] if c["name"] == "every-way-a-point-goes-missing")
-    inp = case["input"]
-    transfer = inp["transfer"]
-    freqs = transfer["frequencies_hz"]
-    ant = inp["antenna"]
-    source = {f: complex(v[0], v[1])
-              for f, v in zip(freqs, inp["source_volts"]) if v is not None}
-    antenna = {f: (complex(ant["z_real"][k], ant["z_imag"][k]), ant["e_per_amp"][k])
-               for k, f in enumerate(ant["frequencies_hz"])}
 
-    em = compose(transfer["ref"], ant["cable_id"], transfer, source, antenna)
+def test_every_harmonic_is_evaluated_not_only_the_grid_points():
+    """A 25 MHz clock against a six-point grid: 37 harmonics in 30-960 MHz, not the one grid
+    point (250 MHz) that happens to be a harmonic."""
+    comp = _compose(_CASES["harmonics-between-grid-points"])
+    assert comp.line
+    assert [round(p.frequency_hz / 25e6) for p in comp.points] == list(range(2, 39))
 
-    assert em.points == []
-    reasons = [em.undriven[f] for f in sorted(em.undriven)]
-    assert len(set(reasons)) == 4, reasons
-    assert "no source energy" in reasons[0]
-    assert "driver says nothing" in reasons[1]
-    assert "antenna solver was not run" in reasons[2]
-    assert "zero input impedance" in reasons[3]
+
+def test_every_reason_a_point_goes_missing_is_named():
+    """§17.3's completeness gate reads this list, and a user who sees "no result at 250 MHz"
+    needs to know whether the driver is silent there or the solve had no energy."""
+    comp = _compose(_CASES["every-way-a-point-goes-missing"])
+    assert "no source energy" in comp.undriven[120e6]
+    assert "bandwidth" in comp.undriven[250e6]
+    # The antenna solver's range caps the band rather than producing points past it.
+    assert comp.band == (30e6, 480e6)
+    assert all(p.frequency_hz <= 480e6 for p in comp.points)

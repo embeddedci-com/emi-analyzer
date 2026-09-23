@@ -9,6 +9,7 @@ import { describe, expect, it } from 'vitest'
 import fixtures from '../../../server/emi/testdata/driver_document_fixtures.json'
 import { DriverError, trapezoidSeries } from './driverSpectrum'
 import {
+  driverOptionLabel,
   driverTrapezoid,
   MAX_DOCUMENT_BYTES,
   MAX_SAMPLES,
@@ -122,5 +123,16 @@ describe('handoff to the spectrum module', () => {
   it('refuses to give trapezoid parameters for a waveform', () => {
     const d = parseDriverDocument(byName['waveform-captured-edge'].document)
     expect(() => driverTrapezoid(d)).toThrow(/no trapezoid parameters/)
+  })
+})
+
+describe('a driver picker', () => {
+  it('says a driver is assumed before it is chosen', () => {
+    expect(driverOptionLabel('clk', byName['trapezoid-spi-clock'].document)).toBe(
+      'clk · assumed',
+    )
+    expect(driverOptionLabel('clk', byName['all-measured'].document)).toBe('clk')
+    // A document this build cannot read keeps its name; the attach step says why.
+    expect(driverOptionLabel('clk', { format: 'nope' })).toBe('clk')
   })
 })

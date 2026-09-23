@@ -319,6 +319,18 @@ export function sigmaDb(driver: Driver): number {
   return SOURCE_SIGMA_DB[weakestSource(driver)]
 }
 
+/**
+ * A driver picker's label: its name, and "assumed" when any value in it is. Every place a
+ * driver is chosen says so before it is chosen, not only once a result is drawn with it.
+ */
+export function driverOptionLabel(name: string, document: unknown): string {
+  try {
+    return weakestSource(parseDriverDocument(document)) === 'assumed' ? `${name} · assumed` : name
+  } catch {
+    return name
+  }
+}
+
 /** The trapezoid parameters, for a driver that has them. */
 export function driverTrapezoid(driver: Driver): Trapezoid {
   if (driver.kind !== 'trapezoid') {
