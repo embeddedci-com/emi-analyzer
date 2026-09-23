@@ -297,6 +297,11 @@ def run_solve(ctx: StageContext) -> StageResult:
             return
         last_post[0] = now
         frac = p.timestep / p.total_timesteps if p.total_timesteps else 0.0
+        if small:
+            # A small part ends on its energy long before its cap, so the step count alone
+            # would sit near 10 % and then jump to done. How far the energy has fallen towards
+            # the end criterion is the better measure of how far along it is.
+            frac = max(frac, small_part.decay_fraction(p.energy_db))
         ctx.progress(
             "solve", 15 + 75 * min(1.0, frac),
             f"timestep {p.timestep:,} / {p.total_timesteps:,} at {p.speed_mcells_s:.0f} MC/s",

@@ -33,6 +33,7 @@ dropped and listed in ``truncated_hz``.
 from __future__ import annotations
 
 import json
+import math
 
 from ..openems import coupon as coupon_mod
 from ..openems import network as network_mod
@@ -190,6 +191,12 @@ def admit(cells: int, needed_steps: int, dt_seconds: float) -> int:
             f"region or use the coarse mesh"
         )
     return cap
+
+
+def decay_fraction(energy_db: float) -> float:
+    """How far a run's energy has fallen towards the end criterion, 0 to 1, for progress."""
+    target = 10.0 * math.log10(END_CRITERIA)
+    return min(1.0, max(0.0, energy_db / target))
 
 
 def unusable_reason(result) -> str | None:
