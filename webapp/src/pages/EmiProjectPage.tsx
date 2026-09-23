@@ -23,6 +23,11 @@ import { NetPicker } from '../components/NetPicker'
 import { NetsExportButton } from '../components/NetsExportButton'
 import { NearFieldImport } from '../components/NearFieldImport'
 import { RuleFindings } from '../components/RuleFindings'
+import { AnalysisNotes } from '../components/AnalysisNotes'
+import { ChecksSettings } from '../components/ChecksSettings'
+import { WhatNext } from '../components/WhatNext'
+import { collectNotices, worstLevel } from '../lib/notices'
+import { layerFromParams, type AppLayer } from '../lib/rulesSettings'
 import { RunProgress } from '../components/RunProgress'
 import { DriversPanel } from '../components/DriversPanel'
 import { ComponentsPanel } from '../components/ComponentsPanel'
@@ -66,6 +71,8 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
 
   // Solve setup
   const [tab, setTab] = useState<string | null>('findings')
+  // The Findings tab shows the findings, or the settings they were found with.
+  const [findingsView, setFindingsView] = useState<'findings' | 'checks'>('findings')
   const [roi, setRoi] = useState<[number, number, number, number] | null>(null)
   const [ports, setPorts] = useState<PortSpec[]>([])
   const [pickingPad, setPickingPad] = useState(false)
@@ -136,8 +143,12 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
       ),
     [runs.data, ingest],
   )
+  // The settings edited in the app that the analysis on screen ran with. A plain re-analysis
+  // keeps them; dropping them there would quietly undo an edit made in the Checks view.
+  const savedSettings = useMemo(() => layerFromParams(ingest?.params), [ingest?.params])
   const reanalyse = useMutation({
-    mutationFn: () => api.reanalyse(projectId, ingest!.board_id!),
+    mutationFn: (settings?: AppLayer) =>
+      api.reanalyse(projectId, ingest!.board_id!, (settings ?? savedSettings) as Record<string, unknown>),
     // Refetching runs restarts the page's polling, which is what notices it finishing.
     onSuccess: () => qc.invalidateQueries({ queryKey: ['emi', 'runs', projectId] }),
   })
@@ -180,6 +191,8 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
   }, [activeRun?.id, activeRun?.progress])
 
   const doc: BoardDoc | null = board.data?.doc ?? null
+  const noticeLevel = useMemo(
+    () => worstLevel(collectNotices(rules.data, doc).notices), [rules.data, doc])
 
   // Point the PCB Editor at a finding's net. It is next to this window, so saying nothing
   // when it refuses would look like the click did not register.
@@ -607,6 +620,17 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
                       {rules.data.summary.critical}
                     </Badge>
                   )}
+                  {/* Something to read before the findings: a check that did not run, or an
+                      assumption behind the numbers. */}
+                  {(noticeLevel === 'off' || noticeLevel === 'warn') && (
+                    <Box component="span" w={7} h={7} role="img"
+                         aria-label={noticeLevel === 'off' ? 'A check was skipped' : 'This analysis has notes'}
+                         title={noticeLevel === 'off' ? 'A check was skipped. See the notes.' : 'See the notes'}
+                         style={{
+                           borderRadius: '50%', display: 'inline-block', flex: 'none',
+                           background: `var(--mantine-color-${noticeLevel === 'off' ? 'orange' : 'yellow'}-6)`,
+                         }} />
+                  )}
                 </Group>
               </Tabs.Tab>
               {fullWave && <Tabs.Tab value="fullwave" px={6}>Full-wave</Tabs.Tab>}
@@ -629,14 +653,38 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
                   <Text size="xs">{kicadNote}</Text>
                 </Alert>
               )}
-              {ingestDone && (
-                <RuleFindings
-                  rules={(rules.data as RulesDoc | null) ?? null}
-                  onFocus={onFocusFinding}
-                  onSelectNet={setNet}
-                  onSimulate={onSimulateFinding}
-                  onShowInKiCad={kicad ? showInKiCad : undefined}
-                />
+              {!ingestDone && (
+                <Text size="sm" c="dimmed">Findings appear here when the analysis finishes.</Text>
+              )}
+              {ingestDone && rules.isSuccess && (
+                <Stack gap="sm">
+                  <AnalysisNotes rules={rules.data} doc={doc} runId={ingest?.id}
+                                 onOpenChecks={() => setFindingsView('checks')} />
+                  <SegmentedControl size="xs" fullWidth value={findingsView}
+                                    onChange={(v) => setFindingsView(v as 'findings' | 'checks')}
+                                    data={[{ label: 'Findings', value: 'findings' },
+                                           { label: 'Checks', value: 'checks' }]} />
+                  {findingsView === 'findings' && rules.data && <WhatNext onTab={setTab} />}
+                  {findingsView === 'findings' ? (
+                    <RuleFindings
+                      rules={(rules.data as RulesDoc | null) ?? null}
+                      onFocus={onFocusFinding}
+                      onSelectNet={setNet}
+                      onSimulate={onSimulateFinding}
+                      onShowInKiCad={kicad ? showInKiCad : undefined}
+                    />
+                  ) : (
+                    <ChecksSettings
+                      // A new analysis brings new values underneath, so the draft starts over.
+                      key={ingest?.id}
+                      rules={rules.data}
+                      saved={savedSettings}
+                      onApply={(layer) => reanalyse.mutate(layer)}
+                      applying={reanalysing || reanalyse.isPending}
+                      applyBlocked={!ingest?.board_id ? 'The board has not finished processing yet' : undefined}
+                    />
+                  )}
+                </Stack>
               )}
             </Tabs.Panel>
 
@@ -800,7 +848,7 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
                       <Button
                         size="compact-xs"
                         variant="light"
-                        onClick={() => reanalyse.mutate()}
+                        onClick={() => reanalyse.mutate(undefined)}
                         loading={reanalysing || reanalyse.isPending}
                         disabled={!ingest?.board_id}
                       >
@@ -818,7 +866,7 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
                         runId={ingest?.id}
                         doc={doc}
                         projectName={project.data?.name ?? 'board'}
-                        onReanalyse={ingest?.board_id ? () => reanalyse.mutate() : undefined}
+                        onReanalyse={ingest?.board_id ? () => reanalyse.mutate(undefined) : undefined}
                         reanalysing={reanalysing || reanalyse.isPending}
                       />
                     </Group>

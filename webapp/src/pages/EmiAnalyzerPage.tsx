@@ -10,6 +10,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router'
 import { EmiApi, hashFile } from '../lib/emiApi'
+import { SAMPLE_BOARD_NAME, sampleBoardFile } from '../lib/sampleBoard'
 import { ChecksTable } from '../components/ChecksTable'
 import type { EmiDeployment } from '../routes'
 import { resolveHostCopy, useEmiBase, type EmiHostCopy } from '../host'
@@ -44,7 +45,9 @@ export function EmiAnalyzerPage({ api, deployment = 'hosted', host }: EmiAnalyze
   })
 
   const create = useMutation({
-    mutationFn: async (file: File) => {
+    // `as` names the project regardless of the name field: the sample board is always the
+    // sample board, whatever was typed before it was chosen.
+    mutationFn: async ({ file, as }: { file: File; as?: string }) => {
       // Hash before anything else. If this organisation has already uploaded these exact
       // bytes, the board is here — parsed, with its findings and any solves — and the
       // right answer is to open it rather than send it again.
@@ -62,7 +65,7 @@ export function EmiAnalyzerPage({ api, deployment = 'hosted', host }: EmiAnalyze
       // here marked "kicad".
       setStage(null)
       const project = await api.createProject(
-        name.trim() || file.name.replace(/\.(kicad_pcb|zip)$/i, ''),
+        as ?? (name.trim() || file.name.replace(/\.(kicad_pcb|zip)$/i, '')),
         /\.zip$/i.test(file.name) ? 'gerber' : 'kicad',
       )
       setUploadPct(0)
@@ -93,7 +96,7 @@ export function EmiAnalyzerPage({ api, deployment = 'hosted', host }: EmiAnalyze
 
   const onPick = useCallback(
     (file: File | null) => {
-      if (file) create.mutate(file)
+      if (file) create.mutate({ file })
     },
     [create],
   )
@@ -190,6 +193,21 @@ export function EmiAnalyzerPage({ api, deployment = 'hosted', host }: EmiAnalyze
                 )}
               </FileButton>
             </Group>
+            {/* The same upload as a user's own file, from a copy bundled with the app, so a
+                first look needs neither a board nor a network. Uploaded once: after that the
+                hash finds it and this opens the one already here. */}
+            <Group gap="xs">
+              <Text size="xs" c="dimmed">No board to hand?</Text>
+              <Button size="compact-xs" variant="light" disabled={create.isPending}
+                      onClick={() => create.mutate({ file: sampleBoardFile(), as: SAMPLE_BOARD_NAME })}>
+                Try the sample board
+              </Button>
+            </Group>
+            {!local && workers.isSuccess && online === 0 && (
+              <Text size="xs" c="orange">
+                No worker is connected, so a new board waits until one is.
+              </Text>
+            )}
 
             {stage && (
               <Group gap="xs">
@@ -203,7 +221,7 @@ export function EmiAnalyzerPage({ api, deployment = 'hosted', host }: EmiAnalyze
                 <Progress value={uploadPct} size="sm" animated />
                 <Text size="xs" c="dimmed">
                   {uploadPct < 100
-                    ? `Uploading — ${uploadPct.toFixed(0)}%`
+                    ? `Uploading: ${uploadPct.toFixed(0)}%`
                     : 'Uploaded. Waiting for the analysis to start…'}
                 </Text>
               </Stack>
@@ -224,9 +242,10 @@ export function EmiAnalyzerPage({ api, deployment = 'hosted', host }: EmiAnalyze
             <Text size="xs" c="dimmed">
               A <Text span ff="monospace" size="xs">.kicad_pcb</Text>, a zipped KiCad
               project, or a zip of your Gerber output. Gerbers must include the drill file
-              and an <Text span ff="monospace" size="xs">IPC-D-356</Text> netlist — they
-              carry no net information on their own, so without one there is no way to tell
-              which copper is which signal.
+              and an <Text span ff="monospace" size="xs">IPC-D-356</Text> netlist. Gerbers
+              carry no net names on their own. To set thresholds in the zip, add an{' '}
+              <Text span ff="monospace" size="xs">emi.rules.yaml</Text>; you can also change
+              them in the app and export one.
             </Text>
             <Text size="xs" c="dimmed">
               {local
@@ -253,7 +272,7 @@ export function EmiAnalyzerPage({ api, deployment = 'hosted', host }: EmiAnalyze
           )}
           {projects.isSuccess && projects.data.length === 0 && (
             <Text c="dimmed" size="sm">
-              No boards yet — choose a board file above to analyse one.
+              No boards yet. Choose a board file above, or try the sample board.
             </Text>
           )}
 
