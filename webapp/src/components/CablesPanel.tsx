@@ -12,7 +12,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Alert, Badge, Button, Card, Group, List, NumberInput, Select, Stack, Text, Title,
   Tooltip,
@@ -70,32 +70,35 @@ export function CablesPanel({
   // rather than being silently absent from the result.
   const ranWith = useRef<string | null>(null)
 
-  // Poll while the run is in flight. Without this the panel said "try again shortly" and the
-  // only button on screen started a *second* run -- so the honest reading of the UI was that
-  // the first one had failed.
-  const doc = useQuery({
-    queryKey: ['emi', 'cables', startedRunId],
-    queryFn: () => api.fetchCables(startedRunId!),
-    enabled: !!startedRunId,
-    retry: 20,
-    retryDelay: 1500,
-  })
+  const qc = useQueryClient()
 
-  // The artifact alone cannot tell a slow run from a failed one: both are a 404. Watching the
-  // run itself is what turns "waiting for the result" -- which used to stay on screen forever
-  // -- into a reason and a retry.
+  // Poll the run while it is in flight, and fetch the result once it is done. The artifact
+  // alone cannot tell a slow run from a failed one: both are a 404. It used to be retried 20
+  // times 1.5 s apart, which gave up for good on a run that sat in the queue longer than
+  // that, and the panel then said "Running" forever.
   const run = useQuery({
     queryKey: ['emi', 'run', startedRunId],
     queryFn: () => api.getRun(startedRunId!),
-    enabled: !!startedRunId && !doc.data,
+    enabled: !!startedRunId,
     refetchInterval: (q) =>
       q.state.data && TERMINAL_STATUSES.includes(q.state.data.status) ? false : 1500,
   })
   const failed = run.data && (run.data.status === 'failed' || run.data.status === 'timed_out')
 
+  const doc = useQuery({
+    queryKey: ['emi', 'cables', startedRunId],
+    queryFn: () => api.fetchCables(startedRunId!),
+    enabled: !!startedRunId && run.data?.status === 'done',
+    // A finished run's result does not change.
+    staleTime: Infinity,
+  })
+
   const retry = useMutation({
     mutationFn: () => api.retryRun(startedRunId!),
-    onSuccess: () => { run.refetch(); doc.refetch() },
+    onSuccess: () => {
+      run.refetch()
+      qc.invalidateQueries({ queryKey: ['emi', 'runs', projectId] })
+    },
   })
 
   const start = useMutation({
@@ -106,6 +109,8 @@ export function CablesPanel({
     onSuccess: (started) => {
       ranWith.current = JSON.stringify(assignments)
       setStartedRunId(started.id)
+      // The page's runs list drives the Runs menu and its own polling.
+      qc.invalidateQueries({ queryKey: ['emi', 'runs', projectId] })
     },
   })
 
@@ -157,7 +162,15 @@ export function CablesPanel({
       {start.error && (
         <Alert color="red" variant="light">{(start.error as Error).message}</Alert>
       )}
-      {startedRunId && !d && !failed && (
+      {doc.isError && (
+        <Alert color="red" variant="light" title="The cable result could not be loaded">
+          <Text size="xs">{(doc.error as Error).message}</Text>
+        </Alert>
+      )}
+      {run.isError && !d && (
+        <Alert color="red" variant="light">{(run.error as Error).message}</Alert>
+      )}
+      {startedRunId && !d && !failed && !doc.isError && !run.isError && (
         <Text size="sm" c="dimmed">
           {workersOnline === 0
             ? 'Waiting for a worker to pick this up — none is connected yet.'
@@ -168,6 +181,9 @@ export function CablesPanel({
         <Alert color="red" variant="light" title="The cable run did not finish">
           <Stack gap="xs" align="flex-start">
             <Text size="xs">{run.data?.error || 'No reason was reported.'}</Text>
+            {retry.isError && (
+              <Text size="xs" fw={600}>{(retry.error as Error).message}</Text>
+            )}
             <Button size="compact-xs" variant="light" loading={retry.isPending}
                     onClick={() => retry.mutate()}>
               Try again

@@ -235,6 +235,11 @@ function WorkerModal({ status, opened, onClose }: { status: LocalStatus; opened:
                 Restart worker
               </Button>
             </Group>
+            {restart.isError && (
+              <Alert color="red" variant="light">
+                <Text size="xs">{(restart.error as Error).message}</Text>
+              </Alert>
+            )}
             <ScrollArea.Autosize mah="45vh" type="auto">
               <Code block style={{ whiteSpace: 'pre-wrap', fontSize: 11 }}>
                 {logs.data || 'No output yet.'}

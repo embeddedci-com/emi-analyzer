@@ -183,6 +183,11 @@ export function ComponentsPanel({ api, signedIn, deployment = 'hosted', frequenc
       {signedIn && saved.error && (
         <Alert color="red" variant="light">{(saved.error as Error).message}</Alert>
       )}
+      {[share, remove].map((m, i) => m.isError && (
+        <Alert key={i} color="red" variant="light" withCloseButton onClose={() => m.reset()}>
+          <Text size="xs">{(m.error as Error).message}</Text>
+        </Alert>
+      ))}
 
       {signedIn && saved.data?.map((c: StoredComponent) => (
         <Card key={c.id} withBorder padding="xs">
