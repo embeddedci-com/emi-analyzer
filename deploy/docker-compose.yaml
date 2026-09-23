@@ -6,6 +6,11 @@
 # worker reaching both over a network -- so it can be tested end to end. There are no accounts:
 # every request is a signed-out visitor with a private space (see cmd/emi-server/userauth.go).
 #
+# It is a development stack and says so: the server runs with EMI_DEV=1, which lets it use the
+# development secrets published in cmd/emi-server/config.go, and MinIO uses its well-known
+# default credentials. So every published port is bound to 127.0.0.1. Do not expose this stack
+# to a network; a real deployment sets its own secrets and leaves EMI_DEV unset.
+#
 # Presigned URL hosts
 # -------------------
 # Presigned URLs sign the path and query, never the Host header, so the origin can be
@@ -25,7 +30,7 @@ services:
       POSTGRES_PASSWORD: emi
       POSTGRES_DB: emi
     ports:
-      - "5433:5432"      # 5433 on the host, to stay clear of a local postgres
+      - "127.0.0.1:5433:5432"      # 5433 on the host, to stay clear of a local postgres
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U emi -d emi"]
       interval: 3s
@@ -35,14 +40,16 @@ services:
       - pgdata:/var/lib/postgresql/data
 
   minio:
-    image: minio/minio:latest
+    # Pinned, and from quay.io: MinIO no longer publishes images to Docker Hub, and "latest"
+    # would change under the stack without anyone asking for it.
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
     ports:
-      - "9000:9000"
-      - "9001:9001"      # console: http://localhost:9001 (minioadmin / minioadmin)
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"      # console: http://localhost:9001 (minioadmin / minioadmin)
     healthcheck:
       test: ["CMD", "mc", "ready", "local"]
       interval: 3s
@@ -55,7 +62,11 @@ services:
     build:
       context: ../server
     environment:
+      # All interfaces inside the container, so the port mapping and the worker can reach it;
+      # the mapping below keeps it on the host's loopback.
       ADDR: ":8090"
+      # Development stack: unset secrets fall back to the public development values.
+      EMI_DEV: "1"
       DATABASE_URL: postgres://emi:emi@postgres:5432/emi?sslmode=disable
       S3_ENDPOINT: http://minio:9000
       S3_BUCKET: emi
@@ -64,10 +75,8 @@ services:
       S3_PUBLIC_URL: ${S3_PUBLIC_URL:-}
       # Comma-separated experimental features, e.g. full-wave. Off unless set.
       EMI_EXPERIMENTAL: ${EMI_EXPERIMENTAL:-}
-      EMI_PEPPER: dev-pepper-not-for-production-use-0123456789
-      EMI_TOKEN_SECRET: dev-token-secret-not-for-production-0123456789
     ports:
-      - "8090:8090"
+      - "127.0.0.1:8090:8090"
     depends_on:
       postgres:
         condition: service_healthy
