@@ -70,6 +70,7 @@ func (s *Service) Mount(mux *http.ServeMux, prefix string, userAuth func(http.Ha
 	handle("POST "+p+"/emi/projects/{project_id}/uploads", userAuth(s.handleCreateUpload))
 	handle("POST "+p+"/emi/projects/{project_id}/boards", userAuth(s.handleCreateBoard))
 	handle("GET "+p+"/emi/projects/{project_id}/boards", userAuth(s.handleListBoards))
+	handle("DELETE "+p+"/emi/projects/{project_id}/boards/{board_id}", userAuth(s.handleDeleteBoard))
 	handle("GET "+p+"/emi/projects/{project_id}/drivers", userAuth(s.handleListDrivers))
 	handle("POST "+p+"/emi/projects/{project_id}/drivers", userAuth(s.handleCreateDriver))
 	handle("DELETE "+p+"/emi/projects/{project_id}/drivers/{driver_id}", userAuth(s.handleDeleteDriver))
