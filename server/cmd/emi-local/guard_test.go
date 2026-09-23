@@ -3,6 +3,7 @@ package main
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -24,6 +25,14 @@ func TestGuard(t *testing.T) {
 		{"cross-site post", "POST", "127.0.0.1:7465", "https://evil.example", http.StatusForbidden},
 		{"cross-site get is harmless", "GET", "127.0.0.1:7465", "https://evil.example", http.StatusTeapot},
 		{"public ip as host", "GET", "8.8.8.8:7465", "", http.StatusForbidden},
+		// Another page on this machine or this network is still another origin.
+		{"another localhost port", "POST", "127.0.0.1:7465", "http://localhost:3000", http.StatusForbidden},
+		{"same host, other port", "POST", "127.0.0.1:7465", "http://127.0.0.1:8080", http.StatusForbidden},
+		{"a router's page", "POST", "127.0.0.1:7465", "http://192.168.1.1", http.StatusForbidden},
+		{"localhost by another name", "POST", "127.0.0.1:7465", "http://localhost:7465", http.StatusForbidden},
+		{"sandboxed or file page", "POST", "127.0.0.1:7465", "null", http.StatusForbidden},
+		{"the vite dev server's proxy", "POST", "localhost:5175", "http://localhost:5175", http.StatusTeapot},
+		{"a delete from this origin", "DELETE", "127.0.0.1:7465", "http://127.0.0.1:7465", http.StatusTeapot},
 	}
 	for _, c := range cases {
 		req := httptest.NewRequest(c.method, "/api/emi/projects", nil)
@@ -36,6 +45,52 @@ func TestGuard(t *testing.T) {
 		if rec.Code != c.want {
 			t.Errorf("%s: got %d, want %d", c.name, rec.Code, c.want)
 		}
+	}
+}
+
+func TestGuardWantsJSONBodies(t *testing.T) {
+	ok := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusTeapot) })
+	h := guard(ok)
+
+	cases := []struct {
+		name, path, contentType, body string
+		want                          int
+	}{
+		// What a cross-site form or a text/plain fetch sends without a preflight.
+		{"text/plain", "/api/emi/projects", "text/plain", `{"name":"x"}`, http.StatusUnsupportedMediaType},
+		{"form", "/api/emi/projects", "application/x-www-form-urlencoded", "name=x", http.StatusUnsupportedMediaType},
+		{"no content type", "/api/emi/projects", "", `{"name":"x"}`, http.StatusUnsupportedMediaType},
+		{"json", "/api/emi/projects", "application/json", `{"name":"x"}`, http.StatusTeapot},
+		{"json with a charset", "/api/emi/projects", "application/json; charset=utf-8", `{}`, http.StatusTeapot},
+		{"no body", "/api/local/worker/restart", "", "", http.StatusTeapot},
+		// A signed blob upload carries the file's own type.
+		{"blob upload", "/blob/uploads/x.zip", "application/zip", "PK", http.StatusTeapot},
+	}
+	for _, c := range cases {
+		req := httptest.NewRequest("POST", c.path, strings.NewReader(c.body))
+		req.Host = "127.0.0.1:7465"
+		if c.contentType != "" {
+			req.Header.Set("Content-Type", c.contentType)
+		}
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != c.want {
+			t.Errorf("%s: got %d, want %d", c.name, rec.Code, c.want)
+		}
+	}
+}
+
+func TestGuardRefusesFraming(t *testing.T) {
+	h := guard(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Host = "127.0.0.1:7465"
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if got := rec.Header().Get("Content-Security-Policy"); got != "frame-ancestors 'self'" {
+		t.Errorf("CSP %q", got)
+	}
+	if got := rec.Header().Get("X-Frame-Options"); got != "SAMEORIGIN" {
+		t.Errorf("X-Frame-Options %q", got)
 	}
 }
 
