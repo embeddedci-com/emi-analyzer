@@ -7,8 +7,9 @@
  * unusable on a board with half a million triangles.
  */
 
-import { useCallback, useEffect, useRef } from 'react'
-import { BoardRenderer } from '../lib/BoardRenderer'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { BoardRenderer, type ViewState } from '../lib/BoardRenderer'
+import { FrameScheduler, keyAction, watchContextLoss, wheelZoomFactor } from '../lib/canvasInput'
 import type { FieldOverlayData, OverlayOptions } from '../lib/overlay'
 import type { BoardDoc } from '../lib/boardTypes'
 import { anchorNear, type PortAnchor } from '../lib/portPlacement'
@@ -73,7 +74,13 @@ export function BoardCanvas({
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const rendererRef = useRef<BoardRenderer | null>(null)
   const dirtyRef = useRef(true)
-  const rafRef = useRef(0)
+  const schedulerRef = useRef<FrameScheduler | null>(null)
+  // Bumped when a lost GL context is rebuilt, so every effect that pushes state into the
+  // renderer runs again against the new one.
+  const [generation, setGeneration] = useState(0)
+  const [contextLost, setContextLost] = useState(false)
+  // The view to put back once a lost context is rebuilt, instead of re-fitting the board.
+  const restoreViewRef = useRef<ViewState | null>(null)
   // x0/y0 is where the press started, to tell a click from a pan on release.
   const dragRef = useRef<{ id: number; x: number; y: number; x0: number; y0: number } | null>(null)
   const roiDragRef = useRef<{ id: number; x0: number; y0: number } | null>(null)
@@ -84,6 +91,7 @@ export function BoardCanvas({
 
   const markDirty = useCallback(() => {
     dirtyRef.current = true
+    schedulerRef.current?.request()
   }, [])
 
   // Held in a ref so no effect has to take a callback as a dependency. The page passes
@@ -92,39 +100,83 @@ export function BoardCanvas({
   useEffect(() => {
     onErrorRef.current = onError
   }, [onError])
+  const onReadyRef = useRef(onReady)
+  useEffect(() => {
+    onReadyRef.current = onReady
+  }, [onReady])
 
-  // Create the renderer once, and keep it for the element's lifetime.
+  // Create the renderer once, and keep it for the element's lifetime -- or until the browser
+  // takes the GL context away, when a new one is built on the restored context.
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
-    let renderer: BoardRenderer
-    try {
-      renderer = new BoardRenderer(canvas)
-    } catch (err) {
-      onError?.(err as Error)
-      return
-    }
-    rendererRef.current = renderer
-    onReady?.(renderer)
-
-    const loop = () => {
-      if (renderer.resize()) dirtyRef.current = true
-      if (dirtyRef.current) {
-        renderer.render()
-        dirtyRef.current = false
+    const build = (): boolean => {
+      try {
+        const renderer = new BoardRenderer(canvas)
+        renderer.onInvalidate = () => {
+          dirtyRef.current = true
+          schedulerRef.current?.request()
+        }
+        rendererRef.current = renderer
+        onReadyRef.current?.(renderer)
+        return true
+      } catch (err) {
+        onErrorRef.current?.(err as Error)
+        return false
       }
-      rafRef.current = requestAnimationFrame(loop)
     }
-    rafRef.current = requestAnimationFrame(loop)
+    if (!build()) return
+
+    // Frames are drawn on request, not in a loop that polls for a resize every frame.
+    const scheduler = new FrameScheduler(() => {
+      const renderer = rendererRef.current
+      if (!renderer) return
+      renderer.resize()
+      renderer.render()
+      dirtyRef.current = false
+    })
+    schedulerRef.current = scheduler
+    scheduler.request()
+
+    const onResize = () => {
+      dirtyRef.current = true
+      scheduler.request()
+    }
+    // The element's size is watched; the window's too, because moving to a screen with a
+    // different pixel ratio changes the drawing buffer without resizing the element.
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(onResize) : null
+    observer?.observe(canvas)
+    window.addEventListener('resize', onResize)
+
+    const stopWatching = watchContextLoss(
+      canvas,
+      () => {
+        scheduler.cancel()
+        const renderer = rendererRef.current
+        if (renderer) restoreViewRef.current = renderer.getView()
+        setContextLost(true)
+      },
+      () => {
+        rendererRef.current?.dispose()
+        rendererRef.current = null
+        if (build()) {
+          setContextLost(false)
+          setGeneration((g) => g + 1)
+        }
+      },
+    )
 
     return () => {
-      cancelAnimationFrame(rafRef.current)
-      renderer.dispose()
+      stopWatching()
+      observer?.disconnect()
+      window.removeEventListener('resize', onResize)
+      scheduler.cancel()
+      schedulerRef.current = null
+      rendererRef.current?.dispose()
       rendererRef.current = null
     }
     // Deliberately runs once: recreating the GL context on a prop change would drop the
     // uploaded geometry and force a full re-upload.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Upload geometry whenever the board changes -- and only then.
@@ -156,13 +208,17 @@ export function BoardCanvas({
     if (loaded.renderer === renderer && loaded.doc === doc && loaded.geometry === geometry) return
     try {
       renderer.setBoard(doc, geometry)
-      renderer.fit()
+      // A board rebuilt after a lost context keeps the user's pan and zoom.
+      const restore = restoreViewRef.current
+      restoreViewRef.current = null
+      if (restore && loaded.doc === doc && loaded.geometry === geometry) renderer.setView(restore)
+      else renderer.fit()
       loadedRef.current = { renderer, doc, geometry }
       markDirty()
     } catch (err) {
       onErrorRef.current?.(err as Error)
     }
-  }, [doc, geometry, markDirty])
+  }, [doc, geometry, markDirty, generation])
 
   useEffect(() => {
     const renderer = rendererRef.current
@@ -171,22 +227,22 @@ export function BoardCanvas({
       renderer.setLayerStyle(layer.name, { visible: layerVisibility?.[layer.name] ?? true })
     }
     markDirty()
-  }, [layerVisibility, doc, markDirty])
+  }, [layerVisibility, doc, markDirty, generation])
 
   useEffect(() => {
     rendererRef.current?.setHighlightNet(highlightNet)
     markDirty()
-  }, [highlightNet, markDirty])
+  }, [highlightNet, markDirty, generation])
 
   useEffect(() => {
     rendererRef.current?.setRoi(roi)
     markDirty()
-  }, [roi, markDirty])
+  }, [roi, markDirty, generation])
 
   useEffect(() => {
     rendererRef.current?.setMarkers(markers ?? [])
     markDirty()
-  }, [markers, markDirty])
+  }, [markers, markDirty, generation])
 
   // Same reasoning as the upload effect: overlayOptions arrives as an inline object, so
   // comparing it by value is what stops a re-render from re-uploading the field texture.
@@ -200,7 +256,7 @@ export function BoardCanvas({
       onErrorRef.current?.(err as Error)
     }
     markDirty()
-  }, [overlay, gate, markDirty])
+  }, [overlay, gate, markDirty, generation])
 
   useEffect(() => {
     const renderer = rendererRef.current
@@ -313,7 +369,8 @@ export function BoardCanvas({
       renderer.zoomAt(
         (e.clientX - rect.left) * dpr(),
         (e.clientY - rect.top) * dpr(),
-        Math.pow(0.999, e.deltaY),
+        // Firefox reports a mouse wheel in lines, not pixels.
+        wheelZoomFactor(e.deltaY, e.deltaMode, canvas.clientHeight),
       )
       markDirty()
     }
@@ -321,22 +378,60 @@ export function BoardCanvas({
     return () => canvas.removeEventListener('wheel', onWheel)
   }, [markDirty])
 
+  // The keyboard does what the mouse does: arrows pan, + and - zoom about the centre, 0 fits.
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLCanvasElement>) => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return
+    const action = keyAction(e.key, e.shiftKey)
+    const renderer = rendererRef.current
+    if (!action || !renderer) return
+    e.preventDefault()
+    if (action.kind === 'pan') {
+      renderer.panBy(action.dx * dpr(), action.dy * dpr())
+    } else if (action.kind === 'zoom') {
+      const canvas = e.currentTarget
+      renderer.zoomAt(canvas.width / 2, canvas.height / 2, action.factor)
+    } else {
+      renderer.fit()
+    }
+    markDirty()
+  }
+
   return (
-    <canvas
-      ref={canvasRef}
-      className={className}
-      style={{
-        display: 'block',
-        width: '100%',
-        height: '100%',
-        cursor: mode === 'pan' ? 'grab' : 'crosshair',
-        ...style,
-      }}
-      onPointerDown={handlePointerDown}
-      onPointerUp={handlePointerUp}
-      onPointerCancel={handlePointerUp}
-      onPointerMove={handlePointerMove}
-      onPointerLeave={() => onCursorMove?.(null)}
-    />
+    <>
+      <canvas
+        ref={canvasRef}
+        className={className}
+        tabIndex={0}
+        role="application"
+        aria-roledescription="board viewer"
+        aria-label="Board view. Arrow keys pan, plus and minus zoom, 0 fits the board."
+        style={{
+          display: 'block',
+          width: '100%',
+          height: '100%',
+          cursor: mode === 'pan' ? 'grab' : 'crosshair',
+          ...style,
+        }}
+        onPointerDown={handlePointerDown}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+        onPointerMove={handlePointerMove}
+        onPointerLeave={() => onCursorMove?.(null)}
+        onKeyDown={handleKeyDown}
+      />
+      {contextLost && (
+        <div
+          role="status"
+          style={{
+            position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
+            justifyContent: 'center', padding: 16, textAlign: 'center', pointerEvents: 'none',
+            font: '13px sans-serif', color: '#868e96',
+          }}
+        >
+          The browser reset the board view. It comes back on its own; if it does not, reload
+          the page.
+        </div>
+      )}
+    </>
   )
 }

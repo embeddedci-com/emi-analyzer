@@ -298,8 +298,16 @@ export class BoardRenderer {
     this.markers = markers
   }
 
+  /**
+   * Called whenever the view changes, so the owner can draw a frame. The canvas draws on
+   * request rather than in a loop, and a caller such as a "Fit board" button changes the
+   * view without going through it.
+   */
+  onInvalidate: (() => void) | null = null
+
   setView(view: Partial<ViewState>): void {
     this.view = { ...this.view, ...view }
+    this.onInvalidate?.()
   }
 
   getView(): ViewState {
@@ -325,6 +333,7 @@ export class BoardRenderer {
       tx: (w / scale - width_mm) / 2,
       ty: (h / scale - height_mm) / 2,
     }
+    this.onInvalidate?.()
   }
 
   /** Canvas pixel coordinates to board-space mm. */
@@ -345,11 +354,13 @@ export class BoardRenderer {
     const after = this.toBoard(px, py)
     this.view.tx += after.x - before.x
     this.view.ty += after.y - before.y
+    this.onInvalidate?.()
   }
 
   panBy(dxPx: number, dyPx: number): void {
     this.view.tx += dxPx / this.view.scale
     this.view.ty -= dyPx / this.view.scale
+    this.onInvalidate?.()
   }
 
   /** Match the drawing buffer to the element's displayed size. Returns true if it changed. */
