@@ -12,6 +12,7 @@ for "this layout radiates less than that one at 480 MHz, and here is the trace r
 
 from __future__ import annotations
 
+import bisect
 import logging
 import math
 
@@ -322,16 +323,35 @@ def _plan_cable_ports(model: BoardModel, transform, params: "SolveParams",
     return ports, reach
 
 
+#: Where the grid lines go around the long edges of a straight trace: one a third of a cell
+#: inside the copper, one two thirds outside, and none on the edge itself. openEMS's own
+#: guidance for zero-thickness metal.
+#:
+#: The reason is the current crowding at a strip's edge. With a line exactly on the edge, the
+#: strip behaves as if it were about half a cell wider on each side, and the cell beside a
+#: lone trace is set by its width and its neighbours, not by the preset: a 50 ohm microstrip
+#: meshed that way came out at 40 ohm on every preset (research/verify_microstrip.py).
+#: False keeps a line on every edge, as before.
+THIRDS_RULE = True
+
+
 def _copper_features(
     model: BoardModel,
     transform,
     roi: tuple[float, float, float, float],
     margin: float,
+    cell_mm: float = 0.0,
 ) -> tuple[list[float], list[float]]:
     """In-plane coordinates that must land on grid lines.
 
     Trace edges and pad edges: if a copper edge falls mid-cell, the solver rounds it to the
     nearest line and the geometry it simulates is not the geometry that was drawn.
+
+    The long edges of a trace segment that runs along x or y are the exception: with
+    ``cell_mm`` given they get the thirds rule instead (``THIRDS_RULE``). A grid line runs
+    the whole domain, so a line that lands exactly on such an edge for any other reason -- a
+    pad corner, another trace's end -- is dropped too, or it would undo the rule along the
+    whole edge. A diagonal segment is a staircase whatever the grid does; its edges stay.
     """
     min_x, min_y, max_x, max_y = roi
     lo_x, hi_x = min_x - margin, max_x + margin
@@ -345,6 +365,9 @@ def _copper_features(
             xs.add(round(x, 6))
         if lo_y <= y <= hi_y:
             ys.add(round(y, 6))
+
+    # Collected first, because an exact line elsewhere must not land on one of these.
+    ruled_x, ruled_y = _ruled_edges(model, transform, cell_mm)
 
     for track in model.tracks:
         half = track.width_mm / 2.0
@@ -366,21 +389,104 @@ def _copper_features(
         note(bx - r, by - r)
         note(bx + r, by + r)
 
-    return sorted(xs), sorted(ys)
+    def apply(lines: set[float], ruled: dict[float, float], lo: float, hi: float) -> list[float]:
+        if not ruled:
+            return sorted(lines)
+        edges = sorted(ruled)
+
+        def on_edge(v: float) -> bool:
+            i = bisect.bisect_left(edges, v)
+            return any(abs(v - edges[k]) < 1e-6 for k in (i - 1, i) if 0 <= k < len(edges))
+
+        kept = {v for v in lines if not on_edge(v)}
+        for edge, inward in ruled.items():
+            for v in (edge + inward * cell_mm / 3.0, edge - inward * 2.0 * cell_mm / 3.0):
+                if lo <= v <= hi:
+                    kept.add(round(v, 6))
+        return sorted(kept)
+
+    return apply(xs, ruled_x, lo_x, hi_x), apply(ys, ruled_y, lo_y, hi_y)
+
+
+def _ruled_edges(model: BoardModel, transform, cell_mm: float
+                 ) -> tuple[dict[float, float], dict[float, float]]:
+    """The long trace edges that get the thirds rule, per axis.
+
+    ``{edge: +1.0 or -1.0}``, the sign being the side the copper is on. Only segments that run
+    along an axis for longer than their own width: a short stub's "long" edge is its end.
+    """
+    ruled_x: dict[float, float] = {}
+    ruled_y: dict[float, float] = {}
+    if not (THIRDS_RULE and cell_mm > 0):
+        return ruled_x, ruled_y
+    for track in model.tracks:
+        half = track.width_mm / 2.0
+        pts = [transform.pt(px, py) for px, py in track.pts]
+        for (ax, ay), (bx, by) in zip(pts, pts[1:]):
+            if abs(ay - by) < 1e-6 and abs(ax - bx) > track.width_mm:
+                ruled_y[round(ay - half, 6)] = 1.0
+                ruled_y[round(ay + half, 6)] = -1.0
+            elif abs(ax - bx) < 1e-6 and abs(ay - by) > track.width_mm:
+                ruled_x[round(ax - half, 6)] = 1.0
+                ruled_x[round(ax + half, 6)] = -1.0
+    return ruled_x, ruled_y
+
+
+def _stack(model: BoardModel) -> tuple[dict[str, float], list[tuple[object, float, float]]]:
+    """Where each copper sheet goes, and the dielectric slabs between them, in mm from the bottom.
+
+    Copper is drawn with zero thickness (see ``csx.Polygon``), so each layer's sheet has to go
+    somewhere inside its 35 um, and the dielectric has to reach it. It used to go at the middle
+    of the copper while each slab kept its own thickness, which left half a copper thickness of
+    air on both sides of every dielectric. A coarse grid hid that by averaging it away; the fine
+    preset resolved it, and a 50 ohm microstrip on 0.2 mm of FR-4 came out at 56 ohm with an
+    effective permittivity of 2.2 instead of 3.3 (research/verify_microstrip.py).
+
+    So a sheet sits on the face of its copper that touches the dielectric: the thinner one where
+    it has dielectric on both sides, because the thin prepreg under an outer layer is where the
+    spacing sets impedance. The copper's own thickness on the other side is filled by the slab
+    beyond it. Every dielectric between two sheets is then exactly its stated thickness, except
+    that a thicker one also takes up the copper beside it, which is where it matters least.
+    """
+    entries = [s for s in model.stackup if s.thickness_mm > 0 or s.is_copper]
+    total = sum(s.thickness_mm for s in entries) or model.thickness_mm
+    ranges = []
+    z = total
+    for s in entries:
+        ranges.append([z - s.thickness_mm, z])
+        z -= s.thickness_mm
+
+    def dielectric(k: int) -> bool:
+        return 0 <= k < len(entries) and entries[k].is_dielectric
+
+    slab = {k: list(ranges[k]) for k in range(len(entries)) if entries[k].is_dielectric}
+    sheets: dict[str, float] = {}
+    for k, s in enumerate(entries):
+        if not s.is_copper:
+            continue
+        bottom, top = ranges[k]
+        above, below = dielectric(k - 1), dielectric(k + 1)
+        if above and below:
+            thin_below = entries[k + 1].thickness_mm <= entries[k - 1].thickness_mm
+            if thin_below:
+                sheets[s.name] = bottom
+                slab[k - 1][0] = bottom
+            else:
+                sheets[s.name] = top
+                slab[k + 1][1] = top
+        elif below:
+            sheets[s.name] = bottom
+        elif above:
+            sheets[s.name] = top
+        else:
+            sheets[s.name] = (top + bottom) / 2.0
+    sheets = {name: round(v, 6) for name, v in sheets.items()}
+    return sheets, [(entries[k], lo, hi) for k, (lo, hi) in sorted(slab.items())]
 
 
 def _layer_z(model: BoardModel) -> dict[str, float]:
-    """Copper layer heights above the bottom of the stack, in mm."""
-    entries = [s for s in model.stackup if s.thickness_mm > 0 or s.is_copper]
-    total = sum(s.thickness_mm for s in entries) or model.thickness_mm
-    z = total
-    out: dict[str, float] = {}
-    for s in entries:
-        top, bottom = z, z - s.thickness_mm
-        if s.is_copper:
-            out[s.name] = round((top + bottom) / 2.0, 6)
-        z = bottom
-    return out
+    """Copper sheet heights above the bottom of the stack, in mm. See ``_stack``."""
+    return _stack(model)[0]
 
 
 def build_model(model: BoardModel, transform, params: SolveParams) -> BuiltModel:
@@ -405,16 +511,28 @@ def build_model(model: BoardModel, transform, params: SolveParams) -> BuiltModel
     max_er = max((s.epsilon_r for s in dielectrics), default=4.4) or 4.4
 
     # ---- mesh ----
-    copper_x, copper_y = _copper_features(model, transform, params.roi, COPPER_MARGIN_MM)
+    edge_cell = min(params.dx_um, params.dy_um) / 1000.0
+    copper_x, copper_y = _copper_features(model, transform, params.roi, COPPER_MARGIN_MM,
+                                          cell_mm=edge_cell)
+    ruled_x, ruled_y = _ruled_edges(model, transform, edge_cell)
 
     # The port's own edges must be grid lines too. This is not a refinement — a port box
     # that falls entirely between grid lines contains no cells, so the excitation is
     # applied to nothing. openEMS reports no error for that: it finds the excitation
     # property, runs to completion, and every field in the result is zero.
+    #
+    # Not on a trace edge the thirds rule has taken the line off, though: a port as wide as
+    # its trace would put the edge line back along the whole trace. The port still spans the
+    # rule's inner lines, which the cell check below confirms.
+    def clear_of(v: float, ruled: dict[float, float]) -> bool:
+        return all(abs(v - e) >= edge_cell / 3.0 for e in ruled)
+
     for port in params.ports:
         for dx in (-port.half_width_mm, 0.0, port.half_width_mm):
-            copper_x.append(port.x + dx)
-            copper_y.append(port.y + dx)
+            if clear_of(port.x + dx, ruled_x):
+                copper_x.append(port.x + dx)
+            if clear_of(port.y + dx, ruled_y):
+                copper_y.append(port.y + dx)
     # Cable ports, planned before meshing for the same reason components are: the gap is one
     # cell wide and needs grid lines either side of it, and the domain has to reach past the
     # board edge far enough to hold the stub.
@@ -571,29 +689,23 @@ def build_model(model: BoardModel, transform, params: SolveParams) -> BuiltModel
             )
 
     # Dielectric slabs, spanning the whole grid in plane so the board does not end in the
-    # middle of the air box.
-    z = sum(s.thickness_mm for s in model.stackup if s.thickness_mm > 0) or model.thickness_mm
-    for s in model.stackup:
-        if s.thickness_mm <= 0 and not s.is_copper:
-            continue
-        top, bottom = z, z - s.thickness_mm
-        if s.is_dielectric:
-            kappa = kappa_from_loss_tangent(s.epsilon_r or 4.4, s.loss_tangent or 0.0, f_centre)
-            doc.add(csx.Material(
-                name=f"diel_{s.name.replace(' ', '_')}",
-                epsilon=s.epsilon_r or 4.4,
-                kappa=kappa,
-                primitives=[csx.Box(
-                    p1=(dx0, dy0, bottom), p2=(dx1, dy1, top),
-                    priority=csx.PRIORITY_DIELECTRIC,
-                )],
-            ))
-            if not s.from_file:
-                notes.append(
-                    f"{s.name} has an assumed permittivity of {s.epsilon_r or 4.4}; a wrong "
-                    f"value shifts every resonance in the result"
-                )
-        z = bottom
+    # middle of the air box. Each reaches the copper sheets either side of it (``_stack``).
+    for s, bottom, top in _stack(model)[1]:
+        kappa = kappa_from_loss_tangent(s.epsilon_r or 4.4, s.loss_tangent or 0.0, f_centre)
+        doc.add(csx.Material(
+            name=f"diel_{s.name.replace(' ', '_')}",
+            epsilon=s.epsilon_r or 4.4,
+            kappa=kappa,
+            primitives=[csx.Box(
+                p1=(dx0, dy0, bottom), p2=(dx1, dy1, top),
+                priority=csx.PRIORITY_DIELECTRIC,
+            )],
+        ))
+        if not s.from_file:
+            notes.append(
+                f"{s.name} has an assumed permittivity of {s.epsilon_r or 4.4}; a wrong "
+                f"value shifts every resonance in the result"
+            )
 
     # Copper. Filtered by bounding box rather than clipped: primitives outside the grid are
     # simply not discretised, and clipping a trace at the region boundary would create an
@@ -601,8 +713,18 @@ def build_model(model: BoardModel, transform, params: SolveParams) -> BuiltModel
     lo_x, hi_x = x0 - COPPER_MARGIN_MM, x1 + COPPER_MARGIN_MM
     lo_y, hi_y = y0 - COPPER_MARGIN_MM, y1 + COPPER_MARGIN_MM
 
-    def in_region(pts) -> bool:
-        return any(lo_x <= p[0] <= hi_x and lo_y <= p[1] <= hi_y for p in pts)
+    def in_region(pts, pad: float = 0.0) -> bool:
+        """Whether the shape's bounding box overlaps the region.
+
+        Not whether one of its vertices is inside it: that dropped every shape that spans
+        the region, and the usual one is a ground plane drawn as one rectangle over the whole
+        board. The microstrip check (research/verify_microstrip.py) found it: the plane under
+        the line had no vertex near the line, so the solve had no ground at all.
+        """
+        xs = [p[0] for p in pts]
+        ys = [p[1] for p in pts]
+        return (min(xs) - pad <= hi_x and max(xs) + pad >= lo_x
+                and min(ys) - pad <= hi_y and max(ys) + pad >= lo_y)
 
     per_layer: dict[str, list[csx.Primitive]] = {name: [] for name in layer_z}
     kept = dropped = 0
@@ -611,7 +733,7 @@ def build_model(model: BoardModel, transform, params: SolveParams) -> BuiltModel
         if track.layer not in per_layer:
             continue
         pts = [transform.pt(px, py) for px, py in track.pts]
-        if not in_region(pts):
+        if not in_region(pts, track.width_mm / 2.0):
             dropped += 1
             continue
         kept += 1
