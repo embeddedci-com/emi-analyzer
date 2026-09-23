@@ -178,7 +178,7 @@ def plan(
     for net in wanted:
         ends = _ends(board, net)
         if not ends:
-            notes.append(f"{net} has no pads, so it has no port and is only a passive neighbour")
+            notes.append(f"{net} has no pads, so it has no port and is only a passive neighbor")
             continue
         for pad in ends:
             ports.append(_port_on(board, transform, pad, len(ports), roi, resistance))
@@ -399,7 +399,7 @@ def extract(board: BoardModel, transform, nets: list[str],
         notes.append(
             f"{len(left_out)} other net{'s' if len(left_out) != 1 else ''} inside the coupon "
             f"{'were' if len(left_out) != 1 else 'was'} left out, so this is the net over its "
-            f"return path, not its coupling into neighbours"
+            f"return path, not its coupling into neighbors"
         )
     if not any(z.net not in wanted for z in zones):
         notes.append(

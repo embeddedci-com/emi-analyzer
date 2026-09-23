@@ -32,17 +32,17 @@ type Features struct {
 	// out over its planes, or a small drawn region) with no far field, no cable ports and no
 	// component models, a band that keeps the record short, and a cell and timestep budget the
 	// worker enforces. Its outputs are the near-field map and the port impedance and
-	// S-parameters. It is the part of full-wave solving that has been checked against closed
-	// forms, for convergence and on real-board coupons (docs/verification/small-part-solve.md),
-	// which is why it has its own switch. FullWave implies it.
+	// S-parameters. It is the part of full-wave solving meant to be checked against closed
+	// forms, for convergence and on real-board coupons, which is why it has its own switch.
+	// FullWave implies it. docs/verification/small-part-solve.md has what was checked and what
+	// is still to do.
 	//
-	// Off by default until the results in that document are accepted; see
-	// SmallPartSolveByDefault.
+	// Off by default until that list is done; see SmallPartSolveByDefault.
 	SmallPartSolve bool `json:"small_part_solve"`
 }
 
 // SmallPartSolveByDefault turns small-part solving on without EMI_EXPERIMENTAL. Flipping it is
-// the whole change needed to ship it; it is false while the verification is being reviewed.
+// the whole change needed to ship it; it is false while the verification is unfinished.
 const SmallPartSolveByDefault = false
 
 // FeatureFullWave is the EMI_EXPERIMENTAL name for Features.FullWave.
