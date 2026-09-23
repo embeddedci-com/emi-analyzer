@@ -290,4 +290,4 @@ worker-local:
 	cd worker && \
 	if [ ! -d .venv ]; then python3 -m venv .venv && .venv/bin/pip install -q -e . && .venv/bin/pip install -q --no-deps "gerbonara==$(GERBONARA)"; fi && \
 	EMBEDDEDCI_URL="$(EMBEDDEDCI_URL)" EMBEDDEDCI_API_KEY="$(EMBEDDEDCI_API_KEY)" \
-	EMI_WORKDIR=/tmp/emi-worker .venv/bin/python -m emi_worker
+	.venv/bin/python -m emi_worker

@@ -111,7 +111,7 @@ whose tools it finds, and is only handed those.
 | `EMI_WORKER_NAME` | hostname | Shown in the worker list. |
 | `EMI_MAX_CONCURRENT` | `1` | Runs at once. Solves are memory-bound, so more than one is rarely faster. |
 | `EMI_POLL_INTERVAL` | `30` | Seconds between polls. Only a fallback: work normally arrives over the WebSocket. |
-| `EMI_WORKDIR` | `/tmp/emi-worker` | Scratch space. Meshes and field dumps are large; use a fast disk. |
+| `EMI_WORKDIR` | `emi-worker-<uid>` in the temp folder (`/var/lib/emi-worker` in the image) | Scratch space. Meshes and field dumps are large; use a fast disk. At startup the worker removes only the run folders it created there. |
 | `EMI_MAX_CELLS` | from RAM | Override the largest solve advertised (72 bytes per cell). |
 | `EMI_VERIFY_TLS` | `1` | `0` disables certificate checks, for a self-signed test server only. |
 | `EMI_KEEP_SCRATCH` | unset | `1` keeps each run's scratch directory, for debugging a failed run. |

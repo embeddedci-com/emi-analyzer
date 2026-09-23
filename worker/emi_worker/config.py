@@ -15,6 +15,7 @@ import subprocess
 from dataclasses import dataclass, field
 
 from .estimate import BYTES_PER_CELL
+from .scratch import default_workdir
 
 #: Fraction of visible RAM we are willing to fill with field arrays.
 #:
@@ -37,7 +38,7 @@ class Config:
     poll_interval: float = 30.0
     reconnect_min: float = 1.0
     reconnect_max: float = 60.0
-    workdir: str = "/tmp/emi-worker"
+    workdir: str = field(default_factory=default_workdir)
     #: Override the auto-detected ceiling. Useful when the container has a cgroup limit
     #: the kernel does not report through the usual files.
     max_cells_override: int = 0
@@ -65,7 +66,7 @@ class Config:
                   or platform.node() or "emi-worker"),
             max_concurrent=int(os.environ.get("EMI_MAX_CONCURRENT", "1")),
             poll_interval=float(os.environ.get("EMI_POLL_INTERVAL", "30")),
-            workdir=os.environ.get("EMI_WORKDIR", "/tmp/emi-worker"),
+            workdir=os.environ.get("EMI_WORKDIR", "").strip() or default_workdir(),
             max_cells_override=int(os.environ.get("EMI_MAX_CELLS", "0")),
             verify_tls=os.environ.get("EMI_VERIFY_TLS", "1") != "0",
             keep_scratch=os.environ.get("EMI_KEEP_SCRATCH", "") not in ("", "0"),
