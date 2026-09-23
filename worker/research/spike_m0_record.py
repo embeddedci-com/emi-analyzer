@@ -8,7 +8,7 @@ error at exactly that frequency.
 This needs no new solve. It transforms each port-current probe over the full record and over
 the first 75 %, and reports the difference per frequency. A complete record barely moves.
 
-    python3 worker/scripts/spike_m0_record.py <spike_out dir>
+    python3 worker/research/spike_m0_record.py <spike_out dir>
 """
 
 from __future__ import annotations

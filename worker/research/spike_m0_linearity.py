@@ -14,7 +14,7 @@ This runs one model three times with deliberately different Gaussian excitations
 compares T(f) at identical dump frequencies.
 
     docker run --rm -v "$PWD/worker:/spike" -w /spike -e PYTHONPATH=/spike \
-        --entrypoint python3 embeddedci/emi-worker:dev scripts/spike_m0_linearity.py
+        --entrypoint python3 ghcr.io/embeddedci-com/emi-worker:dev research/spike_m0_linearity.py
 """
 
 from __future__ import annotations

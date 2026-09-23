@@ -11,8 +11,8 @@ about the numbers it cannot see: every step checks that what came back is what w
 for, because M0 has already met two tools that complete successfully and compute nothing.
 
     docker run --rm -v "$PWD/worker:/spike" -v <out>:/spike/spike_out -w /spike \\
-        -e PYTHONPATH=/spike --entrypoint python3 embeddedci/emi-worker:dev \\
-        scripts/spike_m0_nf2ff.py
+        -e PYTHONPATH=/spike --entrypoint python3 ghcr.io/embeddedci-com/emi-worker:dev \\
+        research/spike_m0_nf2ff.py
 """
 
 from __future__ import annotations

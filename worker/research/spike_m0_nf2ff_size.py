@@ -9,7 +9,7 @@ Per face, per frequency: cells * 3 components * 2 (real, imaginary) * 4 bytes, f
 again for H.
 
     docker run --rm -v "$PWD/worker:/spike" -w /spike -e PYTHONPATH=/spike \\
-        --entrypoint python3 embeddedci/emi-worker:dev scripts/spike_m0_nf2ff_size.py
+        --entrypoint python3 ghcr.io/embeddedci-com/emi-worker:dev research/spike_m0_nf2ff_size.py
 """
 
 from __future__ import annotations
@@ -61,9 +61,10 @@ def real() -> None:
     from emi_worker.kicad.normalize import _board_extent
     from emi_worker.openems.model import Port, SolveParams, build_model
 
-    path = os.environ.get("BOARD", "/boards/solar-ppm/solar-ppm.kicad_pcb")
-    if not os.path.exists(path):
-        print(f"  (no board at {path})")
+    # Any .kicad_pcb: mount its folder at /boards and set BOARD=/boards/<name>.kicad_pcb.
+    path = os.environ.get("BOARD", "")
+    if not path or not os.path.exists(path):
+        print(f"  (no board at {path!r}; set BOARD to a .kicad_pcb to size a real one)")
         return
     board = parse_board(parse(Path(path).read_text()))
     transform = _board_extent(board)

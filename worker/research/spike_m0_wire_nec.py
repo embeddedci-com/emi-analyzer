@@ -5,12 +5,13 @@ is a square column one cell across, so its effective radius comes from the mesh.
 nec2c over wire radius to find the one that reproduces the FDTD resonance, which is the
 conversion a Tier B against Tier C comparison needs.
 
-    python3 worker/scripts/spike_m0_wire_nec.py [path/to/m0_dipole_fdtd.json]
+    python3 worker/research/spike_m0_wire_nec.py [path/to/m0_dipole_fdtd.json]
 """
 
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -21,6 +22,9 @@ from pathlib import Path
 LENGTH_M = 0.5
 SEGMENTS = 41
 
+
+#: Where nec2c comes from on a host without it: the worker image, which carries it.
+NEC2C_IMAGE = os.environ.get("NEC2C_IMAGE", "ghcr.io/embeddedci-com/emi-worker:dev")
 
 def deck(radius_m: float, f_start_mhz: float, steps: int, step_mhz: float) -> str:
     half = LENGTH_M / 2
@@ -43,8 +47,8 @@ def run_nec(text: str) -> str:
         if shutil.which("nec2c"):
             cmd = ["nec2c", "-i", str(d / "deck.nec"), "-o", str(d / "out.txt")]
         else:
-            cmd = ["docker", "run", "--rm", "-v", f"{d}:/w", "emi-spike-nec2c",
-                   "nec2c", "-i/w/deck.nec", "-o/w/out.txt"]
+            cmd = ["docker", "run", "--rm", "-v", f"{d}:/w", "--user", str(os.getuid()),
+                   "--entrypoint", "nec2c", NEC2C_IMAGE, "-i/w/deck.nec", "-o/w/out.txt"]
         subprocess.run(cmd, capture_output=True, text=True, timeout=300)
         return (d / "out.txt").read_text()
 

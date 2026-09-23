@@ -2,9 +2,12 @@
 """M3 · cable test 4 — Tier B against Tier C on the real fixtures (§19).
 
 M0 answered this on one synthetic board: `V_oc / Z_ant` reproduced a fully coupled solve to
-1.3 dB at 150 mm and 2.2 dB at 300 mm. §19 sets the gate on real boards instead —
-`solar-ppm` USB-C, `ai-vision` RJ45 and `benchpod` USB-C, at 0.3 m and 1 m, passing if Tier B
-keeps the layout ranking at every frequency and agrees within ±6 dB below the first resonance.
+1.3 dB at 150 mm and 2.2 dB at 300 mm. §19 sets the gate on real boards instead — it was
+run on three private boards, two with a USB-C and one with an RJ45 connector, at 0.3 m and 1 m,
+passing if Tier B keeps the layout ranking at every frequency and agrees within ±6 dB below
+the first resonance. SETUPS names your own boards: `folder:connector-ref:cable,...`, each
+folder under BOARDS holding one .kicad_pcb, e.g.
+`SETUPS=my-board:USB1:usb2-shielded,other-board:RJ1:ethernet-ftp`.
 
 Two solves per configuration, on **one shared grid**:
 
@@ -28,8 +31,8 @@ share the grid, coarsening it moves both sides together — so the study preset 
 in a way it would never be in a product run. `DX_UM` sets it.
 
     docker run --rm -v "$PWD/worker:/spike" -v <pcb>:/boards:ro -v <out>:/spike/spike_out \\
-        -w /spike -e PYTHONPATH=/spike --entrypoint python3 emi-analyzer-worker:latest \\
-        scripts/spike_m3_cable_test4.py
+        -e SETUPS=<folder:ref:cable,...> -w /spike -e PYTHONPATH=/spike \\
+        --entrypoint python3 ghcr.io/embeddedci-com/emi-worker:dev research/spike_m3_cable_test4.py
 """
 
 from __future__ import annotations
@@ -68,12 +71,8 @@ HEIGHT_M = float(os.environ.get("HEIGHT_M", "1.0"))
 
 FREQS = np.geomspace(F_MIN, F_MAX, int(os.environ.get("N_FREQ", "31")))
 
-#: fixture directory, connector reference, the cable in the library.
-SETUPS = [
-    ("solar-ppm", "USB1", "usb2-shielded"),
-    ("ai-vision", "RJ1", "ethernet-ftp"),
-    ("benchpod", "USBC1", "usb2-shielded"),
-]
+#: Board folder under BOARDS, connector reference, the cable in the library.
+SETUPS = [tuple(v.split(":")) for v in os.environ.get("SETUPS", "").split(",") if v]
 LENGTHS_M = [float(v) for v in os.environ.get("LENGTHS", "0.3,1.0").split(",")]
 
 #: The gap resistance that stands in for "the cable is bonded to the board". M0 measured this
@@ -130,7 +129,7 @@ def region(board, transform, anchor, length_m: float) -> tuple[float, float, flo
     not worth running on a structure that has none.
 
     **Across it the region is a strip**, because the transverse extent barely moves the
-    antenna and multiplies every copper feature in the board: on ai-vision, going from a
+    antenna and multiplies every copper feature in the board: on one of the boards, going from a
     30 mm strip to the full 100 mm costs 3x the cells for a counterpoise that is already
     the right length.
 

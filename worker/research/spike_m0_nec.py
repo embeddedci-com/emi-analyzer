@@ -7,17 +7,21 @@ known independently. A half-wave dipole in free space is the standard case: at e
 nec2c is invoked as a subprocess, the way openEMS and ngspice already are. On a host without
 the binary this falls back to running it in a container.
 
-    python3 worker/scripts/spike_m0_nec.py
+    python3 worker/research/spike_m0_nec.py
 """
 
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+#: Where nec2c comes from on a host without it: the worker image, which carries it.
+NEC2C_IMAGE = os.environ.get("NEC2C_IMAGE", "ghcr.io/embeddedci-com/emi-worker:dev")
 
 C = 299_792_458.0
 
@@ -45,8 +49,8 @@ def run_nec(text: str) -> str:
         if shutil.which("nec2c"):
             cmd = ["nec2c", "-i", str(d / "deck.nec"), "-o", str(d / "out.txt")]
         else:
-            cmd = ["docker", "run", "--rm", "-v", f"{d}:/w", "emi-spike-nec2c",
-                   "nec2c", "-i/w/deck.nec", "-o/w/out.txt"]
+            cmd = ["docker", "run", "--rm", "-v", f"{d}:/w", "--user", str(os.getuid()),
+                   "--entrypoint", "nec2c", NEC2C_IMAGE, "-i/w/deck.nec", "-o/w/out.txt"]
         p = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
         out = d / "out.txt"
         if not out.exists():
