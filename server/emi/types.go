@@ -3,7 +3,7 @@
 // It is deliberately self-contained: everything it needs from a host application
 // (API-key lookup, object storage, a clock) arrives through the small interfaces in
 // deps.go, and every HTTP route it serves is registered by a single call to Mount.
-// That keeps this package mountable into embeddedci-server without either codebase
+// That keeps this package mountable into a host application without either codebase
 // growing knowledge of the other.
 package emi
 
@@ -43,9 +43,8 @@ func (k RunKind) Valid() bool {
 	return false
 }
 
-// RunStatus mirrors the build-job vocabulary in embeddedci-server's docs/job-lifecycle.md
-// exactly, including the states we do not yet emit, so that an operator reading the EMI
-// tables sees the same words they already know from builds.
+// RunStatus is the lifecycle of a run. It is a CI-style job vocabulary on purpose, including
+// timed_out, so that an operator reading the EMI tables sees words they already know.
 type RunStatus string
 
 const (
@@ -57,6 +56,10 @@ const (
 	StatusFailed       RunStatus = "failed"
 	StatusTimedOut     RunStatus = "timed_out"
 )
+
+// StoppedBeforeStartError is the error recorded on a run stopped while it was still queued.
+// It ends as failed, like a run its worker stopped, so it can be retried the same way.
+const StoppedBeforeStartError = "stopped before a worker started it"
 
 // Claimable reports whether a worker may take this run.
 func (s RunStatus) Claimable() bool {
@@ -89,16 +92,15 @@ func (s SourceKind) Valid() bool {
 	return s == SourceKiCad || s == SourceGerber
 }
 
-// AgentTypeEMI is the third value of embeddedci-server's api_keys.agent_type column,
-// alongside the existing "build" and "hw".
+// AgentTypeEMI is the agent type a worker key must carry. A host whose key table also holds
+// keys for other kinds of agent tells them apart by this value.
 const AgentTypeEMI = "emi"
 
 // Capabilities is what a worker declares about itself at registration.
 //
-// Build agents need no equivalent because build jobs are roughly uniform. EMI runs span
-// four orders of magnitude, so the server has to know whether a given worker can actually
-// finish a given run before dispatching it — otherwise a laptop cheerfully claims a
-// 40-hour solve and dies on it.
+// EMI runs span four orders of magnitude, so the server has to know whether a given worker
+// can actually finish a given run before dispatching it — otherwise a laptop cheerfully
+// claims a 40-hour solve and dies on it.
 type Capabilities struct {
 	Cores          int      `json:"cores"`
 	RAMGB          float64  `json:"ram_gb"`
@@ -202,8 +204,8 @@ type Board struct {
 	CreatedAt     time.Time       `json:"created_at"`
 }
 
-// Progress is what a worker streams while it works. Build agents stream log lines; an EMI
-// solve needs numbers the UI can draw, and EnergyDB in particular is the single best
+// Progress is what a worker streams while it works. A log line is not enough: an EMI solve
+// needs numbers the UI can draw, and EnergyDB in particular is the single best
 // signal of whether a run is converging or wasting hours.
 type Progress struct {
 	Stage          string     `json:"stage"`
@@ -238,10 +240,14 @@ type Run struct {
 	Params    json.RawMessage `json:"params,omitempty"`
 	Estimate  *Estimate       `json:"estimate,omitempty"`
 
-	// Ownership, assigned when a worker mints a run token. Mirrors jobs.owner_api_key_kid
-	// and jobs.jti_key in embeddedci-server.
-	OwnerAPIKeyKid string `json:"owner_api_key_kid,omitempty"`
-	JTIKey         string `json:"jti_key,omitempty"`
+	// Ownership, assigned when a worker mints a run token: the id of the worker key that holds
+	// the run, and the jti its current run token must carry.
+	//
+	// Never serialised. A Run is what the browser receives, and neither field is any of its
+	// business: the kid names a credential, and the jti is half of what authorises writes to
+	// the run. Workers get runEnvelope, which leaves them out as well.
+	OwnerAPIKeyKid string `json:"-"`
+	JTIKey         string `json:"-"`
 
 	ClaimedAt  *time.Time `json:"claimed_at,omitempty"`
 	StartedAt  *time.Time `json:"started_at,omitempty"`
@@ -267,8 +273,8 @@ type Artifact struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
-// Worker is a registered EMI worker. In embeddedci-server these rows live in app.agents
-// with agent_type='emi'; the standalone dev server keeps its own equivalent table.
+// Worker is a registered EMI worker. A host may keep these rows in its own agents table; the
+// built-in stores keep them in emi_workers.
 type Worker struct {
 	ID        string `json:"id"`
 	APIKeyKid string `json:"api_key_kid"`
@@ -276,8 +282,8 @@ type Worker struct {
 	// Empty means a shared worker that serves every organisation.
 	//
 	// It travels on the Worker rather than being looked up in the store, because only the
-	// host knows where keys live: the local stack keeps them in emi.emi_dev_api_keys, and a
-	// mounted deployment in embeddedci-server's app.api_keys. A store that reaches for one
+	// host knows where keys live: the Postgres stack keeps them in emi.emi_dev_api_keys, and a
+	// host that mounts this package in a key table of its own. A store that reaches for one
 	// of those works in exactly one deployment and fails in the other.
 	OrganizationID string       `json:"organization_id,omitempty"`
 	Name           string       `json:"name"`

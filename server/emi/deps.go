@@ -8,9 +8,9 @@ import (
 )
 
 // Everything this package needs from a host application lives behind the interfaces in
-// this file. embeddedci-server satisfies them with its own api_keys table and its own S3
-// client; the standalone dev server in cmd/emi-server satisfies them with Postgres and
-// MinIO. Neither codebase needs to know anything about the other.
+// this file. A host that embeds this package satisfies them with its own key table and
+// storage client; cmd/emi-server satisfies them with Postgres and S3-compatible storage, and
+// cmd/emi-local with SQLite and local files. Neither side needs to know about the other.
 
 // AgentKey is the identity behind a verified agent API key.
 type AgentKey struct {
@@ -38,9 +38,9 @@ var (
 
 // KeyVerifier turns a raw "eci_<kid>_<secret>" string into an identity.
 //
-// The host owns this deliberately: embeddedci-server already has a peppered hashing scheme
-// for agent keys, and duplicating that here would mean two implementations of the same
-// security-critical comparison.
+// The host owns this deliberately: a host with agent keys of its own already has a hashing
+// scheme for them, and duplicating that here would mean two implementations of the same
+// security-critical comparison. The built-in stores share the one in agentkey.go.
 type KeyVerifier interface {
 	VerifyAgentKey(ctx context.Context, raw string) (AgentKey, error)
 }
@@ -115,8 +115,8 @@ func (d *Deps) runTimeout() time.Duration {
 	return DefaultRunTimeout
 }
 
-// Store is the persistence this package needs. embeddedci-server will implement it over
-// its own *sql.DB; cmd/emi-server implements it over pgx.
+// Store is the persistence this package needs. PGStore implements it over pgx and
+// local.SQLiteStore over SQLite; a host may implement it over its own database.
 type Store interface {
 	// Projects
 	CreateProject(ctx context.Context, p *Project) error
@@ -169,6 +169,9 @@ type Store interface {
 	UpdateRunProgress(ctx context.Context, runID string, p *Progress, at time.Time) error
 	SetRunEstimate(ctx context.Context, runID string, e *Estimate) error
 	CompleteRun(ctx context.Context, runID string, status RunStatus, summary []byte, errMsg string, at time.Time) error
+	// RequestStop moves an in_progress run to stopping, for its worker to wind down, and a
+	// queued (new or retry_pending) run straight to failed with StoppedBeforeStartError,
+	// because no worker holds it to report back. ErrConflict for any other state.
 	RequestStop(ctx context.Context, runID string, at time.Time) error
 	RetryRun(ctx context.Context, runID string, at time.Time) error
 
@@ -181,7 +184,7 @@ type Store interface {
 	ListArtifacts(ctx context.Context, runID string) ([]*Artifact, error)
 	GetArtifactByName(ctx context.Context, runID, name string) (*Artifact, error)
 
-	// Workers. In embeddedci-server these map onto app.agents with agent_type='emi'.
+	// Workers. A host may map these onto an agents table of its own.
 	UpsertWorker(ctx context.Context, w *Worker) error
 	GetWorker(ctx context.Context, keyKid string) (*Worker, error)
 	ListWorkers(ctx context.Context, orgID string) ([]*Worker, error)

@@ -1,12 +1,12 @@
 -- EMI Analyzer schema.
 --
--- The standalone dev server creates these in a dedicated "emi" schema. When this package is
--- mounted into embeddedci-server the same tables move to "app" and the emi_workers table
--- disappears, because workers live in app.agents with agent_type='emi' there.
+-- PGStore creates these in a dedicated "emi" schema. A host that mounts this package with a
+-- store of its own may keep the same tables elsewhere, and may keep workers in an agents
+-- table of its own instead of emi_workers.
 --
 -- Status and kind are text with CHECK constraints rather than enums: adding a value to a
--- Postgres enum is a migration that cannot run inside a transaction with other DDL, and the
--- status vocabulary is copied from build jobs precisely so it can grow the same way.
+-- Postgres enum is a migration that cannot run inside a transaction with other DDL, and both
+-- vocabularies are expected to grow.
 
 CREATE SCHEMA IF NOT EXISTS emi;
 
@@ -62,9 +62,8 @@ CREATE TABLE IF NOT EXISTS emi.emi_runs (
     params     jsonb,
     estimate   jsonb,
 
-    -- Ownership. Mirrors jobs.owner_api_key_kid / jobs.jti_key in embeddedci-server: the
-    -- kid says which worker holds the run, and the jti invalidates a superseded worker's
-    -- token when a retry hands the run to somebody else.
+    -- Ownership: the kid says which worker holds the run, and the jti invalidates a
+    -- superseded worker's token when a retry hands the run to somebody else.
     owner_api_key_kid text,
     jti_key           text,
 
@@ -142,7 +141,7 @@ CREATE TABLE IF NOT EXISTS emi.emi_artifacts (
     UNIQUE (run_id, name)
 );
 
--- Dev-only. In embeddedci-server this is app.agents with agent_type='emi'.
+-- Registered workers. A host may keep these in an agents table of its own instead.
 CREATE TABLE IF NOT EXISTS emi.emi_workers (
     id              text PRIMARY KEY,
     api_key_kid     text NOT NULL UNIQUE,
@@ -154,8 +153,8 @@ CREATE TABLE IF NOT EXISTS emi.emi_workers (
     last_seen_at    timestamptz
 );
 
--- Dev-only API keys. embeddedci-server has its own peppered api_keys table; this exists so
--- the local stack can issue a worker key without depending on it.
+-- Worker keys for DevKeyVerifier. A host with a key table of its own does not use this; it
+-- exists so the compose stack can issue a worker key without one.
 CREATE TABLE IF NOT EXISTS emi.emi_dev_api_keys (
     kid             text PRIMARY KEY,
     hash            text NOT NULL,
@@ -167,7 +166,7 @@ CREATE TABLE IF NOT EXISTS emi.emi_dev_api_keys (
 );
 
 -- Drivers: the measured or declared source attached to a port, as an emi-driver document
--- (model-fidelity.md §9.2). Project-scoped and open to visitors, exactly like boards -- the
+-- (docs/emi-driver-format.md). Project-scoped and open to visitors, exactly like boards -- the
 -- sign-in gate is on the component library, not on this.
 --
 -- The document is stored whole rather than shredded into columns. It is a versioned format
@@ -194,7 +193,7 @@ CREATE INDEX IF NOT EXISTS emi_drivers_project_created_idx
     ON emi.emi_drivers (project_id, created_at DESC);
 
 -- Components: a user's own models for parts the analyzer would otherwise treat as bare
--- copper (model-fidelity.md §11-13). Unlike boards and drivers, these are NOT open to
+-- copper (docs/implementation.md §3). Unlike boards and drivers, these are NOT open to
 -- visitors: a signed-out visitor can build one and use it, but it lives in their browser and
 -- is gone when they leave, because there is no account to file it under.
 --

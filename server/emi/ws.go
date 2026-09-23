@@ -11,8 +11,7 @@ import (
 )
 
 // The worker WebSocket. The worker always dials out, which is the property that lets it run
-// on a laptop behind NAT or on an office workstation with no inbound firewall rule — the
-// same reason build agents work that way.
+// on a laptop behind NAT or on an office workstation with no inbound firewall rule.
 //
 // Push is an optimisation and never the delivery guarantee: everything sent here is also
 // discoverable through GET /emi-agent/runs, so a worker that misses a message because it
@@ -25,20 +24,10 @@ const (
 )
 
 func (s *Service) handleWorkerWS(w http.ResponseWriter, r *http.Request) {
-	// Authenticate before upgrading, so a bad key gets a plain 403 rather than a socket
+	// Authenticate before upgrading, so a bad key gets a plain 401 rather than a socket
 	// that closes immediately for reasons the worker has to guess at.
-	raw := bearer(r)
-	if raw == "" {
-		writeErr(w, http.StatusUnauthorized, "missing agent key")
-		return
-	}
-	key, err := s.deps.Keys.VerifyAgentKey(r.Context(), raw)
-	if err != nil {
-		writeErr(w, http.StatusForbidden, "invalid agent key")
-		return
-	}
-	if key.AgentType != AgentTypeEMI {
-		writeErr(w, http.StatusForbidden, "key is not an emi worker key")
+	key, ok := s.workerKey(w, r)
+	if !ok {
 		return
 	}
 
@@ -100,20 +89,16 @@ func (s *Service) handleWorkerWS(w http.ResponseWriter, r *http.Request) {
 
 // sendPending pushes every claimable run for this worker's org that it could actually take.
 func (s *Service) sendPending(ctx context.Context, wc *workerConn) {
-	runs, err := s.deps.Store.ListClaimableRuns(ctx, wc.orgID, 50)
+	s.hub.mu.RLock()
+	caps := wc.caps
+	s.hub.mu.RUnlock()
+	runs, err := s.pendingFor(ctx, wc.orgID, caps)
 	if err != nil {
 		s.deps.log().Error("emi: list claimable failed", "err", err)
 		return
 	}
 	sent := 0
 	for _, run := range runs {
-		var cells int64
-		if run.Estimate != nil {
-			cells = run.Estimate.Cells
-		}
-		if !wc.caps.Accepts(run.Kind, cells) {
-			continue
-		}
 		if err := wc.send(ctx, map[string]any{"type": "new_run", "run": runEnvelope(run)}); err != nil {
 			return
 		}
@@ -122,6 +107,34 @@ func (s *Service) sendPending(ctx context.Context, wc *workerConn) {
 	if sent > 0 {
 		s.deps.log().Info("emi: sent pending runs", "kid", wc.keyKid, "count", sent)
 	}
+}
+
+// pendingFor is the queue a worker is offered on connect and on poll: claimable runs it has
+// the capabilities for, of a kind this server allows.
+//
+// The feature gate matters as much here as in the REST listing. A run of a kind that was
+// switched off after it was queued would otherwise be pushed, refused with 403 at mint, and
+// pushed again on every poll, while it sat at "new" forever.
+func (s *Service) pendingFor(ctx context.Context, orgID string, caps Capabilities) ([]*Run, error) {
+	runs, err := s.deps.Store.ListClaimableRuns(ctx, orgID, 50)
+	if err != nil {
+		return nil, err
+	}
+	var out []*Run
+	for _, run := range runs {
+		if !s.deps.Features.allows(run.Kind) {
+			continue
+		}
+		var cells int64
+		if run.Estimate != nil {
+			cells = run.Estimate.Cells
+		}
+		if !caps.Accepts(run.Kind, cells) {
+			continue
+		}
+		out = append(out, run)
+	}
+	return out, nil
 }
 
 // handleWorkerMessage handles the few things a worker says over the socket. Everything with

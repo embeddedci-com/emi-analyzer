@@ -1,15 +1,14 @@
 // Package local holds what the EMI Analyzer needs to run on one computer with nothing else
 // installed: a SQLite Store, a Blob on the local filesystem, and a worker-key verifier.
 //
-// It is a separate package from emi on purpose. embeddedci-server mounts the emi package and
-// never imports this one, so the SQLite driver and the file server are not linked into the
-// hosted server. `make test-go` checks that emi never starts importing it.
+// It is a separate package from emi on purpose. A host that mounts the emi package never
+// imports this one, so the SQLite driver and the file server are not linked into a hosted
+// server. `make test-go` checks that emi never starts importing it.
 package local
 
 import (
 	"context"
 	"database/sql"
-	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -20,9 +19,6 @@ import (
 
 	"github.com/embeddedci-com/emi-analyzer/server/emi"
 )
-
-//go:embed schema.sql
-var schemaSQL string
 
 // SQLiteStore implements emi.Store over a single SQLite file.
 //
@@ -35,7 +31,8 @@ type SQLiteStore struct {
 
 var _ emi.Store = (*SQLiteStore)(nil)
 
-// OpenSQLite opens (creating if needed) the database at path and applies the schema.
+// OpenSQLite opens (creating if needed) the database at path and migrates it to the newest
+// schema (see migrate.go).
 func OpenSQLite(ctx context.Context, path string) (*SQLiteStore, error) {
 	q := url.Values{}
 	q.Add("_pragma", "foreign_keys(1)")
@@ -52,9 +49,9 @@ func OpenSQLite(ctx context.Context, path string) (*SQLiteStore, error) {
 		db.Close()
 		return nil, fmt.Errorf("local: open %s: %w", path, err)
 	}
-	if _, err := db.ExecContext(ctx, schemaSQL); err != nil {
+	if err := migrate(ctx, db); err != nil {
 		db.Close()
-		return nil, fmt.Errorf("local: apply schema: %w", err)
+		return nil, err
 	}
 	return &SQLiteStore{db: db}, nil
 }
@@ -624,10 +621,16 @@ func (s *SQLiteStore) CompleteRun(ctx context.Context, runID string, status emi.
 		string(status), nullJSON(summary), errMsg, ts(at), ts(at), runID))
 }
 
+// RequestStop follows emi.PGStore: a queued run ends at once, a running one is asked to stop.
 func (s *SQLiteStore) RequestStop(ctx context.Context, runID string, at time.Time) error {
 	return conflictIfNone(s.db.ExecContext(ctx, `
-		UPDATE emi_runs SET status = 'stopping', updated_at = ?
-		WHERE id = ? AND status IN ('new','retry_pending','in_progress')`, ts(at), runID))
+		UPDATE emi_runs
+		SET status      = CASE WHEN status = 'in_progress' THEN 'stopping' ELSE 'failed' END,
+		    error       = CASE WHEN status = 'in_progress' THEN error ELSE ? END,
+		    finished_at = CASE WHEN status = 'in_progress' THEN finished_at ELSE ? END,
+		    updated_at  = ?
+		WHERE id = ? AND status IN ('new','retry_pending','in_progress')`,
+		emi.StoppedBeforeStartError, ts(at), ts(at), runID))
 }
 
 func (s *SQLiteStore) RetryRun(ctx context.Context, runID string, at time.Time) error {

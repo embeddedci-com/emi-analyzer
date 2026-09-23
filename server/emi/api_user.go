@@ -214,8 +214,9 @@ func (s *Service) handleCreateBoard(w http.ResponseWriter, r *http.Request) {
 	}
 	// Scoped to the organisation rather than the project, because an upload is now shared
 	// across the projects of one organisation. It still stops a caller naming an upload
-	// belonging to somebody else and having a worker parse it for them.
-	if body.InputKey == "" || !strings.HasPrefix(body.InputKey, "uploads/"+p.OrganizationID+"/") {
+	// belonging to somebody else and having a worker parse it for them -- including by way of
+	// "..", which a prefix check alone lets through (see objectkeys.go).
+	if !uploadKeyAllowed(body.InputKey, p.OrganizationID) {
 		writeErr(w, http.StatusBadRequest, "input_key must be an upload key for this organisation")
 		return
 	}
@@ -604,13 +605,20 @@ func (s *Service) handleStopRun(w http.ResponseWriter, r *http.Request) {
 		writeStoreErr(w, err)
 		return
 	}
+	// Read back rather than assume: a queued run ends as failed, a running one is stopping,
+	// and a worker may have claimed it between the read above and the update.
+	fresh, err := s.deps.Store.GetRun(r.Context(), run.ID)
+	if err != nil {
+		writeStoreErr(w, err)
+		return
+	}
 	// Best effort. The run is already marked stopping in the database, so a worker that
 	// misses this push still finds out at its next progress post.
 	delivered := false
-	if run.OwnerAPIKeyKid != "" {
-		delivered = s.hub.PushStop(r.Context(), run.OwnerAPIKeyKid, run.ID)
+	if fresh.Status == StatusStopping && fresh.OwnerAPIKeyKid != "" {
+		delivered = s.hub.PushStop(r.Context(), fresh.OwnerAPIKeyKid, fresh.ID)
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"status": StatusStopping, "pushed": delivered})
+	writeJSON(w, http.StatusOK, map[string]any{"status": fresh.Status, "pushed": delivered})
 }
 
 func (s *Service) handleRetryRun(w http.ResponseWriter, r *http.Request) {
@@ -653,7 +661,7 @@ func (s *Service) handleListArtifacts(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleGetArtifactURL returns a presigned GET rather than the bytes, so the browser
-// fetches exactly the one frequency grid it is displaying and the droplet stays out of it.
+// fetches exactly the one frequency grid it is displaying and the server stays out of it.
 func (s *Service) handleGetArtifactURL(w http.ResponseWriter, r *http.Request) {
 	run, _, ok := s.run(w, r)
 	if !ok {

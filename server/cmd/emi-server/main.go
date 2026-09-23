@@ -1,11 +1,14 @@
 // Command emi-server runs the EMI control plane, and optionally the webapp, on its own.
 //
 // It is the development harness: one binary that speaks the whole worker protocol against
-// Postgres and S3-compatible storage, so the hosted data path can be exercised end to end
-// (`make up`, `make smoke`) without embeddedci-server.
+// Postgres and S3-compatible storage, so that storage path can be exercised end to end
+// (`make up`, `make smoke`) without a host application around it.
 //
 // It has no accounts. Every request is a signed-out visitor with a private space of their own
 // (see userauth.go); sign-in, sessions and API keys are the mounting host's business.
+//
+// It listens on 127.0.0.1 unless told otherwise, and will not start with missing or published
+// secrets unless -dev (or EMI_DEV=1) says this is the development stack; see config.go.
 package main
 
 import (
@@ -33,7 +36,8 @@ func env(key, def string) string {
 
 func main() {
 	var (
-		addr     = flag.String("addr", env("ADDR", ":8090"), "listen address")
+		addr     = flag.String("addr", env("ADDR", "127.0.0.1:8090"), "listen address")
+		dev      = flag.Bool("dev", envBool(os.Getenv, "EMI_DEV"), "development stack: allow the built-in development secrets and MinIO credentials")
 		dsn      = flag.String("dsn", env("DATABASE_URL", "postgres://emi:emi@localhost:5432/emi?sslmode=disable"), "postgres DSN")
 		issueKey = flag.Bool("issue-key", false, "issue an EMI worker key and exit")
 		keyOrg   = flag.String("org", "", "restrict an issued key to one organisation (default: serves all of them)")
@@ -54,6 +58,16 @@ func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	slog.SetDefault(logger)
 
+	// Before anything else, so a misconfigured server fails at once and says why.
+	sec, err := loadSecrets(*dev, os.Getenv)
+	if err != nil {
+		logger.Error("refusing to start", "err", err)
+		os.Exit(1)
+	}
+	if *dev {
+		logger.Warn("development mode: unset secrets fall back to public development values")
+	}
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -64,13 +78,13 @@ func main() {
 	}
 	defer store.Close()
 
-	pepper := []byte(env("EMI_PEPPER", "dev-pepper-not-for-production-use-0123456789"))
+	pepper := []byte(sec.pepper)
 	keys := emi.NewDevKeyVerifier(store.Pool(), pepper)
 
 	// One-shot mode for `make key`.
 	//
 	// No -org means a shared worker: one that takes runs from every organisation, which is
-	// what a worker EmbeddedCI runs should be. -org is for the other case -- a customer
+	// what a hosted service's own workers are. -org is for the other case -- a customer
 	// running a worker on their own hardware, which must only ever see their own boards.
 	if *issueKey {
 		raw, err := keys.IssueKey(ctx, *keyOrg, *keyName)
@@ -91,8 +105,8 @@ func main() {
 		Endpoint:     env("S3_ENDPOINT", "http://localhost:9000"),
 		Region:       env("S3_REGION", "us-east-1"),
 		Bucket:       env("S3_BUCKET", "emi"),
-		AccessKey:    env("S3_ACCESS_KEY_ID", "minioadmin"),
-		SecretKey:    env("S3_SECRET_ACCESS_KEY", "minioadmin"),
+		AccessKey:    sec.s3Key,
+		SecretKey:    sec.s3Secret,
 		UsePathStyle: true,
 		// The server talks to MinIO over the compose network; workers and browsers reach
 		// it from the host. Presigned URLs sign path and query, not host, so rewriting the
@@ -118,7 +132,7 @@ func main() {
 		Store:       store,
 		Keys:        keys,
 		Blob:        blob,
-		TokenSecret: []byte(env("EMI_TOKEN_SECRET", "dev-token-secret-not-for-production-0123456789")),
+		TokenSecret: []byte(sec.tokenSecret),
 		Logger:      logger,
 		RunTimeout:  24 * time.Hour,
 	})
@@ -131,7 +145,7 @@ func main() {
 	mux := http.NewServeMux()
 
 	svc.Mount(mux, "/api", visitorAuth(emi.Visitors{
-		Secret: []byte(env("EMI_TOKEN_SECRET", "dev-token-secret-not-for-production-0123456789")),
+		Secret: []byte(sec.tokenSecret),
 	}))
 
 	if *webapp != "" {

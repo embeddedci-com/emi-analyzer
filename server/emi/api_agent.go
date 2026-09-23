@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// Worker-facing endpoints. The flow mirrors build agents exactly:
+// Worker-facing endpoints. The flow is that of a CI agent:
 //
 //	dial in (ws) or poll  ->  mint run token  ->  claim  ->  progress*  ->  artifacts*  ->  complete
 //
@@ -85,9 +85,8 @@ func (s *Service) handleWorkerDeregister(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deregistered"})
 }
 
-// handleWorkerListRuns is the REST fallback for the WebSocket push, exactly as
-// GET /api/agent/jobs is for build agents. Push is an optimisation; polling is the
-// guarantee.
+// handleWorkerListRuns is the REST fallback for the WebSocket push. Push is an optimisation;
+// polling is the guarantee.
 func (s *Service) handleWorkerListRuns(w http.ResponseWriter, r *http.Request) {
 	key, _ := agentFrom(r.Context())
 	runs, err := s.deps.Store.ListClaimableRuns(r.Context(), key.OrganizationID, queryInt(r, "limit", 25, 100))
@@ -110,8 +109,8 @@ func (s *Service) handleWorkerListRuns(w http.ResponseWriter, r *http.Request) {
 
 // handleMintRunToken issues the short-lived run token and takes ownership of the run.
 //
-// Minting is what assigns ownership, matching the build-agent flow where the mint sets
-// jobs.owner_api_key_kid. A second worker that mints for the same run gets a new jti, which
+// Minting is what assigns ownership: it records the key id and the token's jti on the run.
+// A second worker that mints for the same run after a retry gets a new jti, which
 // invalidates the first worker's token — that is how a retry takes a run away from a hung
 // worker without needing to reach that worker.
 func (s *Service) handleMintRunToken(w http.ResponseWriter, r *http.Request) {
@@ -144,34 +143,91 @@ func (s *Service) handleMintRunToken(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusConflict, "run has already finished")
 		return
 	}
-	if run.OwnerAPIKeyKid != "" && run.OwnerAPIKeyKid != key.Kid && run.Status == StatusInProgress {
+	// Minting again for a run this key already holds is a refresh, not a second claim.
+	if heldBy(run, key.Kid) {
+		s.writeRunToken(w, run.ID, proj.OrganizationID, run.JTIKey)
+		return
+	}
+	if run.OwnerAPIKeyKid != "" && run.OwnerAPIKeyKid != key.Kid && !run.Status.Claimable() {
 		writeErr(w, http.StatusConflict, "run is owned by another worker")
 		return
 	}
 
+	// ClaimRun is the atomic step: of two workers minting for one run, exactly one changes
+	// the row, and only that one is handed a token. The jti is chosen first because the row
+	// records it, and a token is only worth anything once it matches the row.
 	jti := newID()
-	tok, exp, err := s.mintRunToken(run.ID, proj.OrganizationID, jti)
+	if _, err := s.deps.Store.ClaimRun(r.Context(), run.ID, key.Kid, jti, s.deps.now()); err != nil {
+		writeStoreErr(w, err)
+		return
+	}
+	s.writeRunToken(w, run.ID, proj.OrganizationID, jti)
+}
+
+// handleRefreshRunToken hands the worker that holds a run a fresh token for it.
+//
+// A run token lives RunTokenTTL and a solve can take longer. Minting again used to be the
+// answer, and it never worked: ClaimRun refuses a run that is already in progress, and the
+// token that came back carried a new jti the row did not have, so every call made with it was
+// answered 409 as if the run had been reassigned.
+//
+// The new token carries the jti the run already has, and only its expiry is new. So the old
+// token keeps working until it expires on its own: a progress post already in flight when the
+// worker swaps tokens is not refused, which rotating the jti would do, and the worker would
+// read that 409 as "reassigned" and abandon a solve hours in. Taking a run away from a worker
+// is still what changes the jti (a retry clears it, the next claim sets a new one), and a
+// refresh never succeeds for a run this key does not hold at that moment.
+//
+// Authenticated by the worker key, not the run token, so a worker whose token has already
+// lapsed can still recover the run it is working on.
+func (s *Service) handleRefreshRunToken(w http.ResponseWriter, r *http.Request) {
+	key, _ := agentFrom(r.Context())
+	run, err := s.deps.Store.GetRun(r.Context(), r.PathValue("run_id"))
 	if err != nil {
+		writeStoreErr(w, err)
+		return
+	}
+	proj, err := s.deps.Store.GetProject(r.Context(), run.ProjectID)
+	if err != nil {
+		writeStoreErr(w, err)
+		return
+	}
+	if key.OrganizationID != "" && proj.OrganizationID != key.OrganizationID {
+		writeErr(w, http.StatusNotFound, "not found")
+		return
+	}
+	if run.Status.Terminal() {
+		writeErr(w, http.StatusConflict, "run has already finished")
+		return
+	}
+	if !heldBy(run, key.Kid) {
+		writeErr(w, http.StatusConflict, "run is not held by this worker")
+		return
+	}
+	s.writeRunToken(w, run.ID, proj.OrganizationID, run.JTIKey)
+}
+
+// heldBy reports whether the worker key kid currently holds run: it claimed it, nothing has
+// taken it away since, and the run is still being worked on.
+func heldBy(run *Run, kid string) bool {
+	return kid != "" && run.OwnerAPIKeyKid == kid && run.JTIKey != "" &&
+		(run.Status == StatusInProgress || run.Status == StatusStopping)
+}
+
+// writeRunToken signs a run token and writes the response both mint and refresh return.
+func (s *Service) writeRunToken(w http.ResponseWriter, runID, orgID, jti string) {
+	tok, exp, err := s.mintRunToken(runID, orgID, jti)
+	if err != nil {
+		s.deps.log().Error("emi: signing a run token failed", "err", err)
 		writeErr(w, http.StatusInternalServerError, "failed to mint run token")
 		return
 	}
-
-	// Record intent to own before handing out the token. ClaimRun then flips the status.
-	if _, err := s.deps.Store.ClaimRun(r.Context(), run.ID, key.Kid, jti, s.deps.now()); err != nil {
-		// Not fatal for the mint itself when the run is already ours and in progress
-		// (a worker re-minting after a token expiry mid-solve).
-		if !(run.OwnerAPIKeyKid == key.Kid && run.Status == StatusInProgress) {
-			writeStoreErr(w, err)
-			return
-		}
-	}
-
 	writeJSON(w, http.StatusOK, map[string]any{
 		"token":      tok,
-		"run_id":     run.ID,
+		"run_id":     runID,
 		"jti":        jti,
 		"expires_at": exp.UTC().Format(time.RFC3339),
-		"expires_in": int(time.Until(exp).Seconds()),
+		"expires_in": int(exp.Sub(s.deps.now()).Seconds()),
 	})
 }
 
@@ -215,10 +271,9 @@ func (s *Service) handleRunProgress(w http.ResponseWriter, r *http.Request) {
 
 // handleArtifactUploadInit hands back a presigned PUT.
 //
-// This is the deliberate divergence from the build-agent flow, which proxies artifact bytes
-// through the server. A result bundle is hundreds of megabytes and the production droplet
-// is 1 vCPU / 2 GB, also serving BenchPod WebSockets. The bytes go worker -> Spaces
-// directly and the control plane only ever sees this small JSON.
+// Artifact bytes never pass through the control plane. A result bundle is hundreds of
+// megabytes, and a small server shared with other work cannot afford to proxy it. The bytes
+// go worker -> object storage directly and the control plane only ever sees this small JSON.
 func (s *Service) handleArtifactUploadInit(w http.ResponseWriter, r *http.Request) {
 	runID, _ := runIDFrom(r.Context())
 
@@ -362,9 +417,18 @@ func (s *Service) handleCompleteRun(w http.ResponseWriter, r *http.Request) {
 	}
 	now := s.deps.now()
 
-	// Register artifacts before flipping the run to done, so a client that reacts to the
-	// status change never sees a finished run with a half-populated artifact list.
-	for _, a := range body.Artifacts {
+	// The parsed board's key is presigned for every later solve and for the viewer, so like an
+	// artifact key it must point into this run's own prefix. Checked before anything is written.
+	if body.Board != nil && body.Board.BoardKey != "" && !runKeyAllowed(body.Board.BoardKey, runID) {
+		writeErr(w, http.StatusBadRequest, "board_key must be under this run")
+		return
+	}
+
+	// Names and keys are all checked before any row is written, so a bad entry late in the
+	// list cannot leave the ones before it recorded.
+	names := make([]string, len(body.Artifacts))
+	keys := make([]string, len(body.Artifacts))
+	for i, a := range body.Artifacts {
 		name, ok := sanitiseArtifactName(a.Name)
 		if !ok {
 			writeErr(w, http.StatusBadRequest, "invalid artifact name: "+a.Name)
@@ -374,6 +438,19 @@ func (s *Service) handleCompleteRun(w http.ResponseWriter, r *http.Request) {
 		if key == "" {
 			key = artifactKey(runID, name)
 		}
+		// The key is presigned for any browser that can see this run, so a worker must not be
+		// able to point it at another run's results, or at somebody's upload.
+		if !runKeyAllowed(key, runID) {
+			writeErr(w, http.StatusBadRequest, "artifact key must be under this run: "+name)
+			return
+		}
+		names[i], keys[i] = name, key
+	}
+
+	// Register artifacts before flipping the run to done, so a client that reacts to the
+	// status change never sees a finished run with a half-populated artifact list.
+	for i, a := range body.Artifacts {
+		name, key := names[i], keys[i]
 		size, ct := a.SizeBytes, a.ContentType
 		// Trust but verify: ask storage what actually landed. A worker that crashed
 		// mid-upload should not be able to record a result that is not there.
