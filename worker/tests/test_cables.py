@@ -400,8 +400,8 @@ def test_cable_5_no_diode_package_gets_a_cable():
     what keeps the two from drifting into disagreeing about it.
 
     Known limitation, asserted so it is a decision rather than a surprise: a genuine connector
-    carrying a non-connector reference is missed too — `U4` on solar-ppm is a real 2-pin
-    terminal block. Erring this way keeps false cables off the board at the cost of a real
+    carrying a non-connector reference is missed too — a 2-pin terminal block labelled `U4` on
+    a real board. Erring this way keeps false cables off the board at the cost of a real
     connector going unlisted, and §5 already requires the user to confirm every assignment.
     """
     import collections
@@ -838,15 +838,13 @@ def test_the_cable_stage_runs_on_a_real_board(tmp_path):
     """
     from emi_worker.stages.cable import run_cable
 
-    board_path = (Path(__import__("os").environ.get("EMI_TEST_BOARDS", "/nonexistent"))
-                  / "solar-ppm" / "solar-ppm.kicad_pcb")
-    if not board_path.exists():
-        pytest.skip("EMI_TEST_BOARDS does not contain solar-ppm/solar-ppm.kicad_pcb")
+    # The public fixture: J1 is a through-hole connector at the board edge.
+    board_path = Path(__file__).parent / "fixtures" / "tiny.kicad_pcb"
 
     ctx, client = _cable_context(
         tmp_path, board_path.read_bytes(),
         {"standard_id": "fcc-15b-radiated-3m",
-         "connectors": {"USB1": {"type": "usb2-shielded", "length_m": 1.0}}},
+         "connectors": {"J1": {"type": "usb2-shielded", "length_m": 1.0}}},
     )
     result = run_cable(ctx)
 
@@ -857,11 +855,11 @@ def test_the_cable_stage_runs_on_a_real_board(tmp_path):
     assert doc["assumptions"], "a result with no stated assumptions hides its own model"
 
     refs = {c["ref"] for c in doc["cables"]} | {u["ref"] for u in doc["unassigned"]}
-    assert "USB1" in refs
+    assert "J1" in refs
     assert len({c["ref"] for c in doc["cables"]} & {u["ref"] for u in doc["unassigned"]}) == 0
 
     modelled = [c for c in doc["cables"] if c.get("cable_id")]
-    assert modelled, "USB1 was assigned a cable and produced no budget"
+    assert modelled, "J1 was assigned a cable and produced no budget"
     assert modelled[0]["points"], "a modelled cable with no points has no budget"
     assert result.summary["stage"] == "cable"
 
@@ -879,28 +877,22 @@ def test_the_cable_stage_reads_a_settings_document_from_the_archive(tmp_path):
 
     from emi_worker.stages.cable import run_cable
 
-    board_path = (Path(__import__("os").environ.get("EMI_TEST_BOARDS", "/nonexistent"))
-                  / "solar-ppm" / "solar-ppm.kicad_pcb")
-    if not board_path.exists():
-        pytest.skip("EMI_TEST_BOARDS does not contain solar-ppm/solar-ppm.kicad_pcb")
+    # The public fixture: J1 is a through-hole connector at the board edge.
+    board_path = Path(__file__).parent / "fixtures" / "tiny.kicad_pcb"
 
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as z:
-        z.writestr("solar-ppm.kicad_pcb", board_path.read_text())
-        # JSON rather than YAML on purpose: settings.py reads YAML only when PyYAML is
-        # importable, and the worker image does not carry it. A test written in YAML passes
-        # on a developer machine and skips the parse silently in the image that ships.
-        z.writestr(
-            "emi.rules.json",
-            json.dumps({"cables": {"connectors": {"USB1": {"type": "usb2-shielded"}}}}),
-        )
+        z.writestr("tiny.kicad_pcb", board_path.read_text())
+        # YAML, the documented form. The image once lacked PyYAML and read only JSON, so the
+        # documented file was silently ignored in the image that ships.
+        z.writestr("emi.rules.yaml", "cables:\n  connectors:\n    J1: {type: usb2-shielded}\n")
 
     ctx, client = _cable_context(tmp_path, buf.getvalue(), {})
     run_cable(ctx)
 
     doc = json.loads(client.uploads["cables.json"])
     assigned = {c["ref"] for c in doc["cables"] if c.get("cable_id")}
-    assert "USB1" in assigned, "the committed settings document was not read"
+    assert "J1" in assigned, "the committed settings document was not read"
 
 
 # ---- where the receiving antenna is ------------------------------------------------------

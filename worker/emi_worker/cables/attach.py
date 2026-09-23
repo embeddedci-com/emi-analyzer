@@ -7,7 +7,7 @@ incomplete — a cable the user did not ask for is exactly the kind of invisible
 tool exists not to make.
 
 **Recognition is reused, not reinvented.** `rules/emc.py` already decides what a connector is,
-and it already knows that `SMA_L4.3-W2.6-LS5.2-RD` on `solar-ppm` is a DO-214AC diode package
+and it already knows that `SMA_L4.3-W2.6-LS5.2-RD` on a real board is a DO-214AC diode package
 rather than an SMA jack. Writing a second answer to that question is how the two drift and how
 a diode ends up with a USB cable attached to it (§19, cable test 5).
 """
@@ -107,7 +107,7 @@ class Anchor:
     ny: float
     #: How close this connector's **copper** gets to the outline — the nearest pad, not the
     #: centroid. A big through-hole jack has a centroid well back from the edge while its
-    #: nearest pin nearly touches it: measured on ai-vision, an RJ45 is 14 mm from the edge by
+    #: nearest pin nearly touches it: measured on a real board, an RJ45 is 14 mm from the edge by
     #: centroid and 2 mm by pad, and only the second answers "is this an edge connector".
     distance_to_edge_mm: float
     #: The width of the connector across the exit direction, which sets the stub's width.
@@ -121,8 +121,8 @@ class Anchor:
 #: How close a connector's nearest pad must come to the outline to count as an edge connector.
 #:
 #: Set from the four real boards rather than picked: every genuine edge connector on them is
-#: within 9 mm (solar-ppm's through-hole USB-A is the furthest at 8.8, its pins set back behind
-#: the jack body), and every mid-board header is beyond 18 (benchpod's H1-H3, at 19 to 29).
+#: within 9 mm (a real board's through-hole USB-A is the furthest at 8.8, its pins set back behind
+#: the jack body), and every mid-board header is beyond 18 (one board's H1-H3, at 19 to 29).
 #: 12 mm sits in the gap with room on both sides.
 EDGE_TOLERANCE_MM = 12.0
 

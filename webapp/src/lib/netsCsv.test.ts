@@ -103,7 +103,7 @@ describe('older boards', () => {
 
 describe('file name', () => {
   it('is safe on every filesystem', () => {
-    expect(csvFileName('vbench pod / rev B')).toBe('vbench-pod-rev-B-nets.csv')
+    expect(csvFileName('sensor pod / rev B')).toBe('sensor-pod-rev-B-nets.csv')
     expect(csvFileName('   ')).toBe('board-nets.csv')
   })
 })

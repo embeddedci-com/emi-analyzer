@@ -430,7 +430,7 @@ def build_model(model: BoardModel, transform, params: SolveParams) -> BuiltModel
     # terminated by the PML instead of by open air.
     #
     # Extended only on the sides the stubs actually leave from. Growing all four sides is the
-    # obvious version and costs far more than it needs to: on solar-ppm with one westward stub
+    # obvious version and costs far more than it needs to: on a real board with one westward stub
     # it took the mesh from 7.8 M cells to 11.3 M (+46 %) against §4's +5-15 % budget, almost
     # all of it air nothing reaches into.
     roi = list(params.roi)

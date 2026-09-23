@@ -20,7 +20,7 @@ exported board is one that could not be built. Two rectangles say the same thing
 physics and export faithfully.
 
 The same comparison runs against real hardware with ``scripts/compare_ingest.py``; on this
-repo's 4-layer ``solar-ppm`` it reports 307 of 307 tracks named, no shorts, and every shared
+real 4-layer board it reported 307 of 307 tracks named, no shorts, and every shared
 net agreeing to 0.0%.
 """
 
