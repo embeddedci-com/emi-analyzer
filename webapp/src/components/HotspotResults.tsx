@@ -17,6 +17,7 @@ import type { EmiApi } from '../lib/emiApi'
 import { DriverAttach } from './DriverAttach'
 import { CableEmissionPanel } from './CableEmissionPanel'
 import { ModelledParts } from './ModelledParts'
+import { EXPERIMENTAL, Experimental } from './Experimental'
 import {
   assessGrid, convergence, NOISE_MARGIN_DB, suggestedGate,
 } from '../lib/solveQuality'
@@ -254,6 +255,7 @@ export function HotspotResults({
 
   return (
     <Stack gap="md">
+      <Experimental why={EXPERIMENTAL.hotspotMap} mb={0} />
       {state === 'unusable' && (
         <Alert color="red" variant="light" title="This run stopped before its fields settled">
           Energy only fell to {energyDb?.toFixed(1)} dB, so this is a snapshot of fields still

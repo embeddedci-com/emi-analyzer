@@ -44,7 +44,13 @@ export function Experimental({ why, label = 'experimental', size = 'xs', mb }: E
  * unsure about can be read in one go — by someone deciding what to validate next, and by the
  * limitations page, which has to list them without going out of date.
  */
-export const EXPERIMENTAL: Record<string, string> = {
+export const EXPERIMENTAL = {
+  hotspotMap:
+    'Full-wave solving is experimental, and no hotspot map has yet been compared with a '
+    + 'near-field scan of the same board. Use the maps to compare layers, frequencies and '
+    + 'layouts. A level in dBµA/m is the solve scaled by the driver, and has not been checked '
+    + 'against a probe.',
+
   cableBudget:
     'The antenna model behind this is checked against transmission-line theory, but not yet '
     + 'against a second solver, and the composition it feeds has been compared with a fully coupled '
@@ -77,4 +83,13 @@ export const EXPERIMENTAL: Record<string, string> = {
     'implies, and none has been measured. Treat the level as indicative and ' +
     'the ranking between layouts as the useful part. The uncertainty budget carries a ' +
     'deliberately conservative 4.5 dB for this term until real-board residuals replace it.',
+} satisfies Record<string, string>
+
+/** What each reason is about, as the limitations page titles it. Typed so none is left out. */
+export const EXPERIMENTAL_TITLES: Record<keyof typeof EXPERIMENTAL, string> = {
+  hotspotMap: 'Hotspot maps and levels',
+  cableBudget: 'Cable budget',
+  complianceEstimate: 'Compliance estimate',
+  farField: 'Far field',
+  cableEmissions: 'Cable emissions from a solve',
 }
