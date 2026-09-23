@@ -96,14 +96,31 @@ def parse_project(data: bytes | str) -> NetClasses:
             via_diameter_mm=float(c.get("via_diameter") or 0.0),
         )
 
-    # KiCad 7+ assigns by pattern; older files list nets per class.
+    # Three generations of saying which net is in which class, and all three are in use:
+    #
+    #   KiCad 6     each class lists its members: classes[].nets
+    #   KiCad 7, 8  netclass_assignments maps net -> class name, plus netclass_patterns
+    #   KiCad 9+    netclass_assignments maps net -> [class names], plus netclass_patterns
+    #
+    # This used to read a "classAssignments" key that no KiCad version writes, so every
+    # project's explicit assignments were silently dropped and nets fell back to Default.
+    for c in settings.get("classes") or []:
+        for net in c.get("nets") or ():
+            if isinstance(net, str) and c.get("name"):
+                out.assignment[net] = c["name"]
+
+    for net, cls in (settings.get("netclass_assignments") or {}).items():
+        if isinstance(cls, list):
+            # A KiCad 9 net can sit in several classes, which KiCad merges into one
+            # effective class. This model holds one, so take the first the file defines.
+            cls = next((c for c in cls if c in out.classes), cls[0] if cls else "")
+        if isinstance(cls, str) and cls:
+            out.assignment[net] = cls
+
     for p in settings.get("netclass_patterns") or []:
         pattern, cls = p.get("pattern"), p.get("netclass")
         if pattern and cls:
             out.patterns.append((pattern, cls))
-    for cls, nets in (settings.get("classAssignments") or {}).items():
-        for net in nets or ():
-            out.assignment[net] = cls
 
     out.available = bool(out.classes)
     return out
