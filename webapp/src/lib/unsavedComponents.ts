@@ -1,5 +1,5 @@
 /**
- * Components a signed-out visitor has made (§13).
+ * Components a signed-out visitor has made (docs/implementation.md §3).
  *
  * They are usable immediately — sent inline with a run, so a visitor gets the same modelling
  * a signed-in user does — but they live in `sessionStorage` and are gone when the tab closes.

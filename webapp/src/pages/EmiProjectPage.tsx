@@ -14,6 +14,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLocation, useNavigate, useParams } from 'react-router'
 import type { BoardRenderer } from '../lib/BoardRenderer'
+import { createCursorStore, useCursor, type CursorStore } from '../lib/cursorStore'
 import { BoardCanvas, type CanvasMode } from '../components/BoardCanvas'
 import { EsdSimulation } from '../components/EsdSimulation'
 import { HotspotResults, type SolveManifest } from '../components/HotspotResults'
@@ -56,7 +57,8 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
   const [visibility, setVisibility] = useState<Record<string, boolean>>({})
   const [net, setNet] = useState<string | null>(null)
   const [focus, setFocus] = useState<{ x: number; y: number; zoom?: number } | null>(null)
-  const [cursor, setCursor] = useState<{ x: number; y: number } | null>(null)
+  // Outside React state: a pointer move re-renders the readout, not this page.
+  const [cursorStore] = useState(createCursorStore)
   const [glError, setGlError] = useState<string | null>(null)
   // Only inside the KiCad plugin: the PCB Editor next door, and what it last said back.
   const kicad = useKiCad()
@@ -250,13 +252,13 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
           // reads the resolved copies back out. Omitted when off, so a run that does not want
           // components looks exactly as it did before they existed.
           ...(req.model_components ? { model_components: true } : {}),
-          // §7. Omitted when empty, so a solve that wants no cable emissions is meshed
-          // exactly as it was before gap ports existed.
+          // docs/implementation.md §5.2. Omitted when empty, so a solve that wants no cable
+          // emissions is meshed exactly as it was before gap ports existed.
           ...(req.cable_ports && Object.keys(req.cable_ports).length > 0
             ? { cable_ports: req.cable_ports }
             : {}),
-          // §16.2. Omitted when off, so a hotspot solve is meshed and dumped exactly as it was
-          // before the far field existed.
+          // docs/implementation.md §6. Omitted when off, so a hotspot solve is meshed and dumped
+          // exactly as it was before the far field existed.
           ...(req.far_field ? { far_field: true } : {}),
         },
         req.estimateInput,
@@ -307,7 +309,7 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
   })
 
   // Which connector carries which cable. Lives here rather than in the Cables tab because
-  // the Solve tab needs it too: a gap port changes the mesh, so §7's cable has to be chosen
+  // the Solve tab needs it too: a gap port changes the mesh, so the cable has to be chosen
   // before the run, unlike a driver.
   const [cableAssignments, setCableAssignments] = useState<Record<string, Assignment>>({})
 
@@ -400,11 +402,7 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
           )}
         </Group>
         <Group gap="xs" wrap="nowrap">
-          {cursor && (
-            <Text size="xs" c="dimmed" ff="monospace">
-              {cursor.x.toFixed(2)}, {cursor.y.toFixed(2)} mm
-            </Text>
-          )}
+          <CursorReadout store={cursorStore} />
           <RunsMenu runs={runs.data ?? []} busy={retry.isPending || stop.isPending}
                     onRetry={(id) => retry.mutate(id)} onStop={(id) => stop.mutate(id)} />
           <Menu position="bottom-end" withinPortal>
@@ -531,7 +529,7 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
               layerVisibility={visibility}
               highlightNet={net}
               focus={focus}
-              onCursorMove={setCursor}
+              onCursorMove={cursorStore.set}
               onReady={(r) => { rendererRef.current = r }}
               onError={(e) => setGlError(e.message)}
             />
@@ -974,5 +972,16 @@ function RunsMenu({ runs, busy, onRetry, onStop }: {
         ))}
       </Menu.Dropdown>
     </Menu>
+  )
+}
+
+/** The board coordinates under the pointer. The only thing a pointer move re-renders. */
+function CursorReadout({ store }: { store: CursorStore }) {
+  const cursor = useCursor(store)
+  if (!cursor) return null
+  return (
+    <Text size="xs" c="dimmed" ff="monospace">
+      {cursor.x.toFixed(2)}, {cursor.y.toFixed(2)} mm
+    </Text>
   )
 }

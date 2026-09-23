@@ -1,5 +1,5 @@
 /**
- * The modelled-parts list (§12).
+ * The modelled-parts list (docs/implementation.md §3).
  *
  * The distinction that matters is the three-way one: a result that modelled nothing, a result
  * that modelled some things, and a result produced before the list existed. Collapsing any two

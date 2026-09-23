@@ -18,6 +18,7 @@ import os
 
 import pytest
 
+from emi_worker import scratch
 from emi_worker.config import Capabilities, Config
 from emi_worker.runner import Worker
 from emi_worker.stages import StageContext, StageResult
@@ -103,14 +104,57 @@ def test_scratch_from_a_previous_process_is_cleared_on_start(worker):
     The run itself is not lost -- it is the server's to reassign, and a reassigned run is
     downloaded fresh. Only the bytes on this machine are pointless.
     """
-    os.makedirs(os.path.join(worker.cfg.workdir, "run-a", "openems"), exist_ok=True)
-    os.makedirs(os.path.join(worker.cfg.workdir, "run-b"), exist_ok=True)
-    with open(os.path.join(worker.cfg.workdir, "run-a", "openems", "mesh.xml"), "w") as fh:
+    run_a = scratch.run_dir(worker.cfg.workdir, "run-a")
+    scratch.run_dir(worker.cfg.workdir, "run-b")
+    os.makedirs(os.path.join(run_a, "openems"))
+    with open(os.path.join(run_a, "openems", "mesh.xml"), "w") as fh:
         fh.write("x" * 1024)
 
     worker._clear_scratch()
 
     assert os.listdir(worker.cfg.workdir) == []
+
+
+def test_clearing_scratch_leaves_what_the_worker_did_not_create(worker):
+    """EMI_WORKDIR pointed at a shared folder by mistake must not empty it."""
+    scratch.run_dir(worker.cfg.workdir, "run-a")
+    os.makedirs(os.path.join(worker.cfg.workdir, "somebody-elses"))
+    with open(os.path.join(worker.cfg.workdir, "notes.txt"), "w") as fh:
+        fh.write("keep me")
+
+    worker._clear_scratch()
+
+    assert sorted(os.listdir(worker.cfg.workdir)) == ["notes.txt", "somebody-elses"]
+
+
+@pytest.mark.parametrize("run_id", ["../../etc", "a/b", "..", "", ".hidden", "x" * 200, None])
+def test_an_unsafe_run_id_never_reaches_a_path(worker, run_id):
+    """The id comes from the server and becomes a directory that is later removed."""
+    with pytest.raises(ValueError):
+        _context(worker, run_id)
+
+
+def test_the_runner_only_queues_run_ids_in_the_servers_format(worker):
+    worker._enqueue({"id": "../../home", "kind": "ingest"})
+    worker._enqueue({"id": "not-an-id", "kind": "ingest"})
+    assert worker._queue.empty()
+    worker._enqueue({"id": "0123456789abcdef0123456789abcdef", "kind": "ingest"})
+    worker._enqueue({"id": "01234567-89ab-cdef-0123-456789abcdef", "kind": "ingest"})
+    assert worker._queue.qsize() == 2
+
+
+def test_the_default_scratch_folder_is_this_users_own(tmp_path, monkeypatch):
+    """A fixed /tmp/emi-worker could be created first by another user of the machine."""
+    monkeypatch.delenv("EMI_WORKDIR", raising=False)
+    monkeypatch.setattr(scratch.tempfile, "gettempdir", lambda: str(tmp_path))
+    path = scratch.default_workdir()
+    assert path.startswith(str(tmp_path))
+    assert str(os.getuid()) in os.path.basename(path)
+
+    os.makedirs(path, mode=0o777)
+    os.chmod(path, 0o777)
+    scratch.prepare_workdir(path)
+    assert os.stat(path).st_mode & 0o077 == 0
 
 
 def test_clearing_scratch_is_fine_when_there_is_none(worker):

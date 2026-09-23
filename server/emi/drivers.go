@@ -28,7 +28,7 @@ const (
 	// driverVersion is the newest document this build stores. A newer one is refused rather
 	// than accepted and half-understood.
 	driverVersion = 1
-	// maxDriverDocumentBytes matches §9.2 and the two validators.
+	// maxDriverDocumentBytes matches docs/emi-driver-format.md and the two validators.
 	maxDriverDocumentBytes = 2 << 20
 )
 

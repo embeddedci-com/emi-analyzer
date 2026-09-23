@@ -2,8 +2,8 @@
 
 M4 needs E and H on the six faces of a box around the region, in the frequency domain, at
 enough frequencies to interpolate a spectrum. openEMS writes those as HDF5 dumps, and the
-worry in §16.2 is that a fine board mesh makes them enormous. This sizes them from the real
-mesher rather than guessing.
+worry (docs/implementation.md §6) is that a fine board mesh makes them enormous. This sizes
+them from the real mesher rather than guessing.
 
 Per face, per frequency: cells * 3 components * 2 (real, imaginary) * 4 bytes, for E and
 again for H.

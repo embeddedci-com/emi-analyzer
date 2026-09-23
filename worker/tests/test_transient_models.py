@@ -13,7 +13,7 @@ import pytest
 
 from emi_worker import topology
 from emi_worker.kicad.board import BoardModel, CopperLayer, Pad, Track, Via
-from emi_worker.kicad.normalize import _board_extent
+from emi_worker.kicad.normalize import board_extent
 from emi_worker.rules.model import RuleContext
 from emi_worker.stackup import BoardElectrics, LayerElectrics
 from emi_worker.transient import lines, spice_model, waveforms
@@ -164,7 +164,7 @@ def _electrics():
 
 
 def _ctx(m, routed=True):
-    return RuleContext(model=m, transform=_board_extent(m), max_frequency_hz=1e9,
+    return RuleContext(model=m, transform=board_extent(m), max_frequency_hz=1e9,
                        electrics=_electrics(), topology=topology.build(m) if routed else {})
 
 

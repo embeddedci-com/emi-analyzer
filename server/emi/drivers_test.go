@@ -139,7 +139,7 @@ func TestValidateDriverDocumentRefusesNonJSON(t *testing.T) {
 }
 
 func TestValidateDriverDocumentDefaultsTheRole(t *testing.T) {
-	// §9.2 shows role as optional; a document without one is a signal driver.
+	// docs/emi-driver-format.md shows role as optional; a document without one is a signal driver.
 	env, err := validateDriverDocument([]byte(
 		`{"format":"emi-driver","version":1,"name":"clk","kind":"trapezoid"}`))
 	if err != nil {

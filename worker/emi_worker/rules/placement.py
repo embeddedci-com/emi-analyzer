@@ -20,10 +20,9 @@ from typing import Iterator
 
 import numpy as np
 
-from ..kicad.normalize import _ring_area
-from ..topology import _point_in_ring
+from ..kicad.geometry import point_in_ring, point_segment_distance, ring_area
 from .model import Finding, RuleContext, classify_net
-from .planes import ground_planes, plane_layers, point_segment_distance, severity
+from .planes import ground_planes, plane_layers, severity
 
 XTAL_REF = re.compile(r"^(Y|X|XTAL|XO|OSC)\d", re.I)
 XTAL_HINT = re.compile(r"crystal|xtal|oscillat|resonator|\d\s*[mk]hz", re.I)
@@ -41,7 +40,7 @@ def _near_ring(ring: list[tuple[float, float]], x: float, y: float, reach: float
     spokes, so its centre is *outside* the poured copper. Testing the centre alone would call
     every thermally relieved pour an island.
     """
-    if _point_in_ring(x, y, ring):
+    if point_in_ring(x, y, ring):
         return True
     r = np.asarray(ring)
     if len(r) < 2:
@@ -86,7 +85,7 @@ def check_copper_islands(ctx: RuleContext) -> Iterator[Finding]:
                 joins[(t.layer, t.net)].append((x, y, t.width_mm / 2 + 0.3))
 
     for z in ctx.model.zones:
-        area = _ring_area(z.ring)
+        area = ring_area(z.ring)
         if area < min_area or len(z.ring) < 3:
             continue
         if z.net:

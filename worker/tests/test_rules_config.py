@@ -235,7 +235,7 @@ def test_disabling_a_rule_that_predates_settings_actually_stops_it():
     """Regression: run_rules ran every rule, so disabling one of the original five did nothing."""
     from pathlib import Path
     from emi_worker.kicad import parse, parse_board
-    from emi_worker.kicad.normalize import _board_extent
+    from emi_worker.kicad.normalize import board_extent
     from emi_worker.rules import run_rules
     from emi_worker.rules.model import RuleContext
 
@@ -243,7 +243,7 @@ def test_disabling_a_rule_that_predates_settings_actually_stops_it():
     model = parse_board(parse(fixture.read_text()))
 
     def rules_run(cfg):
-        ctx = RuleContext(model=model, transform=_board_extent(model), max_frequency_hz=1e9, settings=cfg)
+        ctx = RuleContext(model=model, transform=board_extent(model), max_frequency_hz=1e9, settings=cfg)
         return {f["rule"] for f in run_rules(ctx).as_dict()["findings"]}
 
     on = rules_run(settings.defaults())
@@ -255,13 +255,13 @@ def test_disabling_a_rule_that_predates_settings_actually_stops_it():
 def test_a_severity_override_reaches_rules_that_predate_settings():
     from pathlib import Path
     from emi_worker.kicad import parse, parse_board
-    from emi_worker.kicad.normalize import _board_extent
+    from emi_worker.kicad.normalize import board_extent
     from emi_worker.rules import run_rules
     from emi_worker.rules.model import RuleContext
 
     model = parse_board(parse((Path(__file__).parent / "fixtures" / "tiny.kicad_pcb").read_text()))
     cfg = settings.load(("file", {"rules": {"return-via": {"severity": "info"}}}))
-    ctx = RuleContext(model=model, transform=_board_extent(model), max_frequency_hz=1e9, settings=cfg)
+    ctx = RuleContext(model=model, transform=board_extent(model), max_frequency_hz=1e9, settings=cfg)
     sev = {f["severity"] for f in run_rules(ctx).as_dict()["findings"] if f["rule"] == "return-via"}
     assert sev == {"info"}
 

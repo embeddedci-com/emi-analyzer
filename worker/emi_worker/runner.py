@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import queue
 import random
 import shutil
@@ -33,6 +32,7 @@ from dataclasses import dataclass
 import websockets
 from websockets.sync.client import connect as ws_connect
 
+from . import scratch
 from .client import Client, RunReassigned, RunToken, ServerError
 from .config import Capabilities, Config
 from .stages import STAGES, StageContext, StageError, Stopped
@@ -62,6 +62,7 @@ class Worker:
     # ---- lifecycle ----
 
     def run(self) -> None:
+        scratch.prepare_workdir(self.cfg.workdir)
         self._clear_scratch()
         reg = self.client.register(self.cfg.name, self.caps.as_dict())
         log.info(
@@ -95,7 +96,7 @@ class Worker:
         self._shutdown.set()
 
     def _clear_scratch(self) -> None:
-        """Start from an empty scratch directory.
+        """Remove the run directories a previous process of this worker left behind.
 
         A process that was killed mid-solve leaves a run directory holding a mesh and
         field dumps -- gigabytes, for a large run. Nothing will ever read them again: the
@@ -103,19 +104,16 @@ class Worker:
         only thing keeping them would do is fill the disk of the machine this happens to
         be running on.
 
-        This assumes the scratch directory belongs to one worker process. Two workers on
-        one machine need two directories (or two containers, which get that for free) --
-        pointing both at the same one means each start wipes the other's work in flight.
+        Only directories the worker marked as its own are removed. Pointed at a folder
+        that holds anything else, it leaves that alone. Two workers on one machine still
+        need two folders, or each start would remove the other's runs in flight.
         """
-        if self.cfg.keep_scratch or not os.path.isdir(self.cfg.workdir):
+        if self.cfg.keep_scratch:
             return
-        leftover = [e for e in os.listdir(self.cfg.workdir)]
-        if not leftover:
-            return
-        log.info("clearing %d leftover scratch director%s in %s",
-                 len(leftover), "y" if len(leftover) == 1 else "ies", self.cfg.workdir)
-        for entry in leftover:
-            shutil.rmtree(os.path.join(self.cfg.workdir, entry), ignore_errors=True)
+        removed = scratch.clear_leftovers(self.cfg.workdir)
+        if removed:
+            log.info("cleared %d leftover run director%s in %s",
+                     len(removed), "y" if len(removed) == 1 else "ies", self.cfg.workdir)
 
     def _drop_scratch(self, ctx: StageContext) -> None:
         """Delete one run's scratch directory, however that run ended.
@@ -196,6 +194,11 @@ class Worker:
         run_id = run.get("id")
         kind = run.get("kind")
         if not run_id or not kind:
+            return
+        # The id names a scratch directory, so one that is not in the server's format is
+        # refused before it reaches a path.
+        if not scratch.valid_run_id(run_id):
+            log.warning("ignoring a run with a malformed id: %r", run_id)
             return
         if kind not in self.caps.kinds:
             return

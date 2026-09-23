@@ -1,15 +1,15 @@
 /**
- * Drivers: the measured or declared source attached to a net (§9.4).
+ * Drivers: the measured or declared source attached to a net (docs/implementation.md §4).
  *
  * A solve on its own is relative — it says one layout radiates 8 dB less than another, not
  * how many µA/m either of them produces. A driver is what turns that into absolute units,
  * and because openEMS solves a linear structure it is arithmetic on a finished result rather
- * than another run (§8).
+ * than another run (docs/implementation.md §4).
  *
  * The form's job is mostly to be honest about provenance. Every number carries where it came
- * from, the weakest one sets the driver's confidence term (§17.2), and the panel shows that
- * on a chip — so a driver built from one guessed number reads differently at a glance from
- * one measured throughout.
+ * from, the weakest one sets the driver's confidence term (docs/implementation.md §7.4), and the
+ * panel shows that on a chip — so a driver built from one guessed number reads differently at a
+ * glance from one measured throughout.
  */
 
 import { useMemo, useState } from 'react'
@@ -58,7 +58,7 @@ export const DRIVER_FORM_DEFAULTS: Record<string, Field> = {
  * Build an emi-driver document from the form's fields.
  *
  * Exported and pure because of the unit conversion. The form works in nanoseconds, which is
- * what a datasheet quotes, while §9.2's document is in seconds — and a missing or doubled
+ * what a datasheet quotes, while the driver document is in seconds — and a missing or doubled
  * 1e-9 would move every harmonic by nine decades while still producing a document that
  * validates and a spectrum that looks like a spectrum.
  */

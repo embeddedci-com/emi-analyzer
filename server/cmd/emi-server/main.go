@@ -45,6 +45,7 @@ func main() {
 		webapp   = flag.String("webapp", env("EMI_WEBAPP_DIR", ""), "directory holding the built webapp; empty serves the API only")
 		webBase  = flag.String("webapp-base", env("EMI_WEBAPP_BASE", "/tools/emi"), "path the webapp is served under")
 		health   = flag.Bool("health-check", false, "probe the local server and exit 0 if healthy")
+		maxMB    = flag.Int64("max-upload-mb", envInt64(os.Getenv, "EMI_MAX_UPLOAD_MB", emi.DefaultMaxUploadBytes>>20), "largest board file or result accepted, in MB")
 	)
 	flag.Parse()
 
@@ -135,6 +136,8 @@ func main() {
 		TokenSecret: []byte(sec.tokenSecret),
 		Logger:      logger,
 		RunTimeout:  24 * time.Hour,
+
+		MaxUploadBytes: *maxMB << 20,
 	})
 	if err != nil {
 		logger.Error("failed to build service", "err", err)

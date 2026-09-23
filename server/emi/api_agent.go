@@ -280,8 +280,14 @@ func (s *Service) handleArtifactUploadInit(w http.ResponseWriter, r *http.Reques
 	var body struct {
 		Name        string `json:"name"`
 		ContentType string `json:"content_type"`
+		// SizeBytes is the exact length the worker will send. Optional; when given, storage
+		// refuses a body of any other length.
+		SizeBytes int64 `json:"size_bytes"`
 	}
 	if !decodeJSON(w, r, &body) {
+		return
+	}
+	if !s.uploadSizeOK(w, body.SizeBytes) {
 		return
 	}
 	name, ok := sanitiseArtifactName(body.Name)
@@ -295,7 +301,7 @@ func (s *Service) handleArtifactUploadInit(w http.ResponseWriter, r *http.Reques
 	}
 
 	key := artifactKey(runID, name)
-	url, err := s.deps.Blob.PresignPut(r.Context(), key, ct, presignTTL)
+	url, err := s.deps.Blob.PresignPut(r.Context(), key, ct, body.SizeBytes, presignTTL)
 	if err != nil {
 		s.deps.log().Error("emi: presign put failed", "err", err, "key", key)
 		writeErr(w, http.StatusInternalServerError, "failed to create upload url")
@@ -412,6 +418,9 @@ func (s *Service) handleCompleteRun(w http.ResponseWriter, r *http.Request) {
 			NetCount   int             `json:"net_count"`
 			OutlineMM  json.RawMessage `json:"outline_mm,omitempty"`
 			Stackup    json.RawMessage `json:"stackup,omitempty"`
+			// The hash of the bytes the worker downloaded. It becomes the board's
+			// content hash, so deduplication never trusts the uploader's claim.
+			ContentSHA256 string `json:"content_sha256,omitempty"`
 		} `json:"board,omitempty"`
 	}
 	if !decodeJSON(w, r, &body) {
@@ -459,13 +468,18 @@ func (s *Service) handleCompleteRun(w http.ResponseWriter, r *http.Request) {
 		names[i], keys[i] = name, key
 	}
 
-	// Register artifacts before flipping the run to done, so a client that reacts to the
-	// status change never sees a finished run with a half-populated artifact list.
+	// Storage is asked what actually landed before anything is written. The rows themselves
+	// go in with the status change, in one transaction that first checks the run is still
+	// running: a run that timed out or was retried must not gain results from a worker that
+	// no longer holds it.
+	done := &Completion{
+		Status: body.Status, Summary: body.Summary, Error: body.Error, Estimate: body.Estimate,
+	}
 	for i, a := range body.Artifacts {
 		name, key := names[i], keys[i]
 		size, ct := a.SizeBytes, a.ContentType
-		// Trust but verify: ask storage what actually landed. A worker that crashed
-		// mid-upload should not be able to record a result that is not there.
+		// Trust but verify: a worker that crashed mid-upload should not be able to record a
+		// result that is not there.
 		if realSize, realCT, sErr := s.deps.Blob.Stat(r.Context(), key); sErr == nil {
 			size = realSize
 			if realCT != "" {
@@ -475,35 +489,33 @@ func (s *Service) handleCompleteRun(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusBadRequest, "artifact was not uploaded: "+name)
 			return
 		}
+		if size > s.deps.maxUploadBytes() {
+			writeErr(w, http.StatusRequestEntityTooLarge, "artifact is larger than the upload limit: "+name)
+			return
+		}
 		if ct == "" {
 			ct = "application/octet-stream"
 		}
-		if err := s.deps.Store.CreateArtifact(r.Context(), &Artifact{
+		done.Artifacts = append(done.Artifacts, &Artifact{
 			ID: newID(), RunID: runID, Name: name, Key: key,
 			ContentType: ct, SizeBytes: size, CreatedAt: now,
-		}); err != nil {
-			writeStoreErr(w, err)
-			return
-		}
+		})
 	}
-
-	if body.Estimate != nil {
-		if err := s.deps.Store.SetRunEstimate(r.Context(), runID, body.Estimate); err != nil {
-			writeStoreErr(w, err)
-			return
-		}
-	}
-
 	if body.Board != nil && run.BoardID != "" {
-		if err := s.deps.Store.UpdateBoardParsed(r.Context(), run.BoardID,
-			body.Board.BoardKey, body.Board.LayerCount, body.Board.NetCount,
-			body.Board.OutlineMM, body.Board.Stackup); err != nil {
-			writeStoreErr(w, err)
+		sha, err := normaliseSHA256(body.Board.ContentSHA256)
+		if err != nil {
+			writeErr(w, http.StatusBadRequest, "board "+err.Error())
 			return
+		}
+		done.Board = &ParsedBoard{
+			BoardID: run.BoardID, BoardKey: body.Board.BoardKey,
+			LayerCount: body.Board.LayerCount, NetCount: body.Board.NetCount,
+			OutlineMM: body.Board.OutlineMM, Stackup: body.Board.Stackup,
+			ContentSHA256: sha,
 		}
 	}
 
-	if err := s.deps.Store.CompleteRun(r.Context(), runID, body.Status, body.Summary, body.Error, now); err != nil {
+	if err := s.deps.Store.CompleteRun(r.Context(), runID, done, now); err != nil {
 		writeStoreErr(w, err)
 		return
 	}

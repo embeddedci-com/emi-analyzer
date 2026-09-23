@@ -1,5 +1,5 @@
 /**
- * The `emi-component` document — the browser's copy (§11.2).
+ * The `emi-component` document — the browser's copy (docs/implementation.md §3).
  *
  * The worker holds the other implementation (`worker/emi_worker/components/document.py`) and
  * both are checked against `server/emi/testdata/component_fixtures.json`. The browser previews

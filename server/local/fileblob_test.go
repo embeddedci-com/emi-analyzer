@@ -49,7 +49,7 @@ func TestPresignedPutThenGet(t *testing.T) {
 	b, srv := newTestBlob(t)
 	ctx := WithOrigin(context.Background(), srv.URL)
 
-	put, _ := b.PresignPut(ctx, "runs/r1/nearfield/100000000.bin", "application/octet-stream", time.Minute)
+	put, _ := b.PresignPut(ctx, "runs/r1/nearfield/100000000.bin", "application/octet-stream", 0, time.Minute)
 	if !strings.HasPrefix(put, srv.URL+"/blob/runs/r1/nearfield/") {
 		t.Fatalf("url %q does not use the request's origin", put)
 	}
@@ -134,7 +134,7 @@ func TestDeleteAndDeletePrefix(t *testing.T) {
 	ctx := WithOrigin(context.Background(), srv.URL)
 
 	put := func(key string) {
-		u, _ := b.PresignPut(ctx, key, "application/octet-stream", time.Minute)
+		u, _ := b.PresignPut(ctx, key, "application/octet-stream", 0, time.Minute)
 		if resp, _ := do(t, http.MethodPut, u, []byte("x"), "application/octet-stream"); resp.StatusCode != 200 {
 			t.Fatalf("put %s: %d", key, resp.StatusCode)
 		}

@@ -117,6 +117,14 @@ func TestRefreshAfterRetryGoesToTheNewHolder(t *testing.T) {
 		map[string]any{"name": "x.bin"}); code != http.StatusConflict {
 		t.Fatalf("superseded token on a retried run: got %d, want 409", code)
 	}
+	// Nor can it read the input or report a result while the run waits for a new worker.
+	if code, _ := f.agent(tok, "GET", "/emi-agent/runs/"+runID+"/input", nil); code != http.StatusConflict {
+		t.Fatalf("superseded token reading the input: got %d, want 409", code)
+	}
+	if code, _ := f.agent(tok, "POST", "/emi-agent/runs/"+runID+"/complete",
+		map[string]any{"status": "done"}); code != http.StatusConflict {
+		t.Fatalf("superseded token completing a retried run: got %d, want 409", code)
+	}
 	f.mint(second, runID)
 
 	if code, _ := f.agent(first, "POST", "/emi-agent/runs/"+runID+"/token/refresh", map[string]any{}); code != http.StatusConflict {

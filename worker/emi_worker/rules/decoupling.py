@@ -163,8 +163,8 @@ def check_decoupling(ctx: RuleContext) -> Iterator[Finding]:
             farads = cap_farads(getattr(cap[1], "value", "")) or ASSUMED_CAP_F
             assumed = cap_farads(getattr(cap[1], "value", "")) is None
 
-            # §12's payoff: when the library knows this part, the finding stops guessing at
-            # its inductance and quotes the part's own self-resonance instead.
+            # The component library's payoff: when the library knows this part, the finding
+            # stops guessing at its inductance and quotes the part's own self-resonance instead.
             model = _resolve_cap(cap[1])
             part_esl_nh = None
             srf_note = ""

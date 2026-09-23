@@ -1,10 +1,10 @@
 /**
- * Attaching a driver to a finished result (§8, §10).
+ * Attaching a driver to a finished result (docs/implementation.md §4).
  *
  * A solve is relative: it says one layout is 8 dB quieter than another, not how many µA/m
  * either produces. Because openEMS solves a linear structure, the response to any source
  * inside the excitation band is already in the result — so attaching a driver is arithmetic
- * on the recorded port spectra, not another run. M0 measured that this re-weighting is exact
+ * on the recorded port spectra, not another run. The spikes measured this re-weighting as exact
  * to 0.01 dB wherever the stored record has energy at the frequency.
  *
  * The component's real work is refusing clearly. A driver can fail to say anything about a

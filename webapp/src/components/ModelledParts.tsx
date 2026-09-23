@@ -1,5 +1,5 @@
 /**
- * Which parts a solve modelled, and on whose authority (§12).
+ * Which parts a solve modelled, and on whose authority (docs/implementation.md §3).
  *
  * A result that models some capacitors and not others is two different results in one
  * picture, and the difference is invisible in the field map. This says which is which.

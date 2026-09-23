@@ -1,18 +1,18 @@
 /**
  * From a driver document to the voltage it pushes at each frequency — the browser's copy.
  *
- * Drives the live preview in §9.4 and feeds the near-field re-weighting in §10. The worker
- * holds the other implementation (`worker/emi_worker/drivers/resolve.py`); both assert
+ * Drives the live preview and feeds the near-field re-weighting (docs/implementation.md §4). The
+ * worker holds the other implementation (`worker/emi_worker/drivers/resolve.py`); both assert
  * against `server/emi/testdata/driver_document_fixtures.json`.
  *
  * The substance here is the *failures*. A trapezoid or a captured waveform is a **line**
  * spectrum: a 25 MHz clock has energy at 25 and 75 MHz and none at 40. A solve asked for
  * 40 MHz is not driven by that clock, and saying so is the honest answer — a small number
- * there would look measured and be invented. §9.3 says the same about a waveform above its
- * capture bandwidth with no declared rise time.
+ * there would look measured and be invented. docs/emi-driver-format.md §4 says the same about a
+ * waveform above its capture bandwidth with no declared rise time.
  *
  * So every resolution returns `null` where the driver has nothing to say and names those
- * frequencies. §17.3's completeness gate reads that list.
+ * frequencies. The completeness gate (docs/implementation.md §7.5) reads that list.
  */
 
 import {
@@ -196,9 +196,9 @@ function resolveWaveform(driver: Driver, frequencies: number[]): Resolved {
 /**
  * Scale the envelope so it meets the transform at the bandwidth.
  *
- * §9.3 asks the waveform to "continue above that with the envelope". An unscaled envelope
- * would step at the join by whatever ratio it happened to have, and a step in a source
- * spectrum becomes a step in every result that reads it.
+ * docs/emi-driver-format.md §4 asks the waveform to "continue above that with the envelope". An
+ * unscaled envelope would step at the join by whatever ratio it happened to have, and a step in a
+ * source spectrum becomes a step in every result that reads it.
  */
 function matchEnvelopeAtJoin(
   volts: (Complex | null)[],
@@ -252,7 +252,7 @@ function resolveSpectrum(driver: Driver, frequencies: number[]): Resolved {
   }
 }
 
-/** Interpolate a level in dB against log frequency, the way §16.2 reads a spectrum. */
+/** Interpolate a level in dB against log frequency, as the compliance stage reads a spectrum. */
 function interpolateDb(points: [number, number][], frequencyHz: number): number {
   for (let i = 0; i < points.length - 1; i++) {
     const [f0, l0] = points[i]
@@ -273,7 +273,7 @@ export function voltsToDbuv(volts: number): number {
   return 20 * Math.log10(volts / 1e-6)
 }
 
-/** The two envelope corners, for the preview (§9.4). Trapezoids only. */
+/** The two envelope corners, for the preview. Trapezoids only. */
 export function describeCorners(driver: Driver): { f1: number; f2: number } | null {
   if (driver.kind !== 'trapezoid') return null
   return cornerFrequencies(driverTrapezoid(driver))

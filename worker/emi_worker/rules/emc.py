@@ -30,10 +30,10 @@ import re
 from collections import Counter, defaultdict
 from typing import Iterator
 
-from ..kicad.normalize import _ring_area
+from ..kicad.geometry import point_segment_distance, ring_area
 from .decoupling import CAP_RE, IC_RE
 from .model import Finding, RuleContext, classify_net
-from .planes import point_segment_distance, severity
+from .planes import severity
 
 RES_RE = re.compile(r"^R\d", re.I)
 #: Two-pad series parts a filter is built from: inductors and ferrite beads.
@@ -644,7 +644,7 @@ def check_switch_node(ctx: RuleContext) -> Iterator[Finding]:
             layers[t.net].add(t.layer)
     for z in ctx.model.zones:
         if z.net in nodes and len(z.ring) >= 3:
-            areas[z.net] += _ring_area(z.ring)
+            areas[z.net] += ring_area(z.ring)
             layers[z.net].add(z.layer)
 
     for net, how in sorted(nodes.items()):

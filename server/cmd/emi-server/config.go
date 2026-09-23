@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"strconv"
 	"strings"
 )
 
@@ -59,6 +60,14 @@ func loadSecrets(dev bool, getenv func(string) string) (secrets, error) {
 			" (set them, or pass -dev for the local development stack)")
 	}
 	return s, nil
+}
+
+// envInt64 reads a positive whole number, falling back to def when it is unset or not one.
+func envInt64(getenv func(string) string, name string, def int64) int64 {
+	if n, err := strconv.ParseInt(strings.TrimSpace(getenv(name)), 10, 64); err == nil && n > 0 {
+		return n
+	}
+	return def
 }
 
 // envBool reads a boolean environment variable: 1, true, yes or on.

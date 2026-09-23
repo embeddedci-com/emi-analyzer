@@ -2,16 +2,15 @@
 
 A stage takes a :class:`StageContext` and returns a :class:`StageResult`, or raises. The
 runner owns claiming, completion and error reporting; a stage owns only the work. Keeping
-that split means the P1 KiCad parser and the P2 openEMS solve slot in without touching the
-agent protocol at all.
+that split means a new kind of run slots in without touching the agent protocol at all.
 """
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass, field
 from typing import Callable
 
+from .. import scratch
 from ..client import Client, RunToken
 
 
@@ -38,8 +37,9 @@ class StageContext:
     should_stop: Callable[[], bool]
 
     def __post_init__(self) -> None:
-        self.rundir = os.path.join(self.workdir, self.token.run_id)
-        os.makedirs(self.rundir, exist_ok=True)
+        # The id becomes a directory that is later removed with rmtree, so it is checked
+        # before it touches a path.
+        self.rundir = scratch.run_dir(self.workdir, self.token.run_id)
 
     @property
     def params(self) -> dict:

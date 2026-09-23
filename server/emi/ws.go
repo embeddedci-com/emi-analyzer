@@ -21,6 +21,10 @@ const (
 	wsReadLimit    = 1 << 20 // 1 MiB; control messages only, results go to object storage
 	wsPingInterval = 30 * time.Second
 	wsPingTimeout  = 10 * time.Second
+	// wsIdleTimeout closes a socket that has neither answered a ping nor sent a message for
+	// this long. A half-dead TCP connection otherwise holds a goroutine and a file
+	// descriptor until the kernel gives up on it, which can take hours.
+	wsIdleTimeout = 90 * time.Second
 )
 
 func (s *Service) handleWorkerWS(w http.ResponseWriter, r *http.Request) {
@@ -52,11 +56,22 @@ func (s *Service) handleWorkerWS(w http.ResponseWriter, r *http.Request) {
 		conn: conn, keyKid: key.Kid, orgID: key.OrganizationID,
 		name: key.Name, caps: caps, closed: make(chan struct{}),
 	}
+	wc.seen()
 	s.hub.register(wc)
 	s.deps.log().Info("emi: worker connected", "kid", key.Kid, "org", key.OrganizationID,
 		"max_cells", caps.MaxCells, "online", s.hub.OnlineCount())
 
+	// The request context is not used: it ends with the handler, and the handler is this
+	// loop. The socket's own lifetime is wc.closed, which a replacement, a failed ping or
+	// the idle timer all trigger.
 	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		select {
+		case <-wc.closed:
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
 	defer func() {
 		cancel()
 		s.hub.unregister(wc)
@@ -74,6 +89,7 @@ func (s *Service) handleWorkerWS(w http.ResponseWriter, r *http.Request) {
 
 	for {
 		typ, data, rErr := conn.Read(ctx)
+		wc.seen()
 		if rErr != nil {
 			if !errors.Is(rErr, context.Canceled) {
 				s.deps.log().Debug("emi: ws read ended", "kid", key.Kid, "err", rErr)
@@ -174,8 +190,10 @@ func (s *Service) handleWorkerMessage(ctx context.Context, wc *workerConn, data 
 // keepalive pings the worker so a dead TCP connection is noticed rather than lingering as a
 // phantom that dispatch keeps choosing.
 func (s *Service) keepalive(ctx context.Context, wc *workerConn) {
-	t := time.NewTicker(wsPingInterval)
+	t := time.NewTicker(s.hub.pingInterval)
 	defer t.Stop()
+	idle := time.NewTicker(s.hub.idleTimeout / 3)
+	defer idle.Stop()
 	for {
 		select {
 		case <-ctx.Done():
@@ -183,14 +201,20 @@ func (s *Service) keepalive(ctx context.Context, wc *workerConn) {
 		case <-wc.closed:
 			return
 		case <-t.C:
-			pctx, cancel := context.WithTimeout(ctx, wsPingTimeout)
+			pctx, cancel := context.WithTimeout(ctx, s.hub.pingTimeout)
 			err := wc.conn.Ping(pctx)
 			cancel()
 			if err != nil {
 				wc.shutdown()
 				return
 			}
+			wc.seen()
 			_ = s.deps.Store.TouchWorker(ctx, wc.keyKid, s.deps.now())
+		case <-idle.C:
+			if wc.idleFor() > s.hub.idleTimeout {
+				wc.shutdown()
+				return
+			}
 		}
 	}
 }

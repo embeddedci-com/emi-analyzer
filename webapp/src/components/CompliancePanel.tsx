@@ -128,7 +128,10 @@ export function CompliancePanel({ doc }: { doc: ComplianceDoc }) {
               </Text>
             </Group>
 
-            <Text size="xs" c="dimmed" mt={8} style={{ cursor: 'pointer' }}
+            {/* A button, so the keyboard and a screen reader can reach it too. */}
+            <Text component="button" type="button" size="xs" c="dimmed" mt={8}
+                  aria-expanded={showBudget}
+                  style={{ cursor: 'pointer', background: 'none', border: 0, padding: 0 }}
                   onClick={() => setShowBudget((v) => !v)}>
               {showBudget ? '▾' : '▸'} where σ comes from
             </Text>

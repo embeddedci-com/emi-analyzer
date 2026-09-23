@@ -1,6 +1,6 @@
 /**
- * The browser's half of §10. The near-field shader applies these offsets, so this is the
- * implementation a user actually sees the result of.
+ * The browser's half of the re-weighting in docs/implementation.md §4. The near-field shader
+ * applies these offsets, so this is the implementation a user actually sees the result of.
  */
 
 import { describe, expect, it } from 'vitest'

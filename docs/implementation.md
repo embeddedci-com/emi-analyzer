@@ -8,8 +8,8 @@ were reference data rather than argument — the limits tables and the decisions
 
 **What is still missing, wrong or unproven is not here.** It is in
 [`known-issues.md`](known-issues.md), which is the companion to this file and the one to read
-before relying on a number. Where this file says "M0 measured", the number comes from an early
-round of spike measurements made before the model was built.
+before relying on a number. Where this file says "the spikes measured", the number comes from an
+early round of measurements made before the model was built (the scripts in `worker/research/`).
 
 ---
 
@@ -51,7 +51,7 @@ file). `openems/model.py` turns a board plus a `SolveParams` into a CSX document
 boundaries — then fills, grades and pads for the PML.
 
 - **`dx_um` is a floor on cell size, not the spacing.** The mesher puts a line at every copper
-  edge, and a routed board has edges far closer together than any preset. M0 measured the
+  edge, and a routed board has edges far closer together than any preset. The spikes measured the
   consequence: the in-plane axes come out 2.7–4.0× *denser* than a uniform grid over the same
   box, not sparser. The cost estimator's "fill factor" is therefore greater than one — 3.55 to
   8.75 at the coarse preset — and the UI passes the per-preset **minimum**, because the panel
@@ -64,7 +64,7 @@ boundaries — then fills, grades and pads for the PML.
 ### 2.2 Excitation band
 
 `excitation_band()` centres the Gaussian so requested frequencies sit inside it rather than on
-the −20 dB edge. **This was a production bug M0 found:** a transfer function at 1 GHz moved
+the −20 dB edge. **This was a production bug the spikes found:** a transfer function at 1 GHz moved
 3–4 dB between two sources that agreed to 0.01 dB everywhere inside the band. `BAND_FILL = 0.8`
 leaves about 7 dB of source amplitude at each requested end.
 
@@ -192,7 +192,7 @@ E(f)    = I_cm · E_per_amp
 
 ### 5.3 Tier C — the reference
 
-The cable meshed in the FDTD grid. M0 established it is not a product mode: placing a radiating
+The cable meshed in the FDTD grid. The spikes established it is not a product mode: placing a radiating
 resonance needs about λ/90, not the λ/20 a near-field map needs, and the cable region is most of
 the domain. It exists to certify Tier B on fixtures, and that certification is incomplete.
 
@@ -203,8 +203,8 @@ the domain. It exists to certify Tier B on fixtures, and that certification is i
 `openems/nf2ff.py`, `stages/solve.py`. Six E and six H frequency-domain face dumps, then the
 shipped `nf2ff` CLI.
 
-- **A PEC `Mirror` at table height puts the ground reflection inside the transform.** M0
-  measured it against image theory at 0.08 dB median, with the mirror *on* the box's lower face.
+- **A PEC `Mirror` at table height puts the ground reflection inside the transform.** The
+  spikes measured it against image theory at 0.08 dB median, with the mirror *on* the box's lower face.
   The product puts the plane 0.8 m below a box that ends centimetres under the board, and there
   **all six faces are kept**: the image of a closed box is a second closed box. The job used to
   drop the lower face whenever a mirror was set, which left the surface open and integrated five
@@ -392,7 +392,7 @@ worker does means a run is rejected at the mesh stage after they already committ
 ## 10. Verification, and the failure mode it is built around
 
 **Every solver step asserts twice** — that what came back is what was asked for, separately from
-whether the value is right. M0 met four tools that completed successfully and computed nothing:
+whether the value is right. The spikes met four tools that completed successfully and computed nothing:
 
 - a NEC deck with no execution card (no output, exit 0);
 - a `DUMP_J_FREQ` map of an all-zero conduction current on PEC;

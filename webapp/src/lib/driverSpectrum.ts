@@ -24,7 +24,7 @@ export class DriverError extends Error {
 export interface Trapezoid {
   amplitude_v: number
   period_s: number
-  /** Width at 50 % amplitude, which is what §9.1's closed form means by tau. */
+  /** Width at 50 % amplitude, which is what the closed form (driver format §3) means by tau. */
   pulse_width_s: number
   rise_s: number
   fall_s: number
@@ -161,7 +161,7 @@ export function piecewiseLinearSeries(
 /**
  * `(frequency, amplitude)` for harmonics 1..`harmonics`.
  *
- * The amplitude is the RMS of that harmonic, `sqrt(2) * |C_n|`: §9.1's closed form gives the
+ * The amplitude is the RMS of that harmonic, `sqrt(2) * |C_n|`: the closed form gives the
  * one-sided peak `2 * |C_n|`, and RMS_PER_PEAK says why it is converted. Note the peak is half the
  * textbook `4A/(n*pi)` quoted for square waves, because those swing between -A and +A while
  * a driver output swings between 0 and A.
@@ -195,7 +195,7 @@ export function cornerFrequencies(t: Trapezoid): { f1: number; f2: number } {
  * The spectral envelope at one frequency, in volts: flat to the first corner, then
  * -20 dB/decade, then -40 dB/decade. It bounds the line spectrum rather than reproducing
  * it — this is what the preview draws, and what continues an uploaded waveform above its
- * capture bandwidth (§9.3).
+ * capture bandwidth (docs/emi-driver-format.md §4).
  */
 export function envelopeV(t: Trapezoid, frequencyHz: number): number {
   validateTrapezoid(t)
@@ -209,7 +209,7 @@ export function envelopeV(t: Trapezoid, frequencyHz: number): number {
 }
 
 /**
- * The factor every field at this frequency is multiplied by (§8).
+ * The factor every field at this frequency is multiplied by (docs/implementation.md §4).
  *
  * `vPort` and `iPort` are what the solve recorded, so their ratio is the input impedance the
  * driver sees and `iPort` is the current the solve used. The driver pushes
@@ -235,7 +235,7 @@ export function reweight(
   return cDiv(cDiv(vSource, denom), iPort)
 }
 
-/** `reweight` as a dB offset, which is how the near-field shader applies it (§10). */
+/** `reweight` as a dB offset, which is how the near-field shader applies it. */
 export function reweightDb(
   vSource: Complex,
   sourceImpedanceOhm: number,

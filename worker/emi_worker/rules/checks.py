@@ -15,14 +15,15 @@ from typing import Callable, Iterator
 import numpy as np
 
 from .. import impedance
+from ..kicad.geometry import outer_rings, ring_edges, segment_to_edges
 from .model import (
     Finding,
     RuleContext,
     RulesResult,
     classify_net,
     dedupe,
-    distance_point_segment,
 )
+from .planes import plane_layers
 
 log = logging.getLogger(__name__)
 
@@ -55,51 +56,50 @@ RADIATOR_CRITICAL_FRACTION = 1.0 / 4.0
 RADIATOR_MAX_REPORTED = 12
 
 
-def _layer_pairs(ctx: RuleContext) -> dict[str, str]:
-    """Map each copper layer to its nearest reference plane layer.
+def copper_z(ctx: RuleContext) -> dict[str, float]:
+    """Height of each copper layer's centre above the bottom of the stack, in mm.
 
-    The reference for a signal is whichever plane is physically closest, which on a
-    four-layer board is the inner plane directly under the outer signal layer. Getting this
-    from the stackup rather than from layer names is what makes the plane checks work on a
-    board with an unusual stack.
+    From the stackup's thicknesses. A board file with no stackup falls back to the layer
+    order, one unit apart, which still ranks neighbours correctly.
     """
-    layers = ctx.model.copper_layers
-    z = {}
-    for entry in ctx.model.stackup:
+    z: dict[str, float] = {}
+    running = 0.0
+    for entry in reversed([e for e in ctx.model.stackup if e.thickness_mm > 0 or e.is_copper]):
         if entry.is_copper:
-            z[entry.name] = entry
-    plane_layers = [layer.name for layer in layers if layer.kind in ("power", "mixed")]
-    if not plane_layers:
-        # No layer is declared a plane. Fall back to whichever layers carry the largest
-        # zone fills, which is what a plane is regardless of how it was labelled.
-        area: dict[str, float] = defaultdict(float)
-        for zone in ctx.model.zones:
-            area[zone.layer] += abs(_ring_area(zone.ring))
-        plane_layers = [n for n, _ in sorted(area.items(), key=lambda kv: -kv[1])[:2]]
-        if plane_layers:
-            ctx.notes.append(
-                "no layer is marked as a plane in the board file; treating "
-                + ", ".join(plane_layers) + " as reference planes based on fill area"
-            )
+            z[entry.name] = running + entry.thickness_mm / 2
+        running += entry.thickness_mm
+    names = ctx.model.copper_layer_names
+    if not all(n in z for n in names):
+        return {n: float(len(names) - 1 - i) for i, n in enumerate(names)}
+    return z
 
-    names = [layer.name for layer in layers]
+
+def _layer_pairs(ctx: RuleContext) -> dict[str, str]:
+    """Map each copper layer to the reference plane beneath it.
+
+    The planes are the ones ingest decided from pour coverage, which the viewer labels and
+    the impedance model uses, so the plane checks and the electrical model agree on which
+    layer is whose reference. With the stackup analysed, its answer is used directly: it
+    already knows which plane is physically nearest and that a signal layer in between
+    blocks it. Without one, the nearest plane layer by stackup height stands in.
+    """
+    if ctx.electrics is not None and ctx.electrics.layers:
+        return {
+            name: le.reference_plane
+            for name, le in ctx.electrics.layers.items()
+            if le.reference_plane and le.reference_plane != name
+        }
+
+    planes = set(plane_layers(ctx.model))
+    if not planes:
+        return {}
+    z = copper_z(ctx)
     out: dict[str, str] = {}
-    for name in names:
-        candidates = [p for p in plane_layers if p != name]
-        if not candidates:
-            continue
-        out[name] = min(candidates, key=lambda p: abs(names.index(p) - names.index(name)))
+    for name in ctx.model.copper_layer_names:
+        candidates = [p for p in planes if p != name and p in z]
+        if name in z and candidates:
+            out[name] = min(candidates, key=lambda p: abs(z[p] - z[name]))
     return out
-
-
-def _ring_area(ring: list[tuple[float, float]]) -> float:
-    a = 0.0
-    n = len(ring)
-    for i in range(n):
-        x0, y0 = ring[i]
-        x1, y1 = ring[(i + 1) % n]
-        a += x0 * y1 - x1 * y0
-    return a / 2.0
 
 
 # --------------------------------------------------------------------------------------
@@ -180,14 +180,7 @@ def check_via_stubs(ctx: RuleContext) -> Iterator[Finding]:
             used[zone.net].add(zone.layer)
 
     # Stack height between adjacent copper layers, for the stub length.
-    z: dict[str, float] = {}
-    running = 0.0
-    for entry in reversed([e for e in ctx.model.stackup if e.thickness_mm > 0 or e.is_copper]):
-        if entry.is_copper:
-            z[entry.name] = running + entry.thickness_mm / 2
-        running += entry.thickness_mm
-
-    lam = ctx.wavelength_mm
+    z = copper_z(ctx)
 
     for via in ctx.model.vias:
         if via.kind != "through" or not via.net:
@@ -307,11 +300,10 @@ def check_edge_proximity(ctx: RuleContext) -> Iterator[Finding]:
     Copper near the edge radiates from the edge instead of coupling back into its reference
     plane, and the effect is strongest exactly where the trace runs parallel to the cut.
     """
-    edges: list[tuple[float, float, float, float]] = []
-    for ring in ctx.model.outline:
-        for i in range(len(ring) - 1):
-            edges.append((*ring[i], *ring[i + 1]))
-    if not edges:
+    # The outer outline only. Mounting holes and slots are rings in Edge.Cuts too, but a
+    # trace beside a mounting hole is not radiating off the edge of the board.
+    edges = ring_edges(outer_rings(ctx.model.outline))
+    if edges.size == 0:
         return
 
     keepout = float(ctx.setting("edge-proximity", "min_clearance_mm") or EDGE_KEEPOUT_MM)
@@ -319,12 +311,15 @@ def check_edge_proximity(ctx: RuleContext) -> Iterator[Finding]:
     for track in ctx.model.tracks:
         if not track.net or classify_net(track.net) != "signal":
             continue
-        for px, py in track.pts:
-            d = min(distance_point_segment(px, py, *e) for e in edges)
+        # Every segment, not only its end points: a long straight run hugs the edge in its
+        # middle as often as at its ends.
+        pts = track.pts if len(track.pts) > 1 else track.pts * 2
+        for (ax, ay), (bx, by) in zip(pts, pts[1:]):
+            d, at = segment_to_edges(ax, ay, bx, by, edges)
             d -= track.width_mm / 2.0
             cur = worst.get(track.net)
             if cur is None or d < cur[0]:
-                worst[track.net] = (d, (px, py), track.layer)
+                worst[track.net] = (d, at, track.layer)
 
     for net, (d, pt, layer) in sorted(worst.items(), key=lambda kv: kv[1][0]):
         if d >= keepout:
@@ -427,14 +422,21 @@ def check_plane_gaps(ctx: RuleContext) -> Iterator[Finding]:
         r = _rasterize_layer(ctx, plane)
         if r is not None:
             rasters[plane] = r
+
+    # A plane with no filled copper in the file (pours never filled, or too large to
+    # rasterise) is unknown, not a gap: flagging every trace over it would report the
+    # whole layer as missing.
+    unknown = sorted(p for p in set(pairs.values()) if p not in rasters)
+    if unknown:
+        ctx.notes.append(
+            "no filled copper was found on " + ", ".join(unknown)
+            + ", so traces over it were not checked for plane gaps"
+        )
     if not rasters:
         return
 
-    def covered(plane: str, x: float, y: float) -> bool | None:
-        r = rasters.get(plane)
-        if r is None:
-            return None
-        mask, ox, oy, res = r
+    def covered(plane: str, x: float, y: float) -> bool:
+        mask, ox, oy, res = rasters[plane]
         col = int((x - ox) / res)
         row = int((y - oy) / res)
         if row < 0 or col < 0 or row >= mask.shape[0] or col >= mask.shape[1]:
@@ -450,7 +452,7 @@ def check_plane_gaps(ctx: RuleContext) -> Iterator[Finding]:
         if not track.net or classify_net(track.net) != "signal":
             continue
         plane = pairs.get(track.layer)
-        if plane is None or plane == track.layer:
+        if plane is None or plane == track.layer or plane not in rasters:
             continue
 
         # Walk the track, sampling the plane beneath it.
@@ -640,7 +642,7 @@ def _group_delay(ctx: RuleContext, net: str) -> float | None:
     path = topo.longest_path()
     if path is None:
         return None
-    return path.delay_ps(ctx.electrics)  # type: ignore[arg-type]
+    return path.delay_ps(ctx.electrics)
 
 
 def _path_summary(ctx: RuleContext, net: str) -> str:
@@ -752,7 +754,7 @@ def check_impedance(ctx: RuleContext) -> Iterator[Finding]:
                         "midpoint; a 2D field solver would narrow it."
                     ),
                     net=net,
-                    layer=worst.kind and sorted(off)[0][0],
+                    layer=", ".join(sorted({layer for layer, _ in off})),
                 )
 
         # 2. Discontinuities, which need no target at all.

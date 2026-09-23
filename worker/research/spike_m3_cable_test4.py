@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""M3 · cable test 4 — Tier B against Tier C on the real fixtures (§19).
+"""M3 · cable test 4 — Tier B against Tier C on the real fixtures (docs/implementation.md §10).
 
 M0 answered this on one synthetic board: `V_oc / Z_ant` reproduced a fully coupled solve to
-1.3 dB at 150 mm and 2.2 dB at 300 mm. §19 sets the gate on real boards instead — it was
-run on three private boards, two with a USB-C and one with an RJ45 connector, at 0.3 m and 1 m,
+1.3 dB at 150 mm and 2.2 dB at 300 mm. The gate is set on real boards instead — it was run
+on three private boards, two with a USB-C and one with an RJ45 connector, at 0.3 m and 1 m,
 passing if Tier B keeps the layout ranking at every frequency and agrees within ±6 dB below
 the first resonance. SETUPS names your own boards: `folder:connector-ref:cable,...`, each
 folder under BOARDS holding one .kicad_pcb, e.g.
@@ -66,7 +66,7 @@ ROI_MM = float(os.environ.get("ROI_MM", "30"))
 #: How far back from the connector the excitation sits.
 DRIVER_SETBACK_MM = float(os.environ.get("SETBACK_MM", "15"))
 THREADS = int(os.environ.get("THREADS", "8"))
-#: Height of the cable above the reference ground, for nec2c. §6.3's standard test setup.
+#: Height of the cable above the reference ground, for nec2c. The standard test setup.
 HEIGHT_M = float(os.environ.get("HEIGHT_M", "1.0"))
 
 FREQS = np.geomspace(F_MIN, F_MAX, int(os.environ.get("N_FREQ", "31")))

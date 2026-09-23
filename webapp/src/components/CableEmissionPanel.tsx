@@ -1,5 +1,5 @@
 /**
- * Cable emissions for a finished solve (§7, §10, §17).
+ * Cable emissions for a finished solve (docs/implementation.md §5.2, §4 and §7).
  *
  * The first place in the tool that predicts an absolute field on a real board rather than a
  * budget or a relative map, so most of this component is about being clear when it cannot.
@@ -9,7 +9,8 @@
  *     this cannot be added to a result afterwards the way a driver can;
  *   - **the antenna solver's terms** — computed beside the solve, absent if `nec2c` was not
  *     installed on the worker that ran it;
- *   - **a driver** — attached here, because §10 keeps that decision out of the run.
+ *   - **a driver** — attached here, because docs/implementation.md §4 keeps that decision
+ *     out of the run.
  *
  * Each gets its own sentence naming what to do about it. "No chart" would be the same display
  * for a solve that cannot ever produce one and a solve that needs one more click.

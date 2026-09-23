@@ -176,7 +176,9 @@ class Client:
         """
         init = self._request(
             "POST", f"/emi-agent/runs/{tok.run_id}/artifacts", self._bearer(tok),
-            json={"name": name, "content_type": content_type},
+            # The exact length, so storage refuses anything else and the server can refuse a
+            # result over its upload limit before a byte is sent.
+            json={"name": name, "content_type": content_type, "size_bytes": len(data)},
         )
         resp = self._blob.put(
             init["upload_url"], content=data,
