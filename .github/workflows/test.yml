@@ -1,58 +1,110 @@
+# Every action is pinned to a commit, with its version in a comment. A tag can be moved to
+# other code after the fact; a commit cannot. Dependabot keeps the pins current.
 name: test
 
 on:
   push:
     branches: [main]
   pull_request:
+  # The release workflow runs this on the commit it is about to ship, and ships nothing if
+  # it fails. `ref` is that commit's tag: a release started by hand runs from a branch, and
+  # without it these jobs would test the branch instead of the tag.
+  workflow_call:
+    inputs:
+      ref:
+        description: "Git ref to test (defaults to the commit that triggered the run)"
+        type: string
+        required: false
+        default: ""
 
 permissions:
   contents: read
 
 jobs:
   go:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: server/go.mod
           cache-dependency-path: server/go.sum
       - run: make test-go
 
   webapp:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: webapp/package-lock.json
       - run: cd webapp && npm ci && npm run typecheck && npm test && npm run build:app
 
-  worker:
-    runs-on: ubuntu-latest
+  # The desktop app's own Rust: the window, the tray and starting the sidecar. Nothing else
+  # compiles it before a release does. `cargo check` needs what tauri's build script checks
+  # for: the sidecar named in tauri.conf.json (an empty file is enough to check against) and
+  # the frontend folder, which is committed (desktop/loading). ubuntu-22.04 and the package
+  # list are the release build's, so a check that passes here means the same there.
+  desktop:
+    runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable branch, 2026-09-03
+        with:
+          toolchain: stable
+      - uses: swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: desktop/src-tauri
+      - name: Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - name: Placeholder sidecar
+        run: |
+          mkdir -p desktop/src-tauri/binaries
+          touch "desktop/src-tauri/binaries/emi-local-$(rustc -vV | sed -n 's/^host: //p')"
+      - run: cd desktop/src-tauri && cargo check --locked --all-targets
+
+  worker:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ inputs.ref }}
       # The tests run inside the worker image, which is the only place ngspice, nec2c and
       # openEMS are guaranteed to be the versions the worker is built against.
       - run: docker build -t emi-worker-test worker
       # Mounted read-only and copied, because the image runs as a non-root user and the tests
-      # read fixtures from server/ and the rule catalogue from webapp/.
+      # read fixtures from server/, the rule catalogue from webapp/ and the rules file from docs/.
       - run: |
           docker run --rm --user root --entrypoint sh -v "$PWD:/repo:ro" emi-worker-test -c '
-            pip install -q pytest &&
-            mkdir /tmp/repo && cp -r /repo/worker /repo/server /repo/webapp /tmp/repo/ &&
+            pip install -q "pytest==9.1.1" &&
+            mkdir /tmp/repo && cp -r /repo/worker /repo/server /repo/webapp /repo/docs /tmp/repo/ &&
             cd /tmp/repo/worker && python -m pytest -q -p no:cacheprovider'
 
   # The KiCad plugin is plain Python and its tests stand in for KiCad and for the app, so
   # they run here without either. The few that need PySide6 skip themselves.
+  # 3.9 because plugin.json promises it (a Linux KiCad runs on the system Python), 3.11 because
+  # that is what KiCad bundles on Windows and macOS. pytest 8.4 is the last to support 3.9.
   kicad-plugin:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        python: ["3.9", "3.11"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          python-version: "3.11"
-      - run: pip install pytest
+          ref: ${{ inputs.ref }}
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: ${{ matrix.python }}
+      - run: pip install "pytest==8.4.2"
       - run: make plugin-test
