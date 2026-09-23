@@ -80,7 +80,7 @@ def parse_project(data: bytes | str) -> NetClasses:
     try:
         doc = json.loads(data if isinstance(data, str) else data.decode("utf-8", "replace"))
     except (ValueError, AttributeError, RecursionError) as exc:
-        out.warnings.append(f"project file could not be read ({exc}); netclasses unavailable")
+        out.warnings.append(f"The .kicad_pro could not be read ({exc}), so net classes were not used.")
         return out
     try:
         _read_project(doc, out)
@@ -89,7 +89,8 @@ def parse_project(data: bytes | str) -> NetClasses:
         # that is a string, a width that is not a number. Degrade the same way.
         out = NetClasses()
         out.warnings.append(
-            f"project file has an unexpected layout ({type(exc).__name__}); netclasses unavailable")
+            f"The .kicad_pro has an unexpected layout ({type(exc).__name__}), so net classes "
+            "were not used.")
     return out
 
 

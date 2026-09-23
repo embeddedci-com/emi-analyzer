@@ -200,6 +200,36 @@ def test_the_summary_reports_the_grading_it_achieved():
     assert summary["max_cell_ratio"] <= 1.8
 
 
+@pytest.mark.parametrize("dx_um", [300, 1000])
+@pytest.mark.parametrize("roi_end_mm", [270.0, 370.0])  # cable reach, then plus far-field air
+def test_a_long_empty_span_is_graded_up_to_the_coarse_cell(dx_um, roi_end_mm):
+    """A cable port leaves hundreds of mm of air between the board and the region edge.
+
+    Measured on a real board with a USB cable port: that air was filled with ~2.4 mm cells for
+    250 mm and then jumped to 11.5 mm (4.8:1; 6.8:1 at 1000 um), and the openEMS run on that
+    grid diverged. The cause was a small gap next to fine copper being left as one cell, then
+    graded from as if its neighbour were that big; smoothing it afterwards only pushed the jump
+    outward. Past the last required line there is nothing forcing any cell size, so the grading
+    bound has to hold there exactly, all the way through the PML padding.
+    """
+    max_res = meshmod.max_cell_for_frequency(600e6, 4.4)
+    step = dx_um / 1000.0 / 4  # merge_close keeps copper this close, so it sets the finest cell
+    copper = [float(v) for v in np.arange(0.0, 20.0, step)] + [20.0, 20.35]
+    gap_port = [20.35, 20.55, 30.55]  # board edge, one-cell gap, 10 mm stub end
+    required = copper + gap_port + [roi_end_mm]
+
+    lines = meshmod.build_axis(required, dx_um / 1000.0, max_res)
+    d = np.diff(lines)
+    ratio = np.maximum(d[1:] / d[:-1], d[:-1] / d[1:])
+    shared = lines[1:-1]  # the line between cell i and cell i + 1
+    outside = ratio[shared >= gap_port[-1] - 1e-9]
+    assert outside.max() <= meshmod.MAX_CELL_RATIO * (1 + 1e-6), (
+        f"{outside.max():.2f}:1 in the empty span"
+    )
+    # And it does grade up: the air is not filled at the fine end's cell size.
+    assert d[shared.searchsorted(roi_end_mm - 1e-9)] >= 0.9 * max_res
+
+
 def test_pml_padding_is_smoothed_too():
     """The seam where padding meets the mesh is itself a cell-size discontinuity.
 

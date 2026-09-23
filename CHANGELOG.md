@@ -21,6 +21,13 @@ The KiCad plugin is versioned and released separately; see
 - A licence notice in the worker image (`/usr/share/doc/emi-worker/NOTICE`) with the Debian
   and Python package lists it refers to.
 - SHA256SUMS on every release, and a security policy, code of conduct and issue templates.
+- Rule settings in the app: a Checks view under Findings switches checks on and off and sets
+  severities and thresholds, shows where each value came from, re-analyses with the change,
+  and exports an equivalent `emi.rules.yaml`.
+- Notes about the analysis above the findings: which rules file was applied, and what the
+  worker skipped or assumed (unfilled zones, an unreadable rules file, a missing stackup).
+- "Try the sample board" on the home page, and a one-time hint on what to do after the
+  findings.
 
 ### Changed
 

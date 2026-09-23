@@ -95,7 +95,10 @@ def _fill_gap(length: float, s_left: float, s_right: float,
         return []
     s_left = max(min(s_left, max_res), 1e-12)
     s_right = max(min(s_right, max_res), 1e-12)
-    if length <= max_res and length <= max(s_left, s_right) * ratio:
+    # A single cell has to satisfy the grading against *both* neighbours. Testing only the
+    # larger one left a 0.35 mm cell against 0.075 mm copper cells whole, and the 4.7:1 jump
+    # that made was then "smoothed" into a sawtooth running out across the cable air.
+    if length <= max_res and length <= min(s_left, s_right) * ratio:
         return []  # a single cell already satisfies both the grading and the wavelength bound
 
     left: list[float] = []
@@ -151,6 +154,51 @@ def _fill_gap(length: float, s_left: float, s_right: float,
     for v in sizes[:-1]:
         pos += v * scale
         out.append(pos)
+    return out
+
+
+def _fill_all(lines: np.ndarray, max_res: float, ratio: float,
+              max_rounds: int = 32) -> list[float]:
+    """Fill every gap between required lines, each graded from its neighbours' real cells.
+
+    **A gap has to grade from the cell it actually touches, not from the gap next door.** The
+    first version passed the neighbouring gap's *length* as the neighbour size. That is only
+    right when the neighbour stays one cell; once it is filled, the cell against the seam is
+    far smaller. On a board with a cable port that put a 0.35 mm gap (filled at ~0.1 mm) next
+    to 250 mm of cable air graded as if its neighbour were 0.35 mm, and the jump that left was
+    4.8:1 at 300 um and 6.8:1 at 1000 um -- one of those grids diverged. _smooth_ratio could
+    not repair it: grading one cell in place leaves the next one too big, so each pass only
+    moved the jump outward.
+
+    So fill, read back the boundary cells each gap ended up with, and fill again with those,
+    until nothing changes. Neighbour sizes only ever decrease, and each is a cell the mesh
+    already has, so this converges and never shortens the timestep.
+    """
+    gaps = [float(g) for g in np.diff(lines)]
+    n = len(gaps)
+    s_left = [gaps[i - 1] if i > 0 else gaps[i] for i in range(n)]
+    s_right = [gaps[i + 1] if i + 1 < n else gaps[i] for i in range(n)]
+
+    fills: list[list[float]] = []
+    for _ in range(max_rounds):
+        fills = [_fill_gap(g, s_left[i], s_right[i], max_res, ratio) for i, g in enumerate(gaps)]
+        first = [f[0] if f else g for f, g in zip(fills, gaps)]
+        last = [g - f[-1] if f else g for f, g in zip(fills, gaps)]
+        changed = False
+        for i in range(n):
+            if i > 0 and last[i - 1] < s_left[i] * (1 - 1e-9):
+                s_left[i] = last[i - 1]
+                changed = True
+            if i + 1 < n and first[i + 1] < s_right[i] * (1 - 1e-9):
+                s_right[i] = first[i + 1]
+                changed = True
+        if not changed:
+            break
+
+    out: list[float] = [float(lines[0])]
+    for i, f in enumerate(fills):
+        out.extend(float(lines[i]) + off for off in f)
+        out.append(float(lines[i + 1]))
     return out
 
 
@@ -272,15 +320,8 @@ def build_axis(
     # Fill each gap between required lines, grading in from both neighbours so a dense
     # region hands over smoothly to a sparse one. The gap fill also enforces the wavelength
     # bound, since no generated cell exceeds max_res.
-    filled: list[float] = [float(lines[0])]
-    gaps = np.diff(lines)
-    for i, gap in enumerate(gaps):
-        s_left = float(gaps[i - 1]) if i > 0 else float(gap)
-        s_right = float(gaps[i + 1]) if i + 1 < len(gaps) else float(gap)
-        for off in _fill_gap(float(gap), s_left, s_right, max_res, ratio):
-            filled.append(float(lines[i]) + off)
-        filled.append(float(lines[i + 1]))
-    lines = merge_close(np.asarray(filled), min_res * MERGE_FRACTION)
+    lines = merge_close(np.asarray(_fill_all(lines, max_res, ratio)),
+                        min_res * MERGE_FRACTION)
 
     # A gap whose own neighbours were coarse can still exceed max_res after one pass, so
     # subdivide anything left over before smoothing the seams.

@@ -69,6 +69,19 @@ type BlobDeleter interface {
 	DeletePrefix(ctx context.Context, prefix string) error
 }
 
+// BoardDeleter is an optional half of Store: a store that can remove one board of a project.
+//
+// Every upload into a project is a version of its board, and a version uploaded by mistake
+// (the wrong file, one that never parses) would otherwise stay in the version list for as
+// long as the project does. Optional so that a host with a Store of its own keeps compiling;
+// without it the route answers 501.
+type BoardDeleter interface {
+	// DeleteBoard removes a board of the project and the runs made on it, with their
+	// artifacts, in one go. The rows go; the objects they name are the caller's job, as for
+	// DeleteProject. ErrNotFound when the project has no such board.
+	DeleteBoard(ctx context.Context, projectID, boardID string) error
+}
+
 // Deps is the wiring a host passes to Mount.
 type Deps struct {
 	Store Store

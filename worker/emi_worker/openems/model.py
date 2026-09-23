@@ -118,10 +118,6 @@ class BuiltModel:
     cable_ports: list[dict] = field(default_factory=list)
     #: Where the NF2FF box went and at which frequencies (§16.2). ``None`` when not recorded.
     far_field: dict | None = None
-    #: The timestep after which the excitation has certainly finished. From here on nothing
-    #: feeds the structure, so its energy may only fall; ``run.divergence_ratio`` holds it to
-    #: that. 0 when unknown.
-    source_ends_at_step: int = 0
 
 
 #: openEMS's Gaussian pulse has support of roughly this many time constants, measured
@@ -129,10 +125,10 @@ class BuiltModel:
 #: dt = 1.069e-13 s, which is 2.86 ns, or 2.86/fc.
 GAUSSIAN_SUPPORT_OVER_FC = 2.86
 
-#: Where the divergence check starts holding the energy to a decay, as a multiple of the pulse's
-#: support. The margin is for the support being measured rather than derived; past the pulse
-#: nothing enters the structure at all.
-SOURCE_END_MARGIN = 1.25
+def excitation_seconds(fc: float) -> float:
+    """How long openEMS's Gaussian pulse runs, in seconds (see GAUSSIAN_SUPPORT_OVER_FC)."""
+    return GAUSSIAN_SUPPORT_OVER_FC / max(fc, 1.0)
+
 
 #: The resistance across a cable gap port (§7). An open circuit in all but name: against a
 #: cable's antenna impedance of a few hundred ohms this loads the gap by about 0.016 dB, which
@@ -213,7 +209,7 @@ def required_timesteps(dt_seconds: float, fc: float, f_min: float) -> tuple[int,
     if dt_seconds <= 0:
         raise ModelError("the mesh produced a non-positive timestep")
 
-    excitation_s = GAUSSIAN_SUPPORT_OVER_FC / max(fc, 1.0)
+    excitation_s = excitation_seconds(fc)
     # Three times the pulse: one to emit it, the rest for the structure to ring down.
     need_excitation = 3.0 * excitation_s
     need_bandwidth = 3.0 / max(f_min, 1.0)
@@ -1011,16 +1007,20 @@ def build_model(model: BoardModel, transform, params: SolveParams) -> BuiltModel
                 faces = nf2ff_mod.plan_faces(mesh, copper, ff_clearance)
             except nf2ff_mod.NF2FFError as exc:
                 raise ModelError(str(exc)) from exc
-            nf2ff_mod.add_dumps(doc, faces, ff_freqs)
+            resolution = nf2ff_mod.face_resolution_mm(f_max)
+            nf2ff_mod.add_dumps(doc, faces, ff_freqs, resolution_mm=resolution)
             far_field_meta = {
                 "frequencies_hz": ff_freqs,
+                # What the scan is measured from: the board sits on the table by its bottom
+                # copper, and the turntable circle is drawn around the copper in plan.
+                "copper_mm": list(copper),
                 "faces_mm": [faces.x0, faces.y0, faces.z0, faces.x1, faces.y1, faces.z1],
                 "centre_mm": list(faces.centre()),
-                "sub_sampling": nf2ff_mod.FACE_SUB_SAMPLING,
+                "face_resolution_mm": resolution,
                 "clearance_mm": ff_clearance,
                 # Where the box is a tenth of a wavelength out. Below this it sits closer, in
-                # the reactive near field, and nothing has measured how far down the
-                # transform stays right there. Carried so the result can say so.
+                # the reactive near field. Dipoles and a loop read right down to 30 MHz (0.003
+                # wavelengths, docs/verification/far-field.md); a board has not been checked.
                 "tenth_wavelength_above_hz": SPEED_OF_LIGHT / (10.0 * ff_clearance / 1000.0),
             }
             notes.append(
@@ -1033,8 +1033,6 @@ def build_model(model: BoardModel, transform, params: SolveParams) -> BuiltModel
     return BuiltModel(
         doc=doc, mesh=mesh, dump_names=dump_names, port_names=port_names, notes=notes,
         modelled_parts=modelled, cable_ports=cable_port_meta, far_field=far_field_meta,
-        source_ends_at_step=int(math.ceil(
-            SOURCE_END_MARGIN * GAUSSIAN_SUPPORT_OVER_FC / fc / dt)),
     )
 
 
@@ -1061,7 +1059,8 @@ FAR_FIELD_MIN_CLEARANCE_MM = 25.0
 #: ...and never less than this fraction of the wavelength at the top of the solved band. At
 #: that frequency the box is then a tenth of a wavelength out, above the 0.064 wavelengths at
 #: which M0 saw a pattern no box that size can produce. Lower frequencies see the box
-#: electrically closer; that is unverified, and the result carries where it starts.
+#: electrically closer; on dipoles and a loop that measured right to 30 MHz, 0.003 wavelengths,
+#: once the box was closed and read at the scan's positions. The result carries where it starts.
 FAR_FIELD_CLEARANCE_WAVELENGTHS = 0.1
 
 #: Grid lines kept between a face and the edge of the grid. openEMS's PML_8 absorbs over the

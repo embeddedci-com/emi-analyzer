@@ -61,18 +61,20 @@ export const EXPERIMENTAL = {
 
   complianceEstimate:
     'The chain behind this number runs end to end on the small fixture board, and has never '
-    + 'been checked against a lab result or a second solver on a real board. The far field was '
-    + 'checked against a dipole with the ground plane on the box; the product places the plane '
-    + '0.8 m below it, which has not been measured. The uncertainty is uncalibrated. Read the '
-    + 'ranking and the contributions before the absolute margin.',
+    + 'been checked against a lab result or a second solver on a real board. The far field '
+    + 'matches a second solver on test antennas over the ground plane, not on a board. The '
+    + 'uncertainty is uncalibrated. Read the ranking and the contributions before the absolute '
+    + 'margin.',
 
   farField:
-    'The transform is proven on a fixture — a half-wave dipole comes back at 2.13 dBi against '
-    + 'a textbook 2.15, and the ground reflection matches image theory to 0.08 dB — but it has '
-    + 'never been run on a real board. The box placement and the 4:1 face sub-sampling are '
-    + 'untested outside that fixture. A far-field run is also always a long one, because the '
-    + 'band starts at 30 MHz and that needs 100 ns of simulated time whatever the board is; no '
-    + 'run of that length has been measured.',
+    'Checked on test antennas, not on a board: dipoles over the ground plane match a second '
+    + 'solver (nec2c) within 0.2 dB from 30 MHz, and within about 1 dB for a resonant one up '
+    + 'to its resonance. The top 15 % of the solved band reads up to 2 dB low, so solve past the '
+    + 'highest frequency you care about. On a real board the run can stop while the board is '
+    + 'still ringing; those frequencies are dropped and marked. No real board has been compared '
+    + 'with a measurement. A '
+    + 'far-field run is always a long one: the band starts at 30 MHz, which needs 100 ns of '
+    + 'simulated time whatever the board is.',
 
   cableEmissions:
     'The composition behind this — open-circuit voltage at the connector divided by the ' +

@@ -99,13 +99,13 @@ def test_growth_from_the_start_is_invisible_without_the_source_length():
 
 def test_growth_after_the_source_has_finished_is_caught():
     energies, steps = _growing()
-    assert divergence_ratio(energies, steps, source_ends_at_step=10_000) >= DIVERGENCE_RATIO
+    assert divergence_ratio(energies, steps, excitation_end=10_000) >= DIVERGENCE_RATIO
 
 
 def test_growth_while_the_source_is_still_on_is_not_divergence():
     """The whole series is the excitation arriving, so nothing may be called unstable."""
     energies, steps = _growing()
-    assert divergence_ratio(energies, steps, source_ends_at_step=steps[-1]) == 1.0
+    assert divergence_ratio(energies, steps, excitation_end=steps[-1]) == 1.0
 
 
 def test_the_source_length_does_not_disturb_a_healthy_run():
@@ -114,7 +114,7 @@ def test_the_source_length_does_not_disturb_a_healthy_run():
     steps = [1500 * (k + 1) for k in range(len(REAL_RUN_ENERGY))]
     # Its energy peaks at sample 34, so the source was still on until then; after it the
     # energy still wobbles 2.5x (3.21e-14 to 8.04e-14), which is the ripple the ratio allows.
-    assert divergence_ratio(REAL_RUN_ENERGY, steps, source_ends_at_step=steps[34]) < 10
+    assert divergence_ratio(REAL_RUN_ENERGY, steps, excitation_end=steps[34]) < 10
 
 
 def test_a_ringing_tail_after_the_source_is_not_divergence():
@@ -122,7 +122,7 @@ def test_a_ringing_tail_after_the_source_is_not_divergence():
     ramp = [1e-20 * 10 ** k for k in range(8)]
     tail = [ramp[-1] * (0.9 ** k) * (1.0 + 0.5 * (k % 2)) for k in range(40)]
     steps = [100 * (k + 1) for k in range(len(ramp) + len(tail))]
-    assert divergence_ratio(ramp + tail, steps, source_ends_at_step=steps[7]) < 10
+    assert divergence_ratio(ramp + tail, steps, excitation_end=steps[7]) < 10
 
 
 # ---- convergence and the warnings that mean the model is not the one asked for ---------
@@ -158,7 +158,7 @@ def test_a_skipped_lumped_element_is_surfaced(line):
 
 
 def test_a_run_that_stopped_inside_its_own_source_is_not_converged():
-    """openEMS 0.0.35 checks its end criterion while the pulse is still on (verify_record_length)."""
+    """openEMS 0.0.35 checks its end criterion while the pulse is still on (a 6 mm region of a real board)."""
     r = RunResult(returncode=0, cells=1, dt_seconds=8.3e-14, max_timesteps=1_383_981,
                   final_timestep=50_995, final_energy_db=-53.2, elapsed_s=1.0, warnings=[],
                   log_text="Time for 50995 iterations", excitation_steps=66_806)
@@ -186,7 +186,7 @@ def test_the_excitation_length_and_the_closing_line_are_parsed(tmp_path, monkeyp
     assert r.converged is False
 
 
-def _fake_openems(tmp_path, energies_db: list[tuple[int, float]]):
+def _abortable_openems(tmp_path, energies_db: list[tuple[int, float]]):
     """An openEMS that prints its source length and progress, then waits for an ABORT file."""
     lines = ["echo 'Excitation signal length is: 1000 timesteps (1e-10s)'",
              "echo 'Max. number of timesteps: 9000 ( --> 9 * Excitation signal length)'"]
@@ -207,7 +207,7 @@ def test_the_runner_stops_openems_only_after_its_source(tmp_path, monkeypatch):
     """A -60 dB dip inside the source is ignored; -45 dB after it ends the run normally."""
     from emi_worker.openems import run as runmod
 
-    monkeypatch.setattr(runmod, "OPENEMS_BIN", _fake_openems(
+    monkeypatch.setattr(runmod, "OPENEMS_BIN", _abortable_openems(
         tmp_path, [(400, -60.0), (800, -0.0), (2000, -30.0), (3000, -45.0)]))
     r = runmod.run_openems("model.xml", str(tmp_path), stop_below_db=-40.0)
     assert r.stopped_on_energy_at == 3000
@@ -217,8 +217,124 @@ def test_the_runner_stops_openems_only_after_its_source(tmp_path, monkeypatch):
 def test_without_the_runner_criterion_the_run_goes_to_its_cap(tmp_path, monkeypatch):
     from emi_worker.openems import run as runmod
 
-    monkeypatch.setattr(runmod, "OPENEMS_BIN", _fake_openems(
+    monkeypatch.setattr(runmod, "OPENEMS_BIN", _abortable_openems(
         tmp_path, [(400, -60.0), (2000, -30.0), (3000, -45.0)]))
     r = runmod.run_openems("model.xml", str(tmp_path))
     assert r.stopped_on_energy_at == 0
     assert r.converged is False
+# --- The excitation is still running --------------------------------------------------------
+#
+# A wide-band Gaussian (f0 == fc) has lobes. A small structure that empties fast -- a board
+# strip with a 10 mm cable stub and a 1 MOhm gap -- loses more than DECAY_MARGIN_DB between
+# them, and the next lobe refills it. A real run was refused at timestep ~14,000 with "climbed
+# back by a factor of 2.95e+03" while its 9 ns excitation was still running.
+
+#: Timestep of each sample, one progress line every 500 steps.
+_STEP = 500
+#: Where the source stops, in the same units: 9 ns at dt ~0.65 ps.
+_EXCITATION_END = 14_000
+
+
+def _lobed_then_decaying() -> tuple[list[float], list[int]]:
+    """Two lobes with a 30 dB dip between them, both inside the excitation, then a decay."""
+    lobe1 = [1e-18 * 10.0 ** k for k in range(7)]                  # up to 1e-12
+    dip = [1e-13, 1e-14, 1e-15]                                     # 30 dB below lobe 1
+    lobe2 = [1e-14, 1e-13, 1e-12, 3e-12]                            # refills it, x3e3
+    ramp = lobe1 + dip + lobe2
+    # Pad the excitation out so it ends exactly at _EXCITATION_END.
+    n_exc = _EXCITATION_END // _STEP
+    ramp += [3e-12 * 0.9 ** k for k in range(1, n_exc - len(ramp) + 1)]
+    decay = [ramp[-1] * 0.7 ** k for k in range(1, 40)]
+    energies = ramp + decay
+    return energies, [k * _STEP for k in range(len(energies))]
+
+
+def test_a_dip_between_excitation_lobes_is_not_divergence():
+    energies, steps = _lobed_then_decaying()
+    assert steps[len(steps) - 39] == _EXCITATION_END  # the decay starts as the source stops
+    assert divergence_ratio(energies, steps, excitation_end=_EXCITATION_END) == pytest.approx(1.0)
+
+
+def test_without_the_excitation_length_the_lobes_look_like_divergence():
+    """Why the length is needed: the margin alone reads the second lobe as a blow-up."""
+    energies, _ = _lobed_then_decaying()
+    assert divergence_ratio(energies) >= DIVERGENCE_RATIO
+
+
+@pytest.mark.parametrize("tail", [
+    # Late-time instability: bottoms out and climbs back steadily.
+    [4.0 ** k for k in range(1, 20)],
+    # A sudden blow-up of many orders.
+    [10.0 ** k for k in range(1, 12)],
+])
+def test_divergence_after_the_excitation_is_still_caught(tail):
+    energies, steps = _lobed_then_decaying()
+    energies = energies + [energies[-1] * t for t in tail]
+    steps = steps + [steps[-1] + _STEP * k for k in range(1, len(tail) + 1)]
+    assert divergence_ratio(energies, steps, excitation_end=_EXCITATION_END) >= DIVERGENCE_RATIO
+
+
+def test_a_small_wobble_after_the_excitation_is_not_divergence():
+    energies, steps = _lobed_then_decaying()
+    last = energies[-1]
+    energies = energies + [last * 8.0, last * 3.0, last * 1.5]
+    steps = steps + [steps[-1] + _STEP * k for k in (1, 2, 3)]
+    assert 1.0 < divergence_ratio(energies, steps, excitation_end=_EXCITATION_END) < DIVERGENCE_RATIO
+
+
+def test_timesteps_must_line_up_with_the_energies():
+    with pytest.raises(ValueError):
+        divergence_ratio([1.0, 2.0, 3.0], [0, 1], excitation_end=1)
+
+
+def test_the_excitation_line_is_parsed():
+    """openEMS's own report, verbatim from openems.cpp SetupFDTD."""
+    from emi_worker.openems.run import _EXCITATION_LINE
+
+    m = _EXCITATION_LINE.search("Excitation signal length is: 26811 timesteps (2.86607e-09s)")
+    assert m is not None
+    assert int(m.group("n")) == 26811
+
+
+_FAKE_LOG = """\
+FDTD simulation size: 50x50x50 --> 125000 FDTD cells
+FDTD timestep is: 6.5e-13 s; Nyquist rate: 10 timesteps @7.7e+10 Hz
+{excitation}Max. number of timesteps: 60000 ( --> 4.3 * Excitation signal length)
+{progress}"""
+
+
+def _fake_openems(tmp_path, monkeypatch, *, with_excitation_line: bool):
+    """A stand-in binary that prints the lobed run's log, so run_openems is tested end to end."""
+    from emi_worker.openems import run
+
+    energies, steps = _lobed_then_decaying()
+    progress = "".join(
+        f"[@ {k}s] Timestep: {s} || Speed: 4.9 MC/s (4.7e-03 s/TS) || "
+        f"Energy: ~{e:.2e} (- 0.00dB)\n"
+        for k, (s, e) in enumerate(zip(steps, energies))
+    )
+    excitation = (
+        f"Excitation signal length is: {_EXCITATION_END} timesteps (9.1e-09s)\n"
+        if with_excitation_line else ""
+    )
+    log = tmp_path / "log.txt"
+    log.write_text(_FAKE_LOG.format(excitation=excitation, progress=progress))
+    exe = tmp_path / "openEMS"
+    exe.write_text(f"#!/bin/sh\ncat '{log}'\n")
+    exe.chmod(0o755)
+    monkeypatch.setattr(run, "OPENEMS_BIN", str(exe))
+    return run
+
+
+def test_run_openems_waits_out_the_excitation_it_reports(tmp_path, monkeypatch):
+    run = _fake_openems(tmp_path, monkeypatch, with_excitation_line=True)
+    result = run.run_openems("model.xml", str(tmp_path))
+    assert result.returncode == 0
+
+
+def test_run_openems_falls_back_to_the_known_support(tmp_path, monkeypatch):
+    run = _fake_openems(tmp_path, monkeypatch, with_excitation_line=False)
+    with pytest.raises(run.OpenEMSError, match="unstable"):
+        run.run_openems("model.xml", str(tmp_path))
+    result = run.run_openems("model.xml", str(tmp_path), excitation_s=_EXCITATION_END * 6.5e-13)
+    assert result.returncode == 0

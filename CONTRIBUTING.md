@@ -26,6 +26,14 @@ deploy/        Postgres + MinIO integration stack, and the end-to-end smoke test
 docs/          documentation
 ```
 
+### Versions of a board
+
+A project is one board, and every upload into it is a version: a row in `emi_boards`, numbered by
+upload time. Every run names the board it was made on, so the board page shows only the runs of
+the version it is on (`?version=<board id>`), and the compare page
+(`webapp/src/pages/EmiComparePage.tsx`, matching in `webapp/src/lib/compare.ts`) reads two of them.
+Findings have positional ids, so they are matched on rule, net, layer and position instead.
+
 ## Build and run from source
 
 You need Go 1.26, Node.js 22 and Docker. For the desktop app you also need

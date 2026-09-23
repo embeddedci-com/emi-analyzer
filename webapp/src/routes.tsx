@@ -17,6 +17,7 @@
 import { Route } from 'react-router'
 import { EmiAnalyzerPage } from './pages/EmiAnalyzerPage'
 import { EmiProjectPage } from './pages/EmiProjectPage'
+import { EmiComparePage } from './pages/EmiComparePage'
 import { EmiLimitationsPage } from './pages/EmiLimitationsPage'
 import { EmiLimitsPage } from './pages/EmiLimitsPage'
 import type { EmiApi } from './lib/emiApi'
@@ -47,6 +48,7 @@ export function emiRoutes(api: EmiApi, options: EmiRouteOptions = {}) {
              element={<EmiLimitationsPage deployment={deployment} host={host} />} />
       <Route path="limits" element={<EmiLimitsPage />} />
       <Route path=":projectId" element={<EmiProjectPage api={api} deployment={deployment} />} />
+      <Route path=":projectId/compare" element={<EmiComparePage api={api} />} />
     </Route>
   )
 }

@@ -361,6 +361,11 @@ class DumpBox(Property):
     #: a quarter, and even a quarter of a 50 µm mesh is orders finer than the λ/10 any
     #: transform asks for.
     sub_sampling: int = 1
+    #: Record only grid lines at least this far apart, in mm, keeping both ends of the box.
+    #: Unlike ``sub_sampling``, which strides from the first line and drops whatever does not
+    #: fit the stride at the far end, this adapts to a graded mesh: lines packed near the copper
+    #: are thinned, sparse ones in the air are all kept. ``None`` leaves it off.
+    opt_resolution_mm: float | None = None
     primitives: list[Primitive] = field(default_factory=list)
 
     def to_xml(self) -> ET.Element:
@@ -378,6 +383,12 @@ class DumpBox(Property):
                 )
             n = str(int(self.sub_sampling))
             el.set("SubSampling", f"{n},{n},{n}")
+        if self.opt_resolution_mm is not None:
+            if self.opt_resolution_mm <= 0:
+                raise ValueError(f"dump {self.name!r} asks for a resolution of "
+                                 f"{self.opt_resolution_mm} mm")
+            r = _fmt(self.opt_resolution_mm)
+            el.set("OptResolution", f"{r},{r},{r}")
         self._with_primitives(el, self.primitives)
         if self.frequencies:
             ET.SubElement(el, "FD_Samples").text = _lines(self.frequencies)

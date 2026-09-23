@@ -258,6 +258,29 @@ func (s *PGStore) UpdateBoardParsed(ctx context.Context, id, boardKey string, la
 	return mapErr(err)
 }
 
+// DeleteBoard: see BoardDeleter. The runs go explicitly, because their board_id is ON DELETE
+// SET NULL and would otherwise leave them in the project with no version to belong to.
+func (s *PGStore) DeleteBoard(ctx context.Context, projectID, boardID string) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return mapErr(err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // a no-op after Commit
+
+	if _, err := tx.Exec(ctx, `DELETE FROM emi.emi_runs WHERE project_id = $1 AND board_id = $2`,
+		projectID, boardID); err != nil {
+		return mapErr(err)
+	}
+	tag, err := tx.Exec(ctx, `DELETE FROM emi.emi_boards WHERE project_id = $1 AND id = $2`, projectID, boardID)
+	if err != nil {
+		return mapErr(err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return mapErr(tx.Commit(ctx))
+}
+
 func (s *PGStore) ListBoards(ctx context.Context, projectID string) ([]*Board, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT id, project_id, ingest_run_id, s3_input_key, s3_board_key,

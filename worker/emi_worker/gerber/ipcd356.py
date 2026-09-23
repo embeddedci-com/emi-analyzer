@@ -170,15 +170,14 @@ def parse(text: str) -> Netlist:
     truncated = sum(1 for p in result.points if len(p.net) >= 14)
     if truncated:
         result.warnings.append(
-            f"{truncated} net names are at the 14-character limit of the IPC-D-356 format "
-            f"and have been truncated by the exporter, so they may not match your schematic "
-            f"exactly"
+            f"{truncated} net names hit the 14-character limit of IPC-D-356 and were cut "
+            f"short, so they may not match your schematic."
         )
 
     if skipped:
         result.warnings.append(
-            f"{skipped} netlist records could not be read and were ignored; "
-            f"{len(result.points)} were understood"
+            f"{skipped} netlist records could not be read and were ignored "
+            f"({len(result.points)} were read)."
         )
 
     log.info(

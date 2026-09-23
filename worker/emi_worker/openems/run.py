@@ -37,6 +37,7 @@ _PROGRESS = re.compile(
 _TIMESTEP_LINE = re.compile(r"FDTD timestep is:\s*(?P<dt>[\d.eE+-]+)\s*s")
 _MAXSTEPS_LINE = re.compile(r"Max\. number of timesteps:\s*(?P<n>\d+)")
 _CELLS_LINE = re.compile(r"FDTD simulation size:.*?-->\s*(?P<cells>[\d.]+)\s*FDTD cells")
+#: Excitation signal length is: 26811 timesteps (2.866e-09s)
 _EXCITATION_LINE = re.compile(r"Excitation signal length is:\s*(?P<n>\d+)\s*timesteps")
 _DONE_LINE = re.compile(r"Time for\s*(?P<n>\d+)\s*iterations")
 
@@ -180,7 +181,7 @@ def run_openems(
     on_progress: Callable[[RunProgress], None] | None = None,
     should_stop: Callable[[], bool] | None = None,
     poll_interval: float = 0.25,
-    source_ends_at_step: int | None = None,
+    excitation_s: float | None = None,
     stop_below_db: float | None = None,
 ) -> RunResult:
     """Run openEMS to completion, streaming progress.
@@ -188,9 +189,9 @@ def run_openems(
     ``should_stop`` is polled between output lines. A solve runs for hours, so a cancel
     that only takes effect at the end is not a cancel.
 
-    ``source_ends_at_step`` is the timestep after which the excitation has finished. Given it,
-    the divergence check also catches a run that grows from the start (see
-    ``divergence_ratio``).
+    ``excitation_s`` is how long the source runs, for the stability check to wait out. openEMS
+    reports its own figure in the log and that one wins; this is the fallback for a log that
+    lacks the line (``GAUSSIAN_SUPPORT_OVER_FC / fc`` for a Gaussian).
 
     ``stop_below_db`` moves the end criterion out of openEMS and into this loop: once openEMS's
     own excitation has finished and its energy is that far below its running maximum, an
@@ -288,7 +289,8 @@ def run_openems(
                     pass
                 if on_progress:
                     on_progress(last)
-                source_done = excitation_steps or source_ends_at_step or 0
+                source_done = excitation_steps or (
+                    int(excitation_s / dt) if excitation_s and dt > 0 else 0)
                 if (stop_below_db is not None and not aborted_at and source_done
                         and last.timestep > source_done and last.energy_db <= stop_below_db):
                     aborted_at = last.timestep
@@ -310,7 +312,9 @@ def run_openems(
     log_text = "\n".join(lines)
     warnings = [msg for needle, msg in _SIGNIFICANT_WARNINGS if needle in log_text]
 
-    rise = divergence_ratio(energies, energy_steps, source_ends_at_step)
+    if not excitation_steps and excitation_s and dt > 0:
+        excitation_steps = int(excitation_s / dt)
+    rise = divergence_ratio(energies, energy_steps, excitation_end=excitation_steps)
     if rise >= DIVERGENCE_RATIO:
         err = OpenEMSError(
             f"the simulation went unstable: after the excitation passed, its energy climbed "
@@ -360,10 +364,14 @@ def _terminate(proc: subprocess.Popen) -> None:
 
 def divergence_ratio(
     energies: list[float],
-    steps: list[int] | None = None,
-    source_ends_at_step: int | None = None,
+    timesteps: list[int] | None = None,
+    *,
+    excitation_end: int = 0,
 ) -> float:
     """How far the energy climbed back after the run had really started to decay.
+
+    ``timesteps`` gives the timestep of each energy sample, and ``excitation_end`` the
+    timestep at which the source stops. No sample before that is judged at all.
 
     1.0 for a healthy run. A diverging FDTD grid pumps energy, so its stored energy turns
     around and grows without bound; that is what this has to catch, and nothing else.
@@ -386,42 +394,45 @@ def divergence_ratio(
     Comparing against the global peak instead would find nothing at all: a diverging run's
     largest energy is its last one.
 
-    **When the caller knows when the source stops, that replaces the 20 dB gate** (``steps``
-    and ``source_ends_at_step``): the floor arms at the first sample after it, decayed or not,
-    and never before. Both halves were measured:
+    **When the source length is known, it replaces the 20 dB gate.** No sample before
+    ``excitation_end`` is judged, and the floor arms at the first sample after it, decayed or
+    not. Both halves were measured:
 
+    * The 20 dB gate is not safe while the source is on. With f0 == fc the Gaussian has lobes,
+      and a small structure that empties fast loses more than 20 dB between them. The next lobe
+      then refills it: a board strip with a cable stub was refused at timestep ~14,000 with
+      "climbed back by a factor of 2.95e+03" while its 9 ns excitation was still running, and a
+      6 mm region of a real board 30 MHz-1 GHz rose 2,070x at step 46,624 of a 66,806-step
+      pulse.
     * A run that grows from the start never decays 20 dB, so on the energy alone the floor
       never arms and nothing is reported: the fields grow, openEMS prints "- 0.0 dB" to the
       end, and the result is published. Once the excitation has finished nothing feeds a
       passive structure, so its energy can only ring down, and a thousandfold climb from there
       is the grid.
-    * The 20 dB gate is not safe while the source is on. A 30 MHz-1 GHz pulse is barely one
-      cycle of its carrier, and on a real board (research/verify_record_length.py) its energy
-      fell more than 20 dB between two lobes and then rose 2,070x on the next, at step 46,624
-      of a pulse that lasts 66,806. The gate called that a divergence and refused the run.
 
     openEMS's end criterion stops a healthy run 40 dB down, well past the 20 dB gate.
     """
     if len(energies) < 3:
         return 1.0
 
+    if timesteps is not None and len(timesteps) != len(energies):
+        raise ValueError("divergence_ratio needs one timestep per energy sample")
+
     decay_factor = 10.0 ** (DECAY_MARGIN_DB / 10.0)
-    quiet_from = source_ends_at_step if steps is not None else None
-    if quiet_from is not None and len(steps) != len(energies):
-        raise ValueError("steps and energies must be the same length")
+    source_known = timesteps is not None and excitation_end > 0
     peak = 0.0
     floor: float | None = None
     worst = 1.0
-    for k, e in enumerate(energies):
+    for i, e in enumerate(energies):
         if e <= 0:
             continue
         peak = max(peak, e)
+        if timesteps is not None and timesteps[i] < excitation_end:
+            # The source is still driving the structure: a dip here is between two lobes.
+            continue
         if floor is None:
-            # Still rising, or not yet clearly past the excitation.
-            if quiet_from is not None:
-                if steps[k] > quiet_from:
-                    floor = e
-            elif e * decay_factor <= peak:
+            # Past the source, or with no source length, clearly past the excitation.
+            if source_known or e * decay_factor <= peak:
                 floor = e
             continue
         floor = min(floor, e)

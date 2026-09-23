@@ -134,11 +134,11 @@ def analyse(
     from_file = any(s.epsilon_r > 0 and s.from_file for s in entries if s.is_dielectric)
     if epsilon_override > 0:
         from_file = True
-        notes.append(f"permittivity forced to {epsilon_override} by settings")
+        notes.append(f"Permittivity set to {epsilon_override} by your settings.")
     elif not from_file:
         notes.append(
-            f"no dielectric permittivity in the board file; assuming {DEFAULT_EPSILON_R}. "
-            "Delays and impedances below carry that assumption."
+            f"No permittivity in the board file, so {DEFAULT_EPSILON_R} was assumed for delays "
+            "and impedances. Set epsilon_r in the KiCad stackup or in your rules."
         )
 
     # Walk the stack once, so every layer knows what sits above and below it.

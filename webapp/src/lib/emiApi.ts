@@ -315,6 +315,10 @@ export class EmiApi {
     this.call<{ boards: Board[] }>('GET', `/emi/projects/${projectId}/boards`)
       .then((r) => r.boards ?? [])
 
+  /** Removes one version of the project's board and every result on it. Not the last one. */
+  deleteBoard = (projectId: string, boardId: string) =>
+    this.call<void>('DELETE', `/emi/projects/${projectId}/boards/${boardId}`)
+
   // ---- components ----
   //
   // Not project-scoped: a component is a library entry that spans every board, which is the
@@ -352,8 +356,14 @@ export class EmiApi {
   deleteDriver = (projectId: string, driverId: string) =>
     this.call<void>('DELETE', `/emi/projects/${projectId}/drivers/${driverId}`)
 
-  listRuns = (projectId: string) =>
-    this.call<{ runs: Run[] }>('GET', `/emi/projects/${projectId}/runs`).then((r) => r.runs ?? [])
+  /**
+   * The project's runs, newest first. The server's default page is 50, which a project with
+   * several versions outgrows: pass up to 200 to still see the older versions' runs.
+   */
+  listRuns = (projectId: string, limit?: number) =>
+    this.call<{ runs: Run[] }>(
+      'GET', `/emi/projects/${projectId}/runs${limit ? `?limit=${limit}` : ''}`,
+    ).then((r) => r.runs ?? [])
 
   // ---- upload ----
 
@@ -431,8 +441,13 @@ export class EmiApi {
    * opens the existing project — so without this, a board analysed last week could never
    * gain this week's columns.
    */
-  reanalyse = (projectId: string, boardId: string) =>
-    this.call<Run>('POST', `/emi/projects/${projectId}/runs`, { board_id: boardId, kind: 'ingest' })
+  reanalyse = (projectId: string, boardId: string, settings?: Record<string, unknown> | null) =>
+    this.call<Run>('POST', `/emi/projects/${projectId}/runs`, {
+      board_id: boardId, kind: 'ingest',
+      // The settings edited in the app: the worker's "run" layer, on top of any rules file.
+      // Omitted when there are none, so a plain re-analysis looks exactly as it always did.
+      ...(settings && Object.keys(settings).length > 0 ? { params: { settings } } : {}),
+    })
 
   createSolveRun = (projectId: string, boardId: string, params: unknown, est: EstimateInput) =>
     this.call<Run>('POST', `/emi/projects/${projectId}/runs`, {

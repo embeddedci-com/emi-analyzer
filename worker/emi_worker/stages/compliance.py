@@ -314,8 +314,8 @@ def _notes(art: SolveArtifacts | None) -> list[str]:
     if tenth and freqs and freqs[0] < tenth:
         notes.append(
             f"Below {tenth / 1e6:.0f} MHz the far-field box is closer to the board than a "
-            f"tenth of a wavelength. How accurate the transform stays there has not been "
-            f"measured."
+            f"tenth of a wavelength. That was checked on test antennas down to 30 MHz, but "
+            f"not on a board."
         )
     return notes
 

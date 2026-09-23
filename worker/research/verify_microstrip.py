@@ -44,7 +44,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from emi_worker.kicad import parse, parse_board  # noqa: E402
 from emi_worker.kicad.normalize import _board_extent  # noqa: E402
 from emi_worker.openems import post, run  # noqa: E402
-from emi_worker.openems.model import Port, SolveParams, build_model  # noqa: E402
+from emi_worker.openems.model import (  # noqa: E402
+    Port, SolveParams, build_model, excitation_seconds,
+)
 
 OUT = Path(os.environ.get("OUT", "/spike/spike_out")) / "microstrip"
 THREADS = int(os.environ.get("THREADS", "3"))
@@ -166,7 +168,7 @@ def main() -> int:
         print(f"\n== {name}: {m.cells:,} cells, {across} cells across the strip, "
               f"smallest {m.min_cell_mm * 1000:.1f} um", flush=True)
         res = run.run_openems(str(work / "model.xml"), str(work), threads=THREADS,
-                              source_ends_at_step=built.source_ends_at_step)
+                              excitation_s=excitation_seconds(built.doc.excitation.fc))
         got = extract(work, freqs)
         err = (np.abs(got["z0"]) / z_hj - 1) * 100
         e_err = (got["eps_eff"] / e_hj - 1) * 100

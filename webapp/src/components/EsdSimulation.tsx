@@ -184,7 +184,8 @@ export function EsdSimulation({
       </Group>
       {!capable && (
         <Text size="xs" c="dimmed">
-          No connected worker has the circuit simulator, so a simulation cannot start right now.
+          No connected worker has the circuit simulator (ngspice). Start or restart the worker,
+          then try again.
         </Text>
       )}
       {start.isError && (
@@ -199,7 +200,7 @@ export function EsdSimulation({
       )}
 
       {!latestDone && !active && (
-        <Text size="sm" c="dimmed">No simulation has been run for this board yet.</Text>
+        <Text size="sm" c="dimmed">No simulation yet. Pick a level and press Simulate.</Text>
       )}
       {result.isLoading && <Loader size="sm" />}
       {result.isError && (

@@ -51,7 +51,7 @@ from emi_worker.kicad import parse, parse_board
 from emi_worker.kicad.normalize import _board_extent
 from emi_worker.openems import csx, post, run
 from emi_worker.openems.gapport import STUB_CLEARANCE_MM
-from emi_worker.openems.model import Port, SolveParams, build_model
+from emi_worker.openems.model import Port, SolveParams, build_model, excitation_seconds
 
 C = 299_792_458.0
 OUT = Path(os.environ.get("OUT", "/spike/spike_out"))
@@ -204,7 +204,8 @@ def solve(tag: str, built, freqs: np.ndarray) -> dict:
     wd.mkdir(parents=True, exist_ok=True)
     (wd / "model.xml").write_text(built.doc.to_string())
     t0 = time.time()
-    r = run.run_openems(str(wd / "model.xml"), str(wd), threads=THREADS)
+    r = run.run_openems(str(wd / "model.xml"), str(wd), threads=THREADS,
+                        excitation_s=excitation_seconds(built.doc.excitation.fc))
     print(f"    {tag}: {r.final_timestep:,} steps, {time.time()-t0:.0f}s, "
           f"energy {r.final_energy_db:.1f} dB", flush=True)
     for w in r.warnings:

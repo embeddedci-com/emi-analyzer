@@ -51,7 +51,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from emi_worker.kicad import parse, parse_board  # noqa: E402
 from emi_worker.kicad.normalize import _board_extent  # noqa: E402
 from emi_worker.openems import csx, post, run  # noqa: E402
-from emi_worker.openems.model import Port, SolveParams, build_model  # noqa: E402
+from emi_worker.openems.model import (  # noqa: E402
+    Port, SolveParams, build_model, excitation_seconds,
+)
 
 OUT = Path(os.environ.get("OUT", "/spike/spike_out")) / f"cap_0402_{os.environ.get('VALUE', '100p')}"
 THREADS = int(os.environ.get("THREADS", "3"))
@@ -148,7 +150,7 @@ def solve(name: str, doc, built) -> tuple[np.ndarray, run.RunResult]:
     work.mkdir(parents=True, exist_ok=True)
     (work / "model.xml").write_text(doc.to_string())
     res = run.run_openems(str(work / "model.xml"), str(work), threads=THREADS,
-                          source_ends_at_step=built.source_ends_at_step)
+                          excitation_s=excitation_seconds(built.doc.excitation.fc))
     u = post.read_probe(str(work / "p1_ut"))
     i = post.read_probe(str(work / "p1_it"))
     f = np.asarray(FREQS)
