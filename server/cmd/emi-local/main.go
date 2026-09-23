@@ -1,6 +1,6 @@
 // Command emi-local runs the whole EMI Analyzer on one computer.
 //
-// It is the same control plane embeddedci-server mounts -- the emi package, via emi.Mount --
+// It is the same control plane a hosted server mounts -- the emi package, via emi.Mount --
 // with the three host dependencies swapped for local ones:
 //
 //	Store  SQLite, in the data folder              (local.SQLiteStore)

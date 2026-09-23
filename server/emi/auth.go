@@ -18,8 +18,8 @@ const (
 	ctxKeyUser
 )
 
-// TokenTypeEMIRun is the token_type claim on a run-scoped worker token. It mirrors
-// embeddedci-server's "agent_job" token type for build jobs.
+// TokenTypeEMIRun is the token_type claim on a run-scoped worker token. It keeps a run token
+// from being accepted anywhere a host checks tokens of another type signed with the same key.
 const TokenTypeEMIRun = "emi_run"
 
 // RunTokenTTL is how long one run token lasts. A solve can outlive it, which is intentional:
@@ -27,8 +27,8 @@ const TokenTypeEMIRun = "emi_run"
 // stale token cannot be replayed for a day.
 const RunTokenTTL = 6 * time.Hour
 
-// UserIdentity is the authenticated human behind a request. The host supplies it; in
-// embeddedci-server it comes from the existing JWT middleware.
+// UserIdentity is the authenticated human behind a request. The host supplies it, from
+// whatever authentication middleware it already has.
 type UserIdentity struct {
 	UserID         string
 	OrganizationID string
@@ -70,7 +70,7 @@ func runIDFrom(ctx context.Context) (string, bool) {
 
 // bearer extracts a token from the Authorization header, falling back to the ?token= query
 // parameter. The fallback exists only because browsers cannot set headers on a WebSocket
-// handshake; the same fallback is present for build agents.
+// handshake.
 func bearer(r *http.Request) string {
 	if h := r.Header.Get("Authorization"); h != "" {
 		if len(h) > 7 && strings.EqualFold(h[:7], "bearer ") {
@@ -135,7 +135,7 @@ type runClaims struct {
 //
 // The token deliberately does not carry the worker's API key id. Ownership lives on the run
 // row (owner_api_key_kid + jti_key), so a leaked token grants access to exactly one run and
-// nothing else — the same property build-job tokens have.
+// nothing else.
 func (s *Service) mintRunToken(runID, orgID, jti string) (string, time.Time, error) {
 	now := s.deps.now()
 	exp := now.Add(RunTokenTTL)

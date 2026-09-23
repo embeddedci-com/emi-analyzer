@@ -661,7 +661,7 @@ func (s *Service) handleListArtifacts(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleGetArtifactURL returns a presigned GET rather than the bytes, so the browser
-// fetches exactly the one frequency grid it is displaying and the droplet stays out of it.
+// fetches exactly the one frequency grid it is displaying and the server stays out of it.
 func (s *Service) handleGetArtifactURL(w http.ResponseWriter, r *http.Request) {
 	run, _, ok := s.run(w, r)
 	if !ok {

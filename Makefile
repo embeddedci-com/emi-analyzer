@@ -152,7 +152,7 @@ test: test-go test-py
 
 test-go:
 	cd server && go build ./... && go vet ./... && go test ./...
-	@# The emi package is what embeddedci-server mounts. It must not import the local app's
+	@# The emi package is what a hosted server mounts. It must not import the local app's
 	@# packages, or SQLite would be linked into the hosted server.
 	@! (cd server && go list -deps ./emi | grep -q 'emi-analyzer/server/local\\|modernc.org/sqlite') || \
 		{ echo "server/emi depends on the local package or SQLite"; exit 1; }

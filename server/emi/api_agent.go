@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// Worker-facing endpoints. The flow mirrors build agents exactly:
+// Worker-facing endpoints. The flow is that of a CI agent:
 //
 //	dial in (ws) or poll  ->  mint run token  ->  claim  ->  progress*  ->  artifacts*  ->  complete
 //
@@ -85,9 +85,8 @@ func (s *Service) handleWorkerDeregister(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deregistered"})
 }
 
-// handleWorkerListRuns is the REST fallback for the WebSocket push, exactly as
-// GET /api/agent/jobs is for build agents. Push is an optimisation; polling is the
-// guarantee.
+// handleWorkerListRuns is the REST fallback for the WebSocket push. Push is an optimisation;
+// polling is the guarantee.
 func (s *Service) handleWorkerListRuns(w http.ResponseWriter, r *http.Request) {
 	key, _ := agentFrom(r.Context())
 	runs, err := s.deps.Store.ListClaimableRuns(r.Context(), key.OrganizationID, queryInt(r, "limit", 25, 100))
@@ -110,8 +109,8 @@ func (s *Service) handleWorkerListRuns(w http.ResponseWriter, r *http.Request) {
 
 // handleMintRunToken issues the short-lived run token and takes ownership of the run.
 //
-// Minting is what assigns ownership, matching the build-agent flow where the mint sets
-// jobs.owner_api_key_kid. A second worker that mints for the same run gets a new jti, which
+// Minting is what assigns ownership: it records the key id and the token's jti on the run.
+// A second worker that mints for the same run after a retry gets a new jti, which
 // invalidates the first worker's token — that is how a retry takes a run away from a hung
 // worker without needing to reach that worker.
 func (s *Service) handleMintRunToken(w http.ResponseWriter, r *http.Request) {
@@ -272,10 +271,9 @@ func (s *Service) handleRunProgress(w http.ResponseWriter, r *http.Request) {
 
 // handleArtifactUploadInit hands back a presigned PUT.
 //
-// This is the deliberate divergence from the build-agent flow, which proxies artifact bytes
-// through the server. A result bundle is hundreds of megabytes and the production droplet
-// is 1 vCPU / 2 GB, also serving BenchPod WebSockets. The bytes go worker -> Spaces
-// directly and the control plane only ever sees this small JSON.
+// Artifact bytes never pass through the control plane. A result bundle is hundreds of
+// megabytes, and a small server shared with other work cannot afford to proxy it. The bytes
+// go worker -> object storage directly and the control plane only ever sees this small JSON.
 func (s *Service) handleArtifactUploadInit(w http.ResponseWriter, r *http.Request) {
 	runID, _ := runIDFrom(r.Context())
 

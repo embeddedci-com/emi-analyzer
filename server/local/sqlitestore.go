@@ -1,9 +1,9 @@
 // Package local holds what the EMI Analyzer needs to run on one computer with nothing else
 // installed: a SQLite Store, a Blob on the local filesystem, and a worker-key verifier.
 //
-// It is a separate package from emi on purpose. embeddedci-server mounts the emi package and
-// never imports this one, so the SQLite driver and the file server are not linked into the
-// hosted server. `make test-go` checks that emi never starts importing it.
+// It is a separate package from emi on purpose. A host that mounts the emi package never
+// imports this one, so the SQLite driver and the file server are not linked into a hosted
+// server. `make test-go` checks that emi never starts importing it.
 package local
 
 import (

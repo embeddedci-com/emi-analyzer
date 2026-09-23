@@ -12,7 +12,7 @@ import (
 //
 // Regression test for a production failure. The origin sent no Cache-Control, so Cloudflare
 // fell back to deciding by extension and cached GET .../artifacts/geometry.bin — then kept
-// handing browsers a presigned URL that had expired. Spaces rejects an expired signature
+// handing browsers a presigned URL that had expired. Storage rejects an expired signature
 // without CORS headers, so it showed up as a CORS error on the bucket, and only for .bin
 // artifacts; board.json, with an extension Cloudflare does not cache, kept working.
 func TestEveryRouteForbidsCaching(t *testing.T) {

@@ -84,7 +84,7 @@ func main() {
 	// One-shot mode for `make key`.
 	//
 	// No -org means a shared worker: one that takes runs from every organisation, which is
-	// what a worker EmbeddedCI runs should be. -org is for the other case -- a customer
+	// what a hosted service's own workers are. -org is for the other case -- a customer
 	// running a worker on their own hardware, which must only ever see their own boards.
 	if *issueKey {
 		raw, err := keys.IssueKey(ctx, *keyOrg, *keyName)

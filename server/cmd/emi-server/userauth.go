@@ -9,8 +9,8 @@ import (
 // Identity for the development stack: every request is a signed-out visitor.
 //
 // Accounts are not this repository's business. Signed-in users, their sessions and their API
-// keys belong to the host that mounts the analyzer -- embeddedci-server checks all three in its
-// own middleware before calling emi.WithUser -- and the local app has one fixed user. So the
+// keys belong to the host that mounts the analyzer -- it checks all three in its own
+// middleware before calling emi.WithUser -- and the local app has one fixed user. So the
 // harness verifies no credentials at all: each browser gets a private visitor space from
 // emi.Visitors, the same policy the mounted analyzer applies to signed-out visitors.
 func visitorAuth(visitors emi.Visitors) func(http.HandlerFunc) http.HandlerFunc {

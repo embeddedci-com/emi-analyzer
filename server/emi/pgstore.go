@@ -17,8 +17,8 @@ var schemaSQL string
 
 // PGStore implements Store over Postgres.
 //
-// embeddedci-server will supply its own implementation over its *sql.DB and its app schema;
-// this one exists so the local stack and the tests have a real database with the real
+// A host may supply its own implementation over its own database and schema; this one exists
+// so the compose stack and a host without one have a real database with the real
 // constraints rather than a map that silently permits states Postgres would reject.
 type PGStore struct {
 	pool   *pgxpool.Pool
@@ -40,8 +40,8 @@ func NewPGStore(ctx context.Context, dsn string) (*PGStore, error) {
 }
 
 // NewPGStoreFromPool is the same thing for a host that already has a pool, which is the
-// mounted case: embeddedci-server opens one for these tables alongside its own connections
-// to the same database. The schema is applied here rather than by the host's migrations,
+// mounted case: a host opens one for these tables alongside its own connections to the same
+// database. The schema is applied here rather than by the host's migrations,
 // because it belongs to this package and moves with it.
 //
 // Ownership of the pool stays with the caller: Close on this store closes it, so do not

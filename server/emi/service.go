@@ -39,9 +39,9 @@ func (s *Service) Hub() *Hub { return s.hub }
 
 // Mount registers every EMI route on mux.
 //
-// This is the single wiring point. Integrating into embeddedci-server means calling this
-// once from api/routes.go and implementing the three interfaces in deps.go — no EMI
-// concepts leak into any existing file beyond that.
+// This is the single wiring point. A host that embeds this package calls it once from its
+// routing and implements the three interfaces in deps.go; no EMI concepts leak into the
+// host's code beyond that.
 //
 // prefix is the path the host serves this package under, e.g. "/api". The user-facing
 // routes below expect the host's own authentication middleware to have run and to have
@@ -121,8 +121,7 @@ func noStore(h http.HandlerFunc) http.HandlerFunc {
 }
 
 // StartSweeper runs the stale-run timeout loop until ctx is cancelled. It is the backstop
-// for a worker that dies mid-solve without ever completing its run — the same role the
-// timeout loop plays for build jobs.
+// for a worker that dies mid-solve without ever completing its run.
 func (s *Service) StartSweeper(ctx context.Context, every time.Duration) {
 	if every <= 0 {
 		every = 5 * time.Minute

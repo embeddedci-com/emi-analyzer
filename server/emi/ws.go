@@ -11,8 +11,7 @@ import (
 )
 
 // The worker WebSocket. The worker always dials out, which is the property that lets it run
-// on a laptop behind NAT or on an office workstation with no inbound firewall rule — the
-// same reason build agents work that way.
+// on a laptop behind NAT or on an office workstation with no inbound firewall rule.
 //
 // Push is an optimisation and never the delivery guarantee: everything sent here is also
 // discoverable through GET /emi-agent/runs, so a worker that misses a message because it

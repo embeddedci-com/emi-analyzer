@@ -3,7 +3,7 @@ package emi
 import "testing"
 
 // A worker's key decides which organisations it serves, and there are two legitimate
-// answers. A shared worker -- the kind EmbeddedCI runs -- names no organisation and does
+// answers. A shared worker -- the kind a hosted service runs -- names no organisation and does
 // the solving for everybody. A scoped worker is a customer's own hardware and must never be
 // handed anyone else's board.
 func TestSharedWorkersServeEveryOrgAndScopedOnesDoNot(t *testing.T) {

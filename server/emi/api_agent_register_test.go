@@ -45,7 +45,7 @@ func (stubBlob) Stat(context.Context, string) (int64, string, error) { return 0,
 //
 // This is a regression test for a live 404. UpsertWorker used to resolve the organisation by
 // querying emi.emi_dev_api_keys -- the table the standalone DevKeyVerifier writes. Mounted
-// into embeddedci-server, keys live in that server's app.api_keys instead, so the lookup
+// into a host with its own key table, keys live there instead, so the lookup
 // matched nothing, returned ErrNotFound, and every worker registration answered
 // 404 {"error":"not found"}. Only the host knows where its keys live; the organisation has to
 // travel with the request.
@@ -62,7 +62,7 @@ func TestWorkerRegisterCarriesTheKeysOrganisation(t *testing.T) {
 	}
 
 	body, _ := json.Marshal(map[string]any{
-		"name":         "droplet-ingest",
+		"name":         "small-ingest",
 		"capabilities": map[string]any{"cores": 1, "ram_gb": 0.5, "kinds": []string{"ingest"}},
 	})
 	req := httptest.NewRequest(http.MethodPost, "/emi-agent/register", bytes.NewReader(body))

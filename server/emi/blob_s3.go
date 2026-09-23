@@ -15,9 +15,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
 
-// S3Blob implements Blob against anything S3-compatible: DigitalOcean Spaces in production,
-// MinIO in the local stack. Presigning works identically on both, which is the whole reason
-// the local stack can prove the production data path rather than merely imitate it.
+// S3Blob implements Blob against anything S3-compatible: a hosted object store in production,
+// MinIO in the compose stack. Presigning works identically on both, which is the whole reason
+// the compose stack can prove the production data path rather than merely imitate it.
 type S3Blob struct {
 	client  *s3.Client
 	presign *s3.PresignClient
@@ -35,13 +35,13 @@ const DefaultKeyPrefix = "emi/"
 
 // S3Config configures S3Blob.
 type S3Config struct {
-	Endpoint  string // e.g. http://minio:9000 or https://ams3.digitaloceanspaces.com
+	Endpoint  string // e.g. http://minio:9000, or a hosted provider's regional endpoint
 	Region    string
 	Bucket    string
 	AccessKey string
 	SecretKey string
 
-	// UsePathStyle is required for MinIO, and harmless for Spaces.
+	// UsePathStyle is required for MinIO, and harmless for most hosted providers.
 	UsePathStyle bool
 
 	// PublicURL is the endpoint that *clients* (browsers, workers) use to reach storage,
@@ -55,7 +55,7 @@ type S3Config struct {
 	// public one and presign with that, so the signature matches the host the client will
 	// actually send.
 	//
-	// Leave empty in production, where Spaces has one address for everybody.
+	// Leave empty when storage has one address for everybody, as a hosted store does.
 	PublicURL string
 
 	// KeyPrefix is prepended to every key. Empty means DefaultKeyPrefix -- sharing the
