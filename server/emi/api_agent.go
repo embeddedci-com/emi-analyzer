@@ -362,9 +362,18 @@ func (s *Service) handleCompleteRun(w http.ResponseWriter, r *http.Request) {
 	}
 	now := s.deps.now()
 
-	// Register artifacts before flipping the run to done, so a client that reacts to the
-	// status change never sees a finished run with a half-populated artifact list.
-	for _, a := range body.Artifacts {
+	// The parsed board's key is presigned for every later solve and for the viewer, so like an
+	// artifact key it must point into this run's own prefix. Checked before anything is written.
+	if body.Board != nil && body.Board.BoardKey != "" && !runKeyAllowed(body.Board.BoardKey, runID) {
+		writeErr(w, http.StatusBadRequest, "board_key must be under this run")
+		return
+	}
+
+	// Names and keys are all checked before any row is written, so a bad entry late in the
+	// list cannot leave the ones before it recorded.
+	names := make([]string, len(body.Artifacts))
+	keys := make([]string, len(body.Artifacts))
+	for i, a := range body.Artifacts {
 		name, ok := sanitiseArtifactName(a.Name)
 		if !ok {
 			writeErr(w, http.StatusBadRequest, "invalid artifact name: "+a.Name)
@@ -374,6 +383,19 @@ func (s *Service) handleCompleteRun(w http.ResponseWriter, r *http.Request) {
 		if key == "" {
 			key = artifactKey(runID, name)
 		}
+		// The key is presigned for any browser that can see this run, so a worker must not be
+		// able to point it at another run's results, or at somebody's upload.
+		if !runKeyAllowed(key, runID) {
+			writeErr(w, http.StatusBadRequest, "artifact key must be under this run: "+name)
+			return
+		}
+		names[i], keys[i] = name, key
+	}
+
+	// Register artifacts before flipping the run to done, so a client that reacts to the
+	// status change never sees a finished run with a half-populated artifact list.
+	for i, a := range body.Artifacts {
+		name, key := names[i], keys[i]
 		size, ct := a.SizeBytes, a.ContentType
 		// Trust but verify: ask storage what actually landed. A worker that crashed
 		// mid-upload should not be able to record a result that is not there.

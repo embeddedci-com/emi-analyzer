@@ -214,8 +214,9 @@ func (s *Service) handleCreateBoard(w http.ResponseWriter, r *http.Request) {
 	}
 	// Scoped to the organisation rather than the project, because an upload is now shared
 	// across the projects of one organisation. It still stops a caller naming an upload
-	// belonging to somebody else and having a worker parse it for them.
-	if body.InputKey == "" || !strings.HasPrefix(body.InputKey, "uploads/"+p.OrganizationID+"/") {
+	// belonging to somebody else and having a worker parse it for them -- including by way of
+	// "..", which a prefix check alone lets through (see objectkeys.go).
+	if !uploadKeyAllowed(body.InputKey, p.OrganizationID) {
 		writeErr(w, http.StatusBadRequest, "input_key must be an upload key for this organisation")
 		return
 	}

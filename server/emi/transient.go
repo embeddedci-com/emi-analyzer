@@ -48,11 +48,11 @@ var modelSuffixes = []string{
 // modelKeyPrefix is the only place a model a run uses may live: this organisation's uploads.
 // Without this a run could name any object in the bucket and have a worker download it.
 func modelKeyPrefix(orgID string) string {
-	return "uploads/" + orgID + "/"
+	return uploadKeyPrefix(orgID)
 }
 
 func modelKeyAllowed(key, orgID string) bool {
-	return orgID != "" && strings.HasPrefix(key, modelKeyPrefix(orgID)) && !strings.Contains(key, "..")
+	return uploadKeyAllowed(key, orgID)
 }
 
 type statFunc func(ctx context.Context, key string) (int64, string, error)
