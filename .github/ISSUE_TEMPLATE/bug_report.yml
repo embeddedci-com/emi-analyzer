@@ -1,0 +1,60 @@
+name: Bug report
+description: Something does not work, or a result looks wrong
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. A security problem goes in a [private report](https://github.com/embeddedci-com/emi-analyzer/security/advisories/new) instead, not here.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what you got instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Upload the board
+        2. Run the ESD transient on J1
+        3. ...
+  - type: input
+    id: version
+    attributes:
+      label: EMI Analyzer version
+      description: Click the worker badge in the app, or run `emi-local -version`.
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: how
+    attributes:
+      label: How you run it
+      options:
+        - Desktop app
+        - emi-local from a release
+        - Built from source
+        - KiCad plugin
+        - emi-server
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system and Docker version
+      placeholder: "macOS 15.5 (Apple Silicon), Docker Desktop 4.43"
+  - type: textarea
+    id: log
+    attributes:
+      label: Worker log
+      description: Click the worker badge in the app and copy the log. Most analysis problems are explained there.
+      render: text
+  - type: textarea
+    id: board
+    attributes:
+      label: Board
+      description: |
+        If you can share the board, attach it (zip the .kicad_pcb, or the Gerber and drill files). If you cannot, say what tool made it and roughly what is on it: layer count, connectors, the net or part involved.
