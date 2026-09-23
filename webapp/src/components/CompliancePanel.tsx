@@ -110,10 +110,10 @@ export function CompliancePanel({ doc }: { doc: ComplianceDoc }) {
                        style={{ cursor: 'help' }}>uncalibrated</Badge>
               </Tooltip>
             </Group>
-            <Progress value={(doc.confidence ?? 0) * 100} size="lg" radius="sm"
+            <Progress value={(doc.confidence_uncalibrated ?? 0) * 100} size="lg" radius="sm"
                       color={marginColour(margin)} />
             <Group justify="space-between" mt={6}>
-              <Text size="sm" fw={600}>{Math.round((doc.confidence ?? 0) * 100)} %</Text>
+              <Text size="sm" fw={600}>{Math.round((doc.confidence_uncalibrated ?? 0) * 100)} %</Text>
               <Text size="xs" c="dimmed">
                 σ {doc.sigma_db?.toFixed(2)} dB · 80 % range{' '}
                 {doc.range_80_db?.[0].toFixed(1)} … {doc.range_80_db?.[1].toFixed(1)} dB

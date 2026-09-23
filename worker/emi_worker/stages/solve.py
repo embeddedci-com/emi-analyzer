@@ -323,6 +323,13 @@ def run_solve(ctx: StageContext) -> StageResult:
                 "elapsed_seconds": round(result.elapsed_s, 1),
                 "mesh": mesh_summary,
                 "roi_mm": list(params.roi),
+                # What a driver attached later needs to replace this solve's source (§8): the
+                # source impedance each port was driven from. And the cell size asked for,
+                # which sets the mesh term in the compliance budget (§17.2).
+                "ports": [{"name": p.name, "resistance_ohm": p.resistance,
+                           "excited": p.excited} for p in params.ports],
+                "mesh_request": {"dx_um": params.dx_um, "dy_um": params.dy_um,
+                                 "dz_um": params.dz_um},
                 "warnings": result.warnings + built.notes,
             },
         )

@@ -171,7 +171,7 @@ def test_no_path_radiates_and_there_is_no_margin_to_quote():
     o = outlook([_path("board", "b", "clk", [(100e6, 0.0)])], [100e6], STD)
     assert o.worst is None
     assert o.margin_db is None
-    assert o.confidence is None
+    assert o.confidence_uncalibrated is None
     assert o.range_80_db is None
 
 
@@ -226,5 +226,5 @@ def test_matches_the_shared_compliance_fixtures(name, case):
     assert (o.worst.frequency_hz if o.worst else None) == want["worst_frequency_hz"]
     assert o.margin_db == pytest.approx(want["margin_db"], abs=1e-9)
     assert o.sigma_db == pytest.approx(want["sigma_db"], abs=1e-9)
-    assert o.confidence == pytest.approx(want["confidence"], abs=1e-9)
+    assert o.confidence_uncalibrated == pytest.approx(want["confidence_uncalibrated"], abs=1e-9)
     assert [q.frequency_hz for q in o.near_misses] == want["near_misses_hz"]

@@ -56,7 +56,8 @@ export interface Outlook {
   sigmaDb: number
   sigmaTerms: Record<string, number>
   nearMisses: Point[]
-  confidence: number | null
+  /** P(true margin > 0) under the budget. Not a pass probability, and uncalibrated. */
+  confidenceUncalibrated: number | null
   range80Db: [number, number] | null
 }
 
@@ -176,7 +177,7 @@ export function outlook(
   if (scored.length === 0) {
     return {
       points, worst: null, sigmaDb: 0, sigmaTerms: {}, nearMisses: [],
-      confidence: null, range80Db: null,
+      confidenceUncalibrated: null, range80Db: null,
     }
   }
   const worst = scored.reduce((a, b) => (b.marginDb < a.marginDb ? b : a))
@@ -191,7 +192,7 @@ export function outlook(
     sigmaDb,
     sigmaTerms: terms,
     nearMisses,
-    confidence: sigmaDb > 0 ? phi(worst.marginDb / sigmaDb) : null,
+    confidenceUncalibrated: sigmaDb > 0 ? phi(worst.marginDb / sigmaDb) : null,
     range80Db: [worst.marginDb - 1.28 * sigmaDb, worst.marginDb + 1.28 * sigmaDb],
   }
 }

@@ -51,7 +51,7 @@
           "far-field interpolation": 1.0,
           "cable idealisation (cable J1 (USB 2.0, 1 m))": 4.5
         },
-        "confidence": 0.8082443362667413,
+        "confidence_uncalibrated": 0.8082443362667413,
         "range_80_db": [
           -2.3910079428605595,
           12.591007942860562
@@ -135,7 +135,7 @@
           "cable idealisation (cable J1)": 2.0124611797498106,
           "mesh preset (board region around U7)": 0.8944271909999159
         },
-        "confidence": 0.07103474997948878,
+        "confidence_uncalibrated": 0.07103474997948878,
         "range_80_db": [
           -6.532225310305394,
           -0.44717477641498116
@@ -217,7 +217,7 @@
         "sigma_terms": {
           "mesh preset (board region around U3)": 4.0
         },
-        "confidence": 0.45026177516988714,
+        "confidence_uncalibrated": 0.45026177516988714,
         "range_80_db": [
           -5.62,
           4.62
