@@ -19,9 +19,9 @@ solver or a measurement — and passed. The gap between the two is most of this 
 | ESD transient simulation (ngspice) | ✅ | ⚠️ source, line and clamp models unit-checked; no bench comparison | on |
 | Cable budget, Tier A (`cable` run, nec2c) | ✅ | ⚠️ the solver matches transmission-line theory; the product setup (fed against the board, scanned 3 m out) has no second-solver comparison — §3 | on |
 | Limits library and Limits page | ✅ | ⚠️ FCC Part 15 only; there is no CISPR 32 table | on |
-| **Full-wave solve (openEMS)** | ✅ | ⚠️ **solves end to end on the fixture board; nothing verified at radiated record length — §2** | **off** (`full-wave`) |
+| **Full-wave solve (openEMS)** | ✅ | ⚠️ **a 50 ohm microstrip within 1 % of theory on every preset; solves end to end on the fixture board; long records on whole boards are out of scope — §2** | **off** (`full-wave`) |
 | Drivers (re-weighting a solve) | ✅ | ⚠️ partly | off, with full-wave |
-| Components (MLCC models in a solve) | ✅ | ⚠️ partly | off, with full-wave |
+| Components (MLCC models in a solve) | ✅ | ❌ the shipped openEMS 0.0.35 cannot model an inductor, so no capacitor is placed; on a current openEMS build a 100 pF 0402 resonates within 1.6 % but only with a -70 dB record (§3) | off, with full-wave |
 | Board far field (NF2FF) | ✅ | ⚠️ matches nec2c on dipoles over the ground plane as the product runs it, 30 MHz up (§3); no board checked against a measurement | off, with full-wave |
 | Cable emissions, Tier B | ✅ | ⚠️ synthetic board only | off, with full-wave |
 | Compliance estimate | ✅ | ❌ runs end to end on the fixture board; never checked against a lab or a second solver (§3) | off, with full-wave |
@@ -54,7 +54,7 @@ seven orders of magnitude below the peak. The floor was therefore set at 1.07e-1
 legitimate climb to the 1.14e-13 peak was reported as a divergence "by a factor of 1.07e6" --
 the exact figure users were shown, on every long run, whatever the mesh. The excitation now
 counts as passed only once the energy has fallen 20 dB below its own peak, which is far more
-than the ripple and far less than the 50 dB decay a finished run ends with.
+than the ripple and far less than the 40 dB decay a finished run ends with.
 
 With that corrected, the fixture board solves end to end: openEMS stops on its own
 end-criterion after 84,987 of a possible 358,695 timesteps, converged to -41.1 dB, and the
@@ -70,24 +70,36 @@ and 1.46. What remains is geometric: where two copper edges sit closer together 
 beside them, closing the step would need a cell smaller than the mesh's smallest, which would
 cost timesteps for the whole run. Every mesh now reports `max_cell_ratio` in its summary.
 
-Grading properly costs cells: the fixture's mesh grew 35-50 % at the same presets, and the
-cost estimator's per-preset fill factors were calibrated against the old mesher, so they now
-under-predict by about that much. Recalibrating is quick --
-`worker/scripts/measure_fill_factor.py` with `EMI_TEST_BOARDS` -- and has not been done. The
-worker recomputes the cost authoritatively before it solves, so an underestimate delays a
-refusal rather than hiding it.
+Grading properly costs cells: the fixture's mesh grew 35-50 % at the same presets. The cost
+estimator was recalibrated in September 2026 on 4-10 mm regions of four real boards (floors
+4.8 / 2.3 / 1.2), and its timestep now comes from the mesher's real smallest cell, a quarter of
+dx, which had put step counts 2-2.7x low. The worker still recomputes the cost authoritatively
+before it solves. [verification/solver-and-components.md](verification/solver-and-components.md)
+has the numbers.
 
-**What is still unknown, and why the feature stays off by default.** One board, one region, one
-frequency, on a fixture designed to be small. None of this has been run at the record length a
-radiated result needs: 30 MHz means 100 ns of simulated time whatever the board is, which is
-millions of timesteps, and no run of that length has been measured since the fix. Neither has
-the far field on a real board, nor cable emissions; a compliance estimate has run end to end on
-the fixture board only (§4).
+**Three model defects a microstrip found** (September 2026, same page): a ground plane drawn
+over the whole board was dropped from any region that did not contain one of its corners;
+every dielectric had half a copper thickness of air either side of it; and a grid line on a
+trace's edge made the trace act half a cell wider. All fixed; a 50 ohm line now measures
+49.6-50.1 ohm on every preset. They changed every solve's geometry, so the fixture figures
+above are from the model before them.
 
-**The detector's own limit**, stated because it is now the only thing standing between a bad
-mesh and a plausible-looking number: it judges a rise only after the energy has fallen 20 dB,
-so a grid that blew up before decaying at all would not be reported. Every divergence on
-record has the other shape.
+**openEMS stopped runs inside their own pulse.** It checks its end criterion while the source is
+still on, and a wide-band pulse dips far below -40 dB between lobes: a 6 mm region of a real
+board stopped 51k steps into a 67k-step pulse and reported "converged". The worker now ends a
+run itself, after the source, and refuses one that stopped inside it.
+
+**What is still unknown, and why the feature stays off by default.** Whole-board solves at the
+record length a 30 MHz result needs (100 ns, over a million timesteps) will not be validated or
+shipped; full-wave is aimed at small regions cut from a net. What those need, and have not had,
+is a check of a real coupon against a second solver or a measurement. Neither has the far field
+on a real board, nor cable emissions; a compliance estimate has run end to end on the fixture
+board only (§4).
+
+**The detector's limit.** Once the source has finished it holds the energy to a decay from the
+first sample, so a run that grows from the start is caught. Without the source length (a log
+that lacks openEMS's line and a caller that gave none) it falls back to judging a rise only
+after the energy has fallen 20 dB.
 
 ---
 
@@ -121,13 +133,16 @@ at a cheap mesh preset. Neither is the full check.
 
 | Check | Status |
 |---|---|
-| **One 0402 capacitor over a plane: SRF within 5 %, \|Z\| within 1 dB to 3× SRF** | ❌ **never run** |
+| **One 0402 capacitor over a plane: SRF within 5 %, \|Z\| within 1 dB to 3× SRF** | ⚠️ **100 pF on a current openEMS build, run to -70 dB: SRF +1.6 % ✅, \|Z\| within 1.37 dB (1 dB missed at resonance only) ❌. At the solve's -40 dB it ripples ±6 dB; a 1 nF part never settled. The shipped 0.0.35 cannot run it at all** |
 | No matched parts gives results identical to before | ✅ |
 | Every standard KiCad capacitor footprint on four real boards resolves | ✅ (46 % → 99 %) |
 | A decoupling finding quotes the library's SRF and source | ❌ |
 
 The first of these is the only check that the series R-L-C construction behaves like a
-capacitor.
+capacitor. It found that the construction used until September 2026 (R, L and C elements in three
+adjacent cells) was an open circuit on the shipped openEMS 0.0.35, which skips an element with
+only L; every solve with components on had modelled its capacitors as missing. Capacitors are
+now one series element, placed only on a solver that models an inductor.
 
 ### Compliance
 
@@ -156,9 +171,11 @@ capacitor.
 - **Mesh grading is enforced as far as geometry allows** (§2). Where two copper edges sit
   closer together than the cell beside them, the step between those two cells stays: closing it
   would mean a cell smaller than the mesh's smallest, which costs timesteps everywhere.
-- **The cost estimator is calibrated against the old mesher** and now under-predicts (§2).
-- **No solve has been run at radiated record length** since the divergence check was fixed
-  (§2). That is the run the far-field and compliance paths need.
+- **Components need an openEMS build** (`OPENEMS_SOURCE=build`); the released image is 0.0.35
+  and places none. On the build they need a run to -70 dB to be right (§3), which the solve
+  does not ask for, and a current openEMS writes field dumps in a layout only the near-field
+  reader has been taught; nf2ff output from it is untested.
+- **Whole-board solves at radiated record length are out of scope** (§2).
 - **The far field on a real board runs, but its record is too short.** Board A (4 layers,
   100 x 80 mm, a 15 mm region at 300 µm): 7.9 M cells, 2 h 38 min on three threads, 1.8 GB, an
   83 x 83 x 71 mm box, a 47 KB `farfield.json`. It stopped on the -40 dB end criterion at 165,536
