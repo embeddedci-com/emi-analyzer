@@ -15,6 +15,7 @@ Two properties are worth stating because they are easy to break later:
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -48,12 +49,20 @@ class RunReassigned(ServerError):
     """
 
 
+#: Refresh a run token this long before it expires. The server issues six-hour tokens, and a
+#: solve can run for a day: a token minted once used to expire mid-solve, and every post after
+#: that was refused.
+REFRESH_MARGIN_S = 3600
+
+
 @dataclass
 class RunToken:
     token: str
     run_id: str
     jti: str
     expires_in: int
+    #: time.monotonic() after which the next run-scoped call refreshes the token first.
+    refresh_after: float = float("inf")
 
 
 class Client:
@@ -107,15 +116,39 @@ class Client:
 
     def mint_run_token(self, run_id: str) -> RunToken:
         out = self._request("POST", f"/emi-agent/runs/{run_id}/token", self._key, json={})
-        return RunToken(
+        tok = RunToken(
             token=out["token"], run_id=out["run_id"],
             jti=out["jti"], expires_in=int(out.get("expires_in", 0)),
         )
+        _schedule_refresh(tok)
+        return tok
+
+    def refresh_run_token(self, tok: RunToken) -> None:
+        """Extend a run token this worker holds, in place. The jti stays the same."""
+        out = self._request("POST", f"/emi-agent/runs/{tok.run_id}/token/refresh", self._key, json={})
+        tok.token = out["token"]
+        tok.expires_in = int(out.get("expires_in", 0))
+        _schedule_refresh(tok)
+
+    def _bearer(self, tok: RunToken) -> str:
+        """The run token to send, refreshed first when it is close to expiring.
+
+        A failed refresh is not fatal: the old token is still good until it expires, and the
+        next call tries again. Losing the run is, and propagates.
+        """
+        if time.monotonic() >= tok.refresh_after:
+            try:
+                self.refresh_run_token(tok)
+            except RunReassigned:
+                raise
+            except Exception as exc:  # noqa: BLE001 -- see docstring
+                log.warning("run token refresh failed (retrying on the next call): %s", exc)
+        return tok.token
 
     # ---- run-token scoped ----
 
     def claim(self, tok: RunToken) -> dict:
-        return self._request("POST", f"/emi-agent/runs/{tok.run_id}/claim", tok.token, json={})
+        return self._request("POST", f"/emi-agent/runs/{tok.run_id}/claim", self._bearer(tok), json={})
 
     def progress(self, tok: RunToken, **fields) -> None:
         """Post a progress update.
@@ -125,14 +158,14 @@ class Client:
         because continuing after that is pure waste.
         """
         try:
-            self._request("POST", f"/emi-agent/runs/{tok.run_id}/progress", tok.token, json=fields)
+            self._request("POST", f"/emi-agent/runs/{tok.run_id}/progress", self._bearer(tok), json=fields)
         except RunReassigned:
             raise
         except Exception as exc:  # noqa: BLE001 -- see docstring
             log.warning("progress post failed (continuing): %s", exc)
 
     def run_input(self, tok: RunToken) -> dict:
-        return self._request("GET", f"/emi-agent/runs/{tok.run_id}/input", tok.token)
+        return self._request("GET", f"/emi-agent/runs/{tok.run_id}/input", self._bearer(tok))
 
     def upload_artifact(self, tok: RunToken, name: str, data: bytes, content_type: str) -> dict:
         """Upload one artifact straight to object storage.
@@ -142,7 +175,7 @@ class Client:
         half-gigabyte result bundles.
         """
         init = self._request(
-            "POST", f"/emi-agent/runs/{tok.run_id}/artifacts", tok.token,
+            "POST", f"/emi-agent/runs/{tok.run_id}/artifacts", self._bearer(tok),
             json={"name": name, "content_type": content_type},
         )
         resp = self._blob.put(
@@ -185,4 +218,13 @@ class Client:
             body["estimate"] = estimate
         if board is not None:
             body["board"] = board
-        return self._request("POST", f"/emi-agent/runs/{tok.run_id}/complete", tok.token, json=body)
+        return self._request("POST", f"/emi-agent/runs/{tok.run_id}/complete", self._bearer(tok), json=body)
+
+
+def _schedule_refresh(tok: RunToken) -> None:
+    if tok.expires_in <= 0:
+        tok.refresh_after = float("inf")
+        return
+    # Never later than halfway, so a short token from a test server still refreshes in time.
+    lead = min(REFRESH_MARGIN_S, tok.expires_in / 2)
+    tok.refresh_after = time.monotonic() + tok.expires_in - lead
