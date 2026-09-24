@@ -7,7 +7,7 @@
     "tauri": "tauri"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "2.11.4"
+    "@tauri-apps/cli": "2.11.5"
   },
   "license": "Apache-2.0"
 }
