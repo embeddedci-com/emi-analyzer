@@ -25,8 +25,10 @@ import type { TransientDoc, TransientParams } from '../lib/transientTypes'
 import {
   LENGTH_EPSILON_MM, defaultPair, diffCables, diffEsd, diffFindings, diffNets, findingsHeadline,
   groupByRule, latestDone, resample, versionsOf,
-  type CableChange, type EsdChange, type FindingChange, type FindingsDiff, type Version,
+  type CableChange, type EsdChange, type FindingChange, type FindingsDiff, type FindingStatus,
+  type Version,
 } from '../lib/compare'
+import { FINDING_MARKER_HEX, findingMarkerColor } from '../lib/markers'
 import { BoardCanvas } from '../components/BoardCanvas'
 import { CableBudgetChart } from '../components/CableBudgetChart'
 import { RunProgress } from '../components/RunProgress'
@@ -720,6 +722,16 @@ function MissingRun({ api, projectId, kind, versions, data, boardLink, onStarted
 
 // ---- board ----
 
+/** The marker color on the board, and what it means. */
+function MarkerLegend({ status }: { status: FindingStatus }) {
+  return (
+    <Group gap={4} wrap="nowrap">
+      <Box w={10} h={10} style={{ flex: 'none', borderRadius: 2, background: FINDING_MARKER_HEX[status] }} />
+      <Text size="xs">{status === 'new' ? 'New finding' : 'Fixed finding'}</Text>
+    </Group>
+  )
+}
+
 function CanvasView({ api, side, onSide, data, before, after, findings, focus, net, onPick }: {
   api: EmiApi
   side: 'after' | 'before'
@@ -749,9 +761,14 @@ function CanvasView({ api, side, onSide, data, before, after, findings, focus, n
       .map((c) => (side === 'after' ? c.after! : c.before!)),
     [findings, side],
   )
+  const status: FindingStatus = side === 'after' ? 'new' : 'fixed'
   const markers = useMemo(
-    () => shown.filter((f) => f.x != null && f.y != null).map((f) => ({ x: f.x!, y: f.y!, label: f.rule })),
-    [shown],
+    () => {
+      const color = findingMarkerColor(status)
+      return shown.filter((f) => f.x != null && f.y != null)
+        .map((f) => ({ x: f.x!, y: f.y!, label: f.rule, color }))
+    },
+    [shown, status],
   )
 
   return (
@@ -762,7 +779,10 @@ function CanvasView({ api, side, onSide, data, before, after, findings, focus, n
                             { label: `${label(after)} with new findings`, value: 'after' },
                             { label: `${label(before)} with fixed findings`, value: 'before' },
                           ]} />
-        <Text size="xs" c="dimmed">Marked on the board. Click one to zoom to it.</Text>
+        <Group gap="xs" wrap="nowrap">
+          <MarkerLegend status={status} />
+          <Text size="xs" c="dimmed">Click one to zoom to it.</Text>
+        </Group>
       </Group>
       <Group align="stretch" gap="sm" style={{ minHeight: 0 }}>
         <Box style={{ flex: '1 1 420px', minWidth: 0, height: 520, position: 'relative', background: '#0e1211', borderRadius: 4 }}>

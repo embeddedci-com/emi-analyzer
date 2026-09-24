@@ -33,6 +33,9 @@ interface LibraryCable {
 
 const LIBRARY: LibraryCable[] = (cableLibrary as { cables: LibraryCable[] }).cables
 
+/** The worker's `EDGE_TOLERANCE_MM` (cables/attach.py): a solve gives a cable only to these. */
+const EDGE_TOLERANCE_MM = 12
+
 interface Props {
   api: EmiApi
   projectId: string
@@ -173,8 +176,8 @@ export function CablesPanel({
       {startedRunId && !d && !failed && !doc.isError && !run.isError && (
         <Text size="sm" c="dimmed">
           {workersOnline === 0
-            ? 'Waiting for a worker to pick this up — none is connected yet.'
-            : 'Running — a cable run takes a few seconds.'}
+            ? 'Waiting for a worker to pick this up. None is connected yet.'
+            : 'Running. A cable run takes a few seconds.'}
         </Text>
       )}
       {failed && (
@@ -202,9 +205,26 @@ export function CablesPanel({
 
       {!startedRunId && (
         <Text size="sm" c="dimmed">
-          Run this once to list the connectors on this board and what the library suggests for
-          each. Nothing is assumed: a connector you do not assign is not modelled at all.
+          Press <Text span fw={600}>Find connectors</Text> to list this board&apos;s connectors,
+          then pick the cable each one carries. A connector left unassigned is not modelled.
         </Text>
+      )}
+
+      {d && connectors.length === 0 && (
+        <Alert color="blue" variant="light" title="No connectors found">
+          <Stack gap={4}>
+            <Text size="xs">
+              A part counts as a connector when its reference is J, P, CN, CON, USB, FPC or FFC
+              plus a number (J1, CN3), or its footprint or value names one (USB, RJ45, header,
+              terminal, JST, jack).
+            </Text>
+            <Text size="xs">
+              To add one, rename the part or give it a connector footprint, then press{' '}
+              <Text span fw={600}>Run again</Text>. A solve only attaches a cable to a
+              connector within {EDGE_TOLERANCE_MM} mm of the board edge.
+            </Text>
+          </Stack>
+        </Alert>
       )}
 
       {/*
@@ -287,7 +307,7 @@ export function CablesPanel({
           <Text size="xs">
             {stillUnassigned.map((u) => u.ref).join(', ')}{' '}
             {stillUnassigned.length === 1 ? 'has' : 'have'} no cable assigned, so{' '}
-            {stillUnassigned.length === 1 ? 'it is' : 'they are'} not modelled at all — which is
+            {stillUnassigned.length === 1 ? 'it is' : 'they are'} not modelled at all, which is
             not the same as carrying nothing. Assign a cable, or mark it{' '}
             <Text span fw={600}>never cabled</Text> if it is a debug header that never leaves
             the bench.
