@@ -14,6 +14,7 @@
 
 import type { BoardDoc, GeometryGroup } from './boardTypes'
 import { FieldOverlay, type FieldOverlayData, type OverlayOptions } from './overlay'
+import { DEFAULT_MARKER_COLOR, markerBatches, type BoardMarker, type Rgb } from './markers'
 
 const VERT = `#version 300 es
 precision highp float;
@@ -124,7 +125,7 @@ export class BoardRenderer {
   /** Region of interest in board mm: [minX, minY, maxX, maxY]. */
   private roi: [number, number, number, number] | null = null
   /** Port markers in board mm. */
-  private markers: { x: number; y: number; label?: string }[] = []
+  private markers: BoardMarker[] = []
   private annotationVbo: WebGLBuffer
   private annotationVao: WebGLVertexArrayObject
 
@@ -294,7 +295,7 @@ export class BoardRenderer {
   }
 
   /** Port positions, drawn as crosshairs. */
-  setMarkers(markers: { x: number; y: number; label?: string }[]): void {
+  setMarkers(markers: BoardMarker[]): void {
     this.markers = markers
   }
 
@@ -463,15 +464,23 @@ export class BoardRenderer {
       verts.push(x0, y0, x1, y0, x1, y0, x1, y1, x1, y1, x0, y1, x0, y1, x0, y0)
     }
 
+    // One draw per color: the ROI in white, then each marker color in turn.
+    const draws: { first: number; count: number; color: Rgb }[] = []
+    if (verts.length) draws.push({ first: 0, count: verts.length / 2, color: DEFAULT_MARKER_COLOR })
+
     const r = 8 / this.view.scale // 8 device pixels, in mm
-    for (const m of this.markers) {
-      verts.push(m.x - r, m.y, m.x + r, m.y, m.x, m.y - r, m.x, m.y + r)
-      // A small diamond, so a port reads as a placed object rather than a stray crosshair.
-      const d = r * 0.6
-      verts.push(
-        m.x - d, m.y, m.x, m.y + d, m.x, m.y + d, m.x + d, m.y,
-        m.x + d, m.y, m.x, m.y - d, m.x, m.y - d, m.x - d, m.y,
-      )
+    for (const batch of markerBatches(this.markers)) {
+      const first = verts.length / 2
+      for (const m of batch.markers) {
+        verts.push(m.x - r, m.y, m.x + r, m.y, m.x, m.y - r, m.x, m.y + r)
+        // A small diamond, so a port reads as a placed object rather than a stray crosshair.
+        const d = r * 0.6
+        verts.push(
+          m.x - d, m.y, m.x, m.y + d, m.x, m.y + d, m.x + d, m.y,
+          m.x + d, m.y, m.x, m.y - d, m.x, m.y - d, m.x - d, m.y,
+        )
+      }
+      draws.push({ first, count: verts.length / 2 - first, color: batch.color })
     }
 
     if (verts.length === 0) return
@@ -485,9 +494,11 @@ export class BoardRenderer {
     gl.bindBuffer(gl.ARRAY_BUFFER, this.annotationVbo)
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(verts), gl.DYNAMIC_DRAW)
 
-    gl.uniform4f(this.uColor, 1.0, 1.0, 1.0, 1.0)
     gl.uniform1f(this.uAlpha, 0.9)
-    gl.drawArrays(gl.LINES, 0, verts.length / 2)
+    for (const { first, count, color } of draws) {
+      gl.uniform4f(this.uColor, color[0], color[1], color[2], 1.0)
+      gl.drawArrays(gl.LINES, first, count)
+    }
     gl.bindVertexArray(null)
   }
 

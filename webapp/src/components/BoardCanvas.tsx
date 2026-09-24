@@ -12,6 +12,7 @@ import { BoardRenderer, type ViewState } from '../lib/BoardRenderer'
 import { FrameScheduler, keyAction, watchContextLoss, wheelZoomFactor } from '../lib/canvasInput'
 import type { FieldOverlayData, OverlayOptions } from '../lib/overlay'
 import type { BoardDoc } from '../lib/boardTypes'
+import type { BoardMarker } from '../lib/markers'
 import { anchorNear, type PortAnchor } from '../lib/portPlacement'
 
 /**
@@ -33,8 +34,8 @@ export interface BoardCanvasProps {
   /** Region of interest in board mm: [minX, minY, maxX, maxY]. */
   roi?: [number, number, number, number] | null
   onRoiChange?: (roi: [number, number, number, number]) => void
-  /** Port positions to mark. */
-  markers?: { x: number; y: number; label?: string }[]
+  /** Positions to mark. Each may carry its own color; white otherwise. */
+  markers?: BoardMarker[]
   /** Called with the nearest pad or via, or null when the click found nothing. */
   onPadPick?: (anchor: PortAnchor | null) => void
   /** Field-magnitude map to draw over the copper. */
