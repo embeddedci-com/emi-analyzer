@@ -155,7 +155,7 @@ export function CompliancePanel({ doc }: { doc: ComplianceDoc }) {
                   onClick={() => setShowBudget((v) => !v)}>
               {showBudget ? '▾' : '▸'} where σ comes from
             </Text>
-            <Collapse in={showBudget}>
+            <Collapse expanded={showBudget}>
               <Table verticalSpacing={2} fz="xs" mt={6}>
                 <Table.Tbody>
                   {Object.entries(doc.sigma_terms ?? {}).map(([name, v]) => (
