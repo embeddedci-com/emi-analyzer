@@ -48,12 +48,18 @@ MS_H = 0.2
 LINE = (5.0, 30.0)
 Y = 10.0
 CHECK_HZ = np.array([0.5e9, 0.75e9, 1e9, 1.5e9, 2e9])
+#: A linear grid dense enough to unwrap the phase of the longer line: 0.1 rad a step.
+DENSE_HZ = np.linspace(0.05e9, 2e9, 79)
+#: The second microstrip, for the delay by difference (``by_difference``); 0 skips it.
+LONG_END = float(os.environ.get("LONG_END", "55"))
 Z_TOL = 0.05
 S21_TOL_DB = 0.5
 S21_TO_HZ = 1e9
 
 
-def microstrip_board(w: float) -> str:
+def microstrip_board(w: float, end: float = LINE[1]) -> str:
+    """The microstrip from ``LINE[0]`` to ``end``, mm, on a board 5 mm longer than it."""
+    edge = end + 5.0
     return f"""(kicad_pcb
   (version 20241229)
   (generator "emi-analyzer-small-part-check")
@@ -65,17 +71,17 @@ def microstrip_board(w: float) -> str:
            (epsilon_r {ER}) (loss_tangent {TAN_D}))
     (layer "B.Cu" (type "copper") (thickness 0.035))))
   (net 0 "") (net 1 "GND") (net 2 "SIG")
-  (gr_rect (start 0 0) (end 35 20) (layer "Edge.Cuts") (width 0.1))
+  (gr_rect (start 0 0) (end {edge} 20) (layer "Edge.Cuts") (width 0.1))
   (footprint "Pad" (layer "F.Cu") (at {LINE[0]} {Y})
     (property "Reference" "J1" (at 0 0) (layer "F.SilkS"))
     (pad "1" smd rect (at 0 0) (size {w:.4f} {w:.4f}) (layers "F.Cu") (net 2 "SIG")))
-  (footprint "Pad" (layer "F.Cu") (at {LINE[1]} {Y})
+  (footprint "Pad" (layer "F.Cu") (at {end} {Y})
     (property "Reference" "J2" (at 0 0) (layer "F.SilkS"))
     (pad "1" smd rect (at 0 0) (size {w:.4f} {w:.4f}) (layers "F.Cu") (net 2 "SIG")))
-  (segment (start {LINE[0]} {Y}) (end {LINE[1]} {Y}) (width {w:.4f}) (layer "F.Cu") (net 2))
+  (segment (start {LINE[0]} {Y}) (end {end} {Y}) (width {w:.4f}) (layer "F.Cu") (net 2))
   (zone (net 1) (net_name "GND") (layer "B.Cu") (hatch edge 0.5)
-    (polygon (pts (xy 0 0) (xy 35 0) (xy 35 20) (xy 0 20)))
-    (filled_polygon (layer "B.Cu") (pts (xy 0 0) (xy 35 0) (xy 35 20) (xy 0 20))))
+    (polygon (pts (xy 0 0) (xy {edge} 0) (xy {edge} 20) (xy 0 20)))
+    (filled_polygon (layer "B.Cu") (pts (xy 0 0) (xy {edge} 0) (xy {edge} 20) (xy 0 20))))
 )
 """
 
@@ -132,12 +138,14 @@ def lossy_s21(z0: float, eeff: float, er: float, tan_d: float, length_m: float,
 
 
 def check_line(kind: str, text: str, ports, roi, nets, z_ref: float, e_ref: float,
-               preset: str) -> dict:
+               preset: str, length_mm: float = LINE[1] - LINE[0]) -> dict:
     params = h.small_part_params(roi, ports, preset=preset, nets=nets,
                                  freqs_hz=[5e8, 1e9, 2e9])
-    got = h.solve(text, params, f"{kind}-{preset}")
-    length = (LINE[1] - LINE[0]) / 1000.0
+    got = h.solve(text, params, f"{kind}-{length_mm:g}-{preset}")
+    length = length_mm / 1000.0
     z11, z12 = h.z_params(got.workdir, CHECK_HZ)
+    dz11, dz12 = h.z_params(got.workdir, DENSE_HZ)
+    gl = h.unwrapped_gl(dz11, dz12)
     line = h.line_from_z(z11, z12, length, CHECK_HZ)
     z_err = np.abs(line["z0"]) / z_ref - 1
     delay = length * np.sqrt(line["eps_eff"]) / h.C0
@@ -161,7 +169,27 @@ def check_line(kind: str, text: str, ports, roi, nets, z_ref: float, e_ref: floa
         "pass_z0": bool(np.all(np.abs(z_err) <= Z_TOL)),
         "pass_delay": bool(np.all(np.abs(d_err) <= Z_TOL)),
         "network": got.json("network.json") if "network.json" in got.files else None,
+        "length_mm": length_mm, "gl_real": gl.real.tolist(), "gl_imag": gl.imag.tolist(),
     }
+
+
+def by_difference(short: dict, long: dict, e_ref: float) -> dict:
+    """eps_eff from the phase two line lengths differ by, which is what the line alone adds.
+
+    A single run's delay is port to port, and the ports are 0.4 mm boxes whose reference plane
+    need not be their centre; anything the ends add is the same on both lengths and cancels.
+    """
+    dl = (long["length_mm"] - short["length_mm"]) / 1000.0
+    beta = (np.asarray(long["gl_imag"]) - np.asarray(short["gl_imag"])) / dl
+    k0 = 2 * np.pi * DENSE_HZ / h.C0
+    eeff = (beta / k0) ** 2
+    pick = np.isin(np.round(DENSE_HZ), np.round(CHECK_HZ))
+    err = np.sqrt(eeff[pick] / e_ref) - 1
+    # The length the ends add, from the short line: its phase against the line alone.
+    extra_mm = (np.asarray(short["gl_imag"])[pick] / beta[pick] * 1000.0 - short["length_mm"])
+    return {"frequencies_hz": DENSE_HZ[pick].tolist(), "eps_eff": eeff[pick].tolist(),
+            "delay_error": err.tolist(), "end_length_mm": extra_mm.tolist(),
+            "pass_delay": bool(np.all(np.abs(err) <= Z_TOL))}
 
 
 def main() -> int:
@@ -197,6 +225,18 @@ def main() -> int:
             print(f"   S21: worst {r['s21']['worst_to_1ghz_db']:.2f} dB off the closed form to "
                   f"1 GHz, {r['s21']['worst_to_band_top_db']:.2f} dB to 2 GHz; "
                   f"{len(net['truncated_hz'])} frequencies truncated")
+            if LONG_END > LINE[1]:
+                long_text = microstrip_board(w, LONG_END)
+                _, lc = h.coupon_params(long_text, ["SIG"])
+                lr = check_line("microstrip", long_text, lc.ports, lc.roi, ["SIG"], z_hj, e_hj,
+                                preset, LONG_END - LINE[0])
+                r["by_difference"] = d = by_difference(r, lr, e_hj)
+                r["long"] = {k: lr[k] for k in ("cells", "timesteps", "elapsed_s",
+                                                "final_energy_db", "delay_error", "z0_error")}
+                print("   by difference: delay error "
+                      + " ".join(f"{e * 100:.2f}" for e in d["delay_error"])
+                      + " %; the ends add " + " ".join(f"{x:.3f}" for x in d["end_length_mm"])
+                      + " mm", flush=True)
             runs[preset] = r
         report["microstrip"] = {"width_mm": w, "h_mm": MS_H, "z0_ref": z_hj, "eps_eff_ref": e_hj,
                                 "z0_ipc2141": h.ipc2141_microstrip(w, MS_H, ER),
