@@ -6,6 +6,7 @@ a number in that document, so update both or neither.
 
 from __future__ import annotations
 
+import json
 import math
 
 import numpy as np
@@ -294,3 +295,17 @@ def test_it_is_fast():
     d = dv.build(ctx_for(m))
     assert len(d["rails"][0]["ics"]) == 10
     assert time.perf_counter() - t < 1.0
+
+
+def test_the_webapp_fixture_is_current():
+    """Regenerate with: python scripts/gen_decoupling_fixture.py"""
+    import importlib.util
+    from pathlib import Path
+
+    script = Path(__file__).resolve().parents[1] / "scripts" / "gen_decoupling_fixture.py"
+    spec = importlib.util.spec_from_file_location("gen_decoupling_fixture", script)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    assert mod.OUT.exists(), "run python scripts/gen_decoupling_fixture.py"
+    assert json.loads(mod.OUT.read_text(encoding="utf-8")) == json.loads(mod.render()), (
+        "decouplingFixture.json is stale; run python scripts/gen_decoupling_fixture.py")
