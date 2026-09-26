@@ -195,16 +195,27 @@ def _cpu_count() -> int:
     return max(1, affinity)
 
 
+def _version_line(text: str) -> str:
+    """The line of openEMS's banner that names its version.
+
+    openEMS frames its banner in dashes and "|"; the first non-empty line may be the frame,
+    which says nothing about which solver this is.
+    """
+    lines = [ln.strip().strip("|").strip() for ln in text.splitlines()]
+    lines = [ln for ln in lines if ln and ln.strip("-")]
+    for line in lines:
+        if "version" in line.lower():
+            return line[:120]
+    return lines[0][:120] if lines else "unknown"
+
+
 def _openems_version() -> str:
     exe = shutil.which("openEMS")
     if not exe:
         return ""
     try:
         out = subprocess.run([exe, "--version"], capture_output=True, text=True, timeout=15)
-        text = (out.stdout or out.stderr or "").strip()
-        for line in text.splitlines():
-            if line.strip():
-                return line.strip()[:120]
+        return _version_line(out.stdout or out.stderr or "")
     except (OSError, subprocess.SubprocessError):
         pass
     return "unknown"

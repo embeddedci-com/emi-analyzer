@@ -80,7 +80,9 @@ jobs:
         with:
           ref: ${{ inputs.ref }}
       # The tests run inside the worker image, which is the only place ngspice, nec2c and
-      # openEMS are guaranteed to be the versions the worker is built against.
+      # openEMS are guaranteed to be the versions the worker is built against. It starts FROM
+      # the prebuilt openEMS image (OPENEMS_IMAGE), so this pulls openEMS rather than
+      # compiling it, and the build runs the same inductor probe a solve does.
       - run: docker build -t emi-worker-test worker
       # Mounted read-only and copied, because the image runs as a non-root user and the tests
       # read fixtures from server/, the rule catalogue from webapp/ and the rules file from docs/.

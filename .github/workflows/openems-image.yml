@@ -1,0 +1,117 @@
+# Compiles openEMS from a pinned upstream commit (worker/openems-image/Dockerfile) and pushes
+# it as the base the worker image starts FROM.
+#
+#   any push that changes the Dockerfile   :sha-<commit>   (and -amd64, -arm64 halves)
+#   the same on main                       also :<first 12 characters of OPENEMS_REF>
+#   run manually                           the same, from whatever ref is chosen
+#
+# It runs only when the openEMS commit or its Dockerfile changes, because the compile is tens
+# of minutes per architecture. Each architecture builds on a native runner, then one job joins
+# the two into a multi-arch image: under QEMU the arm64 compile took hours, and parallel
+# emulated GCC jobs crash at random (see OPENEMS_NJOBS in the Dockerfile).
+#
+# Nothing here changes a worker. The worker's OPENEMS_IMAGE is a digest, moved by hand to the
+# one this workflow prints in its summary, so a rebuild can never slip into a release.
+name: openems image
+
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - worker/openems-image/**
+      - .github/workflows/openems-image.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Two pushes of the same ref would race for the same tags.
+concurrency:
+  group: openems-image-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/${{ github.repository_owner }}/emi-openems
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # No build cache: the compile stage is 4.4 GB per architecture, which would push the
+      # worker's own cache out of the repository's 10 GB, and this runs a few times a year.
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: worker/openems-image
+          platforms: linux/${{ matrix.arch }}
+          push: true
+          tags: ${{ env.IMAGE }}:sha-${{ github.sha }}-${{ matrix.arch }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+
+  manifest:
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # The openEMS tag only from main: a branch that changes the Dockerfile but not the
+      # commit would otherwise move the tag that names main's image. A worker uses the
+      # digest either way.
+      - name: Join the two architectures
+        env:
+          SHA: ${{ github.sha }}
+          REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          openems_ref=$(sed -n 's/^ARG OPENEMS_REF=\([0-9a-f]\{40\}\)$/\1/p' worker/openems-image/Dockerfile)
+          test -n "$openems_ref" || { echo "no OPENEMS_REF in worker/openems-image/Dockerfile"; exit 1; }
+          tags=(-t "$IMAGE:sha-$SHA")
+          if [ "$REF" = "refs/heads/main" ]; then
+            tags+=(-t "$IMAGE:${openems_ref:0:12}")
+          fi
+          docker buildx imagetools create "${tags[@]}" \
+            "$IMAGE:sha-$SHA-amd64" "$IMAGE:sha-$SHA-arm64"
+          digest=$(docker buildx imagetools inspect "$IMAGE:sha-$SHA" --format '{{json .Manifest}}' | jq -r .digest)
+          docker buildx imagetools inspect "$IMAGE@$digest"
+          {
+            echo "### openEMS ${openems_ref:0:12}"
+            echo
+            echo "Pin it in worker/Dockerfile:"
+            echo
+            echo '```'
+            echo "ARG OPENEMS_IMAGE=$IMAGE:${openems_ref:0:12}@$digest"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
