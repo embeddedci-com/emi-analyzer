@@ -20,6 +20,7 @@ import type { BoardRenderer } from '../lib/BoardRenderer'
 import { createCursorStore, useCursor, type CursorStore } from '../lib/cursorStore'
 import { BoardCanvas, type CanvasMode } from '../components/BoardCanvas'
 import { EsdSimulation } from '../components/EsdSimulation'
+import { ConductedScan } from '../components/ConductedScan'
 import { HotspotResults, type SolveManifest } from '../components/HotspotResults'
 import { LayerRail } from '../components/LayerRail'
 import { NetPicker } from '../components/NetPicker'
@@ -259,6 +260,7 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
   const fullWave = features.data?.full_wave === true
   // Its own switch (docs/verification/small-part-solve.md); full-wave includes it.
   const smallPart = features.data?.small_part_solve === true || fullWave
+  const conducted = features.data?.conducted === true
 
   const me = useQuery({
     queryKey: ['emi', 'whoami'], queryFn: api.whoami, staleTime: 60_000,
@@ -819,6 +821,7 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
               <Tabs.Tab value="cables" px={6}>Cables</Tabs.Tab>
               {fullWave && <Tabs.Tab value="compliance" px={6}>Compliance</Tabs.Tab>}
               <Tabs.Tab value="esd" px={6}>ESD</Tabs.Tab>
+              {conducted && <Tabs.Tab value="conducted" px={6}>Conducted</Tabs.Tab>}
               <Tabs.Tab value="board" px={6}>Board</Tabs.Tab>
             </Tabs.List>
 
@@ -1077,6 +1080,20 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
                 </Text>
               )}
             </Tabs.Panel>
+
+            {conducted && (
+            <Tabs.Panel value="conducted" p="sm">
+              <ConductedScan
+                api={api}
+                projectId={projectId}
+                boardId={ingest?.board_id}
+                runs={boardRuns}
+                workers={workers.data?.workers ?? []}
+                onFocus={(x, y) => setFocus({ x, y, zoom: 28 })}
+                onStarted={() => setPollMs(1500)}
+              />
+            </Tabs.Panel>
+            )}
 
             <Tabs.Panel value="board" p="sm">
               {doc ? (

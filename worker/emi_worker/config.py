@@ -241,6 +241,8 @@ def detect_capabilities(cfg: Config) -> Capabilities:
     # worker with ngspice takes them -- including the ingest-only one on the droplet.
     if shutil.which("ngspice"):
         kinds.append("transient")
+        # A conducted-emissions scan is a few AC analyses in the same simulator.
+        kinds.append("conducted")
     # And the antenna solver. A cable budget is a few hundred milliseconds of method-of-moments
     # on a wire, so it belongs with the other cheap kinds rather than behind a solver worker.
     if shutil.which("nec2c"):

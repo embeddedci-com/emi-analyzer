@@ -599,11 +599,13 @@ def check_input_filter(ctx: RuleContext) -> Iterator[Finding]:
 # Switching regulator nodes
 # ---------------------------------------------------------------------------------------
 
-def check_switch_node(ctx: RuleContext) -> Iterator[Finding]:
-    rule = "switch-node"
+def switch_nodes(ctx: RuleContext) -> dict[str, str]:
+    """Every regulator switch node on the board, with how it was recognised.
+
+    The conducted-emissions scan starts from the same set, so a regulator this check reports is
+    one that scan models.
+    """
     parts = _parts(ctx)
-    max_area = _num(ctx, rule, "max_area_mm2", 30.0)
-    max_len = _num(ctx, rule, "max_length_mm", 15.0)
 
     def has_ic(net: str) -> bool:
         return any(IC_RE.match(p.ref) for p in parts.by_net[net])
@@ -629,7 +631,16 @@ def check_switch_node(ctx: RuleContext) -> Iterator[Finding]:
                 continue
             if _kind(other.net) == "power" or parts.ground_caps.get(other.net):
                 nodes.setdefault(side.net, f"inductor {ref}")
+    return nodes
 
+
+def check_switch_node(ctx: RuleContext) -> Iterator[Finding]:
+    rule = "switch-node"
+    parts = _parts(ctx)
+    max_area = _num(ctx, rule, "max_area_mm2", 30.0)
+    max_len = _num(ctx, rule, "max_length_mm", 15.0)
+
+    nodes = switch_nodes(ctx)
     if not nodes:
         return
 

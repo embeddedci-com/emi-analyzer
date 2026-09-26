@@ -66,6 +66,7 @@ class StageResult:
 from .ingest import run_ingest  # noqa: E402
 from .cable import run_cable  # noqa: E402
 from .compliance import run_compliance  # noqa: E402
+from .conducted import run_conducted  # noqa: E402
 from .solve import run_solve  # noqa: E402
 from .transient import run_transient  # noqa: E402
 
@@ -76,6 +77,7 @@ STAGES: dict[str, Callable[[StageContext], StageResult]] = {
     "cable": run_cable,
     "compliance": run_compliance,
     "transient": run_transient,
+    "conducted": run_conducted,
 }
 
 __all__ = [
@@ -87,6 +89,7 @@ __all__ = [
     "run_ingest",
     "run_cable",
     "run_compliance",
+    "run_conducted",
     "run_solve",
     "run_transient",
 ]
