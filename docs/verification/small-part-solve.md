@@ -73,11 +73,18 @@ by letter only.
 | 1 | 50 ohm microstrip, Z0 and delay | within 5 % of Hammerstad-Jensen | ✅ all three presets, Z0 within 0.45 %, delay within 0.71 % |
 | 2 | Same microstrip, matched S21 | within 0.5 dB to 1 GHz | ✅ 0.06 dB on all three presets |
 | 3 | 50 ohm stripline, Z0 and delay | within 5 % of Cohn | ✅ Z0 within 1.0 %, delay +1.0 to +1.2 % |
-| 4 | Via inductance, parallel-plate | within 10 % of two posts | ⚠️ normal ✅ (worst +7.7 %); coarse ❌ by 0.1 % (+10.1 % at one point) |
+| 4 | Via inductance, parallel-plate | within 10 % of two posts | normal ✅ (worst +7.7 %); coarse ❌ (+10.1 % at one point). The limit stays; a coarse part with vias says so (below) |
 | 5 | Synthetic coupon, 3 margins and 2 presets | hotspot, level 1 dB, \|Z\| 5 %, S21 0.5 dB | ✅ margins and presets |
-| 6 | Real coupons, 3 margins and 2 presets | the same | ⚠️ board C: margins ✅, presets ❌ on hotspot location only; boards D and B not run |
-| 7 | Slow tests (`EMI_SLOW_TESTS=1`) | pass in the image | not run |
-| 8 | A small-part solve from the Part solve tab | runs end to end | ✅ once, before the diagonal fix; not re-run |
+| 6 | Real coupons, 3 margins and 2 presets | the same | ❌ C ✅ and D ✅; B ✅ on margins, ❌ on level between presets (3.3 dB) |
+| 7 | Slow tests (`EMI_SLOW_TESTS=1`) | pass in the image | ✅ the 3 small-part solves, on openEMS 0.0.35 and on the from-source openEMS the released image now builds on |
+| 8 | A small-part solve from the Part solve tab | runs end to end | ⚠️ the synthetic board ✅; the sample board's CLK net ran and gave no numbers (it did not settle) |
+
+The hotspot criterion changed in the third pass (September 2026), by the user's decision: a
+hotspot is found if it did not move, or if either run's hotspot is within 3 dB of the other
+run's peak. Two near-equal spots can trade places between meshes, and either is a spot to fix.
+The level criterion still applies. To go with it, a result now lists every separate spot within
+3 dB of each map's loudest point away from the ports (`worker/emi_worker/openems/hotspots.py`),
+with the nearest net and part, numbered in the result panel and marked on the board.
 
 ### 1-2. Microstrip (`sp_verify_lines.py`)
 
@@ -119,7 +126,11 @@ the drill.
 | 0.8 mm, 2.0 mm | 1.052 nH | -1.0 to +1.7 % | -0.2 to +1.5 % |
 
 Coarse misses by 0.1 % at 100 MHz on the smallest via at the closest spacing, where the 0.3 mm
-barrel is two coarse cells across.
+barrel is two coarse cells across. So coarse fails this check, and the 10 % limit stays (the
+user's decision). What the product does about it: the app starts a part on normal whenever
+normal fits the budget, and a part that runs coarse with a via on its nets says, in the set-up
+and in the result, "coarse mesh: via inductance can read up to about 10% high"
+(`stages/small_part.py`, `COARSE_VIA_NOTE`).
 
 ### 5. Convergence, synthetic clock board (`sp_convergence.py`)
 
@@ -130,55 +141,102 @@ along the line, and coarse's hotspot is 0.89 dB below normal's peak there. Pass.
 
 ### 6. Real coupons
 
-Board C, a differential pair, 4 layers, 32.3 x 8.5 mm at the default 3 mm margin, 4 ports.
-Before the fixes the presets disagreed by 2.2 dB on level, 5.6 % median and 1534 % worst on
-|Z_in| and 1.4 dB on S21, because neither was a through line (the via short above). After:
+Three coupons, each at 3, 5 and 7 mm margins on coarse and normal, with the study's budget lifted
+(`SP_BUDGET=2e11`; a normal run at 7 mm is over the product's). Each margin is compared with
+7 mm on the same preset (the cut), and the presets with each other at each margin (the mesh).
+"Swap" is how far the nearer of the two hotspots sits below the other run's peak.
 
-| Run | Cells | Steps | Wall | End |
-|---|---|---|---|---|
-| coarse, 3 / 5 / 7 mm | 516,780 / 582,768 / 611,010 | 19,074 / 24,684 / 68,816 | 45 / 65 / 183 s | -51.4 / -50.2 / -50.1 dB |
-| normal, 3 / 5 mm | 1,013,880 / 1,105,896 | 37,730 / 35,698 | 145 / 154 s | -50.1 / -51.7 dB |
+| Coupon | Size at 3 mm | Cells, coarse / normal | Wall, coarse / normal |
+|---|---|---|---|
+| C, differential pair, 4 layers, 4 ports | 32.3 x 8.5 mm | 517-611 k / 1.01-1.16 M | 45-185 s / 153-325 s |
+| D, supply net, 4 layers | 17.8 x 8.5 mm | 432-527 k / 0.92-1.03 M | 52-62 s / 121-237 s |
+| B, clock net, 6 layers | 7.0 x 10.2 mm | 183-225 k / 498-607 k | 28-29 s / 73-87 s |
 
-- The cut: 3 and 5 mm against 7 mm on coarse, and 3 against 5 mm on normal, all pass (0 cells,
-  0.00 dB, |Z_in| 0.3 % worst, S21 0.011 dB).
-- The presets, at 3 and at 5 mm: level 0.78 dB, |Z_in| 2.4 % median and 8.9 % worst, S21
-  0.09 dB, all inside the criteria. The hotspot location fails: at 300 MHz normal's loudest
-  point is at the driven end and coarse's at the far end, and coarse's is 2.7 dB below
-  normal's peak. Both are the jogs beside the ports, within a few dB of each other.
+Every run settled (by the runner's criterion; see the end criterion below). Peak memory was
+134-273 MB.
 
-The normal 7 mm run was stopped when this pass ended. Its budget is over the product's (1.16 M
-cells buys 9.7 ns, under the 10 ns minimum), so the study lifted it (`SP_BUDGET=2e11`); no
-product run is affected. Boards D (a supply net, 17.8 x 8.5 mm) and B (a clock net, 7.0 x
-10.2 mm, 6 layers) were not run on the final code. The earlier board D and B numbers were made
-before the via and diagonal fixes and are withdrawn.
+| Coupon | The cut, worst of 4 | Presets: hotspot | Level | \|Z_in\| median / worst | S21 | Verdict |
+|---|---|---|---|---|---|---|
+| C | 0 cells, 0.00 dB, \|Z\| 0.4 %, S21 0.013 dB | 128 cells at 300 MHz, swap 0.1 dB | 0.78 dB | 2.4 / 8.9 % | 0.09 dB | ✅ |
+| D | 0 cells, 0.00 dB, \|Z\| 0.1 %, S21 0.004 dB | 1.7 cells | 0.64 dB | 0.6 / 3.1 % | 0.03 dB | ✅ |
+| B | 0.2 cells, 0.00 dB, \|Z\| 0.1 %, S21 0.001 dB | 0.45 cells | **3.3 dB** | 0.1 / 2.4 % | 0.006 dB | ❌ |
+
+- **Board C** passes with the new hotspot criterion. At 300 MHz the two ends of the pair are
+  0.1 dB apart on normal, so which is the loudest is a coin toss; the result lists both.
+- **Board B fails on the level.** The presets agree on where the hotspot is (under half a cell)
+  and on the port, but coarse reads the hotspot 3.3 dB below normal. A fine run at 3 mm (1.0 M
+  cells, 224 s, budget lifted to 6e11) reads 2.8 dB below normal, so normal is the outlier, not
+  coarse: coarse is 0.5 dB below fine. The net is a 0.1 mm trace on 76 um of dielectric and the
+  hotspot is 1.8 mm from the driven port, just outside the 1.5 mm the study leaves out around a
+  port. A single grid point beside a pad edge, where the field is sharpest, does not settle with
+  the mesh. Averaged over a disc of 0.25 mm radius around the hotspot, the three presets read
+  19.8, 20.7 and 20.5 dB (coarse, normal, fine): within 0.9 dB. Over 0.5 mm, 16.7, 16.1 and 17.2
+  dB: within 1.1 dB.
+- **The end criterion can stop on a dip.** Board D's normal 7 mm run said it settled with its
+  last energy reading at -41 dB. Re-run with the solver log kept, its energy swings by 10-20 dB
+  between progress reports (-49.6, -38.6, then -57.0 dB) and the runner stopped on the -57 dB
+  sample while the swing still reached about -39 dB. Its numbers still match the 3 and 5 mm
+  runs (\|Z\| 0.0 %), so nothing in this table moves, but "settled at -50 dB" means one sample
+  below -50 dB, not the ringing's envelope.
 
 ### 8. In the app
 
-`emi-local -experimental small-part-solve` with the worker image built from this branch (vias,
-PML and map height fixed, the diagonal fix not yet in): the sample board's CLK net, coarse,
-0.68 M cells, finished in about two minutes with its map and port table. Two things were fixed
-from it: the band-edge and "no components" notes, and the normal preset being refused on the
-sample board's first net. It has not been re-run since the diagonal fix.
+`emi-local -experimental small-part-solve`, worker image built from this branch, three threads,
+in a browser:
+
+- **The public synthetic clock board** (`clock_board()` in `sp_convergence.py`, uploaded as a
+  `.kicad_pcb`): the Part solve tab picked CLK's two ends and chose coarse ("over budget on
+  normal"). 0.40 M cells, 32 s, settled at -50.1 dB. The result showed the map, the port table
+  (S11 -35.9 to -14.3 dB, S21 -0.09 to -0.27 dB) and, on F.Cu at 100 MHz, three loudest spots
+  within 0.4 dB ("The loudest 3 spots are within 3 dB of each other, so treat them together"),
+  marked on the board; a row click moves the view there.
+- **The sample board** ("Try the sample board"): both nets have one pad, so their far ends are
+  open. CLK, coarse (normal is over budget), 1.36 M cells: the set-up estimated "about 2 m, at
+  most 16 m"; it ran for 10 minutes, reached its 109,942-step cap with the energy at -48.2 dB,
+  and published no numbers. The result said so plainly and showed the coarse-via note. An
+  unterminated net rings far longer than the terminated coupons the estimate was fitted to.
+
+Two things were fixed from this pass in the app: the loudest spots were never marked on the
+board after a solve (the set-up ports still on screen hid them), and orange markers vanished on
+orange copper.
+
+### Which openEMS
+
+Checks 6 and 8 ran on the Debian openEMS 0.0.35. The released image moved to an openEMS built
+from source while this pass ran; on it the three small-part slow tests pass (1030 of 1031 in
+the suite; the one failure is a far-field test, whose reader does not yet know the new build's
+HDF5 layout). The real coupons have not been re-run on it.
+
+## Verdict
+
+**Stays off.** Checks 1-3, 5 and 7 pass; 4 fails on coarse by the rule the user kept, and the
+product now says so. What fails:
+
+1. Board B's hotspot level differs by 3.3 dB between coarse and normal (limit 1 dB). Fine shows
+   normal is the outlier.
+2. The sample board, the first thing a new user solves, gives no numbers: its nets are open at
+   one end and ring past the budget.
+3. Not a failed criterion but a defect found on the way: the end criterion stops on one sample
+   below -50 dB, and on board D that sample sat in a 20 dB swing.
 
 ## Still to do
 
-Where this pass stopped: the convergence study was on board C's normal 7 mm run. To finish:
-
-1. Re-run the study on the three real coupons with the final code:
-   `MARGINS=3,5,7 PRESETS=coarse,normal SP_BUDGET=2e11 SETUPS=<C pair>,<D supply>,<B clock>`
-   (`sp_convergence.py`, about an hour on three threads).
-2. **Board C's hotspot location.** Decide whether a peak that swaps between two near-equal
-   spots at the two ends is a failure. If the criterion stays, look at the jogs beside the ports
-   on coarse; if it changes, change it in `sp_convergence.passes` and say why here.
-3. **Coarse via** (+10.1 % at one point): either accept a coarse tolerance or put a finer cell
-   under small vias.
-4. Run `EMI_SLOW_TESTS=1 pytest tests/test_small_part_solve.py` in the image, as
-   `.github/workflows/test.yml` runs the suite, and add it to the release checklist.
-5. Rebuild the worker image and run a small-part solve from the Part solve tab again, on coarse
-   and on normal where it fits.
-6. Optional: the stripline delay by difference, to confirm the +1.2 % is the ends.
-7. Only when 1-5 pass: set `SmallPartSolveByDefault = true` and update the README's experimental
-   table, known-issues and `EXPERIMENTAL.smallPart`.
+1. **Decide how a hotspot's level is judged** (user decision). Options: (a) the map averaged over
+   a probe-sized disc (0.25 mm radius: B's presets within 0.9 dB), which is also closer to what a
+   near-field probe reads; (b) keep the single grid point and leave out more around a port (B's
+   hotspot is 1.8 mm from it). Then change `sp_metrics.hotspot` (and `openems/hotspots.py`, so
+   the listed level is the same number) and re-run `sp_convergence.py` on the three coupons.
+2. **End criterion on the envelope.** Stop only when the energy has stayed under the criterion
+   for several progress reports (or over a period of the band's lowest frequency), in
+   `openems/run.py`. This touches every solve, so re-run checks 1-6 after it.
+3. **The sample board.** Either give an open-ended net's far end a 50 ohm port by default (the
+   run then rings down like the coupons), or have the set-up warn that an open end rings long and
+   estimate it from the open-end case. Then re-run check 8 on it.
+4. The browser estimate chose coarse for the synthetic board ("over budget on normal"); check
+   `CELL_FIT` against the real normal mesh, since the rule is normal whenever it fits.
+5. Optional: the stripline delay by difference, to confirm the +1.2 % is the ends.
+6. When 1-3 pass, on the openEMS the released image ships: set `SmallPartSolveByDefault = true` and update the README's experimental
+   table, known-issues, `EXPERIMENTAL.smallPart` and the limitations page.
 
 Known limitations that stay after that:
 
@@ -186,6 +244,7 @@ Known limitations that stay after that:
 - No far field, cable emissions or compliance estimate; those need `full-wave`.
 - No component models in a small part. Capacitors need an openEMS newer than
   0.0.35 ([solver-and-components.md](solver-and-components.md) §3).
+- Coarse mesh: via inductance can read up to about 10 % high.
 - Below 100 MHz a part a few centimeters across is quasi-static; a circuit tool gives the
   lumped L or C more cheaply.
 - Nothing has been compared with a measurement.

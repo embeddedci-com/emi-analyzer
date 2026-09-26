@@ -16,7 +16,7 @@ import type { BoardDoc } from '../lib/boardTypes'
 import { formatDuration } from '../lib/estimate'
 import { harmonics, isReferenceNet, type PortSpec } from '../lib/portPlacement'
 import {
-  BANDS, estimateSmallPart, pairOf, planCoupon, PRESETS, smallPartParams, type Roi,
+  BANDS, estimateSmallPart, hasVias, pairOf, planCoupon, PRESETS, smallPartParams, type Roi,
 } from '../lib/smallPart'
 import { EXPERIMENTAL, Experimental } from './Experimental'
 
@@ -180,6 +180,9 @@ export function SmallPartSetup({
       </Group>
       {presetChoice === null && autoCoarse && (
         <Text size="xs" c="dimmed">Coarse, because this part is over budget on normal.</Text>
+      )}
+      {presetValue === 'coarse' && by === 'net' && hasVias(doc, chosen) && (
+        <Text size="xs" c="dimmed">Coarse mesh: via inductance can read up to about 10% high.</Text>
       )}
       <NumberInput
         size="xs" label="Clock, for maps at its harmonics (optional)" suffix=" MHz" min={1} max={3000}

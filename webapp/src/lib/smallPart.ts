@@ -273,6 +273,37 @@ export function smallPartParams(opts: {
   }
 }
 
+/**
+ * Whether these nets have a via. On the coarse mesh a 0.3 mm via read its inductance 10.1 %
+ * high, over the 10 % the check allows (docs/verification/small-part-solve.md, check 4), so a
+ * part with vias says so when it runs coarse. The worker says it again in the result.
+ */
+export function hasVias(doc: BoardDoc, nets: string[]): boolean {
+  const want = new Set(nets)
+  return doc.vias.some((v) => want.has(v.net))
+}
+
+/** One of a map's loudest spots, as the worker lists them (`openems/hotspots.py`). */
+export interface HotSpot {
+  x_mm: number
+  y_mm: number
+  /** On the map's own scale: dB below the loudest point of the run. */
+  db: number
+  below_peak_db: number
+  net?: string | null
+  part?: string | null
+}
+
+export interface HotSpotList {
+  within_db: number
+  maps: { layer: string; frequency_hz: number; spots: HotSpot[] }[]
+}
+
+/** The spots of one map, loudest first; none for a result that predates the list. */
+export function spotsFor(list: HotSpotList | undefined, layer: string, frequencyHz: number): HotSpot[] {
+  return list?.maps.find((m) => m.layer === layer && m.frequency_hz === frequencyHz)?.spots ?? []
+}
+
 export function isSmallPartRun(params: unknown): boolean {
   return (params as { mode?: string } | undefined)?.mode === SMALL_PART_MODE
 }

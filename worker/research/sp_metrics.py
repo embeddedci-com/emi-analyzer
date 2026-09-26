@@ -89,7 +89,7 @@ def port(solved) -> dict:
 
 def compare(a: dict, b: dict) -> dict:
     """How far ``b`` is from ``a``: hotspot move in cells, level in dB, |Z| in %, S21 in dB."""
-    moves, levels, still = [], [], []
+    moves, levels, still, back = [], [], [], []
     for ha, hb in zip(a["hotspot"], b["hotspot"]):
         d = math.hypot(ha["x_mm"] - hb["x_mm"], ha["y_mm"] - hb["y_mm"])
         moves.append(d / max(ha["cell_mm"], hb["cell_mm"]))
@@ -99,6 +99,9 @@ def compare(a: dict, b: dict) -> dict:
         # is still a hotspot here -- within 1 dB of this map's own peak.
         if "_map" in ha and "_map" in hb:
             still.append(hb["db_per_volt"] - _at(hb, ha["x_mm"], ha["y_mm"]))
+            # And the other way: this map's hotspot in the reference's map. Two near-equal
+            # spots can trade places in either direction (board C's two ends did).
+            back.append(ha["db_per_volt"] - _at(ha, hb["x_mm"], hb["y_mm"]))
     za, zb = np.asarray(a["port"]["z_mag"]), np.asarray(b["port"]["z_mag"])
     z_pct = np.abs(zb / za - 1) * 100
     s21 = None
@@ -111,6 +114,11 @@ def compare(a: dict, b: dict) -> dict:
         "worst_move_cells": float(max(moves)) if moves else None,
         "reference_hotspot_below_peak_db": [round(x, 2) for x in still],
         "worst_reference_below_peak_db": float(max(still)) if still else None,
+        "hotspot_below_reference_peak_db": [round(x, 2) for x in back],
+        "worst_below_reference_peak_db": float(max(back)) if back else None,
+        # Per frequency: how far the nearer of the two hotspots is below the other run's peak.
+        # Under a few dB the two runs agree on which spots are loud, whichever came out on top.
+        "swap_db": [round(min(x, y), 2) for x, y in zip(still, back)],
         "worst_level_db": float(max(abs(x) for x in levels)) if levels else None,
         "worst_z_percent": float(np.nanmax(z_pct)),
         "median_z_percent": float(np.nanmedian(z_pct)),

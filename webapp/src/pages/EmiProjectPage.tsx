@@ -39,7 +39,8 @@ import { ComplianceTab } from '../components/ComplianceTab'
 import { SolveSetup, type SolveRequest } from '../components/SolveSetup'
 import { SmallPartSetup } from '../components/SmallPartSolve'
 import { SmallPartResult } from '../components/SmallPartResult'
-import { isSmallPartRun } from '../lib/smallPart'
+import { isSmallPartRun, type HotSpot } from '../lib/smallPart'
+import { HOTSPOT_MARKER_HEX, hexToRgb, type BoardMarker } from '../lib/markers'
 import type { BoardDoc, RuleFinding, RulesDoc } from '../lib/boardTypes'
 import type { FieldOverlayData } from '../lib/overlay'
 import { placePortOnAnchor, type PortAnchor, type PortSpec } from '../lib/portPlacement'
@@ -86,6 +87,7 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
   const [pickingPad, setPickingPad] = useState(false)
   const [drawingRoi, setDrawingRoi] = useState(false)
   const [overlay, setOverlay] = useState<FieldOverlayData | null>(null)
+  const [spots, setSpots] = useState<HotSpot[]>([])
   const [gateDb, setGateDb] = useState(-45)
   const [selectedSolveId, setSelectedSolveId] = useState<string | null>(null)
   // The line to open in the ESD tab, when arriving there from a finding.
@@ -442,8 +444,15 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
   const markers = useMemo(() => {
     const shown = tab === 'part' ? activePart : activeSolve
     const solved = (shown?.params as { ports?: PortSpec[] } | undefined)?.ports ?? []
-    return (ports.length ? ports : solved).map((p) => ({ x: p.x_mm, y: p.y_mm, label: p.name }))
-  }, [ports, activeSolve, activePart, tab])
+    const out: BoardMarker[] = (ports.length ? ports : solved).map((p) => ({ x: p.x_mm, y: p.y_mm, label: p.name }))
+    // A small-part result's loudest spots, in the color the result panel numbers them in. Only
+    // the result view reports any, so the set-up ports still on screen do not hide them.
+    if (tab === 'part') {
+      const color = hexToRgb(HOTSPOT_MARKER_HEX)
+      spots.forEach((s, i) => out.push({ x: s.x_mm, y: s.y_mm, label: String(i + 1), color }))
+    }
+    return out
+  }, [ports, activeSolve, activePart, tab, spots])
 
   const onFocusFinding = (f: RuleFinding) => {
     if (f.x != null && f.y != null) setFocus({ x: f.x, y: f.y, zoom: 28 })
@@ -855,6 +864,8 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
                     onSelectRun={setSelectedPartId}
                     onOverlayChange={setOverlay}
                     onGateChange={setGateDb}
+                    onSpotsChange={setSpots}
+                    onFocusSpot={(x, y) => setFocus({ x, y, zoom: 28 })}
                   />
                 )}
               </Stack>
