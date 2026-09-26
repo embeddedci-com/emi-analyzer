@@ -15,6 +15,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router'
 import { versionsOf } from '../lib/compare'
 import { NewVersionModal } from '../components/NewVersionModal'
+import { ReportDialog } from '../components/ReportDialog'
 import type { BoardRenderer } from '../lib/BoardRenderer'
 import { createCursorStore, useCursor, type CursorStore } from '../lib/cursorStore'
 import { BoardCanvas, type CanvasMode } from '../components/BoardCanvas'
@@ -98,6 +99,7 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [uploadingVersion, setUploadingVersion] = useState(false)
   const [confirmDeleteVersion, setConfirmDeleteVersion] = useState(false)
+  const [exporting, setExporting] = useState(false)
   const rendererRef = useRef<BoardRenderer | null>(null)
   const qc = useQueryClient()
 
@@ -524,6 +526,9 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
             <Menu.Dropdown>
               <Menu.Item onClick={() => setUploadingVersion(true)}>
                 Upload a new version&#8230;
+              </Menu.Item>
+              <Menu.Item onClick={() => setExporting(true)} disabled={!board.data || !ingestDone}>
+                Export report&#8230;
               </Menu.Item>
               {versions.length > 1 && (
                 <Menu.Item component={Link} to={`${base}/${projectId}/compare`}>
@@ -1077,6 +1082,26 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
         </Paper>
         )}
       </Group>
+
+      {exporting && doc && board.data && ingest && version && (
+        <ReportDialog
+          api={api}
+          projectId={projectId}
+          projectName={project.data?.name ?? 'Board'}
+          versions={versions}
+          version={version}
+          runs={runs.data ?? []}
+          ingest={ingest}
+          doc={doc}
+          geometry={board.data.geometry}
+          rules={rules.data ?? null}
+          features={features.data}
+          cableAssignments={cableAssignments}
+          onClose={() => setExporting(false)}
+          onStarted={() => setPollMs(1500)}
+          onOpenTab={(t) => { setExporting(false); setPanelOpen(true); setTab(t) }}
+        />
+      )}
 
       <NewVersionModal
         api={api}
