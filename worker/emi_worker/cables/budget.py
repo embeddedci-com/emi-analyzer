@@ -205,7 +205,7 @@ def solver_budget(
     unlike the closed form, knows where the cable resonates, which is the question §4 says this
     tier exists to answer.
 
-    Costs a few hundred milliseconds: one nec2c run per frequency, each about 2.5 ms.
+    Costs well under a second: one nec2c run per frequency, run a few at a time.
     """
     from emi_worker.cables import nec
     from emi_worker.compliance.limits import limit_at, standard
@@ -218,14 +218,16 @@ def solver_budget(
     if height_m is None:
         height_m = nec.TABLE_HEIGHT_M
     ring = nec.ObservationRing(distance_m=distance)
-    results = []
-    for f in sorted(frequencies_hz):
-        deck = nec.Deck(
+    decks = [
+        (f, nec.Deck(
             length_m=cable.length_m, frequency_hz=f, height_m=height_m,
             board_span_m=board_span_m, far_end=cable.far_end, ring=ring,
             choke_z=cable.cm_choke.z_at(f) if cable.cm_choke else None,
-        )
-        results.append((f, nec.run(deck)))
+        ))
+        for f in sorted(frequencies_hz)
+    ]
+    runs = nec.run_many([d for _, d in decks])
+    results = [(f, r) for (f, _), r in zip(decks, runs)]
 
     points = []
     for i, (f, r) in enumerate(results):

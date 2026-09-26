@@ -19,6 +19,7 @@ results rather than returning an empty list.
 from __future__ import annotations
 
 import math
+import os
 import re
 import shutil
 import subprocess
@@ -329,6 +330,23 @@ def parse_output(text: str, frequency_hz: float) -> NecResult:
             "NE cards were not reached — check the execution card"
         )
     return NecResult(frequency_hz=frequency_hz, z_in=z_in, e_v_per_m=fields)
+
+
+#: How many nec2c processes run at once. Each deck is one small solve and most of its cost is
+#: starting the process, so a few in parallel hide that; the 12.5 mm segment cap made the
+#: resonance rule's 80 runs take 2 s on a CI runner, which every upload pays.
+PARALLEL_RUNS = min(4, os.cpu_count() or 1)
+
+
+def run_many(decks: list[Deck], *, timeout_s: float = 60.0) -> list[NecResult]:
+    """Run several decks, a few at a time. Results come back in the order of ``decks``."""
+    if len(decks) <= 1 or PARALLEL_RUNS <= 1:
+        return [run(d, timeout_s=timeout_s) for d in decks]
+    from concurrent.futures import ThreadPoolExecutor
+
+    # Threads are enough: each one only waits on its own nec2c process.
+    with ThreadPoolExecutor(max_workers=PARALLEL_RUNS) as pool:
+        return list(pool.map(lambda d: run(d, timeout_s=timeout_s), decks))
 
 
 def run(deck: Deck, *, timeout_s: float = 60.0) -> NecResult:
