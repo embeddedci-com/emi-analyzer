@@ -51,7 +51,7 @@ def zone(net, layer, x0, y0, x1, y1):
 
 def build() -> str:
     parts = []
-    # U1: supply pins on each side of a 10 mm body centred at (20, 20); ground beside each.
+    # U1: supply pins on each side of a 10 mm body centerd at (20, 20); ground beside each.
     u1 = []
     for i, (px, py) in enumerate([(-5, -2), (5, 2), (-2, 5), (2, -5)]):
         u1.append(pad(str(2 * i + 1), px, py, "+3V3"))

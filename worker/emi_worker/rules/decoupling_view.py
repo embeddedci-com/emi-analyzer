@@ -41,7 +41,7 @@ log = logging.getLogger(__name__)
 
 FORMAT_VERSION = 1
 
-#: Used when the net name carries no voltage. 3.3 V is the commonest logic rail; it is labelled
+#: Used when the net name carries no voltage. 3.3 V is the commonest logic rail; it is labeled
 #: assumed wherever it is shown, and a per-net setting replaces it.
 ASSUMED_RAIL_V = 3.3
 
@@ -59,7 +59,7 @@ ASSUMED_VIA_RADIUS_MM = 0.15
 ASSUMED_EPS_R = 4.4
 ASSUMED_LOSS_TANGENT = 0.02
 
-#: Centre-to-centre pad pitch per package, for the capacitor's own length in the loop.
+#: Center-to-center pad pitch per package, for the capacitor's own length in the loop.
 PAD_PITCH_MM = {"0201": 0.5, "0402": 1.0, "0603": 1.6, "0805": 2.0, "1206": 3.2, "1210": 3.2,
                 "1812": 4.5, "2220": 5.7}
 DEFAULT_PITCH_MM = 1.6
@@ -130,7 +130,7 @@ class Heights:
 
 
 def heights(model: BoardModel) -> Heights:
-    """The depth of each copper layer's centre from the top, and the dielectric between each
+    """The depth of each copper layer's center from the top, and the dielectric between each
     pair. From the board's stackup when it has one; evenly spaced through the board's
     thickness otherwise, and marked assumed."""
     coppers = [c.name for c in model.copper_layers]

@@ -80,7 +80,7 @@ def connection_nh(length_mm: float, height_mm: float, via_radius_mm: float,
     """The loop from the capacitor's pads down to the plane and back: half a rectangle of
     ``length`` by ``2 * height``, the plane being the mirror (image theory).
 
-    A second ground via only parallels one of the loop's two vertical legs, so it is modelled
+    A second ground via only parallels one of the loop's two vertical legs, so it is modeled
     as halving that leg rather than the whole loop: n vias scale the loop by (1 + n) / 2n.
     Mutual inductance between the paralleled vias is ignored, which makes it slightly
     optimistic for vias closer than about a millimetre.

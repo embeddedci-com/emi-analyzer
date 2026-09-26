@@ -11,7 +11,7 @@ do. Every number here is asserted by `worker/tests/test_decoupling_view.py` or
 Per supply rail and per IC on it (parts named U or IC, nets that classify as power):
 
 - **Each capacitor is a series R-L-C.** C, ESR and ESL come from the component library
-  (`components/library/mlcc.json`, generic figures, labelled so). A part the library cannot
+  (`components/library/mlcc.json`, generic figures, labeled so). A part the library cannot
   resolve gets its value from its Value field (100 nF when that does not parse), an ESL of
   0.5 nH and the family's ESR for its value, and is shown as assumed.
 - **The layout adds a connection loop** in series with the part. The loop runs from the IC's
@@ -27,9 +27,9 @@ Per supply rail and per IC on it (parts named U or IC, nets that classify as pow
   posts between parallel plates. The IC's own connection to the pair is a series inductance
   common to every capacitor. The pair is one more branch: C = eps0 eps_r A / t, L the radial
   inductance from a via to the plane's equivalent radius, R from the loss tangent at its own
-  resonance. Its first cavity resonance, c / (2 a sqrt(eps_r)), is quoted and not modelled.
+  resonance. Its first cavity resonance, c / (2 a sqrt(eps_r)), is quoted and not modeled.
 - **Target impedance** = rail volts x ripple / current step. Volts from the net name (3V3, 1V8,
-  +5V; 3.3 V labelled assumed otherwise), ripple 5 %, step 0.5 A. All three are settings
+  +5V; 3.3 V labeled assumed otherwise), ripple 5 %, step 0.5 A. All three are settings
   (`ripple_pct`, `step_current_a` per net group) and all are editable in the app. The target
   is judged from 100 kHz up to `board_max_hz` (100 MHz): above that an IC's package and die
   capacitance decouple it, and 1 nH is already 0.6 ohm at 100 MHz.
@@ -86,7 +86,7 @@ within 6.7 %.
 **7. 0402 via-in-pad against openEMS.** `research/verify_0402.py` measured the port, the two
 0402 pads 0.96 mm apart and a 0.2 mm via in the second, over a plane 0.2 mm below, as
 0.207 nH (flat 234 MHz to 2.6 GHz). The same geometry through `connection_nh` (0.96 mm loop,
-0.235 mm between copper centres, 0.1 mm via radius) gives 0.308 nH, 49 % high; with 0.2 mm
+0.235 mm between copper centers, 0.1 mm via radius) gives 0.308 nH, 49 % high; with 0.2 mm
 height, 0.264 nH (+28 %). The loop is shorter than it is wide: two 0.54 mm pads and a wide
 lumped port, against a formula for thin round wire. The model is pessimistic for very short,
 wide loops, which moves a part's useful-up-to down by up to 18 % (the square root of 1.49 on

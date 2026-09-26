@@ -233,7 +233,7 @@ def test_a_well_decoupled_ic_is_ok():
     assert ic["recommendations"] == []
 
 
-def test_an_unreadable_part_is_modelled_and_says_it_was_assumed():
+def test_an_unreadable_part_is_modeled_and_says_it_was_assumed():
     m = _two_layer()
     for p in m.pads:
         if p.ref == "C1":

@@ -183,15 +183,15 @@ What it models and what it does not:
 - **Lumped.** Each capacitor is one series R-L-C, the plane pair one more branch, all in parallel
   behind the IC's own connection. No plane resonances: the first cavity mode is quoted
   ("no plane resonances; the first is near X") and nothing above it is right.
-- **Not modelled:** the regulator's output impedance (below its loop bandwidth it holds the
+- **Not modeled:** the regulator's output impedance (below its loop bandwidth it holds the
   rail, so a 100 kHz gap on a rail with no bulk capacitor may be covered by it), the IC's package
   and die capacitance (hence the 100 MHz `board_max_hz`), DC-bias derating of MLCCs (a 10 uF
-  0603 at 3.3 V can be half that), mutual inductance between neighbouring capacitors and vias,
+  0603 at 3.3 V can be half that), mutual inductance between neighboring capacitors and vias,
   and which way a trace actually runs: distance is straight-line from the nearest supply pin.
 - **Assumed unless set:** the current step (0.5 A), the ripple (5 %), a rail voltage the net
   name does not carry (3.3 V), and anything about a part the library cannot resolve. Each is
-  labelled where it is shown.
-- **ICs and capacitors are recognised by designator** (U/IC, C) and nets by name, like the
+  labeled where it is shown.
+- **ICs and capacitors are recognized by designator** (U/IC, C) and nets by name, like the
   decoupling check. A capacitor must join the rail to ground directly; one behind a ferrite
   bead is on a different net and is not counted.
 
