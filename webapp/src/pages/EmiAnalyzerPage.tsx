@@ -1,11 +1,14 @@
 /**
  * Tools -> EMI Analyzer: project list and new-board upload.
+ *
+ * A first visit has one job: get a board in. The upload and the sample sit at the top, the
+ * boards already here under them, and how the analysis works is folded away below.
  */
 
 import { useCallback, useRef, useState } from 'react'
 import {
-  Alert, Anchor, Badge, Button, Card, Container, FileButton, Group, List, Loader,
-  Progress, SimpleGrid, Stack, Text, TextInput, Title, Tooltip,
+  Accordion, Alert, Anchor, Badge, Box, Button, Card, Container, FileButton, Group, List,
+  Loader, Progress, SimpleGrid, Stack, Text, TextInput, Title, Tooltip,
 } from '@mantine/core'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router'
@@ -22,6 +25,8 @@ export interface EmiAnalyzerPageProps {
   host?: EmiHostCopy
 }
 
+const ACCEPT = /\.(kicad_pcb|zip)$/i
+
 export function EmiAnalyzerPage({ api, deployment = 'hosted', host }: EmiAnalyzerPageProps) {
   const local = deployment === 'local'
   const copy = resolveHostCopy(host)
@@ -29,6 +34,9 @@ export function EmiAnalyzerPage({ api, deployment = 'hosted', host }: EmiAnalyze
   const qc = useQueryClient()
   const navigate = useNavigate()
   const [name, setName] = useState('')
+  const [naming, setNaming] = useState(false)
+  const [dragging, setDragging] = useState(false)
+  const [refused, setRefused] = useState<string | null>(null)
   const [uploadPct, setUploadPct] = useState<number | null>(null)
   const [stage, setStage] = useState<string | null>(null)
   const resetFile = useRef<() => void>(null)
@@ -36,8 +44,6 @@ export function EmiAnalyzerPage({ api, deployment = 'hosted', host }: EmiAnalyze
   const projects = useQuery({ queryKey: ['emi', 'projects'], queryFn: api.listProjects })
   const me = useQuery({ queryKey: ['emi', 'whoami'], queryFn: api.whoami, staleTime: 60_000 })
   const features = useQuery({ queryKey: ['emi', 'features'], queryFn: api.features, staleTime: 5 * 60_000 })
-  // Undecided until the server answers, so nothing promises a solver that may be off.
-  const fullWave = features.data?.full_wave === true
   const workers = useQuery({
     queryKey: ['emi', 'workers'],
     queryFn: api.listWorkers,
@@ -51,7 +57,7 @@ export function EmiAnalyzerPage({ api, deployment = 'hosted', host }: EmiAnalyze
       // Hash before anything else. If this organisation has already uploaded these exact
       // bytes, the board is here — parsed, with its findings and any solves — and the
       // right answer is to open it rather than send it again.
-      setStage('Checking whether this board is already here…')
+      setStage('Checking for a copy already here…')
       const sha = await hashFile(file)
       if (sha) {
         const hit = await api.lookupBoard(sha)
@@ -65,7 +71,7 @@ export function EmiAnalyzerPage({ api, deployment = 'hosted', host }: EmiAnalyze
       // here marked "kicad".
       setStage(null)
       const project = await api.createProject(
-        as ?? (name.trim() || file.name.replace(/\.(kicad_pcb|zip)$/i, '')),
+        as ?? (name.trim() || file.name.replace(ACCEPT, '')),
         /\.zip$/i.test(file.name) ? 'gerber' : 'kicad',
       )
       setUploadPct(0)
@@ -83,6 +89,7 @@ export function EmiAnalyzerPage({ api, deployment = 'hosted', host }: EmiAnalyze
       setUploadPct(null)
       setStage(null)
       setName('')
+      setNaming(false)
       resetFile.current?.()
       qc.invalidateQueries({ queryKey: ['emi', 'projects'] })
       // Opened at the version these bytes are, which need not be the newest one in that project.
@@ -98,47 +105,40 @@ export function EmiAnalyzerPage({ api, deployment = 'hosted', host }: EmiAnalyze
 
   const onPick = useCallback(
     (file: File | null) => {
-      if (file) create.mutate({ file })
+      if (!file) return
+      if (!ACCEPT.test(file.name)) {
+        setRefused(file.name)
+        return
+      }
+      setRefused(null)
+      create.mutate({ file })
     },
     [create],
   )
+
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    setDragging(false)
+    if (create.isPending) return
+    onPick(e.dataTransfer.files?.[0] ?? null)
+  }
 
   const online = workers.data?.online_count ?? 0
 
   return (
     <Container size="lg" py="lg">
       <Stack gap="lg">
-        <Group justify="space-between" align="flex-start">
+        <Group justify="space-between" align="flex-start" wrap="nowrap">
           <div>
             <Title order={2}>EMI Analyzer</Title>
             <Text c="dimmed" size="sm" mt={4}>
-              Upload a KiCad board to see its copper, its stackup and a set of geometric EMI and
-              EMC checks: where it radiates, what it conducts out through its cables, and where
-              ESD and fast transients get in. An ESD discharge is simulated in ngspice and each
-              cable gets a common-mode budget from an antenna model.
-              {fullWave ? (
-                <>
-                  {' '}Full-wave analysis of a selected region runs on{' '}
-                  <Anchor href="https://www.openems.de/" target="_blank" rel="noreferrer" inherit>
-                    openEMS
-                  </Anchor>
-                  , a real field solver. It is experimental: its results are not yet checked
-                  against a real board.
-                </>
-              ) : (
-                <>
-                  {' '}Full-wave simulation with{' '}
-                  <Anchor href="https://www.openems.de/" target="_blank" rel="noreferrer" inherit>
-                    openEMS
-                  </Anchor>
-                  {' '}is experimental and switched off in this build.
-                </>
-              )}
+              Upload a KiCad board and see where it may fail EMI and EMC tests, and what to
+              change.
               {!local && copy.pluginDocsUrl && (
                 <>
-                  {' '}Prefer to work inside KiCad?{' '}
+                  {' '}Also{' '}
                   <Anchor component={Link} to={copy.pluginDocsUrl} inherit>
-                    Install it as a plugin
+                    a KiCad plugin
                   </Anchor>
                   .
                 </>
@@ -150,7 +150,8 @@ export function EmiAnalyzerPage({ api, deployment = 'hosted', host }: EmiAnalyze
               variant="light"
               color="green"
               size="lg"
-              title="Boards, results and components are stored on this computer and never uploaded anywhere."
+              style={{ flex: 'none' }}
+              title="Boards and results stay on this computer."
             >
               On this computer
             </Badge>
@@ -160,6 +161,7 @@ export function EmiAnalyzerPage({ api, deployment = 'hosted', host }: EmiAnalyze
               variant="light"
               color={me.data.anonymous ? 'gray' : 'green'}
               size="lg"
+              style={{ flex: 'none' }}
               title={
                 me.data.anonymous
                   ? copy.signIn
@@ -173,98 +175,117 @@ export function EmiAnalyzerPage({ api, deployment = 'hosted', host }: EmiAnalyze
 
         <Card withBorder padding="md">
           <Stack gap="sm">
-            <Text fw={500}>New board</Text>
-            <Group align="flex-end" gap="sm">
+            {/* The whole card area is a drop target; the button is for those who prefer a dialog. */}
+            <Box
+              onDragEnter={(e) => { e.preventDefault(); setDragging(true) }}
+              onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy' }}
+              onDragLeave={(e) => {
+                if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false)
+              }}
+              onDrop={onDrop}
+              p="lg"
+              style={{
+                border: `2px dashed var(--mantine-color-${dragging ? 'blue-6' : 'default-border'})`,
+                borderRadius: 8,
+                background: dragging ? 'var(--mantine-color-blue-light)' : undefined,
+                transition: 'background 120ms, border-color 120ms',
+              }}
+            >
+              <Stack gap="sm" align="center">
+                <Text fw={500} ta="center">Drop a board file here</Text>
+                <Group gap="sm" justify="center">
+                  <FileButton
+                    resetRef={resetFile}
+                    onChange={onPick}
+                    accept=".kicad_pcb,.zip,application/zip"
+                  >
+                    {(props) => (
+                      <Button {...props} loading={create.isPending}>
+                        Choose a file
+                      </Button>
+                    )}
+                  </FileButton>
+                  {/* The same upload as a user's own file, from a copy bundled with the app,
+                      so a first look needs neither a board nor a network. Uploaded once: after
+                      that the hash finds it and this opens the one already here. */}
+                  <Button variant="light" disabled={create.isPending}
+                          onClick={() => create.mutate({ file: sampleBoardFile(), as: SAMPLE_BOARD_NAME })}>
+                    Try the sample board
+                  </Button>
+                </Group>
+                {/* One line that says what is accepted, or how the upload is going: the same
+                    height either way, so nothing below moves. */}
+                <Box mih={34} w="100%" maw={560}>
+                  {stage ? (
+                    <Group gap="xs" justify="center">
+                      <Loader size="xs" />
+                      <Text size="xs" c="dimmed">{stage}</Text>
+                    </Group>
+                  ) : uploadPct !== null ? (
+                    <Group gap="xs" wrap="nowrap">
+                      <Progress value={uploadPct} size="sm" animated style={{ flex: 1 }} />
+                      <Text size="xs" c="dimmed" w={120}>
+                        {uploadPct < 100 ? `Uploading ${uploadPct.toFixed(0)}%` : 'Opening…'}
+                      </Text>
+                    </Group>
+                  ) : (
+                    <Text size="xs" c="dimmed" ta="center">
+                      A <Text span ff="monospace" size="xs">.kicad_pcb</Text>, a zipped KiCad
+                      project, or a zip of Gerbers with the drill file and an IPC-D-356 netlist.
+                    </Text>
+                  )}
+                </Box>
+              </Stack>
+            </Box>
+
+            {naming ? (
               <TextInput
-                label="Project name"
-                placeholder="taken from the filename if left blank"
+                size="xs"
+                label="Board name"
+                placeholder="the file name"
                 value={name}
                 onChange={(e) => setName(e.currentTarget.value)}
-                style={{ flex: 1 }}
                 disabled={create.isPending}
+                maw={360}
+                data-autofocus
               />
-              <FileButton
-                resetRef={resetFile}
-                onChange={onPick}
-                accept=".kicad_pcb,.zip,application/zip"
-              >
-                {(props) => (
-                  <Button {...props} loading={create.isPending}>
-                    Choose a board file
-                  </Button>
-                )}
-              </FileButton>
-            </Group>
-            {/* The same upload as a user's own file, from a copy bundled with the app, so a
-                first look needs neither a board nor a network. Uploaded once: after that the
-                hash finds it and this opens the one already here. */}
-            <Group gap="xs">
-              <Text size="xs" c="dimmed">No board to hand?</Text>
-              <Button size="compact-xs" variant="light" disabled={create.isPending}
-                      onClick={() => create.mutate({ file: sampleBoardFile(), as: SAMPLE_BOARD_NAME })}>
-                Try the sample board
-              </Button>
-            </Group>
-            {!local && workers.isSuccess && online === 0 && (
-              <Text size="xs" c="orange">
-                No worker is connected, so a new board waits until one is.
-              </Text>
-            )}
-
-            {stage && (
+            ) : (
               <Group gap="xs">
-                <Loader size="xs" />
-                <Text size="xs" c="dimmed">{stage}</Text>
+                <Anchor component="button" type="button" size="xs" c="dimmed"
+                        onClick={() => setNaming(true)}>
+                  Name it (optional)
+                </Anchor>
               </Group>
             )}
 
-            {uploadPct !== null && (
-              <Stack gap={4}>
-                <Progress value={uploadPct} size="sm" animated />
-                <Text size="xs" c="dimmed">
-                  {uploadPct < 100
-                    ? `Uploading: ${uploadPct.toFixed(0)}%`
-                    : 'Uploaded. Waiting for the analysis to start…'}
-                </Text>
-              </Stack>
+            {!local && workers.isSuccess && online === 0 && (
+              <Text size="xs" c="orange">
+                No worker is connected. A new board waits until one is.
+              </Text>
             )}
 
+            {refused && (
+              <Alert color="red" variant="light" p="xs" withCloseButton onClose={() => setRefused(null)}>
+                <Text size="xs">{refused} is not a .kicad_pcb or a .zip.</Text>
+              </Alert>
+            )}
             {create.isError && (
               <Alert color="red" variant="light" title="That board could not be opened">
-                <Text size="xs">
-                  {(create.error as Error).message}
-                </Text>
-                <Text size="xs" mt={4}>
-                  A KiCad board, a zipped KiCad project, or a zip of Gerbers with the drill file
-                  and an IPC-D-356 netlist. Anything else is refused before it is read.
-                </Text>
+                <Text size="xs">{(create.error as Error).message}</Text>
               </Alert>
             )}
 
             <Text size="xs" c="dimmed">
-              A <Text span ff="monospace" size="xs">.kicad_pcb</Text>, a zipped KiCad
-              project, or a zip of your Gerber output. Gerbers must include the drill file
-              and an <Text span ff="monospace" size="xs">IPC-D-356</Text> netlist. Gerbers
-              carry no net names on their own. To set thresholds in the zip, add an{' '}
-              <Text span ff="monospace" size="xs">emi.rules.yaml</Text>; you can also change
-              them in the app and export one.
-            </Text>
-            <Text size="xs" c="dimmed">
-              {local
-                ? 'Board files are stored on this computer and processed by the worker container running on it.'
-                : copy.storage}{' '}
+              {local ? 'Files stay on this computer.' : copy.storage}{' '}
               <Anchor component={Link} to={`${base}/limitations`} size="xs">
-                What that means
+                Limitations
               </Anchor>
-              .
             </Text>
           </Stack>
         </Card>
 
         <div>
-          <Group justify="space-between" mb="xs">
-            <Text fw={500}>Your boards</Text>
-          </Group>
+          <Text fw={500} mb="xs">Your boards</Text>
 
           {projects.isLoading && <Loader size="sm" />}
           {projects.isError && (
@@ -273,9 +294,7 @@ export function EmiAnalyzerPage({ api, deployment = 'hosted', host }: EmiAnalyze
             </Alert>
           )}
           {projects.isSuccess && projects.data.length === 0 && (
-            <Text c="dimmed" size="sm">
-              No boards yet. Choose a board file above, or try the sample board.
-            </Text>
+            <Text c="dimmed" size="sm">No boards yet.</Text>
           )}
 
           <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }} spacing="sm">
@@ -304,137 +323,77 @@ export function EmiAnalyzerPage({ api, deployment = 'hosted', host }: EmiAnalyze
           </SimpleGrid>
         </div>
 
-        <Card withBorder padding="md">
-          <Title order={4} mb="xs">
-            How the analysis works
-          </Title>
-          <Text size="sm" c="dimmed" mb="md">
-            {fullWave
-              ? 'Four stages, and only the full-wave solve is slow. Nothing here is a rule-of-thumb estimate standing in for a solver.'
-              : 'Three stages run in this build, and all of them are quick. The fourth, full-wave simulation, is experimental and switched off.'}
-          </Text>
-          <List type="ordered" size="sm" spacing="sm">
-            <List.Item>
-              <Text size="sm" fw={500} span>Ingest.</Text>{' '}
-              <Text size="sm" c="dimmed" span>
-                A <Text span ff="monospace" size="xs">.kicad_pcb</Text> is parsed straight from
-                its s-expression source, so nets, traces, vias, pads and the stackup arrive as
-                they were drawn. Gerbers take a longer route: every copper layer is rasterised,
-                its connected islands labelled, and the{' '}
-                <Text span ff="monospace" size="xs">IPC-D-356</Text> netlist coordinates dropped
-                onto them to recover which island is which net. Both paths end at one normalised
-                board model, and everything after this point reads only that.
-              </Text>
-            </List.Item>
-            <List.Item>
-              <Text size="sm" fw={500} span>Geometric checks (seconds).</Text>{' '}
-              {/* Points at the table rather than naming checks here: a second hand-kept list
-                  is how this sentence came to describe five checks after there were thirteen. */}
-              <Text size="sm" c="dimmed" span>
-                Return paths and plane stitching, decoupling, length matching and impedance, and
-                the layout details that make a board radiate. Then the other half of an EMC
-                test: ESD protection at the connectors, shield and chassis grounding, reset lines
-                that a transient can trip, and the power input and switching-regulator layout
-                behind conducted emissions. Every check is in the table below. No solver is
-                involved, which is why these run on any worker and finish while you wait.
-              </Text>
-            </List.Item>
-            <List.Item>
-              <Text size="sm" fw={500} span>ESD simulation (on demand).</Text>{' '}
-              <Text size="sm" c="dimmed" span>
-                An IEC 61000-4-2 contact discharge, simulated in ngspice on every line that leaves
-                the board through an edge connector: the trace, the clamp — from its datasheet or
-                a SPICE model you upload — its ground via, and the IC pin. Each line is compared
-                with its clamp moved to the connector, and that difference is the number to act on.
-              </Text>
-            </List.Item>
-            <List.Item>
-              <Text size="sm" fw={500} span>Small-part solve (minutes).</Text>{' '}
-              {features.isSuccess && !features.data.small_part_solve && (
-                <Badge component="span" size="xs" variant="light" color="yellow"
-                       style={{ display: 'inline-flex', verticalAlign: 'middle' }}>
-                  experimental · off
-                </Badge>
-              )}{' '}
-              <Text size="sm" c="dimmed" span>
-                One net cut out with the planes under it, solved in openEMS with a port at each end.
-                You get where its current flows and the impedance and S-parameters its ends see.
-                No far field, and a size limit that keeps it to minutes.
-              </Text>
-            </List.Item>
-            <List.Item>
-              <Text size="sm" fw={500} span>Full-wave solve (hours).</Text>{' '}
-              {features.isSuccess && !features.data.full_wave && (
-                <Tooltip
-                  multiline
-                  w={300}
-                  withArrow
-                  events={{ hover: true, focus: true, touch: true }}
-                  label="Experimental, and turned off on this server. It runs, but nothing it produces has been checked against a real board yet, so it is not offered by default. Everything else on this page works without it."
-                >
-                  <Badge
-                    component="span"
-                    size="xs"
-                    variant="light"
-                    color="yellow"
-                    style={{ cursor: 'help', display: 'inline-flex', verticalAlign: 'middle' }}
-                  >
-                    experimental · off
-                  </Badge>
-                </Tooltip>
-              )}{' '}
-              {/* Said here rather than at the top of the page: it is a property of this one
-                  stage, not of the tool. Shown only while solving is unavailable, and the
-                  badge carries the short form so the reason is discoverable on hover without
-                  a bare icon nobody notices. touch is enabled so it opens on a tap too. */}
-              {features.data?.full_wave && workers.isSuccess && online === 0 && (
-                <Tooltip
-                  multiline
-                  w={280}
-                  withArrow
-                  events={{ hover: true, focus: true, touch: true }}
-                  label="openEMS solving currently not available. The solving takes a lot of computing power and is not always available on-demand."
-                >
-                  {/* component="span" + inline-flex so it sits in the sentence after the
-                      stage name rather than breaking onto a line of its own. */}
-                  <Badge
-                    component="span"
-                    size="xs"
-                    variant="light"
-                    color="gray"
-                    style={{ cursor: 'help', display: 'inline-flex', verticalAlign: 'middle' }}
-                  >
-                    currently unavailable
-                  </Badge>
-                </Tooltip>
-              )}{' '}
-              <Text size="sm" c="dimmed" span>
-                openEMS, an EC-FDTD solver, over a region of interest you select. The worker
-                meshes the geometry, excites the nets you nominate, and steps the fields through
-                time on a rectilinear grid. Results come back as frequency-domain surface-current
-                maps per layer, a near-field-to-far-field radiation pattern, and S-parameters.
-                Whole-board solves are not offered: a 100 x 80 mm board meshed at 25 um is around
-                1.9 billion cells, which no amount of hardware makes practical.
-              </Text>
-            </List.Item>
-          </List>
-          <Text size="xs" c="dimmed" mt="md">
-            The memory and runtime arithmetic behind a solve, and what the results can and
-            cannot tell you, are on{' '}
-            <Anchor component={Link} to={`${base}/limitations`} size="xs">
-              the limitations page
-            </Anchor>
-            . The published limits those results are read against are on{' '}
-            <Anchor component={Link} to={`${base}/limits`} size="xs">
-              the emission limits page
-            </Anchor>
-            .
-          </Text>
-        </Card>
-
-        <ChecksTable />
-
+        <Accordion variant="contained" chevronPosition="left">
+          <Accordion.Item value="how">
+            <Accordion.Control>
+              <Text fw={500}>How it works</Text>
+            </Accordion.Control>
+            <Accordion.Panel>
+              <Stack gap="md">
+                {/* One short line per analysis, so each can change without touching the others. */}
+                <List size="sm" spacing={6}>
+                  <List.Item>
+                    <Text size="sm" fw={500} span>Checks (seconds).</Text>{' '}
+                    <Text size="sm" c="dimmed" span>
+                      Layout checks on every upload. They are listed below.
+                    </Text>
+                  </List.Item>
+                  <List.Item>
+                    <Text size="sm" fw={500} span>ESD (on demand).</Text>{' '}
+                    <Text size="sm" c="dimmed" span>
+                      An IEC 61000-4-2 discharge on each connector line, in ngspice.
+                    </Text>
+                  </List.Item>
+                  <List.Item>
+                    <Text size="sm" fw={500} span>Cables (seconds).</Text>{' '}
+                    <Text size="sm" c="dimmed" span>
+                      How much common-mode current each cable may carry, from an antenna model.
+                    </Text>
+                  </List.Item>
+                  <List.Item>
+                    <Text size="sm" fw={500} span>Small-part solve (minutes).</Text>{' '}
+                    {features.isSuccess && !features.data.small_part_solve && <OffBadge />}{' '}
+                    <Text size="sm" c="dimmed" span>
+                      One net and the planes under it, solved in openEMS.
+                    </Text>
+                  </List.Item>
+                  <List.Item>
+                    <Text size="sm" fw={500} span>Full-wave solve (hours).</Text>{' '}
+                    {features.isSuccess && !features.data.full_wave && <OffBadge />}{' '}
+                    <Text size="sm" c="dimmed" span>
+                      A region of the board in{' '}
+                      <Anchor href="https://www.openems.de/" target="_blank" rel="noreferrer" inherit>
+                        openEMS
+                      </Anchor>
+                      : current maps, far field and S-parameters.
+                    </Text>
+                  </List.Item>
+                </List>
+                <Text size="xs" c="dimmed">
+                  Read{' '}
+                  <Anchor component={Link} to={`${base}/limitations`} size="xs">the limitations</Anchor>
+                  {' '}and{' '}
+                  <Anchor component={Link} to={`${base}/limits`} size="xs">the emission limits</Anchor>
+                  {' '}before acting on a result.
+                </Text>
+                <ChecksTable />
+              </Stack>
+            </Accordion.Panel>
+          </Accordion.Item>
+        </Accordion>
       </Stack>
     </Container>
+  )
+}
+
+function OffBadge() {
+  return (
+    <Tooltip withArrow events={{ hover: true, focus: true, touch: true }}
+             label="Experimental, and off in this build.">
+      <Badge component="span" size="xs" variant="light" color="yellow"
+             style={{ cursor: 'help', display: 'inline-flex', verticalAlign: 'middle' }}>
+        experimental · off
+      </Badge>
+    </Tooltip>
   )
 }

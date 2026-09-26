@@ -45,12 +45,8 @@ export function ChecksTable() {
         <div>
           <Text fw={500}>What every board is checked for</Text>
           <Text size="xs" c="dimmed" mt={2}>
-            {rules.length} checks run on every upload, in seconds, from the board geometry and
-            stackup: what the board radiates and conducts out through its cables, and where ESD
-            and fast transients get in. They say where to look. A solve on a selected region, or
-            a near-field scan loaded onto the board, confirms what is actually radiating. Thresholds and
-            which checks run are set per board under Findings, Checks, or in an{' '}
-            <code>emi.rules.yaml</code> uploaded next to the <code>.kicad_pcb</code> in a zip.
+            {rules.length} checks run on every upload. They show where to look. Change them per
+            board under Findings, Checks, or with an <code>emi.rules.yaml</code> in the zip.
           </Text>
         </div>
         <Table.ScrollContainer minWidth={560}>
