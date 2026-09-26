@@ -18,6 +18,14 @@ The KiCad plugin is versioned and released separately; see
   capacitors, and ranks computed fixes (move a part, add a via, add or remove a part) by how
   much of the worst gap they close. The target is editable in the tab and in the decoupling
   check's settings (`ripple_pct`, `step_current_a`, `board_max_hz`, `clock_hz`, `switching_hz`).
+- An experimental conducted-emissions scan (`EMI_EXPERIMENTAL=conducted`), on a Conducted tab:
+  the board's power input through two CISPR 16-1-2 LISNs, the input filter as laid out and each
+  buck regulator as a trapezoidal current source, simulated with ngspice against the FCC
+  15.107 limits. Regulator settings not entered are assumed and marked so. It shows the worst
+  margin, which capacitor carries the ripple, what adding a capacitor or an LC filter would
+  change, and what each input capacitor is worth. Differential mode only; see
+  [docs/verification/conducted-emissions.md](docs/verification/conducted-emissions.md).
+
 - Report export from the board menu: a self-contained HTML report (prints to PDF) or JSON, with
   the findings on a board image, notes, cable budgets, ESD results and changes since an earlier
   version. Missing runs can be started from the dialog. Runs now record the worker version.

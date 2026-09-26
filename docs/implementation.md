@@ -405,6 +405,21 @@ proximity ≤ 25 mm). A board path uses the driver's net; a cable path uses the 
 nets and position from the board. With nothing specific found, general guidance, labelled
 general. The findings come with the request and only ever change this list.
 
+### 7.7 Conducted emissions (`conducted` run, experimental)
+
+Separate from the estimate above, and from full-wave: seconds of ngspice on any worker that has
+it. The stage (`stages/conducted.py`) finds the power input and the rail behind it
+(`conducted/rail.py`, following the `input-filter` and `switch-node` checks), builds a ladder of
+the rail's trace inductance and its capacitors (library ESR and ESL, one via), puts a trapezoidal
+current source at each buck's input pin (`conducted/sources.py`) and two CISPR 16-1-2 LISNs on the
+input (`conducted/lisn.py`), and runs one AC analysis per regulator at exactly its harmonics
+(`conducted/scan.py`). The layout and each what-if (a capacitor at the connector, one at each
+regulator, an LC filter, and the layout without each capacitor in turn) are isolated circuits in
+the same deck. Differential mode only; the level is compared with FCC 15.107 quasi-peak and
+average limits, and every line is a steady tone. Settings the user has not entered are assumed
+defaults, and `conducted.json` says which. Verification:
+[verification/conducted-emissions.md](verification/conducted-emissions.md).
+
 ---
 
 ## 8. Marking a feature experimental

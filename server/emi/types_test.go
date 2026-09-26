@@ -42,7 +42,7 @@ func TestEveryRunKindIsInTheSchemaConstraint(t *testing.T) {
 		t.Fatal("schema.sql no longer has both the CREATE TABLE constraint and its migration")
 	}
 	for _, k := range []RunKind{
-		RunKindIngest, RunKindSolve, RunKindTransient, RunKindCable, RunKindCompliance,
+		RunKindIngest, RunKindSolve, RunKindTransient, RunKindCable, RunKindCompliance, RunKindConducted,
 	} {
 		if strings.Count(schema, "'"+string(k)+"'::text") < 2 {
 			t.Errorf("run kind %q is missing from the CHECK constraint or from the migration "+
@@ -53,7 +53,7 @@ func TestEveryRunKindIsInTheSchemaConstraint(t *testing.T) {
 
 	// The migration only fires when the constraint lacks the value it probes for, so that probe
 	// has to name the newest kind. Naming an older one makes the whole block a no-op.
-	newest := string(RunKindCompliance)
+	newest := string(RunKindConducted)
 	if !strings.Contains(schema, "LIKE '%"+newest+"%'") {
 		t.Errorf("the migration probes for something other than %q, so it will not fire on a "+
 			"database that predates it", newest)

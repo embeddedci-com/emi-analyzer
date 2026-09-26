@@ -159,11 +159,10 @@ export function EsdSimulation({
   return (
     <Stack gap="md">
       <Text size="xs" c="dimmed">
-        Simulates an IEC 61000-4-2 contact discharge on every line that leaves the board through an
-        edge connector, with the trace, the clamp and its ground via as circuit elements. Each line
-        is compared with the clamp moved to the connector. Compare those numbers; the absolute
-        volts are an estimate —{' '}
-        <Anchor component={Link} to={`${base}/limitations`} size="xs">limitations</Anchor>.
+        An IEC 61000-4-2 contact discharge on each line that leaves through an edge connector,
+        with the clamp where it is and moved to the connector. Compare the two; the volts are
+        estimates.{' '}
+        <Anchor component={Link} to={`${base}/limitations`} size="xs">Limitations</Anchor>
       </Text>
 
       <Group gap="xs" wrap="nowrap" align="flex-end">
