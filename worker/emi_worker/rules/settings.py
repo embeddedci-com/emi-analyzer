@@ -191,7 +191,19 @@ RULE_CATALOGUE: dict[str, dict] = {
         "about": "IC supply pins far from a capacitor to ground, and decoupling capacitors whose "
                  "ground pad has no via nearby. The loop through them sets the frequency above "
                  "which they stop decoupling.",
-        "params": {"max_distance_mm": 3.0, "critical_distance_mm": 10.0, "max_ground_via_mm": 1.0},
+        "params": {
+            "max_distance_mm": 3.0, "critical_distance_mm": 10.0, "max_ground_via_mm": 1.0,
+            # The decoupling view's target impedance: rail volts x ripple / current step. The
+            # step is per IC and nothing in a board file says what it is, so the default is
+            # an assumption the view labels as one; set it per rail in a net group.
+            "ripple_pct": 5.0, "step_current_a": 0.5,
+            # Above this the IC's package and die capacitance decouple, not the board's parts,
+            # so the target is judged only below it.
+            "board_max_hz": 100e6,
+            # Noise the view marks on the chart. Zero means not known. A clock is board-wide;
+            # a regulator's switching frequency belongs to its rail.
+            "clock_hz": 0.0, "switching_hz": 0.0,
+        },
     },
     "stitching": {
         "title": "Plane stitching",
@@ -298,6 +310,7 @@ RULE_CATALOGUE["cable-resonance"] = {
 PER_NET_PARAMS: dict[str, tuple[str, ...]] = {
     "ddr-skew": ("intra_pair_ps", "byte_lane_ps", "address_command_ps"),
     "impedance": ("single_ended_ohm", "differential_ohm"),
+    "decoupling": ("ripple_pct", "step_current_a", "switching_hz", "board_max_hz"),
 }
 
 
