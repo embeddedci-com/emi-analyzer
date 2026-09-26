@@ -109,6 +109,9 @@ class SolveParams:
     #: Read each layer's map this far above its copper, mm, on every preset. 0 reads it on the
     #: next grid line up, wherever the preset put it. A small-part solve sets it.
     map_height_mm: float = 0.0
+    #: Say so when the band's ends sit near the edge of the excitation (``excitation_band``).
+    #: A small-part solve turns it off: see stages/small_part.py.
+    band_edge_note: bool = True
 
     def resolved_f_max(self) -> float:
         if self.f_max > 0:
@@ -661,7 +664,7 @@ def build_model(model: BoardModel, transform, params: SolveParams) -> BuiltModel
     # ---- document ----
     f_min = min(params.frequencies_hz)
     f0, fc, band_note = excitation_band(f_min, f_max)
-    if band_note:
+    if band_note and params.band_edge_note:
         notes.append(band_note)
 
     dt = mesh.timestep_seconds()

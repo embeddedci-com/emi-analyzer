@@ -341,7 +341,8 @@ export function HotspotResults({
         </Table>
       </div>
 
-      <ModelledParts parts={manifest.modelled_parts} />
+      {/* A small part never models components, so "none were modelled" would only confuse. */}
+      {!smallPart && <ModelledParts parts={manifest.modelled_parts} />}
 
       {/*
         Cables sit below the layer maps rather than beside them: this is the only number here
