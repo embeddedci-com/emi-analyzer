@@ -26,11 +26,12 @@ solver or a measurement — and passed. The gap between the two is most of this 
 | Board far field (NF2FF) | ✅ | ⚠️ matches nec2c on dipoles over the ground plane as the product runs it, 30 MHz up (§3); no board checked against a measurement | off, with full-wave |
 | Cable emissions, Tier B | ✅ | ❌ failed its real-board gate, 7-9 dB low on average on two boards below resonance. Cause found in nec2c (the board modelled as a wire, not a plate) and fixed; a residual of 0-5 dB low remains by where the source is. Needs the openEMS re-run — §3 | off, with full-wave |
 | Compliance estimate | ✅ | ❌ runs end to end on the fixture board; never checked against a lab or a second solver (§3) | off, with full-wave |
-| Conducted emissions scan | ❌ | ❌ | — |
+| Conducted emissions scan (`conducted` run, ngspice), differential mode | ✅ | ⚠️ the LISN within the CISPR 16-1-2 tolerance, a buck's ripple and first harmonic and an LC filter within 0.1 dB of closed forms; no board against a measurement; regulator settings are assumed until entered ([verification/conducted-emissions.md](verification/conducted-emissions.md)) | **off** (`conducted`) |
 | Report export (HTML and JSON, built in the browser) | ✅ | — (nothing to verify: it restates results) | on |
 
 Everything marked **off** is behind the `full-wave` experimental feature, except small-part
-solves, which also have their own, `small-part-solve`. It is refused by the server, not merely
+solves, which also have their own, `small-part-solve`, and the conducted scan, which has only
+its own, `conducted`. It is refused by the server, not merely
 hidden. It is off because none of it has been verified on a real board, not
 because it is known to be broken — see §2. To try it:
 
@@ -140,6 +141,33 @@ Numbers, method and what is still open: [`verification/cables-and-drivers.md`](v
 
 Details and the full list: [`verification/small-part-solve.md`](verification/small-part-solve.md).
 
+### Conducted emissions
+
+Experimental (`conducted`). What is modelled: two CISPR 16-1-2 50 Ω/50 µH LISNs on the board's
+power input; the input rail as laid out, through ferrites, inductors, fuses, series diodes,
+low-value resistors and eFuses, with each capacitor's library ESR and ESL, its via and the
+trace inductance between them; each buck regulator the `switch-node` check finds as a
+trapezoidal current source at its input pin, with the frequency, current, duty and edge the user
+enters or assumed defaults marked as assumed. Differential mode only, against the FCC 15.107
+quasi-peak and average limits; every harmonic is a steady tone, so the average limit decides.
+
+Not modelled: common-mode current (through the switch node's and the board's capacitance to the
+test bench's reference plane, which depends on the setup); spread spectrum, burst and
+pulse-skipping modes; boost, buck-boost and flyback input currents; controllers with external
+FETs; a PMIC's bucks as separate sources; inductor and ferrite self-resonance; DC-bias
+derating; the external power supply's own filter.
+
+| Check | Status |
+|---|---|
+| LISN impedance within CISPR 16-1-2's ±20 % | ✅ within 10.4 %, phase within 6.6° |
+| A buck's input ripple against I·D(1-D)/(f·C) | ✅ -0.10 dB |
+| Its first harmonic at the LISN against the closed form and a transient FFT | ✅ both within 0.01 dB |
+| An LC filter's attenuation against its closed form | ✅ within 0.012 dB, 150 kHz-30 MHz |
+| Real boards: the input, filter and regulators found | ⚠️ 4 private boards: the input on all, a regulator on one (a PMIC behind two eFuses); a boost, a missed switch node and an external-FET controller on the others |
+| One board against a LISN measurement | ❌ |
+
+Details: [`verification/conducted-emissions.md`](verification/conducted-emissions.md).
+
 ### Drivers
 
 | Check | Status |
@@ -184,7 +212,7 @@ now one series element, placed only on a solver that models an inductor.
 | A real solve, a driver and the board assembled into a margin | ✅ runs on the fixture board (`scripts/e2e_compliance_fixture.py`); the level is not checked against anything |
 | Transfer functions interpolated between grid points | ❌ the 1 dB σ term is a placeholder, not a residual |
 | Disclaimer on reports and exports | ✅ on the report's first page, on every printed page, and in the JSON |
-| LISN network for conducted emissions | ❌ not started |
+| LISN network for conducted emissions | ✅ in the `conducted` scan, not in the compliance estimate (§3, Conducted emissions) |
 | One real board against a real lab result | ❌ |
 
 ---
@@ -263,7 +291,7 @@ now one series element, placed only on a solver that models an inductor.
 
 | Item | Notes |
 |---|---|
-| Conducted emissions scan | ngspice LISN, switching-regulator drivers, common-mode term. The largest piece left. |
+| Conducted emissions, common mode | The differential-mode scan is experimental (§3); the common-mode term needs the setup's capacitance to the reference plane. |
 | Record a lab test result | Needed before confidence can be called calibrated. |
 | Built-in antenna solver | nec2c is the only one. |
 | Cheap cable what-ifs | Re-run only the antenna model when a choke, length or far end changes. |
