@@ -42,3 +42,11 @@ describe('findingAction', () => {
     expect(findingAction({ rule: 'new-check', detail: 'Why it matters. Do this.' })).toBe('Do this.')
   })
 })
+
+describe('findingAction with a per-finding action', () => {
+  it('prefers the worker line over the rule default', () => {
+    expect(findingAction({ rule: 'decoupling', detail: 'x.', action: 'Add a ground via next to the capacitor\'s ground pad.' }))
+      .toBe('Add a ground via next to the capacitor\'s ground pad.')
+    expect(findingAction({ rule: 'decoupling', detail: 'x.' })).toBe('Move the capacitor next to the pin, with its own ground via.')
+  })
+})

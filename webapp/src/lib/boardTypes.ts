@@ -140,6 +140,8 @@ export interface RuleFinding {
   y?: number | null
   /** Optional bounding box in mm: [minX, minY, maxX, maxY]. */
   bbox?: [number, number, number, number]
+  /** What to do, when it differs from the rule's usual fix. */
+  action?: string
 }
 
 export interface RulesDoc {

@@ -150,6 +150,7 @@ def check_decoupling(ctx: RuleContext) -> Iterator[Finding]:
                     rule="decoupling",
                     severity=severity(ctx, "decoupling", "critical"),
                     title=f"{ref} has no decoupling capacitor on {net}",
+                    action="Add a capacitor to ground next to the pin.",
                     detail=(
                         f"{ref} draws from {net} (pin {pin.number}), and no capacitor on the "
                         f"board joins {net} to ground. Every current step the IC makes is "
@@ -190,6 +191,7 @@ def check_decoupling(ctx: RuleContext) -> Iterator[Finding]:
                 rule="decoupling",
                 severity=severity(ctx, "decoupling", "critical" if d > crit_d else "warning"),
                 title=f"{ref}.{pin.number} is {d:.1f} mm from its nearest decoupling capacitor",
+                action="Move the capacitor next to the pin.",
                 detail=(
                     f"The nearest capacitor on {net} to {ref} pin {pin.number} is {cap[0]}"
                     f"{' (' + cap[1].value + ')' if getattr(cap[1], 'value', '') else ''}, "
@@ -223,6 +225,7 @@ def check_decoupling(ctx: RuleContext) -> Iterator[Finding]:
             rule="decoupling",
             severity=severity(ctx, "decoupling", "warning"),
             title=f"{cref}'s ground pad has no via within {via_d:g} mm",
+            action="Add a ground via next to the capacitor's ground pad.",
             detail=(
                 f"{cref} decouples an IC supply, but the nearest ground via to its ground pad "
                 f"is {near:.1f} mm away. That trace is part of the decoupling loop just as much "

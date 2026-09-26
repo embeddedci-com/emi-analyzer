@@ -69,7 +69,9 @@ const ACTION: Record<string, string> = {
  * What to do about a finding, in one line. A check this list does not know yet falls back to
  * the last sentence of the finding's own text, which is where the worker puts the fix.
  */
-export function findingAction(f: Pick<RuleFinding, 'rule' | 'detail'>): string {
+export function findingAction(f: Pick<RuleFinding, 'rule' | 'detail' | 'action'>): string {
+  // The worker's own line wins: one rule can find different problems with different fixes.
+  if (f.action) return f.action
   const known = ACTION[f.rule]
   if (known) return known
   const sentences = f.detail.trim().split(/(?<=\.)\s+/)
