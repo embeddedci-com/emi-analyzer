@@ -206,17 +206,45 @@ def _abortable_openems(tmp_path, energies_db: list[tuple[int, float]]):
 
 
 def test_the_runner_stops_openems_only_after_its_source(tmp_path, monkeypatch):
-    """A -60 dB dip inside the source is ignored; -45 dB after it ends the run normally."""
+    """A -60 dB dip inside the source is ignored; three reports under -40 dB after it end the
+    run normally."""
     from emi_worker.openems import run as runmod
 
     monkeypatch.setattr(runmod, "OPENEMS_BIN", _abortable_openems(
-        tmp_path, [(400, -60.0), (800, -0.0), (2000, -30.0), (3000, -45.0)]))
+        tmp_path, [(400, -60.0), (800, -0.0), (2000, -30.0), (2500, -45.0), (2800, -46.0),
+                   (3000, -45.0)]))
     (tmp_path / "ABORT").write_text("")  # left behind by an earlier run
     r = runmod.run_openems("model.xml", str(tmp_path), stop_below_db=-40.0)
     assert r.stopped_on_energy_at == 3000
     assert r.converged is True
     assert not any("timestep limit" in w for w in r.warnings)
     assert not (tmp_path / "ABORT").exists()
+
+
+def test_one_trough_in_a_ringing_run_does_not_end_it(tmp_path, monkeypatch):
+    """Board D's normal run swung -49.6, -38.6, -57.0 dB between reports and was stopped on the
+    -57 dB sample (docs/verification/small-part-solve.md). The runner now waits for the energy
+    to stay under the limit for ``END_HOLD_READINGS`` reports in a row; a report above resets
+    the count."""
+    from emi_worker.openems import run as runmod
+
+    assert runmod.END_HOLD_READINGS == 3
+    monkeypatch.setattr(runmod, "OPENEMS_BIN", _abortable_openems(
+        tmp_path, [(2000, -49.6), (2200, -38.6), (2400, -57.0), (2600, -51.0), (2800, -39.0),
+                   (3000, -52.0), (3200, -55.0), (3400, -53.0), (3600, -58.0)]))
+    r = runmod.run_openems("model.xml", str(tmp_path), stop_below_db=-50.0)
+    assert r.stopped_on_energy_at == 3400
+    assert r.converged is True
+
+
+def test_a_ringing_run_that_never_holds_goes_to_its_cap(tmp_path, monkeypatch):
+    from emi_worker.openems import run as runmod
+
+    monkeypatch.setattr(runmod, "OPENEMS_BIN", _abortable_openems(
+        tmp_path, [(2000, -52.0), (2200, -38.6), (2400, -57.0), (2600, -51.0), (2800, -39.0)]))
+    r = runmod.run_openems("model.xml", str(tmp_path), stop_below_db=-50.0)
+    assert r.stopped_on_energy_at == 0
+    assert r.converged is False
 
 
 def test_without_the_runner_criterion_the_run_goes_to_its_cap(tmp_path, monkeypatch):
