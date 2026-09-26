@@ -164,6 +164,15 @@ def test_the_app_layers_groups_and_suppressions_are_applied(tmp_path):
     assert [x["source"] for x in s["base"]["suppress"]] == ["file"]
 
 
+def test_net_patterns_match_as_the_apps_preview_says():
+    """fixtures/net_patterns.json is also run by webapp/src/lib/rulesSettings.test.ts against
+    the app's glob, so the preview of which nets a pattern covers is the worker's answer."""
+    cases = json.loads((FIXTURES / "net_patterns.json").read_text(encoding="utf-8"))
+    for pattern, net, expected in cases:
+        assert settings.NetGroupSetting(match=pattern).matches(net) is expected, (pattern, net)
+        assert settings.Suppression(rule="*", net=pattern).covers("radiator", net) is expected
+
+
 def test_a_group_param_must_be_one_a_rule_reads_per_net():
     cfg = settings.load(("run", {"groups": [
         {"match": "DQ*", "params": {"byte_lane_ps": 4, "max_distance_mm": 3, "nonsense": 1}},

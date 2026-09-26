@@ -93,7 +93,9 @@ class NetGroupSetting:
     def matches(self, net: str, netclass: str = "") -> bool:
         if self.netclass:
             return netclass == self.netclass
-        return fnmatch.fnmatch(net, self.match)
+        # Case-sensitive on every OS (plain fnmatch folds case on Windows), so the app's
+        # pattern preview (rulesSettings.ts globToRegExp) says what the worker will do.
+        return fnmatch.fnmatchcase(net, self.match)
 
 
 @dataclass
@@ -106,7 +108,7 @@ class Suppression:
     source: str = "default"
 
     def covers(self, rule: str, net: str) -> bool:
-        return fnmatch.fnmatch(rule, self.rule) and fnmatch.fnmatch(net or "", self.net)
+        return fnmatch.fnmatchcase(rule, self.rule) and fnmatch.fnmatchcase(net or "", self.net)
 
 
 #: The catalogue. Every rule the analyzer knows, its parameters and their defaults.
@@ -583,7 +585,7 @@ def _apply(s: Settings, source: str, doc: dict) -> None:
             # A suppression without a reason is a mystery to whoever finds it later.
             s.warnings.append(f"{_label(source)}: suppression for {sup.get('rule', '*')} has no reason")
         rule = str(sup.get("rule", "*"))
-        if not any(fnmatch.fnmatch(rid, rule) for rid in RULE_CATALOGUE):
+        if not any(fnmatch.fnmatchcase(rid, rule) for rid in RULE_CATALOGUE):
             # Kept, since it hides nothing, but said: a misspelt id is a suppression that
             # silently stopped working.
             s.warnings.append(f"{_label(source)}: suppression names no known rule ({rule!r})")
