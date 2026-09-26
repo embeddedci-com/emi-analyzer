@@ -56,7 +56,8 @@ const LABEL: Record<WorkerState, { text: string; color: string }> = {
   disabled: { text: 'Worker: external', color: 'gray' },
   docker_missing: { text: 'Docker not installed', color: 'red' },
   docker_not_running: { text: 'Docker not running', color: 'orange' },
-  pulling: { text: 'Downloading worker', color: 'blue' },
+  // The size is the server's too (imageDownloadSize in cmd/emi-local/worker.go).
+  pulling: { text: 'Downloading worker, 330 MB once', color: 'blue' },
   starting: { text: 'Starting worker', color: 'blue' },
   running: { text: 'Worker running', color: 'green' },
   // Not "stopped": it failed, and saying so is what sends the user to the reason.
