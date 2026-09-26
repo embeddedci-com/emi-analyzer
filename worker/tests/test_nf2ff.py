@@ -23,6 +23,7 @@ from emi_worker.openems.nf2ff import (
     NF2FFError,
     add_dumps,
     plan_faces,
+    read_field,
     write_job,
 )
 
@@ -317,6 +318,47 @@ def test_the_job_asks_for_the_standard_distance_directly(tmp_path):
     for distance in (3.0, 10.0):
         job = write_job(str(tmp_path), [100e6], str(tmp_path / "ff.h5"), radius_m=distance)
         assert float(ET.parse(job).getroot().get("Radius")) == pytest.approx(distance)
+
+
+def _nf2ff_output(path: Path, e_theta, e_phi, layout: str) -> None:
+    """An nf2ff output file. ``e_theta``/``e_phi`` are (F, phi, theta), the order Debian's
+    0.0.35 writes; the from-source build writes each one complex and (theta, phi)."""
+    h5py = pytest.importorskip("h5py")
+    with h5py.File(path, "w") as f:
+        f["/Mesh/theta"] = np.deg2rad(THETA_DEG).astype(np.float32)
+        f["/Mesh/phi"] = np.deg2rad(PHI_DEG).astype(np.float32)
+        for name, e in (("E_theta", e_theta), ("E_phi", e_phi)):
+            g = f.create_group(f"/nf2ff/{name}/FD")
+            for k, ek in enumerate(e):
+                if layout == "complex":
+                    g[f"f{k}"] = ek.T
+                else:
+                    g[f"f{k}_real"], g[f"f{k}_imag"] = ek.real, ek.imag
+
+
+@pytest.mark.parametrize("layout", ["split", "complex"])
+def test_both_nf2ff_output_layouts_read_as_the_same_field(tmp_path, layout):
+    """The from-source openEMS writes one complex dataset, transposed to (theta, phi), and does
+    not say so. Read as (phi, theta), the per-theta maximum would be taken across theta."""
+    rng = np.random.default_rng(3)
+    shape = (2, PHI_DEG.size, THETA_DEG.size)
+    e_theta = rng.normal(size=shape) + 1j * rng.normal(size=shape)
+    e_phi = 0.5 * (rng.normal(size=shape) + 1j * rng.normal(size=shape))
+    # One loud direction, so the peak has a known place.
+    e_theta[1, 5, 20] = 40.0
+    _nf2ff_output(tmp_path / "ff.h5", e_theta, e_phi, layout)
+    out = read_field(str(tmp_path / "ff.h5"), [100e6, 300e6])
+    mag = np.maximum(np.abs(e_theta), np.abs(e_phi))
+    assert out["e_max_v_per_m"] == pytest.approx(mag.max(axis=(1, 2)).tolist())
+    assert out["e_by_theta_v_per_m"][1] == pytest.approx(mag[1].max(axis=0).tolist())
+    assert int(np.argmax(out["e_by_theta_v_per_m"][1])) == 20
+
+
+def test_an_nf2ff_field_of_the_wrong_shape_is_refused(tmp_path):
+    shape = (1, PHI_DEG.size, THETA_DEG.size - 1)
+    _nf2ff_output(tmp_path / "ff.h5", np.ones(shape), np.ones(shape), "split")
+    with pytest.raises(NF2FFError, match="not 24 phi by 25 theta"):
+        read_field(str(tmp_path / "ff.h5"), [100e6])
 
 
 # ---- per volt of source ----------------------------------------------------------------
