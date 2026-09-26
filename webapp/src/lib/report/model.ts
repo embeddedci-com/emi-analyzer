@@ -9,6 +9,11 @@
 import type { BoardDoc, NetReport, RuleFinding, RulesDoc, StackupEntry } from '../boardTypes'
 import type { CableBudgetPoint, CablesDoc } from '../cableTypes'
 import type { ComplianceDoc } from '../complianceTypes'
+import type { ConductedDoc, ConductedParamName, ConductedVariantId } from '../conductedTypes'
+import { verdict } from '../conducted'
+import {
+  branchesOf, fmtRange, frequencies, rankRecommendations, type DecBranch, type DecouplingDoc,
+} from '../decoupling'
 import type { Features, Run } from '../emiApi'
 import type { TransientDoc, TransientVariantId } from '../transientTypes'
 import {
@@ -22,14 +27,17 @@ import { EXPERIMENTAL } from '../../components/Experimental'
 export const REPORT_FORMAT = 'emi-report'
 export const REPORT_FORMAT_VERSION = 1
 
-export type SectionId = 'board' | 'findings' | 'notes' | 'cables' | 'esd' | 'changes' | 'experimental'
+export type SectionId =
+  | 'board' | 'findings' | 'notes' | 'decoupling' | 'cables' | 'esd' | 'conducted' | 'changes' | 'experimental'
 
 export const SECTIONS: { id: SectionId; label: string }[] = [
   { id: 'board', label: 'Board image with finding markers' },
   { id: 'findings', label: 'Findings' },
   { id: 'notes', label: 'Analysis notes' },
+  { id: 'decoupling', label: 'Decoupling' },
   { id: 'cables', label: 'Cable budgets' },
   { id: 'esd', label: 'ESD simulation' },
+  { id: 'conducted', label: 'Conducted emissions (experimental)' },
   { id: 'changes', label: 'Changes since an earlier version' },
   { id: 'experimental', label: 'Experimental results' },
 ]
@@ -68,6 +76,8 @@ export interface ReportInput {
   boardImage?: BoardImage | null
   cables?: { run: Run; doc: CablesDoc } | null
   esd?: { run: Run; doc: TransientDoc } | null
+  /** Only used while the `conducted` feature is on. */
+  conducted?: { run: Run; doc: ConductedDoc } | null
   /** An earlier version's results, for "changes since". Each part is compared only when both have it. */
   compare?: {
     versionNumber: number
@@ -178,6 +188,84 @@ export interface EsdSection {
   notes: string[]
 }
 
+export interface DecouplingIcSection {
+  ref: string
+  pins: string[]
+  status: 'ok' | 'gaps'
+  /** "ok", "gaps at 1.88 to 4.73 MHz", or "no capacitors". */
+  statusText: string
+  gaps: [number, number][]
+  targetOhm: number
+  bandHz: number
+  ripplePct: number
+  stepCurrentA: number
+  /** Which of the target's inputs are defaults rather than read from the board. */
+  targetAssumed: string[]
+  worst: { hz: number; ohm: number; excessDb: number } | null
+  antiResonances: { hz: number; ohm: number }[]
+  recommendations: { text: string; improvementDb: number; atHz: number; fixes: [number, number][] }[]
+  caps: {
+    ref: string
+    value: string
+    package: string
+    cF: number
+    distanceMm: number
+    loopNh: number
+    usefulToHz: number
+    model: 'library' | 'assumed'
+    assumed: string[]
+  }[]
+  /** What the layout could not tell, such as the height to ground. */
+  assumed: string[]
+  /** The model behind the chart: each capacitor and the plane pair, behind `seriesLH`. */
+  branches: DecBranch[]
+  seriesLH: number
+}
+
+export interface DecouplingSection {
+  note: string
+  stackupAssumed: boolean
+  /** The worker's log-spaced frequency grid (lib/decoupling.ts `frequencies`). */
+  grid: { fMinHz: number; fMaxHz: number; pointsPerDecade: number }
+  rails: {
+    net: string
+    v: number
+    vAssumed: boolean
+    status: 'ok' | 'gaps'
+    plane: { layer: string; groundLayer: string; cavityMm: number; cF: number; resonanceHz: number } | null
+    ics: DecouplingIcSection[]
+  }[]
+}
+
+export interface ConductedSection {
+  why: string
+  standardClass: 'A' | 'B'
+  quasiPeak: string
+  average: string
+  entry: { connector: string; net: string } | null
+  verdict: string
+  worst: { frequencyHz: number; marginDb: number; dbuv: number; detector: string } | null
+  regulators: string[]
+  /** Regulators still on assumed settings, with the values used (SI units). */
+  assumed: { ref: string; settings: { name: ConductedParamName; value: number; source: string }[] }[]
+  lines: { frequencyHz: number; dbuv: number; qpLimit: number; avgLimit: number; marginAvgDb: number }[]
+  dominant: {
+    frequencyHz: number
+    regulator: string
+    harmonic: number
+    cap: string | null
+    capValue: string | null
+    capShare: number | null
+    lisnShare: number | null
+  } | null
+  whatIfs: { id: ConductedVariantId; label: string; changeDb: number | null }[]
+  caps: { ref: string; value: string; assumed: boolean; withoutChangeDb: number | null }[]
+  skipped: { ref: string; why: string }[]
+  assumptions: string[]
+  notModelled: string[]
+  notes: string[]
+}
+
 export interface ChangesSection {
   sinceVersion: number
   findings: {
@@ -227,7 +315,7 @@ export interface ReportData {
     size: { widthMm: number; heightMm: number; thicknessMm: number }
     copperLayers: number
     nets: number
-    features: { fullWave: boolean; smallPartSolve: boolean }
+    features: { fullWave: boolean; smallPartSolve: boolean; conducted: boolean }
     rulesFile: string | null
     rulesFileError: string | null
     appSettings: boolean
@@ -241,8 +329,10 @@ export interface ReportData {
   markers: { n: number; x: number; y: number; severity: RuleFinding['severity'] }[]
   boardImage: BoardImage | null
   notes: Notice[]
+  decoupling: DecouplingSection | null
   cables: CableSection | null
   esd: EsdSection | null
+  conducted: ConductedSection | null
   changes: ChangesSection | null
   experimental: ExperimentalSection | null
 }
@@ -415,6 +505,134 @@ function esdSection(doc: TransientDoc): EsdSection {
   }
 }
 
+/** The recommendations listed per IC; the app ranks them all. */
+export const MAX_RECOMMENDATIONS = 3
+
+function decouplingSection(doc: DecouplingDoc): DecouplingSection {
+  const freqs = frequencies(doc)
+  return {
+    note: doc.note,
+    stackupAssumed: doc.stackup_assumed,
+    grid: { fMinHz: doc.f_min_hz, fMaxHz: doc.f_max_hz, pointsPerDecade: doc.points_per_decade },
+    rails: doc.rails.map((rail) => ({
+      net: rail.net,
+      v: rail.v,
+      vAssumed: rail.v_assumed,
+      status: rail.status,
+      plane: rail.plane
+        ? {
+            layer: rail.plane.layer, groundLayer: rail.plane.ground_layer, cavityMm: rail.plane.cavity_mm,
+            cF: rail.plane.c_f, resonanceHz: rail.plane.resonance_hz,
+          }
+        : null,
+      ics: rail.ics.map((ic): DecouplingIcSection => {
+        const first = ic.gaps[0]
+        const statusText = !ic.caps.length
+          ? 'no capacitors'
+          : ic.status === 'ok' || !first
+            ? 'ok'
+            : `gaps at ${fmtRange(first)}${ic.gaps.length > 1 ? ` and ${ic.gaps.length - 1} more` : ''}`
+        // Ranked for the worker's target, as the Decoupling tab opens.
+        const ranked = ic.status === 'gaps' && Number.isFinite(ic.target_ohm)
+          ? rankRecommendations(ic, rail.parts, freqs, ic.target_ohm)
+          : []
+        return {
+          ref: ic.ref,
+          pins: ic.pins,
+          status: ic.status,
+          statusText,
+          gaps: ic.gaps,
+          targetOhm: ic.target_ohm,
+          bandHz: ic.band_hz,
+          ripplePct: ic.ripple_pct,
+          stepCurrentA: ic.step_current_a,
+          // As the Decoupling tab says: the step is a default unless a setting gives it.
+          targetAssumed: rail.v_assumed ? ['rail voltage', 'current step'] : ['current step'],
+          worst: ic.worst ? { hz: ic.worst.hz, ohm: ic.worst.ohm, excessDb: ic.worst.excess_db } : null,
+          antiResonances: ic.anti_resonances.filter((a) => a.hz <= ic.band_hz),
+          recommendations: ranked.slice(0, MAX_RECOMMENDATIONS).map((r) => ({
+            text: r.text, improvementDb: r.improvementDb, atHz: r.atHz, fixes: r.fixesNow,
+          })),
+          caps: ic.caps.map((c) => {
+            const p = rail.parts[c.ref]
+            return {
+              ref: c.ref,
+              value: p?.value ?? '',
+              package: p?.package ?? '',
+              cF: p?.c_f ?? 0,
+              distanceMm: c.distance_mm,
+              loopNh: c.mount_l_h * 1e9,
+              usefulToHz: c.useful_up_to_hz,
+              model: p?.source === 'library' ? 'library' : 'assumed',
+              assumed: p?.assumed ?? [],
+            }
+          }),
+          assumed: ic.assumed,
+          branches: branchesOf(ic, rail.parts),
+          seriesLH: ic.series_l_h,
+        }
+      }),
+    })),
+  }
+}
+
+/** Why the conducted scan is experimental, in one line. */
+export const CONDUCTED_WHY =
+  'Differential mode only, and not yet compared with a measurement on a real board.'
+
+function conductedSection(doc: ConductedDoc): ConductedSection {
+  const laid = doc.variants.find((v) => v.id === 'as_laid_out')
+  const caps = new Map(doc.network.caps.map((c) => [c.ref, c]))
+  const d = doc.dominant
+  const top = d?.shares.find((s) => s.ref !== 'LISN')
+  const lisn = d?.shares.find((s) => s.ref === 'LISN')
+  return {
+    why: CONDUCTED_WHY,
+    standardClass: doc.standard.class,
+    quasiPeak: doc.standard.quasi_peak,
+    average: doc.standard.average,
+    entry: doc.entry ? { connector: doc.entry.connector, net: doc.entry.net } : null,
+    verdict: verdict(doc.worst),
+    worst: doc.worst
+      ? { frequencyHz: doc.worst.f_hz, marginDb: doc.worst.margin_db, dbuv: doc.worst.dbuv, detector: doc.worst.detector }
+      : null,
+    regulators: doc.regulators.map((r) => r.ref),
+    assumed: doc.regulators
+      .filter((r) => r.assumed.length > 0)
+      .map((r) => ({
+        ref: r.ref,
+        settings: r.assumed
+          .filter((name) => r.params[name])
+          .map((name) => ({ name, value: r.params[name].value, source: r.params[name].source })),
+      })),
+    lines: (laid?.lines ?? []).map((l) => ({
+      frequencyHz: l.f_hz, dbuv: l.dbuv, qpLimit: l.qp_limit, avgLimit: l.avg_limit, marginAvgDb: l.margin_avg_db,
+    })),
+    dominant: d
+      ? {
+          frequencyHz: d.f_hz,
+          regulator: d.regulator,
+          harmonic: d.harmonic,
+          cap: top?.ref ?? null,
+          capValue: (top && caps.get(top.ref)?.value) || null,
+          capShare: top?.share ?? null,
+          lisnShare: lisn?.share ?? null,
+        }
+      : null,
+    whatIfs: doc.suggestions.map((s) => ({ id: s.id, label: s.label, changeDb: s.change_db })),
+    caps: doc.components.map((c) => ({
+      ref: c.ref,
+      value: caps.get(c.ref)?.value ?? '',
+      assumed: !!caps.get(c.ref)?.assumed,
+      withoutChangeDb: c.without_change_db,
+    })),
+    skipped: doc.skipped ?? [],
+    assumptions: doc.assumptions ?? [],
+    notModelled: doc.not_modelled ?? [],
+    notes: doc.notes ?? [],
+  }
+}
+
 /** The number of changed nets a report lists; the rest are counted. */
 export const MAX_NET_CHANGES = 25
 
@@ -517,6 +735,9 @@ export function assembleReport(input: ReportInput): ReportData {
     if (!want.has(id)) return false
     if (id === 'cables') return !!input.cables
     if (id === 'esd') return !!input.esd
+    if (id === 'decoupling') return !!input.rules?.decoupling
+    // An experimental scan: never in a report while its feature is off.
+    if (id === 'conducted') return input.features.conducted === true && !!input.conducted
     if (id === 'changes') return !!input.compare
     // Experimental results never appear unless their feature is on.
     if (id === 'experimental') {
@@ -558,6 +779,7 @@ export function assembleReport(input: ReportInput): ReportData {
       features: {
         fullWave: input.features.full_wave,
         smallPartSolve: input.features.small_part_solve === true || input.features.full_wave,
+        conducted: input.features.conducted === true,
       },
       rulesFile: notices.rulesFile,
       rulesFileError: notices.rulesFileError
@@ -583,8 +805,10 @@ export function assembleReport(input: ReportInput): ReportData {
     markers: has('board') && has('findings') ? markers : [],
     boardImage: has('board') ? safeImage(input.boardImage) : null,
     notes: has('notes') ? notices.notices : [],
+    decoupling: has('decoupling') && input.rules?.decoupling ? decouplingSection(input.rules.decoupling) : null,
     cables: has('cables') && input.cables ? cableSection(input.cables.doc) : null,
     esd: has('esd') && input.esd ? esdSection(input.esd.doc) : null,
+    conducted: has('conducted') && input.conducted ? conductedSection(input.conducted.doc) : null,
     changes: has('changes') && input.compare ? changesSection(input.compare, input) : null,
     experimental: has('experimental') && input.experimental ? experimentalSection(input.experimental) : null,
   }

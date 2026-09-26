@@ -34,8 +34,10 @@ The KiCad plugin is versioned and released separately; see
   the tab.
 
 - Report export from the board menu: a self-contained HTML report (prints to PDF) or JSON, with
-  the findings on a board image, notes, cable budgets, ESD results and changes since an earlier
-  version. Missing runs can be started from the dialog. Runs now record the worker version.
+  the findings on a board image, notes, decoupling, cable budgets, ESD results, the conducted
+  scan (when that feature is on, labeled experimental) and changes since an earlier version.
+  Decoupling lists each IC; one with gaps gets its |Z| chart, target, top fixes and capacitor
+  table. Missing runs can be started from the dialog. Runs now record the worker version.
 - A KiCad plugin: a front end that hands the board open in the PCB Editor to the desktop app
   and shows the app's pages beside pcbnew.
 - The desktop app can keep running in the tray with its window closed, so the plugin can reach
