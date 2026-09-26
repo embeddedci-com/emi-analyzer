@@ -1051,3 +1051,26 @@ def test_a_cable_longer_than_the_model_supports_is_refused():
 
     with pytest.raises(CableError, match="not modelled"):
         get("usb2-shielded").with_length(MAX_LENGTH_M + 1)
+
+
+# ---- the edge limit the Cables tab quotes --------------------------------------------------
+
+def test_cables_json_carries_the_edge_limit_the_panel_quotes():
+    """The Cables tab says how close to the edge a connector must be. It used to keep its own
+    copy of the number, which could drift from the one a solve applies; now it reads it from
+    ``cables.json``, so this pins the value, the key and that the panel has no copy of its own.
+    """
+    import re
+
+    from emi_worker.cables.attach import EDGE_TOLERANCE_MM
+    from emi_worker.stages.cable import build_document
+
+    doc = build_document("closed-form", "fcc-15b-radiated-3m", [], [], [])
+    assert doc["edge_tolerance_mm"] == EDGE_TOLERANCE_MM
+
+    webapp = Path(__file__).resolve().parents[2] / "webapp" / "src"
+    types = (webapp / "lib" / "cableTypes.ts").read_text(encoding="utf-8")
+    assert re.search(r"\bedge_tolerance_mm\??:", types), "cableTypes.ts lost the field"
+    panel = (webapp / "components" / "CablesPanel.tsx").read_text(encoding="utf-8")
+    assert "d.edge_tolerance_mm" in panel, "the Cables tab no longer reads the worker's value"
+    assert not re.search(r"EDGE_TOLERANCE_MM\s*=", panel), "the Cables tab has its own copy again"

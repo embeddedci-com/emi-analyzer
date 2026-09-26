@@ -54,6 +54,11 @@ export interface CablesDoc {
   solver: string
   standard_id: string
   assumptions: string[]
+  /**
+   * How close a connector's nearest pad must come to the board edge for a solve to attach its
+   * cable (the worker's `EDGE_TOLERANCE_MM`). Absent on runs from before it was written.
+   */
+  edge_tolerance_mm?: number
   cables: CableResult[]
   unassigned: UnassignedConnector[]
   notes: string[]
