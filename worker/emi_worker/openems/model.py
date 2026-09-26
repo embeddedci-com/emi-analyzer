@@ -112,6 +112,10 @@ class SolveParams:
     #: Say so when the band's ends sit near the edge of the excitation (``excitation_band``).
     #: A small-part solve turns it off: see stages/small_part.py.
     band_edge_note: bool = True
+    #: Hold the excitation's half-width to this fraction of its centre (0: the band's own, up
+    #: to the centre). Less of the pulse then falls below the band. A small-part solve sets it:
+    #: see stages/small_part.py.
+    excitation_fc_over_f0: float = 0.0
 
     def resolved_f_max(self) -> float:
         if self.f_max > 0:
@@ -730,6 +734,8 @@ def build_model(model: BoardModel, transform, params: SolveParams) -> BuiltModel
     # ---- document ----
     f_min = min(params.frequencies_hz)
     f0, fc, band_note = excitation_band(f_min, f_max)
+    if params.excitation_fc_over_f0 > 0:
+        fc = min(fc, f0 * params.excitation_fc_over_f0)
     if band_note and params.band_edge_note:
         notes.append(band_note)
 

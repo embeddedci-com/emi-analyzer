@@ -44,6 +44,7 @@ def test_the_band_sets_the_maps_the_end_criterion_and_the_merge():
     assert not p.far_field
     assert p.pml_within_max_cell and p.map_height_mm == small_part.MAP_HEIGHT_MM
     assert not p.band_edge_note  # every output is a ratio to the source
+    assert p.excitation_fc_over_f0 == small_part.EXCITATION_FC_OVER_F0
 
 
 @pytest.mark.parametrize("band", [[10e6, 1e9], [1e9, 1.5e9], [100e6, 10e9], "x"])

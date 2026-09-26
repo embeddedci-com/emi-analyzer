@@ -55,6 +55,19 @@ MAX_HZ = 6e9
 #: The energy decay a run stops at: -50 dB of its peak.
 END_CRITERIA = 1e-5
 
+#: The excitation's half-width as a fraction of its centre, at most. The default band spans
+#: 20:1, where ``model.excitation_band`` sets the half-width to the centre and so puts the
+#: pulse's 20 dB point at DC. Everything below the band is then driven nearly as hard as the
+#: band's lower edge, and a part with a slow mode down there rings in it long after the band
+#: has settled: the sample board's clock net, over a split plane, swung at about 30 MHz and was
+#: still at -43 dB after 15.7 ns, its whole budget, while its ports had been quiet since 7 ns.
+#: At 0.71 the pulse is 38 dB down at 30 MHz instead of 19, and the same net settled at 6.1 ns.
+#: What it costs: the band's own edges are driven 33 dB below the centre instead of 16, and the
+#: pulse is 1.4 times longer. Every output here is a ratio (a port's V/I, a map per volt of the
+#: source), so a weaker edge moves nothing while the run settles; the line checks were re-run
+#: with it (docs/verification/small-part-solve.md).
+EXCITATION_FC_OVER_F0 = 0.71
+
 #: Copper lines closer than this fraction of dx are one grid line (mesh.MERGE_FRACTION is a
 #: quarter). The timestep is set by the smallest cell anywhere, and on a routed board a quarter of
 #: dx is always reached: a pad corner beside a trace edge, an arc's vertices. A half moves no edge
@@ -147,6 +160,7 @@ def apply(p: dict, params: SolveParams) -> SolveParams:
     # of the same record, and the maps are per volt of the source. At 2 GHz the microstrip
     # check read Z0 within 0.5 % and S21 within 0.1 dB on every preset.
     params.band_edge_note = False
+    params.excitation_fc_over_f0 = EXCITATION_FC_OVER_F0
     # The cap is derived from the band (three periods of its lowest frequency); a hand-set cap
     # would make the budget below meaningless.
     params.max_timesteps = 0

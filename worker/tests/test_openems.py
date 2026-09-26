@@ -798,3 +798,19 @@ def test_a_kept_line_is_never_the_one_merged_away():
                               frozenset({1.02, 1.05}))
     assert got.tolist() == [0.0, 1.02, 1.05, 2.0]
     assert meshmod.merge_close(np.array([0.0, 1.0, 1.02]), 0.1).tolist() == [0.0, 1.0]
+
+
+def test_the_excitation_half_width_can_be_held_below_its_centre():
+    """A small part holds it to 0.71 of the centre, so less of the pulse falls below the band:
+    at fc = f0 the sample board's clock rang at 30 MHz past its budget."""
+    board = _microstrip_board()
+
+    def fc(ratio: float) -> float:
+        params = SolveParams(
+            roi=(2.0, 4.0, 28.0, 16.0), frequencies_hz=[100e6, 2e9],
+            ports=[Port("p1", 5.0, 10.0, "F.Cu", half_width_mm=0.19)],
+            dx_um=150, dy_um=150, dz_um=100, air_mm=3.0, excitation_fc_over_f0=ratio)
+        return build_model(board, _board_extent(board), params).doc.excitation.fc
+
+    assert fc(0.0) == pytest.approx(1.05e9)
+    assert fc(0.71) == pytest.approx(0.71 * 1.05e9)
