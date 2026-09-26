@@ -91,6 +91,12 @@ export const EXPERIMENTAL = {
     'implies, and none has been measured. Treat the level as indicative and ' +
     'the ranking between layouts as the useful part. The uncertainty budget carries a ' +
     'deliberately conservative 4.5 dB for this term until real-board residuals replace it.',
+
+  conducted:
+    'Differential mode only. The LISN, a buck\'s input ripple and an LC filter match closed '
+    + 'forms (docs/verification/conducted-emissions.md); no board has been compared with a '
+    + 'measurement. Regulator settings you have not entered are assumed. Common-mode current, '
+    + 'spread spectrum and light-load modes are not modelled.',
 } satisfies Record<string, string>
 
 /** What each reason is about, as the limitations page titles it. Typed so none is left out. */
@@ -101,4 +107,5 @@ export const EXPERIMENTAL_TITLES: Record<keyof typeof EXPERIMENTAL, string> = {
   complianceEstimate: 'Compliance estimate',
   farField: 'Far field',
   cableEmissions: 'Cable emissions from a solve',
+  conducted: 'Conducted emissions scan',
 }

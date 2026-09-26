@@ -10,7 +10,7 @@
 import type { BoardDoc, RulesDoc, NetReport } from './boardTypes'
 import type { Estimate, EstimateInput } from './estimate'
 
-export type RunKind = 'ingest' | 'solve' | 'transient' | 'cable' | 'compliance'
+export type RunKind = 'ingest' | 'solve' | 'transient' | 'cable' | 'compliance' | 'conducted'
 export type RunStatus =
   | 'new' | 'retry_pending' | 'in_progress' | 'stopping'
   | 'done' | 'failed' | 'timed_out'
@@ -119,6 +119,8 @@ export interface Features {
    * server, which is the same as off.
    */
   small_part_solve?: boolean
+  /** The differential-mode conducted-emissions scan (ngspice). Absent on an older server: off. */
+  conducted?: boolean
 }
 
 /** The answer to "have I uploaded this file before?". */
@@ -531,6 +533,14 @@ export class EmiApi {
 
   fetchTransient = (runId: string) =>
     this.artifactJson<import('./transientTypes').TransientDoc>(runId, 'transient.json')
+
+  createConductedRun = (projectId: string, boardId: string, params: import('./conductedTypes').ConductedParams) =>
+    this.call<Run>('POST', `/emi/projects/${projectId}/runs`, {
+      board_id: boardId, kind: 'conducted', params,
+    })
+
+  fetchConducted = (runId: string) =>
+    this.artifactJson<import('./conductedTypes').ConductedDoc>(runId, 'conducted.json')
 
   estimate = (input: EstimateInput) =>
     this.call<{ estimate: Estimate; eta_human: string; ram_gb: number }>(
