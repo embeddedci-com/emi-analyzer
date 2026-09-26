@@ -223,6 +223,38 @@ def test_a_boost_is_skipped_with_a_reason():
     assert d.skipped and "boost" in d.skipped[0][1]
 
 
+def test_a_power_input_that_is_a_regulators_output_is_not_its_load():
+    """A +3V3 pin on a connector, made by the board's own buck: the buck is not drawing from it."""
+    m = _buck_board(with_ferrite=False)
+    m.pads += [pad("J2", "1", "+3V3", 59, 20, footprint="Connector:PinHeader"),
+               pad("J2", "2", "GND", 59, 22, footprint="Connector:PinHeader"),
+               pad("U1", "4", "+3V3", 31, 18)]  # the buck's own feedback pin
+    from emi_worker import topology
+    ctx = ctx_for(m)
+    ctx.topology = topology.build(m)
+    d = rail.discover(ctx, "J2:+3V3")
+    assert d.regulators == []
+    assert "output" in d.skipped[0][1]
+    # With no choice the highest voltage wins, and there U1 is a load again.
+    assert [r.ref for r in rail.discover(ctx).regulators] == ["U1"]
+
+
+def test_the_rail_continues_through_an_efuse_to_the_regulator():
+    m = _buck_board(with_ferrite=False)
+    # U7 between the connector's +12V_IN and the board's +12V; an LDO to +3V3 does not count.
+    for p in m.pads:
+        if p.ref in ("J1",) and p.net == "+12V":
+            p.net = "+12V_IN"
+    m.pads += [pad("U7", "1", "+12V_IN", 3, 20), pad("U7", "2", "+12V", 4, 20), pad("U7", "3", "GND", 4, 22),
+               pad("U8", "1", "+12V", 20, 25), pad("U8", "2", "+3V3", 22, 25), pad("U8", "3", "GND", 21, 27)]
+    d = _discover(m)
+    assert d.entry.net == "+12V_IN"
+    assert d.rail_nets == ["+12V_IN", "+12V"]
+    assert [r.ref for r in d.regulators] == ["U1"]
+    sw = next(s for s in d.network.series if s.ref == "U7")
+    assert sw.kind == "switch" and sw.assumed
+
+
 def test_a_board_with_no_power_input_says_so():
     m = board()
     m.pads = [pad("U1", "1", "+3V3", 10, 10)]
