@@ -7,7 +7,8 @@
  * (`worker/emi_worker/openems/hotspots.py`), and they are shown together here.
  *
  * A spot's level is the map averaged over a probe-sized disc, not its single loudest grid
- * point: beside a pad edge that point read 3.3 dB apart on two meshes, the average 0.9 dB.
+ * point: that is what a probe reads, and a single point beside a copper edge moves with how the
+ * mesh draws the edge.
  */
 
 import { Badge, Group, Table, Text, UnstyledButton } from '@mantine/core'

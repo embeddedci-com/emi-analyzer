@@ -12,11 +12,12 @@ beside a port are left out, as the convergence study leaves them out: the port i
 is injected and is always loud, so a hotspot there says nothing about the layout.
 
 **A spot's level is the map averaged over a probe-sized disc** (``probe_average``), not the
-single loudest grid point. The single point did not settle with the mesh: on a real clock net
-(board B, a 0.1 mm trace on 76 um of dielectric) the loudest point sat beside a pad edge, where
-the field is sharpest, and coarse and normal read it 3.3 dB apart, with fine between them.
-Averaged over ``PROBE_RADIUS_MM`` the three meshes agree within 0.9 dB, and that is also closer
-to what a near-field probe held over the board reads. The map itself is still drawn raw.
+single loudest grid point: that is what a near-field probe held over the board reads, and a
+single point beside a copper edge moves with how the mesh draws that edge. On a real clock net
+(board B, a 0.1 mm trace on 76 um of dielectric) coarse and normal read the single point
+3.3 dB apart and the average 2.1 dB, until the mesher drew the trace the same width on both
+(``model.THIRDS_RULE``); the average then agreed within 0.9 dB. The map itself is still drawn
+raw.
 """
 
 from __future__ import annotations
@@ -54,8 +55,9 @@ PART_WITHIN_MM = 2.0
 #: The radius a spot's level is averaged over, mm (a disc 0.5 mm across). About the tip of the
 #: smallest near-field probes; wide enough that every preset averages several grid points (the
 #: coarse cell is 0.15 mm), and well inside ``MERGE_MM`` and ``PORT_EXCLUSION_MM``, so two
-#: spots are not smeared into one and a port is not smeared onto a spot. Board B's presets read
-#: within 0.9 dB at this radius and within 1.1 dB at 0.5 mm; the single point was 3.3 dB.
+#: spots are not smeared into one and a port is not smeared onto a spot. On board B, with the
+#: trace drawn the same on both presets, coarse and normal read 0.9 dB apart at this radius and
+#: 0.8 dB at 0.5 mm, so a larger probe would not have bought much.
 PROBE_RADIUS_MM = 0.25
 
 #: The uniform grid the map is resampled onto before averaging, mm: a fifth of the radius, so
