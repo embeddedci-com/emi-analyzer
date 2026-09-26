@@ -36,6 +36,7 @@ import json
 import math
 
 from ..openems import coupon as coupon_mod
+from ..openems import hotspots as hotspots_mod
 from ..openems import network as network_mod
 from ..openems.model import SolveParams
 from . import StageError
@@ -66,6 +67,14 @@ MERGE_FRACTION = 0.5
 #: preset's first grid line above a trace is about this far up; a finer one reads closer, where
 #: the field at a trace's edge is louder, and the presets disagreed by 1.7 dB on the level.
 MAP_HEIGHT_MM = 0.1
+
+#: A cell this coarse or coarser, um, is where a via's inductance was measured reading high: a
+#: 0.3 mm via 1 mm from its return read +10.1 % on the coarse preset against the two-post
+#: closed form, and +7.7 % on normal (docs/verification/small-part-solve.md, check 4). The
+#: limit is 10 %, so a coarse part with vias says so rather than failing quietly.
+COARSE_VIA_UM = 150.0
+
+COARSE_VIA_NOTE = "coarse mesh: via inductance can read up to about 10% high"
 
 #: The largest mesh a small-part solve will build, in cells (216 MB at 72 bytes a cell).
 MAX_CELLS = 3_000_000
@@ -171,6 +180,8 @@ def cut(board, transform, p: dict, params: SolveParams):
             )
     nets = coupon_nets(p)
     if not nets:
+        if _coarse(params) and _vias_in(board, transform, params.roi):
+            notes.append(COARSE_VIA_NOTE)
         return board, notes
     missing = [n for n in nets if n not in set(board.nets) | {t.net for t in board.tracks}
                | {q.net for q in board.pads}]
@@ -186,7 +197,19 @@ def cut(board, transform, p: dict, params: SolveParams):
             f"closer to the net than one cell ({cell * 1000:.0f} um), so the mesh may join "
             f"{'them' if many else 'it'} to the net. A finer mesh preset resolves the gap"
         )
+    if _coarse(params) and any(v.net in nets for v in reduced.vias):
+        cut_notes.append(COARSE_VIA_NOTE)
     return reduced, notes + cut_notes
+
+
+def _coarse(params: SolveParams) -> bool:
+    return min(params.dx_um, params.dy_um) >= COARSE_VIA_UM
+
+
+def _vias_in(board, transform, roi) -> bool:
+    x0, y0, x1, y1 = roi
+    return any(x0 <= x <= x1 and y0 <= y <= y1
+               for x, y in (transform.pt(v.x, v.y) for v in board.vias))
 
 
 def admit(cells: int, needed_steps: int, dt_seconds: float) -> int:
@@ -236,6 +259,39 @@ def unusable_reason(result) -> str | None:
         f"{abs(result.final_energy_db):.1f} dB down, before the fields settled, so no impedance "
         f"or S-parameter from it is used"
     )
+
+
+def add_hotspots(artifacts, workdir: str, dump_names: dict[str, str],
+                 dump_heights: dict[str, float], params: SolveParams, nearby) -> None:
+    """List each map's separate spots within a few dB of its loudest (``openems.hotspots``),
+    with the net and part nearest each, in the manifest. A failure leaves the list out."""
+    import os
+
+    from ..openems import post
+
+    ref = artifacts.manifest.get("reference_magnitude") or 0.0
+    if ref <= 0:
+        return
+    ports = [(q.x, q.y) for q in params.ports]
+    floor = -float(artifacts.manifest.get("dynamic_range_db", post.DYNAMIC_RANGE_DB))
+    out = []
+    for layer, dump in dump_names.items():
+        path = os.path.join(workdir, f"{dump}.h5")
+        if not os.path.exists(path):
+            continue
+        try:
+            grids = post.read_fd_dump(path, dump_heights.get(layer))
+        except (OSError, ValueError):
+            continue
+        for g in grids:
+            found = hotspots_mod.spots(g.x_mm, g.y_mm, g.to_db(reference=ref), ports, floor)
+            for s in found:
+                s["net"] = nearby.net(s["x_mm"], s["y_mm"], layer)
+                s["part"] = nearby.part(s["x_mm"], s["y_mm"])
+            if found:
+                out.append({"layer": layer, "frequency_hz": g.frequency_hz, "spots": found})
+    artifacts.manifest["hotspots"] = {"within_db": hotspots_mod.WITHIN_DB, "maps": out}
+    artifacts.files["manifest.json"] = json.dumps(artifacts.manifest, indent=2).encode()
 
 
 def add_network(artifacts, workdir: str, raw_ports: list[dict], params: SolveParams,

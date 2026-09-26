@@ -79,3 +79,10 @@ def test_the_synthetic_clock_coupon_settles_with_nothing_dropped(harness):
     net = got.json("network.json")
     assert net["truncated_hz"] == [] and all(net["usable"])
     assert got.manifest["mode"] == "small_part"
+    # Every map with field lists its loudest spots away from the ports, on the solved net.
+    maps = got.manifest["hotspots"]["maps"]
+    assert {m["layer"] for m in maps} >= {"F.Cu"}
+    for m in maps:
+        assert 1 <= len(m["spots"]) <= 5 and m["spots"][0]["below_peak_db"] == 0
+        assert all(s["below_peak_db"] <= 3 for s in m["spots"])
+    assert {s["net"] for m in maps if m["layer"] == "F.Cu" for s in m["spots"]} == {"CLK"}

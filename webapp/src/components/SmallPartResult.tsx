@@ -6,6 +6,7 @@
 import { Alert, Card, Loader, Select, Stack, Text } from '@mantine/core'
 import type { EmiApi, Run } from '../lib/emiApi'
 import type { FieldOverlayData } from '../lib/overlay'
+import type { HotSpot } from '../lib/smallPart'
 import { HotspotResults, type SolveManifest } from './HotspotResults'
 import { PortNetwork } from './PortNetwork'
 import { RunProgress } from './RunProgress'
@@ -21,6 +22,8 @@ export interface SmallPartResultProps {
   onSelectRun: (id: string) => void
   onOverlayChange: (overlay: FieldOverlayData | null) => void
   onGateChange: (gateDb: number) => void
+  onSpotsChange?: (spots: HotSpot[]) => void
+  onFocusSpot?: (x: number, y: number) => void
 }
 
 function label(run: Run): string {
@@ -31,7 +34,7 @@ function label(run: Run): string {
 
 export function SmallPartResult({
   api, projectId, runs, run, manifest, manifestError, energyHistory, onSelectRun,
-  onOverlayChange, onGateChange,
+  onOverlayChange, onGateChange, onSpotsChange, onFocusSpot,
 }: SmallPartResultProps) {
   if (!run) return <Text size="sm" c="dimmed">No part has been solved yet.</Text>
   return (
@@ -69,6 +72,7 @@ export function SmallPartResult({
           <HotspotResults
             api={api} runId={run.id} projectId={projectId} manifest={manifest}
             onOverlayChange={onOverlayChange} onGateChange={onGateChange} smallPart
+            onSpotsChange={onSpotsChange} onFocusSpot={onFocusSpot}
           />
           <PortNetwork api={api} runId={run.id} />
         </>

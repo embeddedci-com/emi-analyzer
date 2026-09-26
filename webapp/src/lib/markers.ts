@@ -36,6 +36,12 @@ export const FINDING_MARKER_HEX: Record<FindingStatus, string> = {
   unchanged: '#adb5bd',
 }
 
+/**
+ * A small-part result's loudest spots: Mantine's orange.6, the color the result panel numbers
+ * them in, and apart from the white ports and the findings' red and green.
+ */
+export const HOTSPOT_MARKER_HEX = '#fd7e14'
+
 export function findingMarkerColor(status: FindingStatus): Rgb {
   return hexToRgb(FINDING_MARKER_HEX[status])
 }

@@ -19,7 +19,7 @@ import time
 
 from ..kicad.normalize import _board_extent
 from ..openems import model as emmodel
-from ..openems import post, run
+from ..openems import hotspots, post, run
 from ..openems.model import Port, SolveParams
 from . import StageContext, StageError, StageResult, small_part
 from .ingest import load_board
@@ -220,6 +220,7 @@ def run_solve(ctx: StageContext) -> StageResult:
     # A coupon keeps only the named nets over their planes. The transform is taken from the
     # whole board first, so the coupon sits where the region and the ports say it does.
     cut_notes: list[str] = []
+    whole = board
     if small:
         board, cut_notes = small_part.cut(board, transform, ctx.params, params)
 
@@ -378,6 +379,11 @@ def run_solve(ctx: StageContext) -> StageResult:
 
     if small:
         artifacts.manifest["mode"] = small_part.MODE
+        # The part nearest a spot comes from the whole board: the cut keeps only the net's
+        # own pads, and the part beside a hotspot is often on another net.
+        small_part.add_hotspots(
+            artifacts, workdir, built.dump_names, built.dump_heights, params,
+            hotspots.Nearby(board, transform, small_part.coupon_nets(ctx.params), whole))
         small_part.add_network(artifacts, workdir, ctx.params.get("ports") or [], params,
                                small_part.unusable_reason(result))
     _add_antenna_terms(ctx, params, built, artifacts, board, transform)

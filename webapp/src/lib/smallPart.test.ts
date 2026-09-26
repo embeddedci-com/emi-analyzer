@@ -9,7 +9,7 @@ import fixtures from '../../../server/emi/testdata/small_part_fixtures.json'
 import {
   BANDS, estimateSmallPart, END_CRITERIA_DB, marginFor, MAX_CELL_STEPS, MAX_CELLS, MAX_SIDE_MM,
   MARGIN_HEIGHTS, MIN_MARGIN_MM, MIN_RECORD_S, netEnds, pairOf, planCoupon, PORT_HALF_WIDTH_MM,
-  PRESETS, smallPartParams,
+  PRESETS, smallPartParams, hasVias, spotsFor,
 } from './smallPart'
 
 function doc(over: Partial<BoardDoc> = {}): BoardDoc {
@@ -110,5 +110,20 @@ describe('the estimate', () => {
     expect(p.frequencies_hz).toEqual([300e6])
     expect(p.coupon).toEqual({ nets: ['CLK'] })
     expect(p.ports[0]).toMatchObject({ pad: 'U1.1', excited: true, net: 'CLK' })
+  })
+
+  it('knows when a part has vias, for the coarse-mesh note', () => {
+    const via = { x: 5, y: 5, size_mm: 0.6, drill_mm: 0.3, net: 'CLK', layers: ['F.Cu', 'B.Cu'], kind: 'through' as const }
+    expect(hasVias(doc(), ['CLK'])).toBe(false)
+    expect(hasVias(doc({ vias: [via] }), ['CLK'])).toBe(true)
+    expect(hasVias(doc({ vias: [via] }), ['USB_D+'])).toBe(false)
+  })
+
+  it('finds the spots of the map on screen, and none on an older result', () => {
+    const spot = { x_mm: 1, y_mm: 2, db: -6, below_peak_db: 0, net: 'CLK', part: 'U1' }
+    const list = { within_db: 3, maps: [{ layer: 'F.Cu', frequency_hz: 1e9, spots: [spot] }] }
+    expect(spotsFor(list, 'F.Cu', 1e9)).toEqual([spot])
+    expect(spotsFor(list, 'B.Cu', 1e9)).toEqual([])
+    expect(spotsFor(undefined, 'F.Cu', 1e9)).toEqual([])
   })
 })

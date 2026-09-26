@@ -18,6 +18,8 @@ import { DriverAttach } from './DriverAttach'
 import { CableEmissionPanel } from './CableEmissionPanel'
 import { ModelledParts } from './ModelledParts'
 import { EXPERIMENTAL, Experimental } from './Experimental'
+import { LoudestSpots } from './LoudestSpots'
+import { spotsFor, type HotSpot, type HotSpotList } from '../lib/smallPart'
 import {
   assessGrid, convergence, NOISE_MARGIN_DB, suggestedGate,
 } from '../lib/solveQuality'
@@ -73,6 +75,8 @@ export interface SolveManifest {
   cable_ports?: string[]
   cable_antenna?: string[]
   cable_antenna_note?: string
+  /** A small-part result's loudest spots per map. Absent on results that predate it. */
+  hotspots?: HotSpotList
   run?: Record<string, unknown>
 }
 
@@ -131,6 +135,9 @@ export interface HotspotResultsProps {
    * than by the table here. Its maps are the same maps.
    */
   smallPart?: boolean
+  /** The loudest spots of the map on screen, for the board to mark. */
+  onSpotsChange?: (spots: HotSpot[]) => void
+  onFocusSpot?: (x: number, y: number) => void
 }
 
 /** The layer with the loudest field at the first frequency: the one worth opening on. */
@@ -150,6 +157,7 @@ function loudestLayer(m: SolveManifest): string {
 
 export function HotspotResults({
   api, runId, projectId, manifest, onOverlayChange, onGateChange, smallPart = false,
+  onSpotsChange, onFocusSpot,
 }: HotspotResultsProps) {
   const layers = manifest.layers.map((l) => l.layer)
   // Open on the loudest layer, not the first in the stackup. The first is often shielded by a
@@ -191,6 +199,13 @@ export function HotspotResults({
       return { layer: l.layer, peak, quiet: peak !== null && peak <= floorDb + NOISE_MARGIN_DB }
     })
   }, [manifest, freq, floorDb])
+
+  const spots = useMemo(() => spotsFor(manifest.hotspots, layer, freq), [manifest, layer, freq])
+  // Marked only while the map is drawn: a marker over a hidden map points at nothing.
+  useEffect(() => {
+    onSpotsChange?.(showOverlay ? spots : [])
+  }, [spots, showOverlay, onSpotsChange])
+  useEffect(() => () => onSpotsChange?.([]), [onSpotsChange])
 
   const quality = useMemo(
     () => (values && grid ? assessGrid(values, grid.width, grid.height, floorDb, gate) : null),
@@ -340,6 +355,10 @@ export function HotspotResults({
           </Table.Tbody>
         </Table>
       </div>
+
+      {smallPart && state !== 'unusable' && (
+        <LoudestSpots spots={spots} withinDb={manifest.hotspots?.within_db ?? 3} onFocus={onFocusSpot} />
+      )}
 
       {/* A small part never models components, so "none were modelled" would only confuse. */}
       {!smallPart && <ModelledParts parts={manifest.modelled_parts} />}
