@@ -411,33 +411,63 @@ def extract(board: BoardModel, transform, nets: list[str],
 
 
 def tight_gaps(board: BoardModel, nets: list[str], cell_mm: float) -> int:
-    """How many pieces of other copper come closer to the nets than one cell.
+    """How many pieces of other copper come closer to the nets than one cell, on the same layer.
 
     A grid line runs the whole domain, so two copper edges closer together than a cell can land
     on the same line, and the net is then joined to its neighbour: a trace becomes a stub to
     ground. That is how a real coupon's through line read S21 of -57 dB, before vias were drawn
     round (``model.py``). This counts the vias, pads and tracks of other nets a coupon keeps
     within a cell of the net, so a result can say its preset is too coarse for the spacing.
+
+    Edge to edge: a pad is its outline, not the circle around it, which counted a QFN's ground
+    pad as touching every pin beside it.
     """
+    import numpy as np
+
     wanted = set(nets)
     if cell_mm <= 0:
         return 0
-    tests: dict[float, object] = {}
+    everywhere = "*"
 
-    def within(extra: float):
-        key = round(extra, 4)
-        if key not in tests:
-            tests[key] = _near_net(board, wanted, cell_mm + extra)
-        return tests[key]
+    def pieces(net_in: bool):
+        """(layers, segments as rows of ax, ay, bx, by, radius) per piece of copper."""
+        out = []
+        for t in board.tracks:
+            if (t.net in wanted) == net_in and len(t.pts) >= 2:
+                segs = [(a[0], a[1], b[0], b[1], t.width_mm / 2.0) for a, b in zip(t.pts, t.pts[1:])]
+                out.append(({t.layer}, segs))
+        for v in board.vias:
+            if (v.net in wanted) == net_in:
+                out.append(({everywhere}, [(v.x, v.y, v.x, v.y, (v.size_mm or v.drill_mm) / 2.0)]))
+        for p in board.pads:
+            if (p.net in wanted) == net_in and len(p.ring) >= 2:
+                layers = {everywhere} if "*.Cu" in p.layers else {l for l in p.layers if l.endswith(".Cu")}
+                ring = list(p.ring)
+                segs = [(a[0], a[1], b[0], b[1], 0.0) for a, b in zip(ring, ring[1:] + ring[:1])]
+                out.append((layers, segs))
+        return out
 
+    def point_to(S, x, y):
+        dx, dy = S[:, 2] - S[:, 0], S[:, 3] - S[:, 1]
+        L2 = np.maximum(dx * dx + dy * dy, 1e-18)
+        t = np.clip(((x - S[:, 0]) * dx + (y - S[:, 1]) * dy) / L2, 0.0, 1.0)
+        return np.hypot(S[:, 0] + t * dx - x, S[:, 1] + t * dy - y) - S[:, 4]
+
+    def gap(A, B) -> float:
+        # Endpoint to segment, both ways: the shortest distance between two segments that do
+        # not cross, which copper of two nets on one layer never does.
+        best = min(float((point_to(B, x, y) - r).min()) for x, y, r in
+                   [(a[0], a[1], a[4]) for a in A] + [(a[2], a[3], a[4]) for a in A])
+        return min(best, min(float((point_to(A, x, y) - r).min()) for x, y, r in
+                             [(b[0], b[1], b[4]) for b in B] + [(b[2], b[3], b[4]) for b in B]))
+
+    mine = [(layers, np.asarray(segs, dtype=float)) for layers, segs in pieces(True)]
     count = 0
-    for v in board.vias:
-        if v.net not in wanted:
-            count += bool(within((v.size_mm or v.drill_mm) / 2.0)(v.x, v.y))
-    for p in board.pads:
-        if p.net not in wanted:
-            count += bool(any(within(0.0)(x, y) for x, y in p.ring))
-    for t in board.tracks:
-        if t.net not in wanted:
-            count += bool(any(within(t.width_mm / 2.0)(x, y) for x, y in t.pts))
+    for layers, segs in pieces(False):
+        B = np.asarray(segs, dtype=float)
+        for my_layers, A in mine:
+            shared = everywhere in layers or everywhere in my_layers or layers & my_layers
+            if shared and gap(A, B) < cell_mm:
+                count += 1
+                break
     return count
