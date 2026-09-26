@@ -814,3 +814,28 @@ def test_the_excitation_half_width_can_be_held_below_its_centre():
 
     assert fc(0.0) == pytest.approx(1.05e9)
     assert fc(0.71) == pytest.approx(0.71 * 1.05e9)
+
+
+def test_a_trace_that_jogs_by_micrometres_does_not_set_a_micrometre_cell():
+    """Board C's pair has segments 20 um off each other. Each is ruled on its own, and kept
+    apart their lines made 10 um cells: the coarse mesh went over budget."""
+    text = """(kicad_pcb
+  (version 20241229)
+  (general (thickness 0.27))
+  (layers (0 "F.Cu" signal) (2 "B.Cu" signal) (25 "Edge.Cuts" user))
+  (setup (stackup
+    (layer "F.Cu" (type "copper") (thickness 0.035))
+    (layer "dielectric 1" (type "core") (thickness 0.2) (material "FR4") (epsilon_r 4.4))
+    (layer "B.Cu" (type "copper") (thickness 0.035))))
+  (net 0 "") (net 1 "GND") (net 2 "SIG")
+  (gr_rect (start 0 0) (end 30 20) (layer "Edge.Cuts") (width 0.1))
+  (segment (start 5 10) (end 15 10) (width 0.2) (layer "F.Cu") (net 2))
+  (segment (start 15 10) (end 15.02 10.02) (width 0.2) (layer "F.Cu") (net 2))
+  (segment (start 15.02 10.02) (end 25 10.02) (width 0.2) (layer "F.Cu") (net 2))
+  (zone (net 1) (net_name "GND") (layer "B.Cu") (hatch edge 0.5) (min_thickness 0.25)
+    (polygon (pts (xy 0 0) (xy 30 0) (xy 30 20) (xy 0 20)))
+    (filled_polygon (layer "B.Cu") (pts (xy 0 0) (xy 30 0) (xy 30 20) (xy 0 20))))
+)"""
+    y = _microstrip_model(parse_board(parse(text)), dx=150).mesh.y
+    near = y[(y > 9.6) & (y < 10.4)]
+    assert np.diff(near).min() >= 0.05 - 1e-6, near

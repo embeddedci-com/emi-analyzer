@@ -61,6 +61,9 @@ def merge_close(lines: np.ndarray, min_spacing: float,
     for v in lines[1:]:
         v = float(v)
         mine = round(v, 6) in keep
+        if v - kept[-1] < 1e-9:  # the same line twice
+            pinned[-1] = pinned[-1] or mine
+            continue
         if v - kept[-1] >= min_spacing or (mine and pinned[-1]):
             kept.append(v)
             pinned.append(mine)
@@ -481,8 +484,10 @@ def build_mesh(
     def inside(values: list[float], lo: float, hi: float) -> list[float]:
         return [v for v in values if lo <= v <= hi]
 
-    x_req = [min_x, max_x] + inside(copper_x, min_x, max_x)
-    y_req = [min_y, max_y] + inside(copper_y, min_y, max_y)
+    # The lines no merge may remove are lines too, whether or not the copper list has them:
+    # two a few micrometres apart are kept as one, at their middle (model.narrow_trace_lines).
+    x_req = [min_x, max_x] + inside(copper_x + list(spec.keep_x), min_x, max_x)
+    y_req = [min_y, max_y] + inside(copper_y + list(spec.keep_y), min_y, max_y)
 
     x = build_axis(x_req, spec.dx_um / 1000.0, max_res, spec.ratio,
                    merge_fraction=spec.merge_fraction, pml_max_res=spec.pml_within_max_cell,

@@ -523,13 +523,27 @@ def _ruled_edges(model: BoardModel, transform, cell_mm: float
 
 def narrow_trace_lines(ruled: dict[float, tuple[float, float]], cell_mm: float
                        ) -> tuple[float, ...]:
-    """The thirds-rule lines of traces narrower than two cells, which no merge may remove."""
-    out: set[float] = set()
+    """The thirds-rule lines of traces narrower than two cells, which no merge may remove.
+
+    Two of them closer than half their rule's cell are one line, at their middle. A routed
+    trace often jogs by a few micrometres (board C's pair has segments 20 um and 10 um off each
+    other), each jog is an edge of its own, and kept apart their lines set cells of 10 um: the
+    coarse mesh of that pair came out at 1.4 M cells and a timestep five times shorter, over
+    budget. Half a cell moves no line by more than a quarter of one.
+    """
+    lines: list[tuple[float, float]] = []
     for edge, (inward, width) in ruled.items():
         c = _rule_cell(width, cell_mm)
         if 0 < width <= 2.0 * cell_mm:
-            out.update(_rule_lines(edge, inward, c))
-    return tuple(sorted(out))
+            lines.extend((v, c) for v in _rule_lines(edge, inward, c))
+    out: list[tuple[float, float]] = []
+    for v, c in sorted(lines):
+        if out and v - out[-1][0] < min(c, out[-1][1]) / 2.0:
+            pv, pc = out[-1]
+            out[-1] = ((pv + v) / 2.0, min(pc, c))
+        else:
+            out.append((v, c))
+    return tuple(round(v, 6) for v, _ in out)
 
 
 def _stack(model: BoardModel) -> tuple[dict[str, float], list[tuple[object, float, float]]]:
