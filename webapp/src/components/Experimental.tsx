@@ -46,8 +46,8 @@ export function Experimental({ why, label = 'experimental', size = 'xs', mb }: E
  */
 export const EXPERIMENTAL = {
   smallPart:
-    'Checked on a test microstrip only. Vias, the size of the cut and real boards are not '
-    + 'verified yet (docs/verification/small-part-solve.md). The map shows where '
+    'Checked on test lines, vias and a synthetic part. Only one real board has been checked '
+    + '(docs/verification/small-part-solve.md). The map shows where '
     + 'current flows, relative to the loudest point. The port numbers are what the two ends see '
     + 'with 50 Ω on each. Neighboring nets are left out, so coupling into them is not shown.',
 

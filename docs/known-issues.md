@@ -20,7 +20,7 @@ solver or a measurement — and passed. The gap between the two is most of this 
 | Cable budget, Tier A (`cable` run, nec2c) | ✅ | ✅ against openEMS on the product setup: 7 of 9 configurations within 1 dB below resonance, all within 2 dB at the peaks; the wire radius, not the solver, is the larger uncertainty — §3 | on |
 | Limits library and Limits page | ✅ | ⚠️ FCC Part 15 only; there is no CISPR 32 table | on |
 | **Full-wave solve (openEMS)** | ✅ | ⚠️ **a 50 ohm microstrip within 1 % of theory on every preset; solves end to end on the fixture board; long records on whole boards are out of scope — §2** | **off** (`full-wave`) |
-| Small-part solve (one net cut out over its planes, `small-part-solve`) | ✅ | ⚠️ a 50 ohm microstrip within 0.5 % of theory and S21 within 0.06 dB; stripline, via, convergence and real-board checks not done or failing ([verification/small-part-solve.md](verification/small-part-solve.md)) | **off** (`small-part-solve`, or with full-wave) |
+| Small-part solve (one net cut out over its planes, `small-part-solve`) | ✅ | ⚠️ microstrip, stripline and via within their closed forms (coarse via 0.1 % over); a synthetic coupon converges; one real coupon of three checked, and its presets disagree on where the hotspot is ([verification/small-part-solve.md](verification/small-part-solve.md)) | **off** (`small-part-solve`, or with full-wave) |
 | Drivers (re-weighting a solve) | ✅ | ⚠️ every check in §3 passes; nothing against a measured source | off, with full-wave |
 | Components (MLCC models in a solve) | ✅ | ❌ the shipped openEMS 0.0.35 cannot model an inductor, so no capacitor is placed; on a current openEMS build a 100 pF 0402 resonates within 1.6 % but only with a -70 dB record (§3) | off, with full-wave |
 | Board far field (NF2FF) | ✅ | ⚠️ matches nec2c on dipoles over the ground plane as the product runs it, 30 MHz up (§3); no board checked against a measurement | off, with full-wave |
@@ -127,12 +127,12 @@ Numbers, method and what is still open: [`verification/cables-and-drivers.md`](v
 
 | Check | Status |
 |---|---|
-| 50 ohm microstrip Z0 and delay within 5 % of Hammerstad-Jensen | ✅ Z0 -0.4 to +0.3 %, delay -0.4 to -0.7 % (eps_eff reads 0.7-1.4 % low) |
+| 50 ohm microstrip Z0 and delay within 5 % of Hammerstad-Jensen | ✅ Z0 within 0.45 %, delay within 0.71 % on three presets; the low delay is the port's reference plane, and by difference of two lengths it is within 0.4 % |
 | Matched microstrip S21 within 0.5 dB to 1 GHz | ✅ 0.06 dB |
-| 50 ohm stripline within 5 % of Cohn | ❌ not run validly; script fixed, not re-run |
-| Via inductance within 10 % of a closed form | ❌ first setup 57-59 % high; the parallel-plate version not run |
-| Convergence over 3 coupon margins and 2 presets | ❌ not run |
-| Real-board coupons converge and agree across presets | ❌ one of three compared, presets disagree (hotspot 4.6 dB, S21 2.4 dB) |
+| 50 ohm stripline within 5 % of Cohn | ✅ Z0 within 1.0 %, delay +1.0 to +1.2 % |
+| Via inductance within 10 % of two posts between planes | ⚠️ normal worst +7.7 %; coarse +10.1 % at one point |
+| Convergence over 3 coupon margins and 2 presets, synthetic board | ✅ |
+| Real-board coupons converge and agree across presets | ⚠️ board C: margins agree, presets agree on level, \|Z\| and S21 but not on which end is loudest; boards D and B not run |
 
 Details and the full list: [`verification/small-part-solve.md`](verification/small-part-solve.md).
 
