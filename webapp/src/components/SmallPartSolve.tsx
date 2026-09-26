@@ -46,9 +46,17 @@ export function SmallPartSetup({
   const [net, setNet] = useState<string | null>(null)
   const [withPair, setWithPair] = useState(true)
   const [bandValue, setBandValue] = useState<string>(BANDS[0].value)
-  const [presetValue, setPresetValue] = useState<string>('normal')
+  // Null until the user picks one: normal where it fits the budget, coarse where only that does.
+  // The sample board's first net is over budget on normal, so its first solve was refused.
+  const [presetChoice, setPresetChoice] = useState<string | null>(null)
   const [clockMhz, setClockMhz] = useState<number | ''>('')
   const band = BANDS.find((b) => b.value === bandValue) ?? BANDS[0]
+  const autoCoarse = useMemo(
+    () => !!roi && !!estimateSmallPart(roi, PRESETS[1], band, doc).refused
+      && !estimateSmallPart(roi, PRESETS[0], band, doc).refused,
+    [roi, band, doc],
+  )
+  const presetValue = presetChoice ?? (autoCoarse ? 'coarse' : 'normal')
   const preset = PRESETS.find((p) => p.value === presetValue) ?? PRESETS[1]
 
   const nets = useMemo(
@@ -167,9 +175,12 @@ export function SmallPartSetup({
       <Group grow gap="xs" align="flex-end">
         <Select size="xs" label="Band" allowDeselect={false} value={bandValue} onChange={(v) => setBandValue(v ?? BANDS[0].value)}
                 data={BANDS.map((b) => ({ value: b.value, label: b.label }))} />
-        <Select size="xs" label="Mesh" allowDeselect={false} value={presetValue} onChange={(v) => setPresetValue(v ?? 'normal')}
+        <Select size="xs" label="Mesh" allowDeselect={false} value={presetValue} onChange={(v) => setPresetChoice(v)}
                 data={PRESETS.map((p) => ({ value: p.value, label: p.label }))} />
       </Group>
+      {presetChoice === null && autoCoarse && (
+        <Text size="xs" c="dimmed">Coarse, because this part is over budget on normal.</Text>
+      )}
       <NumberInput
         size="xs" label="Clock, for maps at its harmonics (optional)" suffix=" MHz" min={1} max={3000}
         value={clockMhz} onChange={(v) => setClockMhz(typeof v === 'number' ? v : '')}

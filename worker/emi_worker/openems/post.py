@@ -68,8 +68,12 @@ class FieldGrid:
         return np.maximum(db, -DYNAMIC_RANGE_DB).astype(np.float32)
 
 
-def read_fd_dump(path: str) -> list[FieldGrid]:
-    """Read an openEMS frequency-domain dump into one FieldGrid per frequency."""
+def read_fd_dump(path: str, z_mm: float | None = None) -> list[FieldGrid]:
+    """Read an openEMS frequency-domain dump into one FieldGrid per frequency.
+
+    ``z_mm`` reads a dump that spans two grid lines at a height between them, interpolating
+    each field component before taking the magnitude (``model.SolveParams.map_height_mm``).
+    """
     import h5py  # imported lazily so ingest-only workers need no HDF5 stack
 
     grids: list[FieldGrid] = []
@@ -84,7 +88,7 @@ def read_fd_dump(path: str) -> list[FieldGrid]:
         # Metres in the file, millimetres everywhere in this system.
         x_mm = np.asarray(f["Mesh/x"][:], dtype=np.float64) * 1000.0
         y_mm = np.asarray(f["Mesh/y"][:], dtype=np.float64) * 1000.0
-        z_mm = np.asarray(f["Mesh/z"][:], dtype=np.float64) * 1000.0
+        z_axis = np.asarray(f["Mesh/z"][:], dtype=np.float64) * 1000.0
 
         for i, freq in enumerate(freqs):
             if f"f{i}_real" in fd:
@@ -101,6 +105,14 @@ def read_fd_dump(path: str) -> list[FieldGrid]:
                     raise ValueError(f"{os.path.basename(path)} has an unknown order {order!r}")
                 c = np.asarray(ds[:]).transpose(0, 3, 2, 1)
                 re, im = c.real.astype(np.float64), c.imag.astype(np.float64)
+            at = float(z_axis[len(z_axis) // 2]) if len(z_axis) else 0.0
+            if re.ndim == 4 and re.shape[1] >= 2 and z_mm is not None and len(z_axis) >= 2:
+                # (components, nz, ny, nx): the two planes either side of the height asked for.
+                k = int(np.clip(np.searchsorted(z_axis, z_mm) - 1, 0, len(z_axis) - 2))
+                w = float(np.clip((z_mm - z_axis[k]) / (z_axis[k + 1] - z_axis[k]), 0.0, 1.0))
+                re = (1 - w) * re[:, k] + w * re[:, k + 1]
+                im = (1 - w) * im[:, k] + w * im[:, k + 1]
+                at = float(z_mm)
             # (components, nz, ny, nx) -> magnitude of the complex vector, per cell.
             mag = np.sqrt((re ** 2 + im ** 2).sum(axis=0))
             if mag.ndim == 3:
@@ -109,8 +121,7 @@ def read_fd_dump(path: str) -> list[FieldGrid]:
             grids.append(FieldGrid(
                 frequency_hz=float(freq),
                 magnitude=mag.astype(np.float64),
-                x_mm=x_mm, y_mm=y_mm,
-                z_mm=float(z_mm[len(z_mm) // 2]) if len(z_mm) else 0.0,
+                x_mm=x_mm, y_mm=y_mm, z_mm=at,
             ))
     return grids
 
@@ -320,6 +331,7 @@ def build_artifacts(
     run_meta: dict | None = None,
     modelled_parts: list[dict] | None = None,
     cable_ports: list[dict] | None = None,
+    dump_heights: dict[str, float] | None = None,
 ) -> PostResult:
     """Collect openEMS output into the browser-facing artifact set.
 
@@ -341,7 +353,7 @@ def build_artifacts(
             log.warning("dump %s produced no file", dump)
             continue
         try:
-            grids = read_fd_dump(path)
+            grids = read_fd_dump(path, (dump_heights or {}).get(layer))
         except (OSError, ValueError) as exc:
             log.warning("could not read dump %s: %s", dump, exc)
             continue

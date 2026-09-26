@@ -267,11 +267,13 @@ def _merge_tolerance(lines: np.ndarray, min_res: float) -> float:
     return min(min_res, smallest) * MERGE_FRACTION
 
 
-def _pad_pml(lines: np.ndarray, count: int = PML_LINES) -> np.ndarray:
+def _pad_pml(lines: np.ndarray, count: int = PML_LINES,
+             max_step: float | None = None) -> np.ndarray:
     """Extend an axis outward by ``count`` lines at each end.
 
     The padding continues the outermost cell size and grows it gently, so the absorbing
-    layer sits in a region whose mesh is not itself a discontinuity.
+    layer sits in a region whose mesh is not itself a discontinuity. ``max_step`` stops the
+    growth at the wavelength bound; see ``MeshSpec.pml_within_max_cell``.
     """
     if len(lines) < 2:
         raise MeshError("cannot pad an axis with fewer than two lines")
@@ -283,14 +285,14 @@ def _pad_pml(lines: np.ndarray, count: int = PML_LINES) -> np.ndarray:
     v, step = float(lines[0]), float(lo_step)
     for _ in range(count):
         v -= step
-        step *= 1.2
+        step = min(step * 1.2, max_step) if max_step else step * 1.2
         lo.append(v)
 
     hi: list[float] = []
     v, step = float(lines[-1]), float(hi_step)
     for _ in range(count):
         v += step
-        step *= 1.2
+        step = min(step * 1.2, max_step) if max_step else step * 1.2
         hi.append(v)
 
     return np.concatenate([np.asarray(sorted(lo)), lines, np.asarray(hi)])
@@ -303,11 +305,13 @@ def build_axis(
     ratio: float = MAX_CELL_RATIO,
     pml: bool = True,
     merge_fraction: float = MERGE_FRACTION,
+    pml_max_res: bool = False,
 ) -> np.ndarray:
     """Build one axis of the grid.
 
     ``required`` lines survive; everything else is filler chosen to satisfy the resolution
     and grading bounds. Required lines closer than ``merge_fraction * min_res`` are one line.
+    ``pml_max_res`` holds the absorbing layer's cells to ``max_res`` as well.
     """
     if min_res <= 0 or max_res <= 0:
         raise MeshError("mesh resolutions must be positive")
@@ -334,7 +338,8 @@ def build_axis(
         # rather than trusting the seam. Skipping this left exactly one 2:1 jump per axis,
         # sitting right where the absorbing boundary begins, which is the worst place for a
         # numerical reflection.
-        lines = _smooth_ratio(_pad_pml(lines), ratio, min_res)
+        lines = _smooth_ratio(_pad_pml(lines, max_step=max_res if pml_max_res else None),
+                              ratio, min_res)
     # Same tolerance rule as the smoothing pass: a flat fraction of min_res would undo the
     # grading it just did wherever copper forced cells below min_res.
     return merge_close(lines, _merge_tolerance(lines, min_res))
@@ -362,6 +367,13 @@ class MeshSpec:
     #: In-plane copper lines closer than this fraction of dx are merged; see MERGE_FRACTION. A
     #: small-part solve uses a half (stages/small_part.py).
     merge_fraction: float = MERGE_FRACTION
+    #: Hold the PML padding's cells to the wavelength bound too. The padding grows 1.2x a line
+    #: from the outermost cell, and eight lines of that took a real coupon's coarsest cell to
+    #: 5.3 mm against the 3.5 mm 2 GHz allows in FR-4, on every preset: the interior never
+    #: went past 1.5 mm. A small-part solve holds it (stages/small_part.py), so its "coarsest
+    #: cell" warning never fires for cells nobody reads; a region solve keeps the growth its
+    #: verification was run with.
+    pml_within_max_cell: bool = False
 
 
 @dataclass
@@ -453,9 +465,9 @@ def build_mesh(
     y_req = [min_y, max_y] + inside(copper_y, min_y, max_y)
 
     x = build_axis(x_req, spec.dx_um / 1000.0, max_res, spec.ratio,
-                   merge_fraction=spec.merge_fraction)
+                   merge_fraction=spec.merge_fraction, pml_max_res=spec.pml_within_max_cell)
     y = build_axis(y_req, spec.dy_um / 1000.0, max_res, spec.ratio,
-                   merge_fraction=spec.merge_fraction)
+                   merge_fraction=spec.merge_fraction, pml_max_res=spec.pml_within_max_cell)
 
     # Vertical: every copper layer, plus air boxes. The dielectric between layers needs
     # several cells through it, which is what dz_um is really specifying.
@@ -483,6 +495,6 @@ def build_mesh(
             filled.extend(a + gap * i / n for i in range(1, n))
     filled.append(z_req[-1])
 
-    z = build_axis(filled, dz_mm, max_res, spec.ratio)
+    z = build_axis(filled, dz_mm, max_res, spec.ratio, pml_max_res=spec.pml_within_max_cell)
 
     return Mesh(x=x, y=y, z=z)

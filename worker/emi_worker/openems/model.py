@@ -103,6 +103,15 @@ class SolveParams:
     #: In-plane copper lines closer than this fraction of dx are merged (mesh.MERGE_FRACTION when
     #: 0). A small-part solve raises it to a half: see stages/small_part.py.
     merge_fraction: float = 0.0
+    #: Hold the PML padding's cells to the band's wavelength bound (``MeshSpec``). A
+    #: small-part solve sets it: see stages/small_part.py.
+    pml_within_max_cell: bool = False
+    #: Read each layer's map this far above its copper, mm, on every preset. 0 reads it on the
+    #: next grid line up, wherever the preset put it. A small-part solve sets it.
+    map_height_mm: float = 0.0
+    #: Say so when the band's ends sit near the edge of the excitation (``excitation_band``).
+    #: A small-part solve turns it off: see stages/small_part.py.
+    band_edge_note: bool = True
 
     def resolved_f_max(self) -> float:
         if self.f_max > 0:
@@ -118,6 +127,9 @@ class BuiltModel:
     mesh: Mesh
     #: Copper layer name -> the name of its J dump, so post-processing knows what is what.
     dump_names: dict[str, str] = field(default_factory=dict)
+    #: Copper layer name -> the height its map is read at, mm, where that is between two grid
+    #: lines (``SolveParams.map_height_mm``). A layer not here is read on its one grid line.
+    dump_heights: dict[str, float] = field(default_factory=dict)
     port_names: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
     #: One entry per component actually placed (§12): reference, model, provenance, source.
@@ -394,6 +406,29 @@ def _copper_features(
             note(bx + half, by + half)
             note(bx, by)
 
+        # A diagonal segment is a staircase, and the staircase only joins up where there are
+        # grid lines under it. With lines at its ends alone, the mesh between them graded out to
+        # 0.7 mm under a 0.3 mm trace at 45 degrees, whose span along x is 0.42 mm: whole
+        # columns of cells missed it, and a synthetic clock net came out cut in two, its far
+        # port 80 dB down on every preset. So a diagonal gets lines along both axes it spans,
+        # never further apart than 0.7 of its width: a trace's span along either axis is at least
+        # its width, so no column of cells can then fall between two lines that both miss it.
+        # Nor closer than half its width, or the preset's cell if that is coarser: at the normal
+        # preset's 75 um the synthetic board's diagonals alone doubled its cells, to 1.4 M, and
+        # put it over the budget, for a staircase finer than anything else on the trace.
+        if cell_mm > 0:
+            pts = [transform.pt(px, py) for px, py in track.pts]
+            w = track.width_mm
+            step = min(max(cell_mm, w / 2.0), 0.7 * w) if w > 0 else cell_mm
+            for (ax, ay), (bx, by) in zip(pts, pts[1:]):
+                if abs(ax - bx) < 1e-6 or abs(ay - by) < 1e-6:
+                    continue
+                for lo, hi, axis in ((min(ax, bx), max(ax, bx), 0), (min(ay, by), max(ay, by), 1)):
+                    n = int(math.ceil((hi - lo) / step))
+                    for k in range(1, n):
+                        v = lo + (hi - lo) * k / n
+                        note(v, math.nan) if axis == 0 else note(math.nan, v)
+
     for pad in model.pads:
         for px, py in pad.ring:
             bx, by = transform.pt(px, py)
@@ -401,7 +436,7 @@ def _copper_features(
 
     for via in model.vias:
         bx, by = transform.pt(via.x, via.y)
-        r = (via.size_mm or via.drill_mm) / 2.0
+        r = _via_barrel_mm(via) / 2.0
         note(bx - r, by - r)
         note(bx + r, by + r)
 
@@ -422,6 +457,11 @@ def _copper_features(
         return sorted(kept)
 
     return apply(xs, ruled_x, lo_x, hi_x), apply(ys, ruled_y, lo_y, hi_y)
+
+
+def _via_barrel_mm(via) -> float:
+    """The width of a via's barrel box, mm: its drill, or its size when no drill is given."""
+    return via.drill_mm or via.size_mm
 
 
 def _ruled_edges(model: BoardModel, transform, cell_mm: float
@@ -607,6 +647,7 @@ def build_model(model: BoardModel, transform, params: SolveParams) -> BuiltModel
         air_below_mm=params.air_mm,
         max_epsilon_r=max_er,
         **({"merge_fraction": params.merge_fraction} if params.merge_fraction > 0 else {}),
+        pml_within_max_cell=params.pml_within_max_cell,
     )
 
     # §16.2's box needs air on every side. Without far field the mesh stops at the region in
@@ -625,6 +666,7 @@ def build_model(model: BoardModel, transform, params: SolveParams) -> BuiltModel
             f_max=f_max, dx_um=params.dx_um, dy_um=params.dy_um, dz_um=params.dz_um,
             air_above_mm=max(params.air_mm, pad), air_below_mm=max(params.air_mm, pad),
             max_epsilon_r=max_er, merge_fraction=spec.merge_fraction,
+            pml_within_max_cell=spec.pml_within_max_cell,
         )
     mesh = build_mesh(spec, copper_x, copper_y, list(layer_z.values()))
     if ff_clearance is not None:
@@ -645,7 +687,7 @@ def build_model(model: BoardModel, transform, params: SolveParams) -> BuiltModel
     # ---- document ----
     f_min = min(params.frequencies_hz)
     f0, fc, band_note = excitation_band(f_min, f_max)
-    if band_note:
+    if band_note and params.band_edge_note:
         notes.append(band_note)
 
     dt = mesh.timestep_seconds()
@@ -782,6 +824,20 @@ def build_model(model: BoardModel, transform, params: SolveParams) -> BuiltModel
         for name in targets:
             per_layer[name].append(csx.Polygon(vertices=ring, elevation=layer_z[name]))
 
+    # A via's annular ring, round, on every layer it spans. It used to be the corners of the
+    # barrel box below, which was as wide as the ring: a square reaches 41 % further along its
+    # diagonal than the ring does, and on a real coupon one ground via's corner came within
+    # 24 um of a 45-degree differential trace. Snapped to the grid that shorted the trace at
+    # its far end on every preset, and the "through line" read S21 of -57 dB.
+    for via in model.vias:
+        bx, by = transform.pt(via.x, via.y)
+        if not (lo_x <= bx <= hi_x and lo_y <= by <= hi_y) or via.size_mm <= _via_barrel_mm(via):
+            continue
+        from ..kicad import geometry as g
+        ring = g.circle(bx, by, via.size_mm / 2.0)
+        for name in [n for n in layer_z if n in via.layers] or list(layer_z):
+            per_layer[name].append(csx.Polygon(vertices=ring, elevation=layer_z[name]))
+
     for name, prims in per_layer.items():
         if prims:
             doc.add(csx.Metal(name=f"cu_{name.replace('.', '_')}", primitives=prims))
@@ -793,7 +849,8 @@ def build_model(model: BoardModel, transform, params: SolveParams) -> BuiltModel
             "interest."
         )
 
-    # Vias, as vertical PEC boxes joining the layers they span.
+    # Vias, as vertical PEC boxes joining the layers they span: the plated barrel, as wide as
+    # the drill. The ring is copper on each layer, above.
     via_prims: list[csx.Primitive] = []
     for via in model.vias:
         bx, by = transform.pt(via.x, via.y)
@@ -801,7 +858,7 @@ def build_model(model: BoardModel, transform, params: SolveParams) -> BuiltModel
             continue
         spanned = [n for n in layer_z if n in via.layers] or list(layer_z)
         zs = [layer_z[n] for n in spanned]
-        r = (via.size_mm or via.drill_mm) / 2.0
+        r = _via_barrel_mm(via) / 2.0
         if r <= 0:
             continue
         via_prims.append(csx.Box(
@@ -880,21 +937,42 @@ def build_model(model: BoardModel, transform, params: SolveParams) -> BuiltModel
     # For a conductor the surface current is |J_s| = |n x H|, so the honest measurement is
     # the H field on the grid line immediately above the copper. That is what shows which
     # trace is carrying the current that radiates.
+    #
+    # With ``map_height_mm`` set, the map is read at that height on every preset instead: the
+    # dump spans the two grid lines either side of it and post.read_fd_dump interpolates. The
+    # next grid line is dz up, and the field at a trace's edge falls as one over the root of
+    # the distance, so a real coupon's hotspot read 1.7 dB louder on the normal preset (51 um
+    # up) than on the coarse one (72 um up) with the port impedance agreeing to 1.5 %.
     z_lines = built_z = mesh.z
     dump_names: dict[str, str] = {}
+    dump_heights: dict[str, float] = {}
+    sheets = sorted(layer_z.values())
     for name, zc in layer_z.items():
         idx = int(np.searchsorted(z_lines, zc + 1e-9))
         if idx >= len(z_lines):
             idx = len(z_lines) - 1
         z_dump = float(z_lines[idx])
         if abs(z_dump - zc) < 1e-9 and idx + 1 < len(z_lines):
-            z_dump = float(z_lines[idx + 1])
+            idx += 1
+            z_dump = float(z_lines[idx])
+        z_top = z_dump
+        if params.map_height_mm > 0:
+            # Never past half way to the next copper above.
+            above = [z for z in sheets if z > zc + 1e-9]
+            target = zc + min(params.map_height_mm, (above[0] - zc) / 2 if above else math.inf)
+            if z_dump < target - 1e-9:
+                k = int(np.searchsorted(z_lines, target - 1e-9))
+                if k < len(z_lines):
+                    z_dump, z_top = float(z_lines[k - 1]), float(z_lines[k])
+                    if abs(z_top - target) < 1e-9:
+                        z_dump = z_top
+                    dump_heights[name] = round(target, 6)
         dump = f"Hf_{name.replace('.', '_')}"
         doc.add(csx.DumpBox(
             name=dump,
             dump_type=csx.DUMP_H_FREQ,
             frequencies=params.frequencies_hz,
-            primitives=[csx.Box(p1=(x0, y0, z_dump), p2=(x1, y1, z_dump))],
+            primitives=[csx.Box(p1=(x0, y0, z_dump), p2=(x1, y1, z_top))],
         ))
         dump_names[name] = dump
 
@@ -1046,7 +1124,8 @@ def build_model(model: BoardModel, transform, params: SolveParams) -> BuiltModel
             )
 
     return BuiltModel(
-        doc=doc, mesh=mesh, dump_names=dump_names, port_names=port_names, notes=notes,
+        doc=doc, mesh=mesh, dump_names=dump_names, dump_heights=dump_heights,
+        port_names=port_names, notes=notes,
         modelled_parts=modelled, cable_ports=cable_port_meta, far_field=far_field_meta,
     )
 

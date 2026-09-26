@@ -62,6 +62,11 @@ END_CRITERIA = 1e-5
 #: at 37.5 um to 0.80 M at 50.7 um, coarse).
 MERGE_FRACTION = 0.5
 
+#: The height every map is read at above its copper, mm, whatever the preset. The coarse
+#: preset's first grid line above a trace is about this far up; a finer one reads closer, where
+#: the field at a trace's edge is louder, and the presets disagreed by 1.7 dB on the level.
+MAP_HEIGHT_MM = 0.1
+
 #: The largest mesh a small-part solve will build, in cells (216 MB at 72 bytes a cell).
 MAX_CELLS = 3_000_000
 
@@ -116,6 +121,16 @@ def apply(p: dict, params: SolveParams) -> SolveParams:
     params.model_components = False
     params.end_criteria = END_CRITERIA
     params.merge_fraction = MERGE_FRACTION
+    # The band's coarsest cell holds everywhere, the absorbing layer included; the upper edge
+    # of the band is chosen for it (module docstring), and the padding used to grow past it.
+    params.pml_within_max_cell = True
+    params.map_height_mm = MAP_HEIGHT_MM
+    # The default band spans 20:1, just past where ``model.excitation_band`` warns that its ends
+    # carry "a few dB more uncertainty", so every run said so. That is true of a level read
+    # against the source, and nothing here is one: the port numbers are ratios of two transforms
+    # of the same record, and the maps are per volt of the source. At 2 GHz the microstrip
+    # check read Z0 within 0.5 % and S21 within 0.1 dB on every preset.
+    params.band_edge_note = False
     # The cap is derived from the band (three periods of its lowest frequency); a hand-set cap
     # would make the budget below meaningless.
     params.max_timesteps = 0
@@ -162,6 +177,15 @@ def cut(board, transform, p: dict, params: SolveParams):
     if missing:
         raise StageError(f"{', '.join(missing)} is not a net on this board")
     reduced, cut_notes = coupon_mod.extract(board, transform, nets, params.roi)
+    cell = min(params.dx_um, params.dy_um) / 1000.0
+    tight = coupon_mod.tight_gaps(reduced, nets, cell)
+    if tight:
+        many = tight != 1
+        cut_notes.append(
+            f"{tight} piece{'s' if many else ''} of other copper {'are' if many else 'is'} "
+            f"closer to the net than one cell ({cell * 1000:.0f} um), so the mesh may join "
+            f"{'them' if many else 'it'} to the net. A finer mesh preset resolves the gap"
+        )
     return reduced, notes + cut_notes
 
 

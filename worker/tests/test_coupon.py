@@ -7,6 +7,8 @@ what it does not; these pin both halves, and the port rules the browser mirrors
 
 from __future__ import annotations
 
+import math
+
 import pytest
 
 from emi_worker.kicad import parse, parse_board
@@ -170,3 +172,82 @@ def test_a_coupon_builds_a_model_with_its_ports_on_the_plane(board):
     assert "p1_exc" in xml and "p2_res" in xml
     # The port box runs from the top layer to In1, not to some other layer.
     assert f"{lz['In1.Cu']:g}" in xml or f"{lz['In1.Cu'] * 1000:g}" in xml
+
+
+def test_copper_closer_to_the_net_than_a_cell_is_counted(board):
+    b, t = board
+    c = coupon.plan(b, t, ["CLK"])
+    cut, _ = coupon.extract(b, t, ["CLK"], c.roi)
+    # The ground via's ring and U1's ground pin are 0.6 and 0.5 mm from the net's copper.
+    assert coupon.tight_gaps(cut, ["CLK"], 0.15) == 0
+    assert coupon.tight_gaps(cut, ["CLK"], 0.55) == 1
+    assert coupon.tight_gaps(cut, ["CLK"], 0.7) == 2
+
+
+def test_a_via_is_its_drilled_barrel_and_a_round_ring(board):
+    # A box as wide as the ring reached 41 % further along its diagonal than the ring does, and
+    # on a real coupon a ground via's corner shorted a 45-degree trace passing it.
+    b, t = board
+    c = coupon.plan(b, t, ["CLK"])
+    cut, _ = coupon.extract(b, t, ["CLK"], c.roi)
+    built = build_model(cut, t, SolveParams(roi=c.roi, frequencies_hz=[1e8, 1e9], ports=c.ports,
+                                            dx_um=150, dy_um=150, dz_um=100))
+    by_name = {getattr(m, "name", ""): m for m in built.doc.properties}
+    (barrel,) = by_name["cu_vias"].primitives
+    assert barrel.p2[0] - barrel.p1[0] == pytest.approx(0.3)
+    cx, cy = (barrel.p1[0] + barrel.p2[0]) / 2, (barrel.p1[1] + barrel.p2[1]) / 2
+    for layer in ("cu_F_Cu", "cu_B_Cu"):
+        reach = [max(math.hypot(x - cx, y - cy) for x, y in p.vertices)
+                 for p in by_name[layer].primitives
+                 if all(math.hypot(x - cx, y - cy) < 0.4 for x, y in p.vertices)]
+        assert reach and reach[0] == pytest.approx(0.3, rel=0.05), layer
+
+
+@pytest.mark.parametrize("preset", [(150, 150, 100), (75, 75, 50), (50, 50, 25)])
+def test_a_small_part_mesh_holds_the_bands_coarsest_cell_on_every_preset(board, preset):
+    # The PML padding grew 1.2x a line past the wavelength bound: a real coupon's coarsest cell
+    # was 5.3 mm against the 3.5 mm 2 GHz allows, on every preset, in cells nobody reads.
+    from emi_worker.openems.mesh import max_cell_for_frequency
+    from emi_worker.stages import small_part
+
+    b, t = board
+    c = coupon.plan(b, t, ["USB_D+", "USB_D-"])
+    cut, _ = coupon.extract(b, t, ["USB_D+", "USB_D-"], c.roi)
+    dx, dy, dz = preset
+    params = small_part.apply({"mode": "small_part"}, SolveParams(
+        roi=c.roi, frequencies_hz=[], ports=c.ports, dx_um=dx, dy_um=dy, dz_um=dz))
+    built = build_model(cut, t, params)
+    limit = max_cell_for_frequency(small_part.BAND_HZ[1], 4.6)
+    assert built.mesh.max_cell_mm <= limit * 1.0001
+    assert not any("coarsest cell" in n for n in built.notes)
+    # Every preset reads the top layer's map at the same height above its copper: between two
+    # grid lines, or on the first line when that is already about as high.
+    lz = _layer_z(b)
+    (box,) = next(p for p in built.doc.properties if getattr(p, "name", "") == "Hf_F_Cu").primitives
+    height = built.dump_heights.get("F.Cu", box.p1[2]) - lz["F.Cu"]
+    assert height == pytest.approx(small_part.MAP_HEIGHT_MM, rel=0.05)
+    # A region solve keeps the growth its verification was run with.
+    region = build_model(cut, t, SolveParams(roi=c.roi, frequencies_hz=[1e8, 2e9], ports=c.ports,
+                                             dx_um=dx, dy_um=dy, dz_um=dz))
+    assert region.mesh.max_cell_mm > limit
+
+
+@pytest.mark.parametrize("cell_um", [150, 75])
+def test_a_diagonal_trace_has_grid_lines_all_along_it(cell_um):
+    # Lines at a 45-degree trace's ends alone graded out to 0.7 mm under it, whole columns of
+    # cells missed its 0.42 mm span along x, and the net came out cut in two.
+    import numpy as np
+
+    text = BOARD.replace('(segment (start 10 22) (end 30 22) (width 0.2) (layer "F.Cu") (net 3))',
+                         '(segment (start 10 22) (end 20 32) (width 0.2) (layer "F.Cu") (net 3))')
+    b = parse_board(parse(text))
+    t = board_extent(b)
+    c = coupon.plan(b, t, ["OTHER"])
+    cut, _ = coupon.extract(b, t, ["OTHER"], c.roi)
+    built = build_model(cut, t, SolveParams(roi=c.roi, frequencies_hz=[1e8, 2e9], ports=c.ports,
+                                            dx_um=cell_um, dy_um=cell_um, dz_um=100))
+    (x0, y0), (x1, y1) = t.pt(10, 22), t.pt(20, 32)
+    step = min(max(cell_um / 1000.0, 0.1), 0.7 * 0.2) * 1.0001
+    for lines, lo, hi in ((built.mesh.x, x0, x1), (built.mesh.y, min(y0, y1), max(y0, y1))):
+        inside = lines[(lines >= lo) & (lines <= hi)]
+        assert np.diff(inside).max() <= step

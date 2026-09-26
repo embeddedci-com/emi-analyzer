@@ -13,7 +13,7 @@ line of length h, with no end effects to model:
     L = (mu0 / 2 pi) h acosh((s^2 - r1^2 - r2^2) / (2 r1 r2))
 
 r1 is the port's and r2 the via's radius. The model draws both as square boxes, a port 0.4 mm
-across and a via as wide as its pad; a square conductor of side a carries surface current like
+across and a via's barrel as wide as its drill; a square conductor of side a carries surface current like
 a round one of radius 0.59 a (conformal mapping), which is the radius used here. h is the
 distance between the two copper sheets as the model places them (``model._layer_z``).
 
@@ -50,7 +50,7 @@ from emi_worker.openems.model import _layer_z  # noqa: E402
 
 H_DIEL = 1.5
 T_CU = 0.035
-#: (via diameter, port-to-via spacing), mm.
+#: (via drill, which is the barrel the model draws, port-to-via spacing), mm.
 CASES = [(0.3, 1.0), (0.3, 2.0), (0.8, 2.0)]
 #: Where L is read: well below the first resonance, where Im(Z) is a few ohms.
 READ_HZ = np.array([100e6, 150e6, 200e6, 300e6])
@@ -75,7 +75,7 @@ def board(d_via: float, spacing: float) -> str:
   (footprint "Pad" (layer "F.Cu") (at 9 10)
     (property "Reference" "TP1" (at 0 0) (layer "F.SilkS"))
     (pad "1" smd rect (at 0 0) (size 0.4 0.4) (layers "F.Cu") (net 2 "PORT")))
-  (via (at {9 + spacing} 10) (size {d_via}) (drill {d_via / 2}) (layers "F.Cu" "B.Cu") (net 1))
+  (via (at {9 + spacing} 10) (size {d_via + 0.3}) (drill {d_via}) (layers "F.Cu" "B.Cu") (net 1))
   (zone (net 1) (net_name "GND") (layer "F.Cu") (hatch edge 0.5)
     (polygon {plane}) (filled_polygon (layer "F.Cu") {plane}))
   (zone (net 1) (net_name "GND") (layer "B.Cu") (hatch edge 0.5)

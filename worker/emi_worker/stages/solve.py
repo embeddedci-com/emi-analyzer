@@ -351,6 +351,7 @@ def run_solve(ctx: StageContext) -> StageResult:
             [p.name for p in params.ports if p.excited],
             modelled_parts=built.modelled_parts,
             cable_ports=built.cable_ports,
+            dump_heights=built.dump_heights,
             run_meta={
                 "cells": result.cells or cells,
                 "timesteps": result.final_timestep,

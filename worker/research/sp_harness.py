@@ -225,6 +225,20 @@ def line_from_z(z11, z12, length_m: float, freqs: np.ndarray) -> dict:
     return {"z0": z0, "eps_eff": (beta / k0) ** 2, "beta": beta}
 
 
+def unwrapped_gl(z11, z12) -> np.ndarray:
+    """gamma * l of a uniform line from its Z-parameters, phase unwrapped over a dense grid.
+
+    cosh(gl) = Z11 / Z12 has two roots, e^gl and e^-gl; the lossy line's is the one outside
+    the unit circle. arccosh alone folds the phase into [0, pi], which a line longer than half
+    a wavelength at the top of the band passes.
+    """
+    x = z11 / z12
+    root = x + np.sqrt(x * x - 1)
+    root = np.where(np.abs(root) >= 1, root, 1 / root)
+    gl = np.log(root)
+    return gl.real + 1j * np.unwrap(gl.imag)
+
+
 def write_report(name: str, report: dict) -> Path:
     path = OUT / "smallpart" / f"{name}.json"
     path.parent.mkdir(parents=True, exist_ok=True)

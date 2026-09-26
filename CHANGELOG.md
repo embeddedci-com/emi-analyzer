@@ -51,6 +51,12 @@ The KiCad plugin is versioned and released separately; see
 - The divergence check refused every long solve; mesh grading is now enforced.
 - Release builds come from the tag's commit, not from the branch a manual run started on.
 - The worker image health check now fails when the worker or a promised tool is missing.
+- Solves: a via is its drilled barrel and a round ring, not a box as wide as the ring, whose
+  corner shorted a diagonal trace beside it; and a diagonal trace has grid lines all along it,
+  where it used to be cut in two between its ends.
+- Small-part solves read each map 0.1 mm above the copper on every preset, hold the absorbing
+  layer to the band's cell size, start on the coarse mesh when normal is over budget, and say
+  when other copper sits within one cell of the net.
 
 ### Security
 
