@@ -215,3 +215,23 @@ def test_a_dump_from_a_current_openems_reads_the_same(tmp_path: Path):
     a, b = post.read_fd_dump(str(old))[0], post.read_fd_dump(str(new))[0]
     assert b.magnitude.shape == (3, 4)
     np.testing.assert_allclose(a.magnitude, b.magnitude)
+
+
+def test_a_map_is_read_between_two_grid_lines_at_the_height_asked_for(tmp_path: Path):
+    """A small-part map spans the two lines either side of its height and is interpolated."""
+    import h5py
+
+    x, y, z = np.linspace(0, 1e-3, 4), np.linspace(0, 2e-3, 3), np.array([1e-4, 2e-4])
+    field = np.zeros((3, 4, 3, 2), dtype=np.float32)
+    field[0, :, :, 0], field[0, :, :, 1] = 4.0, 2.0  # Hx 4 on the lower line, 2 on the upper
+    path = tmp_path / "two.h5"
+    with h5py.File(path, "w") as f:
+        for k, v in (("x", x), ("y", y), ("z", z)):
+            f[f"Mesh/{k}"] = v
+        fd = f.create_group("FieldData/FD")
+        fd.attrs["frequency"] = [1e8]
+        fd["f0_real"] = field.transpose(0, 3, 2, 1)
+        fd["f0_imag"] = np.zeros_like(field.transpose(0, 3, 2, 1))
+    g = post.read_fd_dump(str(path), 0.175)[0]
+    assert g.magnitude.shape == (3, 4) and g.z_mm == 0.175
+    np.testing.assert_allclose(g.magnitude, 2.5)

@@ -408,3 +408,36 @@ def extract(board: BoardModel, transform, nets: list[str],
         )
     out = replace(board, tracks=tracks, vias=vias, pads=pads, zones=zones)
     return out, notes
+
+
+def tight_gaps(board: BoardModel, nets: list[str], cell_mm: float) -> int:
+    """How many pieces of other copper come closer to the nets than one cell.
+
+    A grid line runs the whole domain, so two copper edges closer together than a cell can land
+    on the same line, and the net is then joined to its neighbour: a trace becomes a stub to
+    ground. That is how a real coupon's through line read S21 of -57 dB, before vias were drawn
+    round (``model.py``). This counts the vias, pads and tracks of other nets a coupon keeps
+    within a cell of the net, so a result can say its preset is too coarse for the spacing.
+    """
+    wanted = set(nets)
+    if cell_mm <= 0:
+        return 0
+    tests: dict[float, object] = {}
+
+    def within(extra: float):
+        key = round(extra, 4)
+        if key not in tests:
+            tests[key] = _near_net(board, wanted, cell_mm + extra)
+        return tests[key]
+
+    count = 0
+    for v in board.vias:
+        if v.net not in wanted:
+            count += bool(within((v.size_mm or v.drill_mm) / 2.0)(v.x, v.y))
+    for p in board.pads:
+        if p.net not in wanted:
+            count += bool(any(within(0.0)(x, y) for x, y in p.ring))
+    for t in board.tracks:
+        if t.net not in wanted:
+            count += bool(any(within(t.width_mm / 2.0)(x, y) for x, y in t.pts))
+    return count
