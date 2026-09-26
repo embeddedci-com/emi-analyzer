@@ -115,8 +115,11 @@ def _kicad_cli() -> str | None:
 @pytest.mark.skipif(_kicad_cli() is None, reason="kicad-cli is not installed")
 def test_kicad_reads_the_sample_board(tmp_path):
     """The sample has to be a board KiCad itself opens, not only one this parser accepts."""
+    # A copy: KiCad writes a .kicad_prl beside the board it opens.
+    board = tmp_path / SAMPLE.name
+    shutil.copy(SAMPLE, board)
     done = subprocess.run(
-        [_kicad_cli(), "pcb", "export", "gerbers", str(SAMPLE), "-o", str(tmp_path)],
+        [_kicad_cli(), "pcb", "export", "gerbers", str(board), "-o", str(tmp_path)],
         capture_output=True, text=True, timeout=120,
     )
     assert done.returncode == 0, done.stderr
