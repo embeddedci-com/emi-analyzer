@@ -247,7 +247,7 @@ def test_a_diagonal_trace_has_grid_lines_all_along_it(cell_um):
     built = build_model(cut, t, SolveParams(roi=c.roi, frequencies_hz=[1e8, 2e9], ports=c.ports,
                                             dx_um=cell_um, dy_um=cell_um, dz_um=100))
     (x0, y0), (x1, y1) = t.pt(10, 22), t.pt(20, 32)
-    step = min(cell_um / 1000.0, 0.7 * 0.2) * 1.0001
+    step = min(max(cell_um / 1000.0, 0.1), 0.7 * 0.2) * 1.0001
     for lines, lo, hi in ((built.mesh.x, x0, x1), (built.mesh.y, min(y0, y1), max(y0, y1))):
         inside = lines[(lines >= lo) & (lines <= hi)]
         assert np.diff(inside).max() <= step
