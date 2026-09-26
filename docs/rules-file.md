@@ -26,7 +26,7 @@ rules:
       intra_pair_ps: 2
       byte_lane_ps: 10
       address_command_ps: 25
-      lane_to_lane_ps: 0               # 0 = do not compare; write levelling absorbs it
+      lane_to_lane_ps: 0               # 0 = off; set it only for a controller without write leveling
   impedance:
     params:
       tolerance_pct: 10
