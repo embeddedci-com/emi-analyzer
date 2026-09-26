@@ -456,14 +456,11 @@ def divergence_ratio(
     return worst
 
 
-@lru_cache(maxsize=1)
-def solver_has_series_rlc() -> bool:
-    """Whether the installed openEMS models a series lumped R-L-C (``LEtype``).
+def series_rlc_probe_xml() -> str:
+    """The model ``solver_has_series_rlc`` gives openEMS: one cell of inductance, one timestep.
 
-    Asked of the binary rather than assumed from a version: it is given a one-cell inductor
-    and one timestep, and a solver that cannot model it says "R or C not specified" while
-    setting up. openEMS 0.0.35, the Debian package, cannot; a current build can. A
-    second or so, once per worker process.
+    The openEMS base image (worker/openems-image) runs the same file at build time, so an
+    image that lost the element fails its build. test_openems_image keeps the two equal.
     """
     from . import csx
 
@@ -480,11 +477,23 @@ def solver_has_series_rlc() -> bool:
     doc.add(csx.LumpedElement(
         name="probe", direction=2, resistance=None, inductance=1e-9, le_type=csx.LE_SERIES,
         primitives=[csx.Box(p1=(3.0, 3.0, 3.0), p2=(4.0, 4.0, 4.0), priority=csx.PRIORITY_PORT)]))
+    return doc.to_string()
+
+
+@lru_cache(maxsize=1)
+def solver_has_series_rlc() -> bool:
+    """Whether the installed openEMS models a series lumped R-L-C (``LEtype``).
+
+    Asked of the binary rather than assumed from a version: it is given a one-cell inductor
+    and one timestep, and a solver that cannot model it says "R or C not specified" while
+    setting up. openEMS 0.0.35, the Debian package (``OPENEMS_SOURCE=apt``), cannot; the
+    openEMS the released image is built on can. A second or so, once per worker process.
+    """
     try:
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, "probe.xml")
             with open(path, "w") as fh:
-                fh.write(doc.to_string())
+                fh.write(series_rlc_probe_xml())
             out = subprocess.run([OPENEMS_BIN, path], cwd=tmp, capture_output=True, text=True,
                                  timeout=60)
     except (OSError, subprocess.SubprocessError) as exc:

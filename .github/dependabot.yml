@@ -45,7 +45,11 @@ updates:
     groups:
       worker-python: { patterns: ["*"], update-types: [minor, patch] }
 
-  # The base image digest in worker/Dockerfile.
+  # The Debian digest in worker/Dockerfile and in the openEMS image it starts FROM, in one pull
+  # request: test_openems_image fails if the two differ. Merging it rebuilds openEMS (tens of
+  # minutes per architecture) and changes no worker until worker/Dockerfile's OPENEMS_IMAGE moves.
   - package-ecosystem: docker
-    directory: /worker
+    directories: [/worker, /worker/openems-image]
     schedule: { interval: weekly }
+    groups:
+      debian: { patterns: ["*"] }
