@@ -61,7 +61,7 @@ export function LoudestSpots({ spots, withinDb, onFocus }: LoudestSpotsProps) {
         </Table.Tbody>
       </Table>
       <Text size="10px" c="dimmed" mt={4}>
-        Away from the ports, which are always loud. Orange on the board.
+        Away from the ports, which are always loud. Marked in the same color on the board; click one to zoom there.
       </Text>
     </div>
   )

@@ -445,8 +445,9 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
     const shown = tab === 'part' ? activePart : activeSolve
     const solved = (shown?.params as { ports?: PortSpec[] } | undefined)?.ports ?? []
     const out: BoardMarker[] = (ports.length ? ports : solved).map((p) => ({ x: p.x_mm, y: p.y_mm, label: p.name }))
-    // A small-part result's loudest spots, in the orange the result panel numbers them in.
-    if (tab === 'part' && !ports.length) {
+    // A small-part result's loudest spots, in the color the result panel numbers them in. Only
+    // the result view reports any, so the set-up ports still on screen do not hide them.
+    if (tab === 'part') {
       const color = hexToRgb(HOTSPOT_MARKER_HEX)
       spots.forEach((s, i) => out.push({ x: s.x_mm, y: s.y_mm, label: String(i + 1), color }))
     }
