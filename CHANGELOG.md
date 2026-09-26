@@ -31,6 +31,10 @@ The KiCad plugin is versioned and released separately; see
   worker skipped or assumed (unfilled zones, an unreadable rules file, a missing stackup).
 - "Try the sample board" on the home page, and a one-time hint on what to do after the
   findings.
+- Small-part solves (still experimental and off) list every spot within 3 dB of each map's
+  loudest point away from the ports, with the nearest net and part, and mark them on the board.
+  When there are several, the result says to treat them together. A part that runs on the
+  coarse mesh with vias says its via inductance can read up to about 10% high.
 
 ### Changed
 

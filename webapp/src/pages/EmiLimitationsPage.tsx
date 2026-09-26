@@ -51,8 +51,9 @@ const LIMITATIONS: Limitation[] = [
     why:
       'A small-part solve cuts one net out with its planes and solves it in minutes, with no ' +
       'far field. Test lines and vias match theory, and the size of the cut does not change ' +
-      'the answer on the parts checked. Only one real board has been checked, and nothing has ' +
-      'been compared with a measurement. It is off unless a server ' +
+      'the answer on the parts checked. On one of three real boards the mesh presets differ ' +
+      'by 3 dB on the hotspot level, and nothing has been compared with a measurement. It is ' +
+      'off unless a server ' +
       'enables it with EMI_EXPERIMENTAL=small-part-solve. Neighboring nets are left out of ' +
       'the cut, so it does not show coupling into them.',
   },

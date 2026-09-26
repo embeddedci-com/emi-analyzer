@@ -424,7 +424,7 @@ run them, not just that the buttons are hidden.
 | Name | What it enables | Why it is off |
 |---|---|---|
 | `full-wave` | openEMS full-wave simulation of a board region, hotspot maps, the far field, cable emissions and the compliance estimate — the Solve, Drivers, Components, Results and Compliance tabs | It runs, and a test board solves end to end. What has not been done is verifying any of it on a real board, or at the record length a radiated result needs. Treat anything it produces as unchecked. See [known issues](docs/known-issues.md). |
-| `small-part-solve` | openEMS solves of one net (or a small drawn region) cut out over its planes, in minutes: its hotspot map, port impedance and S-parameters, on the Part solve tab. No far field. `full-wave` includes it | Test lines and vias match theory, and a synthetic part converges. Only one real board has been checked, and its two mesh presets disagree on where the hotspot is. See [verification](docs/verification/small-part-solve.md). |
+| `small-part-solve` | openEMS solves of one net (or a small drawn region) cut out over its planes, in minutes: its hotspot map, port impedance and S-parameters, on the Part solve tab. No far field. `full-wave` includes it | Test lines and vias match theory, and a synthetic part and two of three real parts converge. On the third, the two mesh presets differ by 3.3 dB on the hotspot level, and the sample board's nets, open at one end, do not settle. See [verification](docs/verification/small-part-solve.md). |
 
 To try one anyway, set `EMI_EXPERIMENTAL` to its name where the app is started (a
 comma-separated list for more than one). For `full-wave`:
