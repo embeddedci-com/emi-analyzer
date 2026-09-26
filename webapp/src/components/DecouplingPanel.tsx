@@ -162,6 +162,7 @@ function IcDetail({ doc, rail, ic, cap, whatIf, onCap, onWhatIf }: {
   const gaps = Number.isFinite(target) ? gapsOf(freqs, total, target, ic.band_hz) : []
   const noise = noiseMarks(ic.noise, branches, ic.series_l_h, target, ic.band_hz, doc.f_max_hz)
   const unfiltered = noise.filter((n) => n.notFiltered)
+  const inBand = ic.anti_resonances.filter((a) => a.hz <= ic.band_hz)
   const whatIfCurve = whatIf !== null && ranked[whatIf]
     ? curve(applyChange(branches, ranked[whatIf].change), ic.series_l_h, freqs)
     : null
@@ -174,16 +175,17 @@ function IcDetail({ doc, rail, ic, cap, whatIf, onCap, onWhatIf }: {
       </Group>
 
       <Group gap="xs" grow>
-        <NumberInput size="xs" label={`Rail V${rail.v_assumed ? ' (assumed)' : ''}`} value={volts}
+        <NumberInput size="xs" label="Rail V" value={volts}
                      min={0.1} step={0.1} decimalScale={2} onChange={(v) => setVolts(Number(v) || 0)} />
         <NumberInput size="xs" label="Ripple %" value={ripple} min={0.1} step={1} decimalScale={1}
                      onChange={(v) => setRipple(Number(v) || 0)} />
-        <NumberInput size="xs" label="Step A (assumed)" value={step} min={0.01} step={0.1}
+        <NumberInput size="xs" label="Step A" value={step} min={0.01} step={0.1}
                      decimalScale={2} onChange={(v) => setStep(Number(v) || 0)} />
       </Group>
       <Text size="xs">
         Target <Text span ff="monospace" size="xs" fw={600}>{Number.isFinite(target) ? fmtOhm(target) : '-'}</Text>
-        {' '}up to {fmtHz(ic.band_hz)}.{' '}
+        {' '}up to {fmtHz(ic.band_hz)}
+        {rail.v_assumed ? ', rail voltage and step assumed' : ', step assumed'}.{' '}
         {gaps.length
           ? <Text span size="xs" c="red.7" fw={600}>Above it at {gaps.map(fmtRange).join(', ')}.</Text>
           : <Text span size="xs" c="green.8" fw={600}>Below it everywhere.</Text>}
@@ -201,9 +203,10 @@ function IcDetail({ doc, rail, ic, cap, whatIf, onCap, onWhatIf }: {
             : 'Filtered up to the board range.'}
         </Text>
       )}
-      {ic.anti_resonances.length > 0 && (
+      {/* Listed within the board range only; the chart marks them all. */}
+      {inBand.length > 0 && (
         <Text size="xs">
-          Anti-resonance: {ic.anti_resonances.map((a) => `${fmtOhm(a.ohm)} at ${fmtHz(a.hz)}`).join(', ')}.
+          Anti-resonance: {inBand.map((a) => `${fmtOhm(a.ohm)} at ${fmtHz(a.hz)}`).join(', ')}.
         </Text>
       )}
 
