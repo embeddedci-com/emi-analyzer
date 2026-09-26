@@ -24,7 +24,7 @@ solver or a measurement — and passed. The gap between the two is most of this 
 | Drivers (re-weighting a solve) | ✅ | ⚠️ every check in §3 passes; nothing against a measured source | off, with full-wave |
 | Components (MLCC models in a solve) | ✅ | ❌ the shipped openEMS 0.0.35 cannot model an inductor, so no capacitor is placed; on a current openEMS build a 100 pF 0402 resonates within 1.6 % but only with a -70 dB record (§3) | off, with full-wave |
 | Board far field (NF2FF) | ✅ | ⚠️ matches nec2c on dipoles over the ground plane as the product runs it, 30 MHz up (§3); no board checked against a measurement | off, with full-wave |
-| Cable emissions, Tier B | ✅ | ❌ fails its real-board gate: 7-9 dB low on average on two boards below resonance; the third gave no result — §3 | off, with full-wave |
+| Cable emissions, Tier B | ✅ | ❌ failed its real-board gate, 7-9 dB low on average on two boards below resonance. Cause found in nec2c (the board modelled as a wire, not a plate) and fixed; a residual of 0-5 dB low remains by where the source is. Needs the openEMS re-run — §3 | off, with full-wave |
 | Compliance estimate | ✅ | ❌ runs end to end on the fixture board; never checked against a lab or a second solver (§3) | off, with full-wave |
 | Conducted emissions scan | ❌ | ❌ | — |
 | Report export (HTML and JSON, built in the browser) | ✅ | — (nothing to verify: it restates results) | on |
@@ -117,6 +117,8 @@ after the energy has fallen 20 dB.
 | A choke from a datasheet curve is R + jX | ✅ built and tested; no library cable has one, none compared with a measured choke |
 | A bond moves the first resonance where a line over the plane resonates | ✅ within 3.3 % (1 m), 6.7 % (2 m). The old check ("never lengthens") could not fail and was wrong for an open far end |
 | **Tier B against a fully coupled simulation on three real boards, ±6 dB below resonance** | ❌ board A: Tier B 6-15 dB low from 45 MHz to resonance (mean -8.9 dB); board B: did not decay in its record; board C: 2-11 dB low from 80 MHz to resonance (mean -7.5 dB from 45 MHz). Same shape on both: low where the cable's impedance is large, agreeing at resonance |
+| Why Tier B read low | ✅ found with nec2c: Tier B modelled the board as a thin wire. A plate of the board's outline reads Z_ant 5-12 dB lower below resonance, about 7 of board A's 8.9 dB and 5.6 of board C's 7.5 dB. Tier B now uses the plate. The rest is V_oc: attaching a cable raises it by 0-5 dB depending on how far the source is from the connector, which the solve cannot see. ⏳ the openEMS re-run on all three boards (100 ns records, and at 1 m) has not been done; the command is in the verification doc |
+| Tier A with the board as a plate | ⏳ not changed: e_per_amp moves 0.1-1 dB below resonance but 2-8 dB around the peaks, which shift down. Needs its own openEMS check first |
 | No diode package is mistaken for a connector | ✅ |
 | `nec2c` and a second antenna solver agree within 1 dB | ✅ openEMS, 9 configurations: 7 within 1 dB below resonance, 1.14 and 2.48 dB for the other two (the second record-limited) |
 | The closed form is a conservative bound | ⚠️ for an open far end only; 4-26 dB low for grounded and equipment far ends |
