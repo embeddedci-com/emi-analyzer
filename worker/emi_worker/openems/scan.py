@@ -37,6 +37,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from . import post
+
 C0 = 299_792_458.0
 ETA0 = 376.730313668
 
@@ -96,10 +98,9 @@ def _read(path: str, frequencies: list[float]):
             if hit.size == 0:
                 raise ScanError(f"{os.path.basename(path)} has no field at {freq / 1e6:g} MHz")
             k = int(hit[0])
-            re = np.asarray(f[f"FieldData/FD/f{k}_real"][:], dtype=float)
-            im = np.asarray(f[f"FieldData/FD/f{k}_imag"][:], dtype=float)
-            # (component, z, y, x) -> (z, y, x, component)
-            fields.append(np.moveaxis(re + 1j * im, 0, -1))
+            # Either openEMS layout; (component, z, y, x) -> (z, y, x, component).
+            c = post.fd_components(f["FieldData/FD"], k, os.path.basename(path))
+            fields.append(np.moveaxis(c, 0, -1))
     return mesh, np.stack(fields)
 
 

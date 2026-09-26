@@ -276,6 +276,30 @@ def run_job(job_path: str, out_h5: str, *, timeout_s: float = 900.0) -> None:
         raise NF2FFError("nf2ff exited cleanly but wrote no output file")
 
 
+def far_field_at(f, k: int) -> tuple[np.ndarray, np.ndarray]:
+    """E_theta and E_phi at frequency ``k`` of an open nf2ff output file, complex, (phi, theta).
+
+    The layout depends on the openEMS build, and not the way the field dumps' does. Debian's
+    0.0.35 writes ``f<k>_real`` and ``f<k>_imag``, (phi, theta). The from-source build
+    (OPENEMS_SOURCE=build) writes one complex ``f<k>``, **(theta, phi)**, with no ``d_order``
+    to say so: both measured on the same dipole, 24 phi by 25 theta. Reading the new file the
+    old way would take the per-theta maximum across theta instead.
+    """
+    n_theta, n_phi = f["/Mesh/theta"].shape[0], f["/Mesh/phi"].shape[0]
+    out = []
+    for name in ("E_theta", "E_phi"):
+        g = f[f"/nf2ff/{name}/FD"]
+        if f"f{k}_real" in g:
+            e = np.asarray(g[f"f{k}_real"][:]) + 1j * np.asarray(g[f"f{k}_imag"][:])
+        else:
+            e = np.asarray(g[f"f{k}"][:]).astype(np.complex128).T
+        if e.shape != (n_phi, n_theta):
+            raise NF2FFError(f"nf2ff wrote {name} as {e.shape}, not {n_phi} phi by "
+                             f"{n_theta} theta")
+        out.append(e)
+    return out[0], out[1]
+
+
 def read_field(
     out_h5: str,
     frequencies: list[float],
@@ -311,10 +335,7 @@ def read_field(
         per_angle: list[list[float]] = []
         for k in range(len(frequencies)):
             try:
-                e_theta = np.asarray(f[f"/nf2ff/E_theta/FD/f{k}_real"][:]) \
-                    + 1j * np.asarray(f[f"/nf2ff/E_theta/FD/f{k}_imag"][:])
-                e_phi = np.asarray(f[f"/nf2ff/E_phi/FD/f{k}_real"][:]) \
-                    + 1j * np.asarray(f[f"/nf2ff/E_phi/FD/f{k}_imag"][:])
+                e_theta, e_phi = far_field_at(f, k)
             except KeyError as exc:
                 raise NF2FFError(
                     f"nf2ff wrote no field for frequency {k} ({frequencies[k] / 1e6:g} MHz)"
