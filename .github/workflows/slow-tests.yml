@@ -1,0 +1,34 @@
+# The worker tests that run a real solver end to end: far field against nec2c, small-part
+# solves against closed forms. They take minutes, so the test workflow skips them, and that is
+# how the far field broke unnoticed when the image moved to a from-source openEMS: every fast
+# test passed and the only test that read a real openEMS dump never ran.
+#
+# Runs nightly, on demand, and on every push to main that touches the worker, so a solver or
+# image change is caught the same day.
+name: slow tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - worker/**
+      - .github/workflows/slow-tests.yml
+  schedule:
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  worker-slow:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: docker build -t emi-worker-test worker
+      - run: |
+          docker run --rm --user root --entrypoint sh -e EMI_SLOW_TESTS=1 -v "$PWD:/repo:ro" emi-worker-test -c '
+            pip install -q "pytest==9.1.1" &&
+            mkdir /tmp/repo && cp -r /repo/worker /repo/server /repo/webapp /repo/docs /tmp/repo/ &&
+            cd /tmp/repo/worker && python -m pytest -q -p no:cacheprovider --durations=15'

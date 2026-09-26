@@ -200,10 +200,9 @@ def far_field(wd: Path, meta: dict, *, mirror_z_m: float | None,
     nf2ff.run_job(str(wd / f"{tag}_job.xml"), str(out))
     res = nf2ff.read_field(str(out), freqs, theta_deg=theta_deg, phi_deg=phi_deg)
     with h5py.File(out, "r") as f:
-        et = np.stack([f[f"/nf2ff/E_theta/FD/f{k}_real"][:] + 1j * f[f"/nf2ff/E_theta/FD/f{k}_imag"][:]
-                       for k in range(len(freqs))])
-        ep = np.stack([f[f"/nf2ff/E_phi/FD/f{k}_real"][:] + 1j * f[f"/nf2ff/E_phi/FD/f{k}_imag"][:]
-                       for k in range(len(freqs))])
+        both = [nf2ff.far_field_at(f, k) for k in range(len(freqs))]
+        et = np.stack([b[0] for b in both])
+        ep = np.stack([b[1] for b in both])
     res["e_theta"], res["e_phi"] = et, ep   # (freq, phi, theta), V/m at 3 m
     return res
 

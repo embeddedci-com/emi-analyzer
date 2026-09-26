@@ -68,6 +68,26 @@ class FieldGrid:
         return np.maximum(db, -DYNAMIC_RANGE_DB).astype(np.float32)
 
 
+def fd_components(fd, i: int, name: str = "the dump") -> np.ndarray:
+    """Frequency ``i`` of an open ``/FieldData/FD`` group, complex, (components, z, y, x).
+
+    Every reader of a field dump goes through this, because the layout depends on the openEMS
+    build. A current openEMS (OPENEMS_SOURCE=build) writes one complex dataset per frequency,
+    ordered (components, x, y, z) and saying so in ``d_order``. The first run on that build
+    failed on "object 'f0_real' doesn't exist", here and then again in ``scan``, which had its
+    own copy of the old read.
+    """
+    if f"f{i}_real" in fd:
+        return np.asarray(fd[f"f{i}_real"][:], dtype=np.float64) \
+            + 1j * np.asarray(fd[f"f{i}_imag"][:], dtype=np.float64)
+    ds = fd[f"f{i}"]
+    order = ds.attrs.get("d_order", b"NXYZ")
+    order = order.decode() if isinstance(order, bytes) else str(order)
+    if order != "NXYZ":
+        raise ValueError(f"{name} has an unknown order {order!r}")
+    return np.asarray(ds[:]).astype(np.complex128).transpose(0, 3, 2, 1)
+
+
 def read_fd_dump(path: str, z_mm: float | None = None) -> list[FieldGrid]:
     """Read an openEMS frequency-domain dump into one FieldGrid per frequency.
 
@@ -91,21 +111,9 @@ def read_fd_dump(path: str, z_mm: float | None = None) -> list[FieldGrid]:
         z_axis = np.asarray(f["Mesh/z"][:], dtype=np.float64) * 1000.0
 
         for i, freq in enumerate(freqs):
-            if f"f{i}_real" in fd:
-                re = np.asarray(fd[f"f{i}_real"][:], dtype=np.float64)
-                im = np.asarray(fd[f"f{i}_imag"][:], dtype=np.float64)
-            else:
-                # A current openEMS (OPENEMS_SOURCE=build) writes one complex dataset per
-                # frequency, ordered (components, x, y, z) and saying so in ``d_order``. The
-                # first run on that build failed here, on "object 'f0_real' doesn't exist".
-                ds = fd[f"f{i}"]
-                order = ds.attrs.get("d_order", b"NXYZ")
-                order = order.decode() if isinstance(order, bytes) else str(order)
-                if order != "NXYZ":
-                    raise ValueError(f"{os.path.basename(path)} has an unknown order {order!r}")
-                c = np.asarray(ds[:]).transpose(0, 3, 2, 1)
-                re, im = c.real.astype(np.float64), c.imag.astype(np.float64)
-            at = float(z_axis[len(z_axis) // 2]) if len(z_axis) else 0.0
+            c = fd_components(fd, i, os.path.basename(path))
+            re, im = c.real, c.imag
+            at =float(z_axis[len(z_axis) // 2]) if len(z_axis) else 0.0
             if re.ndim == 4 and re.shape[1] >= 2 and z_mm is not None and len(z_axis) >= 2:
                 # (components, nz, ny, nx): the two planes either side of the height asked for.
                 k = int(np.clip(np.searchsorted(z_axis, z_mm) - 1, 0, len(z_axis) - 2))
