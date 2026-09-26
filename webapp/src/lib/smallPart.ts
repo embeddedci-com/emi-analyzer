@@ -14,6 +14,7 @@
 
 import type { BoardDoc, BoardPad, GeometryIndex } from './boardTypes'
 import { isReferenceNet, padLayer, type PortSpec } from './portPlacement'
+import { countSmallPartMesh } from './smallPartMesh'
 
 export const SMALL_PART_MODE = 'small_part'
 
@@ -211,24 +212,41 @@ export interface SmallPartEstimate {
   refused: string | null
 }
 
+/** The copper a part is meshed around, for the counted estimate (`smallPartMesh.ts`). */
+export interface PartCopper {
+  geometry: ArrayBuffer | null
+  /** The coupon's nets, or null for a drawn region (everything in it). */
+  nets: string[] | null
+  ports: PortSpec[]
+}
+
 /**
- * What a part will cost. Cells come from a fit to meshed coupons (per preset, per mm² of
- * region, and per copper layer past two), and the timestep from the smallest cell the mesher
- * will make for a small part.
+ * What a part will cost. With its copper, the mesh is counted the way the worker lays it out
+ * (`countSmallPartMesh`); without, cells come from a fit to meshed coupons per mm² of region,
+ * which was 0.45x to 4.4x the real mesh. The timestep is set by the smallest cell either way.
  */
 export function estimateSmallPart(
   roi: Roi, preset: (typeof PRESETS)[number], band: (typeof BANDS)[number], doc: BoardDoc,
+  copper?: PartCopper,
 ): SmallPartEstimate {
-  const fit = CELL_FIT[preset.value]
-  const area = Math.max(0, roi[2] - roi[0]) * Math.max(0, roi[3] - roi[1])
-  const layers = doc.layers.length || 2
-  const cells = Math.ceil(fit.per_mm2 * area * (1 + fit.per_layer * (layers - 2)))
   // The smallest cell: half of dx in plane (copper lines closer than that merge, and a routed
   // board always has some that close), or the thinnest slice of a dielectric at dz.
   const slices = doc.stackup
     .filter((s) => s.role === 'dielectric' && s.thickness_mm > 0)
     .map((s) => (s.thickness_mm * 1000) / Math.ceil((s.thickness_mm * 1000) / preset.dz))
-  const dMin = Math.min(preset.dx / 2, preset.dz, ...slices) * 1e-6
+  let dMin = Math.min(preset.dx / 2, preset.dz, ...slices) * 1e-6
+  let cells: number
+  if (copper && copper.geometry && doc.geometry) {
+    const m = countSmallPartMesh(doc, copper.geometry, doc.geometry, copper.nets, roi, copper.ports,
+      preset, band.hi)
+    cells = m.cells
+    dMin = Math.min(dMin, m.min_cell_mm * 1e-3)
+  } else {
+    const fit = CELL_FIT[preset.value]
+    const area = Math.max(0, roi[2] - roi[0]) * Math.max(0, roi[3] - roi[1])
+    const layers = doc.layers.length || 2
+    cells = Math.ceil(fit.per_mm2 * area * (1 + fit.per_layer * (layers - 2)))
+  }
   const dt = dMin / (299_792_458 * Math.sqrt(3))
   const needed = Math.ceil(3 / band.lo / dt)
   const affordable = Math.floor(MAX_CELL_STEPS / Math.max(cells, 1))

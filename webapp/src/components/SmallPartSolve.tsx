@@ -48,17 +48,10 @@ export function SmallPartSetup({
   const [withPair, setWithPair] = useState(true)
   const [bandValue, setBandValue] = useState<string>(BANDS[0].value)
   // Null until the user picks one: normal where it fits the budget, coarse where only that does.
-  // The sample board's first net is over budget on normal, so its first solve was refused.
+  // The sample board's first net was over budget on normal, so its first solve was refused.
   const [presetChoice, setPresetChoice] = useState<string | null>(null)
   const [clockMhz, setClockMhz] = useState<number | ''>('')
   const band = BANDS.find((b) => b.value === bandValue) ?? BANDS[0]
-  const autoCoarse = useMemo(
-    () => !!roi && !!estimateSmallPart(roi, PRESETS[1], band, doc).refused
-      && !estimateSmallPart(roi, PRESETS[0], band, doc).refused,
-    [roi, band, doc],
-  )
-  const presetValue = presetChoice ?? (autoCoarse ? 'coarse' : 'normal')
-  const preset = PRESETS.find((p) => p.value === presetValue) ?? PRESETS[1]
 
   const nets = useMemo(
     () => doc.nets
@@ -69,6 +62,20 @@ export function SmallPartSetup({
   )
   const pair = net ? pairOf(doc, net) : null
   const chosen = net ? (pair && withPair ? [net, pair] : [net]) : []
+
+  // What the estimate counts the mesh around: the net's copper, or all of a drawn region's.
+  const copper = useMemo(
+    () => ({ geometry, nets: by === 'net' ? chosen : null, ports }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [geometry, by, chosen.join('|'), ports],
+  )
+  const autoCoarse = useMemo(
+    () => !!roi && !!estimateSmallPart(roi, PRESETS[1], band, doc, copper).refused
+      && !estimateSmallPart(roi, PRESETS[0], band, doc, copper).refused,
+    [roi, band, doc, copper],
+  )
+  const presetValue = presetChoice ?? (autoCoarse ? 'coarse' : 'normal')
+  const preset = PRESETS.find((p) => p.value === presetValue) ?? PRESETS[1]
 
   const plan = useMemo(
     () => (by === 'net' && chosen.length ? planCoupon(doc, geometry, doc.geometry, chosen) : null),
@@ -93,8 +100,8 @@ export function SmallPartSetup({
   }
 
   const est = useMemo(
-    () => (roi ? estimateSmallPart(roi, preset, band, doc) : null),
-    [roi, preset, band, doc],
+    () => (roi ? estimateSmallPart(roi, preset, band, doc, copper) : null),
+    [roi, preset, band, doc, copper],
   )
   const clockHz = typeof clockMhz === 'number' && clockMhz > 0 ? clockMhz * 1e6 : 0
   const maps = clockHz ? harmonics(clockHz, 5, band.hi).filter((f) => f >= band.lo) : []
