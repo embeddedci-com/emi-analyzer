@@ -1,10 +1,10 @@
 /**
- * The three things to do once a board's findings are in, shown once per browser. Each is a
- * tab the eye skips on the way to the findings, and each is where the numbers are.
+ * Where to go once a board's findings are in, as one line shown until closed. Each tab is one
+ * the eye skips on the way to the findings, and each is where the numbers are.
  */
 
 import { useState } from 'react'
-import { Alert, Anchor, List, Text } from '@mantine/core'
+import { Anchor, CloseButton, Group, Text } from '@mantine/core'
 import { dismiss, isDismissed } from '../lib/dismissed'
 
 const KEY = 'what-next'
@@ -18,18 +18,13 @@ export function WhatNext({ onTab }: { onTab: (tab: string) => void }) {
     </Anchor>
   )
   return (
-    <Alert color="blue" variant="light" p="xs" title="What next" withCloseButton
-           closeButtonLabel="Hide this hint"
-           onClose={() => { dismiss(KEY); setClosed(true) }}>
-      <List size="xs" spacing={2}>
-        <List.Item><Text size="xs">Click a finding to zoom the board to it.</Text></List.Item>
-        <List.Item>
-          <Text size="xs">{tab('cables', 'Cables')}: say what plugs into each connector.</Text>
-        </List.Item>
-        <List.Item>
-          <Text size="xs">{tab('esd', 'ESD')}: simulate a discharge on each connector line.</Text>
-        </List.Item>
-      </List>
-    </Alert>
+    <Group gap={4} wrap="nowrap" px={8} py={2}
+           style={{ borderRadius: 4, background: 'var(--mantine-color-blue-light)' }}>
+      <Text size="xs" style={{ flex: 1 }}>
+        Next: cable budgets in {tab('cables', 'Cables')}, a discharge test in {tab('esd', 'ESD')}.
+      </Text>
+      <CloseButton size="xs" aria-label="Hide this hint"
+                   onClick={() => { dismiss(KEY); setClosed(true) }} />
+    </Group>
   )
 }

@@ -5,13 +5,15 @@
  * finding the user cannot locate is a complaint, not a diagnosis.
  */
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
-  Accordion, Alert, Anchor, Badge, Group, SegmentedControl, Stack, Text, ThemeIcon,
+  Accordion, Alert, Anchor, Badge, Box, Collapse, Group, Stack, Text,
 } from '@mantine/core'
 import { Link } from 'react-router'
 import { useEmiBase } from '../host'
 import type { RuleFinding, RulesDoc } from '../lib/boardTypes'
+import { findingAction, groupFindings } from '../lib/findings'
+import { SEVERITY_MARKER_HEX } from '../lib/markers'
 import catalogue from '../lib/ruleCatalogue.json'
 import { SOURCE_LABEL, type Suppression } from '../lib/rulesSettings'
 import { SuppressFindingModal } from './ChecksOverrides'
@@ -38,12 +40,17 @@ export interface RuleFindingsProps {
   onSuppress?: (s: Suppression) => void
   /** The board's net names, for the Suppress dialog's pattern preview. */
   nets?: string[]
+  /** Each finding's number, the one its marker on the board carries. */
+  numbers?: Map<string, number>
+  /** The finding picked on the board or in the list: opened, scrolled to and outlined. */
+  selectedId?: string | null
 }
 
+// The same colors as the markers on the board, so a number reads the same in both places.
 const SEVERITY_COLOR: Record<string, string> = {
   critical: 'red',
-  warning: 'yellow',
-  info: 'blue',
+  warning: 'orange',
+  info: 'gray',
 }
 
 /** Rules whose findings are lines a discharge can be simulated on. */
@@ -57,29 +64,38 @@ const RULE_LABEL: Record<string, string> = Object.fromEntries(
 )
 
 export function RuleFindings({
-  rules, onFocus, onSelectNet, onSimulate, onShowInKiCad, onSuppress, nets = [],
+  rules, onFocus, onSelectNet, onSimulate, onShowInKiCad, onSuppress, nets = [], numbers,
+  selectedId = null,
 }: RuleFindingsProps) {
   const base = useEmiBase()
   const [filter, setFilter] = useState('all')
   const [suppressing, setSuppressing] = useState<RuleFinding | null>(null)
 
+  // Rules with a critical finding sort first; the panel should open on the worst thing. The
+  // order is the one the board's marker numbers come from (lib/findings).
   const grouped = useMemo(() => {
     if (!rules) return []
-    const wanted = rules.findings.filter((f) => filter === 'all' || f.severity === filter)
-    const byRule = new Map<string, RuleFinding[]>()
-    for (const f of wanted) {
-      const list = byRule.get(f.rule)
-      if (list) list.push(f)
-      else byRule.set(f.rule, [f])
-    }
-    // Rules with a critical finding sort first; the panel should open on the worst thing.
-    return [...byRule.entries()].sort((a, b) => {
-      const worst = (list: RuleFinding[]) =>
-        list.some((f) => f.severity === 'critical') ? 0
-          : list.some((f) => f.severity === 'warning') ? 1 : 2
-      return worst(a[1]) - worst(b[1])
-    })
+    return groupFindings(rules.findings.filter((f) => filter === 'all' || f.severity === filter))
   }, [rules, filter])
+
+  // Which rule is open. Controlled, so a marker clicked on the board can open its rule.
+  const [open, setOpen] = useState<string | null>(null)
+  const firstRule = grouped[0]?.[0] ?? null
+  const shownOpen = open ?? firstRule
+  const selected = rules?.findings.find((f) => f.id === selectedId) ?? null
+  useEffect(() => {
+    if (!selected) return
+    setOpen(selected.rule)
+    if (filter !== 'all' && filter !== selected.severity) setFilter('all')
+    // After the rule's panel has opened, so the row has a place to scroll to.
+    const t = window.setTimeout(() => {
+      document.querySelector(`[data-finding-id="${CSS.escape(selected.id)}"]`)
+        ?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    }, 220)
+    return () => window.clearTimeout(t)
+    // Only a new selection scrolls; a filter change on its own must not jump the list.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected?.id])
 
   if (!rules) {
     return (
@@ -91,14 +107,14 @@ export function RuleFindings({
 
   const { critical, warning, info } = rules.summary
 
+  const topMhz = (rules.summary.assumed_max_frequency_hz / 1e6).toFixed(0)
+
   if (rules.findings.length === 0) {
     return (
       <Stack gap="sm">
         <Alert color="green" variant="light" title="No findings">
-          The layout checks found nothing at{' '}
-          {(rules.summary.assumed_max_frequency_hz / 1e6).toFixed(0)} MHz. That is not a clean
-          bill of health: they are not a simulation. Under Checks you can see which ran and
-          raise the top frequency.
+          Nothing found up to {topMhz} MHz. These are layout checks, not a simulation. Under
+          Checks you can raise the top frequency.
         </Alert>
         <SuppressedList rules={rules} />
       </Stack>
@@ -107,31 +123,29 @@ export function RuleFindings({
 
   return (
     <Stack gap="sm">
-      <Group gap="xs" justify="space-between">
-        <Group gap={6}>
-          <Badge color="red" variant={critical ? 'filled' : 'light'}>{critical} critical</Badge>
-          <Badge color="yellow" variant={warning ? 'filled' : 'light'}>{warning} warning</Badge>
-          {info > 0 && <Badge color="blue" variant="light">{info} info</Badge>}
-        </Group>
-        <SegmentedControl
-          size="xs"
-          value={filter}
-          onChange={setFilter}
-          data={[
-            { label: 'All', value: 'all' },
-            { label: 'Critical', value: 'critical' },
-            { label: 'Warning', value: 'warning' },
-          ]}
-        />
+      {/* The counts are the filter: click one to show only those, again to show all. */}
+      <Group gap={6}>
+        {([['critical', critical, 'red'], ['warning', warning, 'orange'], ['info', info, 'gray']] as const)
+          .filter(([sev, n]) => n > 0 || sev !== 'info')
+          .map(([sev, n, color]) => (
+            <Badge
+              key={sev}
+              component="button"
+              type="button"
+              color={color}
+              variant={filter === sev || (filter === 'all' && n > 0) ? 'filled' : 'light'}
+              aria-pressed={filter === sev}
+              title={filter === sev ? 'Show all' : `Show only ${sev}`}
+              onClick={() => setFilter(filter === sev ? 'all' : sev)}
+              style={{ cursor: 'pointer', border: 0, opacity: filter !== 'all' && filter !== sev ? 0.5 : 1 }}
+            >
+              {n} {sev}
+            </Badge>
+          ))}
       </Group>
 
-      <Text size="xs" c="dimmed">
-        Evaluated against a top frequency of{' '}
-        {(rules.summary.assumed_max_frequency_hz / 1e6).toFixed(0)} MHz. These are geometric
-        checks: they say where to look, not how much your board radiates.
-      </Text>
-
-      <Accordion variant="separated" defaultValue={grouped[0]?.[0]} chevronPosition="left">
+      <Accordion variant="separated" value={shownOpen} onChange={setOpen}
+                 chevronPosition="left">
         {grouped.map(([rule, findings]) => (
           <Accordion.Item key={rule} value={rule}>
             <Accordion.Control>
@@ -139,7 +153,8 @@ export function RuleFindings({
                 <Text size="sm" fw={500} style={{ flex: 1 }}>
                   {RULE_LABEL[rule] ?? rule}
                 </Text>
-                <Badge size="sm" variant="light" color={SEVERITY_COLOR[findings[0].severity]}>
+                <Badge size="sm" variant="light" color={SEVERITY_COLOR[findings[0].severity]}
+                       style={{ flex: 'none' }}>
                   {findings.length}
                 </Badge>
               </Group>
@@ -150,6 +165,8 @@ export function RuleFindings({
                   <FindingRow
                     key={f.id}
                     finding={f}
+                    number={numbers?.get(f.id)}
+                    selected={f.id === selectedId}
                     onClick={() => {
                       onFocus(f)
                       if (f.net) onSelectNet?.(f.net)
@@ -176,13 +193,11 @@ export function RuleFindings({
         onAdd={(s) => { setSuppressing(null); onSuppress?.(s) }}
       />
 
-      {rules.findings.length > 0 && (
-        <Text size="xs" c="dimmed">
-          Modelled estimate from board geometry. See{' '}
-          <Anchor component={Link} to={`${base}/limitations`} size="xs">the limitations</Anchor>
-          {' '}before acting on these.
-        </Text>
-      )}
+      <Text size="xs" c="dimmed">
+        Layout checks up to {topMhz} MHz. They show where to look, not how much the board
+        radiates.{' '}
+        <Anchor component={Link} to={`${base}/limitations`} size="xs">Limitations</Anchor>
+      </Text>
     </Stack>
   )
 }
@@ -216,123 +231,101 @@ function SuppressedList({ rules }: { rules: RulesDoc }) {
 }
 
 function FindingRow({
-  finding, onClick, onSimulate, onShowInKiCad, onSuppress,
+  finding, number, selected, onClick, onSimulate, onShowInKiCad, onSuppress,
 }: {
   finding: RuleFinding
+  number?: number
+  selected?: boolean
   onClick: () => void
   onSimulate?: () => void
   onShowInKiCad?: () => void
   onSuppress?: () => void
 }) {
+  const [why, setWhy] = useState(false)
   // JSON from the worker carries absent coordinates as null, not undefined, so this has
   // to be a loose check. An info-severity finding ("41 nets exceed lambda/20") has no
   // single place on the board and legitimately has none.
   const locatable = finding.x != null && finding.y != null
+  const color = SEVERITY_MARKER_HEX[finding.severity] ?? SEVERITY_MARKER_HEX.info
+  const link = (label: string, run: () => void, dimmed = false) => (
+    <Anchor size="xs" component="button" type="button" c={dimmed ? 'dimmed' : undefined}
+            style={{ whiteSpace: 'nowrap' }}
+            onClick={(e) => {
+              // The row itself zooms; these do their own thing instead.
+              e.stopPropagation()
+              run()
+            }}>
+      {label}
+    </Anchor>
+  )
   return (
     <Stack
       gap={2}
       p="xs"
+      data-finding-id={finding.id}
       onClick={locatable ? onClick : undefined}
       style={{
         cursor: locatable ? 'pointer' : 'default',
-        borderLeft: `2px solid var(--mantine-color-${SEVERITY_COLOR[finding.severity]}-6)`,
+        borderLeft: `2px solid ${color}`,
         borderRadius: 2,
         background: 'var(--mantine-color-default-hover)',
+        outline: selected ? `2px solid ${color}` : undefined,
+        outlineOffset: -1,
       }}
       role={locatable ? 'button' : undefined}
       tabIndex={locatable ? 0 : undefined}
       onKeyDown={(e) => {
-        if (locatable && (e.key === 'Enter' || e.key === ' ')) {
+        if (locatable && e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
           e.preventDefault()
           onClick()
         }
       }}
     >
-      {/* The layer badge used to sit beside the title, which squeezed a two-line title
-          into a narrow column and left the badge floating against the first line. Title
-          gets the full width; the badge belongs with the other metadata, underneath. */}
-      <Group gap="xs" wrap="nowrap" align="flex-start">
-        <ThemeIcon
-          size={8}
-          radius="xl"
-          color={SEVERITY_COLOR[finding.severity]}
-          mt={6}
-          style={{ flex: 'none' }}
+      <Group gap={6} wrap="nowrap" align="center">
+        {/* The number its marker on the board carries, in the marker's color. */}
+        <Box
+          component="span"
+          style={{
+            flex: 'none', minWidth: 18, height: 18, padding: '0 4px', borderRadius: 9,
+            background: color, color: '#fff', font: '600 11px/18px sans-serif',
+            textAlign: 'center',
+          }}
         >
-          <span />
-        </ThemeIcon>
-        <Text size="sm" fw={500} style={{ flex: 1 }}>
+          {number ?? ''}
+        </Box>
+        <Text size="sm" fw={500} lineClamp={1} title={finding.title} style={{ flex: 1 }}>
           {finding.title}
         </Text>
       </Group>
 
-      <Text size="xs" c="dimmed" pl={20}>
-        {finding.detail}
-      </Text>
+      <Text size="xs" pl={24}>{findingAction(finding)}</Text>
 
-      {(finding.layer || locatable || onSimulate || onShowInKiCad || onSuppress) && (
-        // Wraps: with Suppress beside the coordinates and a layer badge, one line overflowed the panel.
-        <Group gap={6} pl={20} wrap="wrap" align="center" style={{ rowGap: 2 }}>
-          {finding.layer && (
-            <Badge size="xs" variant="outline" color="gray" style={{ flex: 'none' }}>
-              {finding.layer}
-            </Badge>
-          )}
-          {locatable && (
-            <Text size="10px" c="dimmed" ff="monospace" style={{ whiteSpace: 'nowrap' }}>
-              {finding.x!.toFixed(1)}, {finding.y!.toFixed(1)} mm — click to zoom
-            </Text>
-          )}
-          {onShowInKiCad && (
-            <Anchor
-              size="xs"
-              component="button"
-              type="button"
-              ml="auto"
-              style={{ whiteSpace: 'nowrap' }}
-              onClick={(e) => {
-                // The row zooms this viewer; this points the PCB Editor at the same net.
-                e.stopPropagation()
-                onShowInKiCad()
-              }}
-            >
-              Show in KiCad
-            </Anchor>
-          )}
-          {onSimulate && (
-            <Anchor
-              size="xs"
-              component="button"
-              type="button"
-              ml={onShowInKiCad ? undefined : 'auto'}
-              style={{ whiteSpace: 'nowrap' }}
-              onClick={(e) => {
-                // The row itself zooms; this opens the simulation instead of doing both.
-                e.stopPropagation()
-                onSimulate()
-              }}
-            >
-              Simulate discharge
-            </Anchor>
-          )}
-          {onSuppress && (
-            <Anchor
-              size="xs"
-              component="button"
-              type="button"
-              c="dimmed"
-              ml={onShowInKiCad || onSimulate ? undefined : 'auto'}
-              style={{ whiteSpace: 'nowrap' }}
-              onClick={(e) => {
-                e.stopPropagation()
-                onSuppress()
-              }}
-            >
-              Suppress…
-            </Anchor>
-          )}
+      {/* Wraps: with the links beside the coordinates and a layer badge, one line overflowed the panel. */}
+      <Group gap={6} pl={24} wrap="wrap" align="center" style={{ rowGap: 2 }}>
+        {finding.layer && (
+          <Badge size="xs" variant="outline" color="gray" style={{ flex: 'none' }}>
+            {finding.layer}
+          </Badge>
+        )}
+        {locatable && (
+          <Text size="10px" c="dimmed" ff="monospace" style={{ whiteSpace: 'nowrap' }}>
+            {finding.x!.toFixed(1)}, {finding.y!.toFixed(1)} mm
+          </Text>
+        )}
+        <Group gap={8} ml="auto" wrap="nowrap">
+          {onShowInKiCad && link('Show in KiCad', onShowInKiCad)}
+          {onSimulate && link('Simulate discharge', onSimulate)}
+          {link(why ? 'Hide why' : 'Why', () => setWhy((v) => !v), true)}
         </Group>
-      )}
+      </Group>
+
+      <Collapse expanded={why}>
+        <Stack gap={4} pl={24} pt={2} style={{ cursor: 'default' }}
+               onClick={(e) => e.stopPropagation()}>
+          <Text size="xs" c="dimmed">{finding.detail}</Text>
+          {onSuppress && <Group>{link('Suppress\u2026', onSuppress, true)}</Group>}
+        </Stack>
+      </Collapse>
     </Stack>
   )
 }

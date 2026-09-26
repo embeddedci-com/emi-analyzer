@@ -19,6 +19,7 @@ webapp/public/*.kicad_pcb
 # Board files dropped in for a one-off smoke run
 worker/tests/fixtures/*.kicad_pcb
 !worker/tests/fixtures/tiny.kicad_pcb
+!worker/tests/fixtures/sample.kicad_pcb
 
 # The gerber fixture is generated from tiny.kicad_pcb and IS committed, so the test suite
 # runs without KiCad installed. Regenerate with worker/scripts/make_gerber_fixture.py.

@@ -144,8 +144,8 @@ func explainDocker(image, out string, err error) (msg, detail string) {
 		return "The worker image " + image + " does not exist. Check the tag, or install the " +
 			"app version that matches it.", detail
 	case strings.Contains(low, "no space left"):
-		return "There is not enough disk space to download the worker image (about 1.4 GB is " +
-			"needed). Free some space and click Restart worker.", detail
+		return "There is not enough disk space for the worker image (" + imageDiskSize + " once " +
+			"unpacked). Free some space and click Restart worker.", detail
 	case strings.Contains(low, "timeout") || strings.Contains(low, "temporary failure") ||
 		strings.Contains(low, "dial tcp") || strings.Contains(low, "no such host"):
 		return "The worker image could not be downloaded: the registry could not be reached. " +
@@ -207,7 +207,7 @@ func (s *workerSupervisor) startOnce(ctx context.Context) bool {
 	}
 
 	if _, err := s.dockerOut(ctx, 15*time.Second, "image", "inspect", "--format", "{{.Id}}", s.cfg.image); err != nil {
-		s.set(statePulling, "Downloading the worker image ("+s.cfg.image+"). This happens once per version and is about 1.4 GB, so it can take a few minutes.")
+		s.set(statePulling, pullMessage(0, 0))
 		if out, err := s.pull(ctx); err != nil {
 			msg, detail := explainDocker(s.cfg.image, out, err)
 			s.setDetailed(stateError, msg, detail)
@@ -310,6 +310,23 @@ func (s *workerSupervisor) watch(ctx context.Context) {
 	}
 }
 
+// The worker image, compressed as the registry serves it and unpacked. Measured on the
+// openEMS-based image: `docker save | gzip` of it is 330 MB, `docker images` says 1.4 GB.
+const (
+	imageDownloadSize = "about 330 MB"
+	imageDiskSize     = "about 1.4 GB"
+)
+
+// pullMessage is what the banner says while the image downloads: the size, that it happens once
+// per version, and how far it is once docker has said how many layers there are.
+func pullMessage(done, total int) string {
+	msg := "Downloading the worker image, " + imageDownloadSize + ". This happens once per version."
+	if total > 0 {
+		msg += fmt.Sprintf(" %d of %d parts done.", done, total)
+	}
+	return msg
+}
+
 func (s *workerSupervisor) pull(ctx context.Context) (string, error) {
 	cmd := s.command(ctx, "pull", s.cfg.image)
 	stdout, err := cmd.StdoutPipe()
@@ -321,11 +338,33 @@ func (s *workerSupervisor) pull(ctx context.Context) (string, error) {
 	if err := cmd.Start(); err != nil {
 		return "", err
 	}
+	// docker pull without a terminal prints one line per layer event and no byte counts. The
+	// raw lines ("a1b2c3: Pulling fs layer") mean nothing to a user, so they are counted.
+	layers := map[string]bool{}
+	done := 0
 	sc := bufio.NewScanner(stdout)
 	for sc.Scan() {
-		if line := strings.TrimSpace(sc.Text()); line != "" {
-			s.set(statePulling, "Downloading the worker image (about 1.4 GB, once): "+line)
+		id, event, ok := strings.Cut(strings.TrimSpace(sc.Text()), ": ")
+		if !ok {
+			continue
 		}
+		switch event {
+		case "Pulling fs layer", "Waiting":
+			if _, seen := layers[id]; !seen {
+				layers[id] = false
+			}
+		case "Pull complete", "Already exists":
+			layers[id] = true
+		default:
+			continue
+		}
+		done = 0
+		for _, finished := range layers {
+			if finished {
+				done++
+			}
+		}
+		s.set(statePulling, pullMessage(done, len(layers)))
 	}
 	if err := cmd.Wait(); err != nil {
 		return stderr.String(), err

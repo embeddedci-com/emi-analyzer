@@ -1,8 +1,8 @@
 /**
- * The board behind "Try the sample board": the worker's own tiny test fixture, bundled as
- * text so it opens with no network and no file on disk. A copy rather than an import from
- * worker/, because some builds of this webapp see only webapp/; sampleBoard.test.ts fails
- * when the two drift.
+ * The board behind "Try the sample board": a synthetic board drawn so every quick analysis
+ * finds something (worker/scripts/make_sample_board.py), bundled as text so it opens with no
+ * network and no file on disk. A copy rather than an import from worker/, because some builds
+ * of this webapp see only webapp/; sampleBoard.test.ts fails when the two drift.
  */
 
 import text from '../assets/sample.kicad_pcb?raw'
