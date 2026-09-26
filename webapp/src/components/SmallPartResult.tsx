@@ -58,8 +58,8 @@ export function SmallPartResult({
           <Card withBorder padding="xs" radius="sm">
             <Text size="xs">
               <b>What this shows:</b> where this net&apos;s current flows at each frequency,
-              relative to the loudest point, and what its driven end sees looking in with 50 Ω at
-              the other end.
+              relative to the loudest point, and what its driven end sees looking in, with 50 Ω
+              on every other end.
             </Text>
             <Text size="xs" mt={4}>
               <b>What it does not:</b> a level a test lab would measure, the far field, or
