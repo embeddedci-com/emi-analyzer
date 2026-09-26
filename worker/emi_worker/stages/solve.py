@@ -433,7 +433,7 @@ def _add_antenna_terms(ctx, params, built, artifacts, board, transform) -> None:
     are already correct; losing the antenna terms costs the cable emissions chart, and the
     manifest says so rather than the chart appearing empty.
     """
-    from emi_worker.cables.emission import antenna_terms
+    from emi_worker.cables.emission import antenna_terms, board_arm
     from emi_worker.cables.nec import available as nec_available
 
     refs = artifacts.manifest.get("cable_ports") or []
@@ -449,21 +449,20 @@ def _add_antenna_terms(ctx, params, built, artifacts, board, transform) -> None:
         )
         return
 
-    # The board is the antenna's other arm, and its span along each cable's exit decides
-    # where the structure resonates. The outline knows it; a 0.1 m default does not.
-    x0, y0, x1, y1 = _board_span(board, transform)
+    # The board is the antenna's other arm, a plate of its outline's bounding box with the
+    # cable leaving where the connector is. A thin wire as long as the board read Z_ant
+    # 5-12 dB high on real boards (docs/verification/cables-and-drivers.md §4).
+    extent = _board_span(board, transform)
 
     docs = []
     for meta in built.cable_ports:
         if meta["ref"] not in refs:
             continue
         spec = params.cable_ports.get(meta["ref"]) or {}
-        along = abs(meta["exit_normal"][0]) >= abs(meta["exit_normal"][1])
-        span_m = ((x1 - x0) if along else (y1 - y0)) / 1000.0
         try:
             doc = antenna_terms(
                 spec["type"], float(spec["length_m"]), grid,
-                board_span_m=max(0.01, span_m),
+                **board_arm(meta["exit_normal"], meta["anchor_mm"], extent),
             )
         except Exception as exc:  # nec2c is a subprocess; a failure is not a solve failure
             log.warning("antenna terms for %s failed: %s", meta["ref"], exc)

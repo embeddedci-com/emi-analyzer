@@ -211,6 +211,12 @@ I_cm(f) = H_cm · V_src / Z_ant  V_src from the driver, Z_ant from nec2c
 E(f)    = I_cm · E_per_amp
 ```
 
+- **Z_ant has the board as a plate**, a wire grid of its outline's bounding box (pitch 2.5-12.5 mm,
+  equal-area radius) with the cable leaving where the connector is, so it is the impedance at
+  the gap of board and cable together. Tier A's 0.1 m wire read it 5-12 dB high on real boards,
+  which was most of why Tier B read low. What remains is that V_oc rises by 0-5 dB when a
+  cable is attached, which the solve cannot see
+  ([`verification/cables-and-drivers.md`](verification/cables-and-drivers.md) §4).
 - **`V_src` is the solve's Thévenin source**, `V_port + I_port·Z_s` — not the port voltage,
   which would fold the port's own input impedance into a number meant to be independent of it.
 - **The grid is extended only on the sides a stub leaves from.** Growing all four costs +46 %

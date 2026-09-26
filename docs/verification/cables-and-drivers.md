@@ -13,7 +13,8 @@ are called board A, B and C below.
 | Tier A: the integrator that reads openEMS's current | reproduces nec2c's own field from nec2c's current | 0.15 dB worst | ✅ |
 | Bond | moves the first resonance where a line over the plane resonates, both ways | within 3.3 % (1 m), 6.7 % (2 m) | ✅ (old claim was wrong) |
 | Choke | R + jX from a datasheet curve | built and tested; no library cable has one | ✅ model, not validated against a measured choke |
-| Tier B against a fully coupled solve, three real boards | ±6 dB below the first resonance | board A: mean -8.9 dB, worst 17 dB; board C: mean -7.5 dB, worst 21 dB; board B: no result | ❌ |
+| Tier B against a fully coupled solve, three real boards | ±6 dB below the first resonance | board A: mean -8.9 dB, worst 17 dB; board C: mean -7.5 dB, worst 21 dB; board B: no result. Measured with the board as a thin wire; not re-run since | ❌ |
+| Why Tier B read low (nec2c only) | account for the error | the board arm: a plate of the outline reads Z_ant 5-12 dB lower, about 7 of 8.9 dB (A) and 5.6 of 7.5 dB (C); the rest is V_oc changing when the cable is attached, 0-5 dB by where the source is. Tier B now uses the plate | ✅ found, ⏳ openEMS re-run |
 | Cables tab chart | same composition as the estimate | one function, shared fixtures | ✅ |
 | Uploaded waveform joins its envelope | within 1 dB | 0.22 dB worst | ✅ |
 | Assumed driver shown as assumed, including σ | end to end | worker result, σ, 80 % range, panel, pickers | ✅ |
@@ -166,8 +167,9 @@ it where it cancels the cable's own reactance, which is real.
 per board: Tier B (the product model: a 10 mm stub, a 1 MΩ gap, H_cm = V_oc / V_src, composed
 with nec2c's Z_ant) and Tier C (the gap bonded and a PEC cable in the grid, its current probed
 at the root). The gate: Tier B's cable current within ±6 dB of Tier C's below the first
-resonance. Three private boards, each with an edge connector: board A (4 layers, USB-C),
-board B (6 layers, USB-C), board C (4 layers, RJ45); a 0.3 m cable; 30-600 MHz, 31 points; the
+resonance. Three private boards, each with an edge connector: board A (4 layers, USB-C, 60 mm
+along the exit), board B (6 layers, RJ45), board C (4 layers, USB-C, 100 mm along the exit);
+a 0.3 m cable; 30-600 MHz, 31 points; the
 2000/300 µm study preset; 80 mm of air around everything.
 
 **Three things had to be fixed before it could run at all**, each found by running it:
@@ -197,14 +199,7 @@ board B (6 layers, USB-C), board C (4 layers, RJ45); a 0.3 m cable; 30-600 MHz, 
 **What boards A and C say.** The error is not noise around zero. On board A, from 45 MHz to 330 MHz Tier B is
 6-15 dB **below** Tier C at every point, and at the resonance (402 MHz) the two agree to 1.2 dB.
 Board C has the same shape: 2-11 dB low from 81 to 270 MHz, 0.65 dB at 330 MHz next to its
-356 MHz resonance.
-That is the signature of a wrong antenna impedance rather than of coupling outside the gap:
-where |Z_ant| is large and capacitive (1-6 kΩ) the composition divides by too much, and where it
-is small (250 Ω at resonance) the difference vanishes. The likeliest cause is the other arm:
-nec2c models the board as a thin wire as long as the board, while in the grid it is the board
-itself, a strip of copper planes with far more capacitance. A thick-wire board arm in nec2c did
-not reproduce it (nec2c is unreliable where wires of different radius meet), so the cause is a
-hypothesis, not a finding. Below 45 MHz (board A) and 80 MHz (board C) the 40 ns record is too
+356 MHz resonance. Below 45 MHz (board A) and 80 MHz (board C) the 40 ns record is too
 short (11-17 dB between 80 % and 100 % of it), so those points say nothing either way. The gap
 itself is part of why: its 1 MΩ holds the charge the pulse's DC content leaves on it and bleeds
 it off over about 100 ns.
@@ -212,11 +207,96 @@ it off over about 100 ns.
 The direction is the dangerous one: Tier B under-predicts the current, so an emission it shows
 under the limit can be over it.
 
-**Verdict.** The gate is not met. Tier B stays experimental. What would move it: measure the
-Tier C antenna directly (Z at the bonded gap, from the same grid) against nec2c's Z_ant, which
-separates "wrong antenna" from "coupling outside the gap"; if it is the antenna, model the board
-arm from the outline (a plate or wire grid) in the nec2c deck; then rerun at 60-100 ns records
-on all three boards, and at 1 m.
+### What it was (September 2026, nec2c only)
+
+Found without openEMS: `worker/research/verify_cable_tier_b_plate.py` (seconds) and the
+`antenna()` of `spike_m3_cable_test4.py` run on its own. The per-point openEMS results of the
+runs above were not kept, so the openEMS side is compared through the summary numbers only.
+
+**1. The board arm was a wire; the board is a plate. This is most of it.** Tier B's Z_ant came
+from a deck with the board as one thin wire as long as the board. The grid holds a strip of
+copper planes with several times the capacitance. Modelled as a plate (a wire grid of the
+board's outline, pitch 2.5-12.5 mm, equal-area radius pitch/2π, the cable joining at the
+connector), nec2c reads a lower |Z_ant| below the first resonance, rising towards it, and a
+lower first resonance:
+
+| Structure | Thin wire over plate, \|Z_ant\| | First resonance, wire / plate |
+|---|---|---|
+| Board A as test 4's grid holds it (60 x 34 mm strip, cable incl. stub) | +6.2 dB at 45 MHz, +11.9 dB at 298 MHz, **mean +7.0 dB** from 45 MHz to resonance | 391 / 329 MHz |
+| Board C likewise (100 x 34 mm strip) | +4.9 dB at 45 MHz, +9.8 dB at 270 MHz, **mean +5.6 dB** | 346 / 301 MHz |
+| Product geometry, whole outline, 0.8 m over ground, 0.5 mm cable, 0.3-2 m, open or equipment far end, 60 x 40 to 200 x 150 mm | +0.5 to +16.6 dB below resonance, mostly 4-14 | lower with the plate |
+
+Same shape as what test 4 measured: several dB flat at the low end, growing towards the
+resonance, and no difference at it (at the wire's resonance the plate reads 1.4 dB lower; test 4
+measured 1.2 dB). The plate accounts for **about 7 of board A's 8.9 dB mean and 5.6 of board C's
+7.5 dB**, leaving about 2 dB on each. e_per_amp barely moves (under 0.5 dB from 37 MHz to
+resonance, 1.7 dB at 30 MHz), so the error was in the current, not in the radiation.
+
+The pitch is converged to within the accuracy that matters: against 2.5 mm, a 5 mm grid reads
+|Z| 0.3 dB high and a 12.5 mm grid about 1 dB high, flat in frequency.
+
+**2. The rest is V_oc, and it depends on where the source is.** To separate the two halves of
+`I = V_oc / Z_ant`, the whole of test 4 was rebuilt in nec2c: a plate board, a source loop on it
+(1 V in one leg, 50 Ω in the other), the gap, a 10 mm stub, and the cable. The coupled current at
+the cable's root is the reference, and every Tier B variant is composed from the same solver:
+
+| Composition, below resonance, error in dB (min / mean / max) | 60 x 30 mm | 100 x 30 mm |
+|---|---|---|
+| V_oc / Z_ant, thin wire (Tier B as it was) | source near: -12.4 / -5.7 / -4.5; far: -17.1 / -11.2 / -10.1 | near: -13.3 / -6.7 / -5.2; far: -16.0 / -10.6 / -9.7 |
+| V_oc / Z_ant, plate (Tier B now) | near: -2.0 / +0.7 / +1.3; middle: -3.0 mean; far: -6.8 / -4.7 / -4.3 | near: -4.9 / -1.6 / -0.6; middle: -4.2 mean; far: -7.5 / -5.5 / -5.1 |
+| V_oc with the cable over V_oc without | near: 0.0; middle: +3.1; far: +4.5 mean | near: +1.8; middle: +4.1; far: +5.2 mean |
+| V_oc with the cable / Z at the gap | +0.4 to +1.3 mean | +0.4 to +0.8 mean |
+
+The last row is Thévenin's theorem at the gap and holds to nec2c's own floor (0.5 dB), so the
+composition is right when its two inputs are. The board's side of the source impedance is
+already inside Z_ant once the board is a plate: Z_ant is the impedance at the gap of board and
+cable together, which is the Thévenin impedance. Nothing else is missing from it, and the solve
+could not supply a separate board impedance anyway.
+
+What remains is the other input. **V_oc changes when the cable is attached**: the 10 mm stub sits
+in the board's near field and floats at part of the board's potential, a cable reaches away from
+it. For a source next to the connector the two nearly agree; for one across the board V_oc
+with the cable is 4.5-5.2 dB higher. The solve has no cable, so it cannot see this, and it is
+always in the direction of too little current. The stub's width and the gap's length move it by
+another 1-2 dB in nec2c, which is as far as nec2c can be trusted with a 2 mm gap between wires
+of different radius. Test 4's source is 7.5 mm (A) and 12.5 mm (C) behind the connector, on
+the near side, and the 2 dB left over is consistent with that.
+
+**What changed.** Tier B's antenna terms now model the board as a plate of its outline's
+bounding box, with the cable leaving where the connector is (`nec.Deck(board_width_m=...)`,
+`emission.board_arm`). A solve's 60-point grid costs about 12 s of nec2c for a 100 x 80 mm
+board at two cores, instead of a fraction of a second. The composition, its TypeScript copy and
+their fixtures are unchanged: the formula was right, one of its inputs was not. Test 4's
+`antenna()` uses the same plate (the strip the grid holds) and a cable as long as Tier C's,
+reports the old thin-wire error beside the new one from the same runs, and adds a third run per
+case (`VOC_CABLE`, on by default) that measures V_oc with the cable attached, so the re-run
+splits the residual in openEMS as nec2c did here.
+
+**Tier A keeps the thin wire.** It uses e_per_amp only, not Z_ant, and against the same plates
+e_per_amp moves 0.1-1 dB below resonance for boards up to 100 x 80 mm (2.2 dB for 200 x 150 mm).
+Around the peaks it moves 2-8 dB, because a plate lowers the resonances. That is a real change,
+but Tier A is verified against openEMS as it stands (§1), so a plate there needs its own re-check
+against openEMS before it replaces the verified deck.
+
+**Verdict.** Still not met, and not re-measured: the gate needs the openEMS runs again. Expected
+from nec2c: board A and C within about ±3 dB on average below resonance, with the V_oc effect
+as the known residual. A board whose noisy parts sit far from the connector can still read up
+to about 7 dB low, which is outside the gate; if the re-run shows that, a V_oc correction for the
+stub is the next step, not a different antenna. Tier B stays experimental until then.
+
+**The re-run, ready to go.** Three openEMS runs per board (B, C, and C with the gap open) at
+100 ns, about 2.5 times the 40 ns runs above; board B took 43 minutes a run at 40 ns. Keep `out/`: a finished run is reused
+when its model has not changed, so changing only the nec2c side later costs nothing.
+
+```sh
+docker run --rm --cpus 3 -m 6g -v "$PWD/worker:/spike" -v "$BOARDS:/boards:ro" \
+    -v "$PWD/out:/spike/spike_out" -e SETUPS=<A>:<ref>:usb2-shielded,<C>:<ref>:usb2-shielded \
+    -e LENGTHS=0.3 -e DX_UM=2000 -e DZ_UM=300 -e AIR_MM=80 -e MAX_NS=100 -e VOC_CABLE=1 \
+    -w /spike -e PYTHONPATH=/spike --entrypoint python3 emi-worker:main \
+    research/spike_m3_cable_test4.py
+```
+
+Then board B (`<B>:<ref>:ethernet-ftp`) and `LENGTHS=1` the same way.
 
 
 ## 5. The Cables tab chart
@@ -282,9 +362,13 @@ docker run --rm --cpus 3 -m 6g -v "$PWD/worker:/spike" -v "$PWD/out:/out" -e OUT
     -w /spike -e PYTHONPATH=/spike --entrypoint python3 emi-worker:phase1 \
     research/verify_cable_tier_a.py
 
-# Tier B, your own boards
+# Tier B, your own boards (the re-run in §4 is this with MAX_NS=100)
 docker run --rm --cpus 3 -m 6g -v "$PWD/worker:/spike" -v "$BOARDS:/boards:ro" \
     -v "$PWD/out:/spike/spike_out" -e SETUPS=<folder:ref:cable,...> -e LENGTHS=0.3 \
-    -e DX_UM=2000 -e DZ_UM=300 -e AIR_MM=80 -w /spike -e PYTHONPATH=/spike \
-    --entrypoint python3 emi-worker:phase1 research/spike_m3_cable_test4.py
+    -e DX_UM=2000 -e DZ_UM=300 -e AIR_MM=80 -e MAX_NS=100 -w /spike -e PYTHONPATH=/spike \
+    --entrypoint python3 emi-worker:main research/spike_m3_cable_test4.py
+
+# Why Tier B read low: thin wire against plate, and test 4 rebuilt in nec2c (about a minute)
+docker run --rm --cpus 2 -v "$PWD/worker:/spike" -w /spike -e PYTHONPATH=/spike \
+    --entrypoint python3 emi-worker:main research/verify_cable_tier_b_plate.py
 ```
