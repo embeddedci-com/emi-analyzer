@@ -776,3 +776,25 @@ def test_a_capacitor_is_one_series_element_across_the_gap():
     box = el.primitives[0]
     # It spans the gap between the pads' facing edges, 15 - 0.2 to 15 + 0.2 mm.
     assert (box.p1[0], box.p2[0]) == (pytest.approx(14.8), pytest.approx(15.2))
+
+
+def test_a_trace_narrower_than_two_cells_gets_the_same_lines_on_every_preset():
+    """Board B's 0.1 mm clock was drawn 86 um wide on coarse and 45 um on normal, and the field
+    over it read 3.3 dB apart. The rule is now laid out at half the trace's width, on every
+    preset coarser than that, and no merge removes its lines."""
+    board = _microstrip_board(w=0.1)
+    want = sorted([10.0 - 0.05 + 0.05 / 3, 10.0 - 0.05 - 2 * 0.05 / 3,
+                   10.0 + 0.05 - 0.05 / 3, 10.0 + 0.05 + 2 * 0.05 / 3])
+    for dx in (150, 75, 50):
+        y = _microstrip_model(board, dx=dx).mesh.y
+        for v in want:
+            assert np.min(np.abs(y - v)) < 1e-6, f"dx {dx}: no line at {v}"
+        for edge in (9.95, 10.05):
+            assert np.min(np.abs(y - edge)) > 0.05 / 4, f"dx {dx}: a line sits on the edge"
+
+
+def test_a_kept_line_is_never_the_one_merged_away():
+    got = meshmod.merge_close(np.array([0.0, 1.0, 1.02, 1.05, 2.0]), 0.1,
+                              frozenset({1.02, 1.05}))
+    assert got.tolist() == [0.0, 1.02, 1.05, 2.0]
+    assert meshmod.merge_close(np.array([0.0, 1.0, 1.02]), 0.1).tolist() == [0.0, 1.0]
