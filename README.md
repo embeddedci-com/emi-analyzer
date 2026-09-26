@@ -1,36 +1,35 @@
 # EMI Analyzer
 
 PCB EMI and EMC analysis on your own computer. Open a KiCad board or a zip of Gerber files and
-get:
+see what to fix, marked on the board, in seconds.
 
-- **geometric EMI/EMC checks** — return paths, plane gaps and stitching, decoupling, impedance,
-  ESD protection at connectors, shield grounding, reset lines, switching-regulator layout;
-- **a decoupling view** — per supply rail and IC, the impedance the capacitors present against a
-  target, where it falls short and what would fix it (a lumped estimate from the layout);
-- **ESD discharge simulation** — IEC 61000-4-2 contact discharge into each exposed line, with
-  ngspice;
-- **a cable budget** — how much common-mode current each connector's cable can carry before it
-  radiates past a limit, with nec2c;
-- **the FCC Part 15 limit tables** the results are compared against. CISPR 32 is not included yet.
+| | |
+|---|---|
+| **Layout checks** | 19 checks: return paths, plane gaps and stitching, decoupling, impedance, length matching, ESD protection at connectors, shield grounding, reset lines, power input and switching-regulator layout. Each finding says what to do. |
+| **Decoupling** | Per supply rail and IC: the impedance of its capacitors against a target, where it falls short, and which change closes the gap. |
+| **ESD** | An IEC 61000-4-2 contact discharge into each line that leaves the board, simulated in ngspice, with the clamp where it is and moved to the connector. |
+| **Cables** | How much common-mode current each connector's cable can carry before it passes the FCC limit, from an antenna model in nec2c. |
+| **Versions** | Upload a changed layout as a new version and see which findings were fixed and which are new. |
+| **Settings** | Turn checks on or off and set thresholds per board in the app, or in an `emi.rules.yaml` next to the board. |
+| **Reports** | One HTML file (or PDF) with the board, findings and results, to share. |
 
 Your boards and results stay on your computer. Nothing is uploaded anywhere.
 
-The results are for comparing versions of your own board. They are not a pre-compliance test —
-see the limitations page in the app, and [known issues](docs/known-issues.md).
+Results are for comparing versions of your own board. They are not a pre-compliance test. See
+[known issues](docs/known-issues.md).
 
-> **Full-wave simulation (openEMS) is experimental and turned off.** It solves end to end, but
-> nothing about it has been verified on a real board yet. See
-> [Experimental features](#experimental-features).
+Full-wave simulation (openEMS), conducted emissions and small-part solves are built but off. See
+[experimental features](#experimental-features).
 
 ---
 
 ## Contents
 
 1. [What you need](#what-you-need)
-2. [Step 1 — Install Docker](#step-1--install-docker)
-3. [Step 2 — Install EMI Analyzer](#step-2--install-emi-analyzer)
-4. [Step 3 — First launch](#step-3--first-launch)
-5. [Step 4 — Analyse a board](#step-4--analyse-a-board)
+2. [Step 1: Install Docker](#step-1-install-docker)
+3. [Step 2: Install EMI Analyzer](#step-2-install-emi-analyzer)
+4. [Step 3: First launch](#step-3-first-launch)
+5. [Step 4: Analyze a board](#step-4-analyze-a-board)
    - [Sharing results](#sharing-results)
 6. [Using it from KiCad](#using-it-from-kicad)
 7. [Running without the desktop app](#running-without-the-desktop-app)
@@ -59,7 +58,7 @@ operating system, and the app starts and stops it for you.
 
 ---
 
-## Step 1 — Install Docker
+## Step 1: Install Docker
 
 Skip this step if `docker ps` already works in a terminal.
 
@@ -133,7 +132,7 @@ Skip this step if `docker ps` already works in a terminal.
 
 ---
 
-## Step 2 — Install EMI Analyzer
+## Step 2: Install EMI Analyzer
 
 Go to the [latest release](https://github.com/embeddedci-com/emi-analyzer/releases/latest) and
 download the file for your computer:
@@ -203,7 +202,7 @@ chmod +x EMI.Analyzer_*_amd64.AppImage
 
 ---
 
-## Step 3 — First launch
+## Step 3: First launch
 
 1. **Make sure Docker is running** (Step 1).
 2. **Open EMI Analyzer.** A window opens on the analyzer's home page.
@@ -220,7 +219,7 @@ running in the background.
 
 ---
 
-## Step 4 — Analyse a board
+## Step 4: Analyze a board
 
 1. On the home page, drop a board file on the upload area, or click **Choose a file**, and pick
    one of:
