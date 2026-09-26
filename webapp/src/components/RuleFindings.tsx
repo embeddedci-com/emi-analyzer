@@ -13,6 +13,8 @@ import { Link } from 'react-router'
 import { useEmiBase } from '../host'
 import type { RuleFinding, RulesDoc } from '../lib/boardTypes'
 import catalogue from '../lib/ruleCatalogue.json'
+import { SOURCE_LABEL, type Suppression } from '../lib/rulesSettings'
+import { SuppressFindingModal } from './ChecksOverrides'
 
 export interface RuleFindingsProps {
   rules: RulesDoc | null
@@ -29,6 +31,13 @@ export interface RuleFindingsProps {
    * where these pages sit beside the PCB Editor; everywhere else the buttons are absent.
    */
   onShowInKiCad?: (nets: string[]) => void
+  /**
+   * Suppress a finding: rule and net filled in, a reason asked for. The suppression goes to
+   * the Checks view's draft, to be saved with everything else there.
+   */
+  onSuppress?: (s: Suppression) => void
+  /** The board's net names, for the Suppress dialog's pattern preview. */
+  nets?: string[]
 }
 
 const SEVERITY_COLOR: Record<string, string> = {
@@ -48,10 +57,11 @@ const RULE_LABEL: Record<string, string> = Object.fromEntries(
 )
 
 export function RuleFindings({
-  rules, onFocus, onSelectNet, onSimulate, onShowInKiCad,
+  rules, onFocus, onSelectNet, onSimulate, onShowInKiCad, onSuppress, nets = [],
 }: RuleFindingsProps) {
   const base = useEmiBase()
   const [filter, setFilter] = useState('all')
+  const [suppressing, setSuppressing] = useState<RuleFinding | null>(null)
 
   const grouped = useMemo(() => {
     if (!rules) return []
@@ -83,12 +93,15 @@ export function RuleFindings({
 
   if (rules.findings.length === 0) {
     return (
-      <Alert color="green" variant="light" title="No findings">
-        The layout checks found nothing at{' '}
-        {(rules.summary.assumed_max_frequency_hz / 1e6).toFixed(0)} MHz. That is not a clean
-        bill of health: they are not a simulation. Under Checks you can see which ran and
-        raise the top frequency.
-      </Alert>
+      <Stack gap="sm">
+        <Alert color="green" variant="light" title="No findings">
+          The layout checks found nothing at{' '}
+          {(rules.summary.assumed_max_frequency_hz / 1e6).toFixed(0)} MHz. That is not a clean
+          bill of health: they are not a simulation. Under Checks you can see which ran and
+          raise the top frequency.
+        </Alert>
+        <SuppressedList rules={rules} />
+      </Stack>
     )
   }
 
@@ -143,6 +156,7 @@ export function RuleFindings({
                     }}
                     onSimulate={onSimulate && SIMULATABLE.has(f.rule) && f.net ? () => onSimulate(f) : undefined}
                     onShowInKiCad={onShowInKiCad && f.net ? () => onShowInKiCad([f.net!]) : undefined}
+                    onSuppress={onSuppress ? () => setSuppressing(f) : undefined}
                   />
                 ))}
               </Stack>
@@ -151,8 +165,16 @@ export function RuleFindings({
         ))}
       </Accordion>
 
-      {/* Suppressed findings and settings that were not applied are in the notes above the
-          findings (AnalysisNotes), with everything else the worker said about the board. */}
+      {/* Settings that were not applied are in the notes above the findings (AnalysisNotes),
+          with everything else the worker said about the board. */}
+      <SuppressedList rules={rules} />
+
+      <SuppressFindingModal
+        finding={suppressing}
+        nets={nets}
+        onClose={() => setSuppressing(null)}
+        onAdd={(s) => { setSuppressing(null); onSuppress?.(s) }}
+      />
 
       {rules.findings.length > 0 && (
         <Text size="xs" c="dimmed">
@@ -165,13 +187,42 @@ export function RuleFindings({
   )
 }
 
+/** What suppressions hid, and why: a hidden finding should still be findable. */
+function SuppressedList({ rules }: { rules: RulesDoc }) {
+  const hidden = rules.suppressed_findings ?? []
+  if (!hidden.length) return null
+  return (
+    <Accordion variant="contained" chevronPosition="left">
+      <Accordion.Item value="suppressed">
+        <Accordion.Control>
+          <Text size="xs" c="dimmed">{hidden.length} suppressed</Text>
+        </Accordion.Control>
+        <Accordion.Panel>
+          <Stack gap={6}>
+            {hidden.map((h, i) => (
+              <Stack key={i} gap={0}>
+                <Text size="xs" fw={500}>{h.title}</Text>
+                <Text size="xs" c="dimmed">
+                  {h.reason || 'No reason given'}
+                  {h.source && ` (${SOURCE_LABEL[h.source] ?? h.source})`}
+                </Text>
+              </Stack>
+            ))}
+          </Stack>
+        </Accordion.Panel>
+      </Accordion.Item>
+    </Accordion>
+  )
+}
+
 function FindingRow({
-  finding, onClick, onSimulate, onShowInKiCad,
+  finding, onClick, onSimulate, onShowInKiCad, onSuppress,
 }: {
   finding: RuleFinding
   onClick: () => void
   onSimulate?: () => void
   onShowInKiCad?: () => void
+  onSuppress?: () => void
 }) {
   // JSON from the worker carries absent coordinates as null, not undefined, so this has
   // to be a loose check. An info-severity finding ("41 nets exceed lambda/20") has no
@@ -219,8 +270,9 @@ function FindingRow({
         {finding.detail}
       </Text>
 
-      {(finding.layer || locatable || onSimulate || onShowInKiCad) && (
-        <Group gap={6} pl={20} wrap="nowrap" align="center">
+      {(finding.layer || locatable || onSimulate || onShowInKiCad || onSuppress) && (
+        // Wraps: with Suppress beside the coordinates and a layer badge, one line overflowed the panel.
+        <Group gap={6} pl={20} wrap="wrap" align="center" style={{ rowGap: 2 }}>
           {finding.layer && (
             <Badge size="xs" variant="outline" color="gray" style={{ flex: 'none' }}>
               {finding.layer}
@@ -261,6 +313,22 @@ function FindingRow({
               }}
             >
               Simulate discharge
+            </Anchor>
+          )}
+          {onSuppress && (
+            <Anchor
+              size="xs"
+              component="button"
+              type="button"
+              c="dimmed"
+              ml={onShowInKiCad || onSimulate ? undefined : 'auto'}
+              style={{ whiteSpace: 'nowrap' }}
+              onClick={(e) => {
+                e.stopPropagation()
+                onSuppress()
+              }}
+            >
+              Suppress…
             </Anchor>
           )}
         </Group>

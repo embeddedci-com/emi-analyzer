@@ -622,7 +622,7 @@ def check_length_matching(ctx: RuleContext) -> Iterator[Finding]:
                 detail=(
                     f"In {group.name}, {net} arrives {abs(skew):.0f} ps {longer} than its "
                     f"reference {group.reference} — about {abs(mm):.1f} mm of trace. The "
-                    f"budget is ±{tol:.0f} ps ({ctx.settings.rule('ddr-skew').describe(group.tolerance_key, 'ps') if ctx.settings else ''}). "
+                    f"budget is ±{tol:.0f} ps ({_describe_tolerance(ctx, group)}). "
                     f"{_path_summary(ctx, net)} "
                     f"Group identified by {group.source}."
                     + (f" {group.note}" if group.note else "")
@@ -631,6 +631,15 @@ def check_length_matching(ctx: RuleContext) -> Iterator[Finding]:
                 x=where[0] if where else None,
                 y=where[1] if where else None,
             )
+
+
+def _describe_tolerance(ctx: RuleContext, group) -> str:
+    """Where a group's budget came from, naming the net group when one set it."""
+    if not ctx.settings:
+        return ""
+    netclass = ctx.netclasses.of(group.reference) if ctx.netclasses else ""
+    return ctx.settings.describe("ddr-skew", group.tolerance_key, "ps",
+                                 net=group.reference, netclass=netclass)
 
 
 def _group_delay(ctx: RuleContext, net: str) -> float | None:

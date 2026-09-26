@@ -30,7 +30,7 @@ import { AnalysisNotes } from '../components/AnalysisNotes'
 import { ChecksSettings } from '../components/ChecksSettings'
 import { WhatNext } from '../components/WhatNext'
 import { collectNotices, worstLevel } from '../lib/notices'
-import { layerFromParams, type AppLayer } from '../lib/rulesSettings'
+import { layerFromParams, type AppLayer, type Suppression } from '../lib/rulesSettings'
 import { RunProgress } from '../components/RunProgress'
 import { DriversPanel } from '../components/DriversPanel'
 import { ComponentsPanel } from '../components/ComponentsPanel'
@@ -79,6 +79,8 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
   const [tab, setTab] = useState<string | null>('findings')
   // The Findings tab shows the findings, or the settings they were found with.
   const [findingsView, setFindingsView] = useState<'findings' | 'checks'>('findings')
+  // Suppress on a finding hands this to the Checks view, which adds it to its draft.
+  const [pendingSuppression, setPendingSuppression] = useState<Suppression | null>(null)
   const [roi, setRoi] = useState<[number, number, number, number] | null>(null)
   const [ports, setPorts] = useState<PortSpec[]>([])
   const [pickingPad, setPickingPad] = useState(false)
@@ -221,6 +223,7 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
   }, [activeRun?.id, activeRun?.progress])
 
   const doc: BoardDoc | null = board.data?.doc ?? null
+  const netNames = useMemo(() => doc?.nets?.map((n) => n.name).filter(Boolean) ?? [], [doc])
   const noticeLevel = useMemo(
     () => worstLevel(collectNotices(rules.data, doc).notices), [rules.data, doc])
 
@@ -781,15 +784,19 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
                                     data={[{ label: 'Findings', value: 'findings' },
                                            { label: 'Checks', value: 'checks' }]} />
                   {findingsView === 'findings' && rules.data && <WhatNext onTab={setTab} />}
-                  {findingsView === 'findings' ? (
+                  {findingsView === 'findings' && (
                     <RuleFindings
                       rules={(rules.data as RulesDoc | null) ?? null}
                       onFocus={onFocusFinding}
                       onSelectNet={setNet}
                       onSimulate={onSimulateFinding}
                       onShowInKiCad={kicad ? showInKiCad : undefined}
+                      nets={netNames}
+                      onSuppress={(s) => { setPendingSuppression(s); setFindingsView('checks') }}
                     />
-                  ) : (
+                  )}
+                  {/* Hidden rather than unmounted, so unsaved edits survive a look at the findings. */}
+                  <div hidden={findingsView !== 'checks'}>
                     <ChecksSettings
                       // A new analysis brings new values underneath, so the draft starts over.
                       key={ingest?.id}
@@ -798,8 +805,11 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
                       onApply={(layer) => reanalyse.mutate(layer)}
                       applying={reanalysing || reanalyse.isPending}
                       applyBlocked={!ingest?.board_id ? 'The board has not finished processing yet' : undefined}
+                      nets={netNames}
+                      pending={pendingSuppression}
+                      onPendingUsed={() => setPendingSuppression(null)}
                     />
-                  )}
+                  </div>
                 </Stack>
               )}
             </Tabs.Panel>

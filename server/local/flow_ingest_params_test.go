@@ -18,7 +18,11 @@ func TestReanalyseCarriesSettingsToTheWorker(t *testing.T) {
 	settings := map[string]any{"version": 1, "rules": map[string]any{
 		"radiator": map[string]any{"enabled": false},
 		"via-stub": map[string]any{"params": map[string]any{"resonance_margin": 6}},
-	}}
+	},
+		// Net groups and suppressions ride in the same layer (the Checks view edits both).
+		"groups":   []any{map[string]any{"match": "DQ*", "params": map[string]any{"byte_lane_ps": 4}}},
+		"suppress": []any{map[string]any{"rule": "plane-gap", "net": "GND", "reason": "intentional"}},
+	}
 	code, out := f.user("orgA", "POST", "/emi/projects/"+p+"/runs", map[string]any{
 		"board_id": boardID, "kind": "ingest", "params": map[string]any{"settings": settings},
 	})
@@ -70,6 +74,15 @@ func sameSettings(params any, want map[string]any) bool {
 	rules := s["rules"].(map[string]any)
 	radiator := rules["radiator"].(map[string]any)
 	stub := rules["via-stub"].(map[string]any)["params"].(map[string]any)
+	groups, _ := s["groups"].([]any)
+	suppress, _ := s["suppress"].([]any)
+	if len(groups) != 1 || len(suppress) != 1 {
+		return false
+	}
+	group := groups[0].(map[string]any)
+	sup := suppress[0].(map[string]any)
 	return radiator["enabled"] == false && stub["resonance_margin"] == float64(6) &&
-		len(rules) == len(want["rules"].(map[string]any))
+		len(rules) == len(want["rules"].(map[string]any)) &&
+		group["match"] == "DQ*" && group["params"].(map[string]any)["byte_lane_ps"] == float64(4) &&
+		sup["reason"] == "intentional"
 }
