@@ -136,7 +136,8 @@ skip themselves. `PLUGIN_PY=` a Python that has PySide6 and kicad-python runs th
 
 `make test` installs gerbonara the way the worker image does, so the Gerber tests run too.
 Tests that need `ngspice`, `nec2c` or openEMS skip where those are not installed. CI runs the
-worker tests inside the worker image, so they are covered there
+worker tests inside the worker image, built on the prebuilt openEMS (see
+[The openEMS image](#the-openems-image)), so they are covered there
 ([`.github/workflows/test.yml`](.github/workflows/test.yml)). A few tests also run against real
 boards if `EMI_TEST_BOARDS` names a directory of `<board>/<board>.kicad_pcb` files.
 
@@ -203,6 +204,22 @@ commands that publish it. The plugin needs an app that publishes where it is lis
 A release build starts the worker image tagged with its own version, so the app and its worker
 always come from the same commit — which is why the image must exist before the release is
 published. The `emi-worker` package on GHCR must be **public**, or the app cannot pull it.
+
+### The openEMS image
+
+The worker image starts FROM `ghcr.io/embeddedci-com/emi-openems`, openEMS compiled from the
+commit pinned in [`worker/openems-image/Dockerfile`](worker/openems-image/Dockerfile), so no
+worker or CI build compiles it. To move openEMS:
+
+1. Change `OPENEMS_REF` there, and the commit in `worker/NOTICE`.
+2. Push. [`openems-image`](.github/workflows/openems-image.yml) compiles it on a native amd64
+   and arm64 runner (tens of minutes each), runs the inductor probe, joins the two, and prints
+   the line to pin in its run summary.
+3. Paste that line (`ARG OPENEMS_IMAGE=…:<ref>@sha256:…`) into `worker/Dockerfile`. The tests
+   check the tag matches `OPENEMS_REF`, and a release refuses an `OPENEMS_IMAGE` with no digest.
+
+The `emi-openems` package on GHCR must be **public** too: CI and anyone running
+`docker build worker` pull it without signing in.
 
 The installers are not code-signed. On macOS they are ad-hoc signed, which is why users see
 *Open Anyway* rather than an outright refusal.

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<openEMS>
+  <FDTD NumberOfTimesteps="1" endCriteria="0.0001" f_max="2e+09">
+    <Excitation Type="0" f0="1e+09" fc="1e+09" />
+    <BoundaryCond xmin="PEC" xmax="PEC" ymin="PEC" ymax="PEC" zmin="PEC" zmax="PEC" />
+  </FDTD>
+  <ContinuousStructure CoordSystem="0">
+    <Properties>
+      <Excitation Name="exc" Number="0" Type="0" Excite="0,0,1">
+        <Primitives>
+          <Box Priority="20">
+            <P1 X="5" Y="5" Z="5" />
+            <P2 X="5" Y="5" Z="6" />
+          </Box>
+        </Primitives>
+      </Excitation>
+      <LumpedElement Name="probe" Direction="2" Caps="1" L="1e-09" LEtype="1">
+        <Primitives>
+          <Box Priority="20">
+            <P1 X="3" Y="3" Z="3" />
+            <P2 X="4" Y="4" Z="4" />
+          </Box>
+        </Primitives>
+      </LumpedElement>
+    </Properties>
+    <RectilinearGrid DeltaUnit="0.001" CoordSystem="0">
+      <XLines>0,1,2,3,4,5,6,7,8,9,10,11</XLines>
+      <YLines>0,1,2,3,4,5,6,7,8,9,10,11</YLines>
+      <ZLines>0,1,2,3,4,5,6,7,8,9,10,11</ZLines>
+    </RectilinearGrid>
+  </ContinuousStructure>
+</openEMS>

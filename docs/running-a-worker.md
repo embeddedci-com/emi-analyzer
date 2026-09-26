@@ -102,6 +102,39 @@ Board ingest and the rule checks need nothing else. The ESD simulation needs `ng
 budget needs `nec2c`, and full-wave solves need openEMS; a worker advertises only the run kinds
 whose tools it finds, and is only handed those.
 
+Component models (capacitors in a solve) also need an openEMS that models a lumped inductor.
+Debian's and Ubuntu's `openems` 0.0.35 does not, so a worker on it solves bare copper and says so
+in the result. The worker asks the binary before each such solve.
+
+## 3d. Build the image yourself
+
+```bash
+docker build -t emi-worker worker
+```
+
+This starts from `ghcr.io/embeddedci-com/emi-openems`, openEMS compiled from a pinned upstream
+commit, so it compiles nothing. The image is about 1.4 GB. `--build-arg` picks another solver:
+
+| `OPENEMS_SOURCE` | openEMS | Size |
+|---|---|---|
+| `build` (default) | prebuilt from source, models components | about 1.4 GB |
+| `apt` | Debian's 0.0.35, no component models, needs nothing from ghcr.io | about 270 MB |
+| `none` | none: ingest, rule checks, ESD and cable budgets only | smaller still |
+
+To try another openEMS commit, build its image first. The compile takes tens of minutes, and
+under emulation (an amd64 image on Apple Silicon) add `--build-arg OPENEMS_NJOBS=1`:
+
+```bash
+docker build --build-arg OPENEMS_REF=<commit> -t emi-openems:local worker/openems-image
+```
+
+```bash
+docker build --build-arg OPENEMS_IMAGE=emi-openems:local -t emi-worker worker
+```
+
+Either image's build fails if the solver's answer on inductors is not the one its
+`OPENEMS_SOURCE` promises.
+
 ## Configuration
 
 | Variable | Default | |
@@ -130,6 +163,10 @@ revoked. Issue a new one with `emi-local -issue-key` against the data folder the
 without openEMS is not offered solves; a worker whose memory is too small for a solve is skipped
 rather than handed a run it would die on. Full-wave solves are also refused entirely unless the
 app was started with `-experimental full-wave` — see [known-issues.md](known-issues.md).
+
+**A solve places no capacitors.** The worker log says "openEMS does not model a series lumped
+R-L-C": the worker runs openEMS 0.0.35 (an `apt` image or a distribution package). Use the
+released image or a default build.
 
 **It cannot connect.** From inside the container, `localhost` is the container, not your
 computer. Use `host.docker.internal` (Docker Desktop) or `--network host` (Linux).

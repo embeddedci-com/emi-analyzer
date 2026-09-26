@@ -22,7 +22,7 @@ solver or a measurement — and passed. The gap between the two is most of this 
 | **Full-wave solve (openEMS)** | ✅ | ⚠️ **a 50 ohm microstrip within 1 % of theory on every preset; solves end to end on the fixture board; long records on whole boards are out of scope — §2** | **off** (`full-wave`) |
 | Small-part solve (one net cut out over its planes, `small-part-solve`) | ✅ | ⚠️ microstrip, stripline and via within their closed forms (coarse via 0.1 % over); a synthetic coupon converges; one real coupon of three checked, and its presets disagree on where the hotspot is ([verification/small-part-solve.md](verification/small-part-solve.md)) | **off** (`small-part-solve`, or with full-wave) |
 | Drivers (re-weighting a solve) | ✅ | ⚠️ every check in §3 passes; nothing against a measured source | off, with full-wave |
-| Components (MLCC models in a solve) | ✅ | ❌ the shipped openEMS 0.0.35 cannot model an inductor, so no capacitor is placed; on a current openEMS build a 100 pF 0402 resonates within 1.6 % but only with a -70 dB record (§3) | off, with full-wave |
+| Components (MLCC models in a solve) | ✅ | ⚠️ the image now ships openEMS built from source, which models an inductor (0.0.35 did not, so no capacitor was placed); a 100 pF 0402 resonates within 1.6 % but only with a -70 dB record (§3) | off, with full-wave |
 | Board far field (NF2FF) | ✅ | ⚠️ matches nec2c on dipoles over the ground plane as the product runs it, 30 MHz up (§3); no board checked against a measurement | off, with full-wave |
 | Cable emissions, Tier B | ✅ | ❌ failed its real-board gate, 7-9 dB low on average on two boards below resonance. Cause found in nec2c (the board modelled as a wire, not a plate) and fixed; a residual of 0-5 dB low remains by where the source is. Needs the openEMS re-run — §3 | off, with full-wave |
 | Compliance estimate | ✅ | ❌ runs end to end on the fixture board; never checked against a lab or a second solver (§3) | off, with full-wave |
@@ -154,15 +154,15 @@ Details and numbers: [`verification/cables-and-drivers.md`](verification/cables-
 
 | Check | Status |
 |---|---|
-| **One 0402 capacitor over a plane: SRF within 5 %, \|Z\| within 1 dB to 3× SRF** | ⚠️ **100 pF on a current openEMS build, run to -70 dB: SRF +1.6 % ✅, \|Z\| within 1.37 dB (1 dB missed at resonance only) ❌. At the solve's -40 dB it ripples ±6 dB; a 1 nF part never settled. The shipped 0.0.35 cannot run it at all** |
+| **One 0402 capacitor over a plane: SRF within 5 %, \|Z\| within 1 dB to 3× SRF** | ⚠️ **100 pF on a current openEMS build, run to -70 dB: SRF +1.6 % ✅, \|Z\| within 1.37 dB (1 dB missed at resonance only) ❌. At the solve's -40 dB it ripples ±6 dB; a 1 nF part never settled. openEMS 0.0.35 (an `apt` image) cannot run it at all** |
 | No matched parts gives results identical to before | ✅ |
 | Every standard KiCad capacitor footprint on four real boards resolves | ✅ (46 % → 99 %) |
 | A decoupling finding quotes the library's SRF and source | ❌ |
 
 The first of these is the only check that the series R-L-C construction behaves like a
 capacitor. It found that the construction used until September 2026 (R, L and C elements in three
-adjacent cells) was an open circuit on the shipped openEMS 0.0.35, which skips an element with
-only L; every solve with components on had modelled its capacitors as missing. Capacitors are
+adjacent cells) was an open circuit on openEMS 0.0.35, which the image shipped until then and which skips an
+element with only L; every solve with components on had modelled its capacitors as missing. Capacitors are
 now one series element, placed only on a solver that models an inductor.
 
 ### Compliance
@@ -201,10 +201,12 @@ now one series element, placed only on a solver that models an inductor.
 - **Mesh grading is enforced as far as geometry allows** (§2). Where two copper edges sit
   closer together than the cell beside them, the step between those two cells stays: closing it
   would mean a cell smaller than the mesh's smallest, which costs timesteps everywhere.
-- **Components need an openEMS build** (`OPENEMS_SOURCE=build`); the released image is 0.0.35
-  and places none. On the build they need a run to -70 dB to be right (§3), which the solve
-  does not ask for, and a current openEMS writes field dumps in a layout only the near-field
-  reader has been taught; nf2ff output from it is untested.
+- **The image's openEMS is now built from source** (a pinned upstream commit) instead of
+  Debian's 0.0.35, so components can be modelled. They need a run to -70 dB to be right (§3),
+  which the solve does not ask for. Every other full-wave check on these pages ran on 0.0.35
+  and has not been rerun on the new solver; it writes field dumps in a layout only the
+  near-field reader has been taught, and its nf2ff output is untested. An `OPENEMS_SOURCE=apt`
+  image still has 0.0.35 and places no capacitor.
 - **Whole-board solves at radiated record length are out of scope** (§2).
 - **The far field on a real board runs, but its record is too short.** Board A (4 layers,
   100 x 80 mm, a 15 mm region at 300 µm): 7.9 M cells, 2 h 38 min on three threads, 1.8 GB, an
