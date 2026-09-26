@@ -103,6 +103,9 @@ class SolveParams:
     #: In-plane copper lines closer than this fraction of dx are merged (mesh.MERGE_FRACTION when
     #: 0). A small-part solve raises it to a half: see stages/small_part.py.
     merge_fraction: float = 0.0
+    #: Hold the PML padding's cells to the band's wavelength bound (``MeshSpec``). A
+    #: small-part solve sets it: see stages/small_part.py.
+    pml_within_max_cell: bool = False
 
     def resolved_f_max(self) -> float:
         if self.f_max > 0:
@@ -607,6 +610,7 @@ def build_model(model: BoardModel, transform, params: SolveParams) -> BuiltModel
         air_below_mm=params.air_mm,
         max_epsilon_r=max_er,
         **({"merge_fraction": params.merge_fraction} if params.merge_fraction > 0 else {}),
+        pml_within_max_cell=params.pml_within_max_cell,
     )
 
     # §16.2's box needs air on every side. Without far field the mesh stops at the region in
@@ -625,6 +629,7 @@ def build_model(model: BoardModel, transform, params: SolveParams) -> BuiltModel
             f_max=f_max, dx_um=params.dx_um, dy_um=params.dy_um, dz_um=params.dz_um,
             air_above_mm=max(params.air_mm, pad), air_below_mm=max(params.air_mm, pad),
             max_epsilon_r=max_er, merge_fraction=spec.merge_fraction,
+            pml_within_max_cell=spec.pml_within_max_cell,
         )
     mesh = build_mesh(spec, copper_x, copper_y, list(layer_z.values()))
     if ff_clearance is not None:

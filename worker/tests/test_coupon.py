@@ -170,3 +170,26 @@ def test_a_coupon_builds_a_model_with_its_ports_on_the_plane(board):
     assert "p1_exc" in xml and "p2_res" in xml
     # The port box runs from the top layer to In1, not to some other layer.
     assert f"{lz['In1.Cu']:g}" in xml or f"{lz['In1.Cu'] * 1000:g}" in xml
+
+
+@pytest.mark.parametrize("preset", [(150, 150, 100), (75, 75, 50), (50, 50, 25)])
+def test_a_small_part_mesh_holds_the_bands_coarsest_cell_on_every_preset(board, preset):
+    # The PML padding grew 1.2x a line past the wavelength bound: a real coupon's coarsest cell
+    # was 5.3 mm against the 3.5 mm 2 GHz allows, on every preset, in cells nobody reads.
+    from emi_worker.openems.mesh import max_cell_for_frequency
+    from emi_worker.stages import small_part
+
+    b, t = board
+    c = coupon.plan(b, t, ["USB_D+", "USB_D-"])
+    cut, _ = coupon.extract(b, t, ["USB_D+", "USB_D-"], c.roi)
+    dx, dy, dz = preset
+    params = small_part.apply({"mode": "small_part"}, SolveParams(
+        roi=c.roi, frequencies_hz=[], ports=c.ports, dx_um=dx, dy_um=dy, dz_um=dz))
+    built = build_model(cut, t, params)
+    limit = max_cell_for_frequency(small_part.BAND_HZ[1], 4.6)
+    assert built.mesh.max_cell_mm <= limit * 1.0001
+    assert not any("coarsest cell" in n for n in built.notes)
+    # A region solve keeps the growth its verification was run with.
+    region = build_model(cut, t, SolveParams(roi=c.roi, frequencies_hz=[1e8, 2e9], ports=c.ports,
+                                             dx_um=dx, dy_um=dy, dz_um=dz))
+    assert region.mesh.max_cell_mm > limit

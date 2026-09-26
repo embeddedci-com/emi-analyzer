@@ -116,6 +116,9 @@ def apply(p: dict, params: SolveParams) -> SolveParams:
     params.model_components = False
     params.end_criteria = END_CRITERIA
     params.merge_fraction = MERGE_FRACTION
+    # The band's coarsest cell holds everywhere, the absorbing layer included; the upper edge
+    # of the band is chosen for it (module docstring), and the padding used to grow past it.
+    params.pml_within_max_cell = True
     # The cap is derived from the band (three periods of its lowest frequency); a hand-set cap
     # would make the budget below meaningless.
     params.max_timesteps = 0
