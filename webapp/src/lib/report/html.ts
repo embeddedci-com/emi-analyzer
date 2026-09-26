@@ -12,8 +12,11 @@
  */
 
 import type { BoardDoc } from '../boardTypes'
-import { CHART_COLORS, cableBudgetSvg, fmtHz, transientSvg } from './charts'
-import { SECTIONS, type ReportData, type SectionId } from './model'
+import { PARAM_FIELDS, fmtHz as condFmtHz, fmtShare } from '../conducted'
+import { fmtFarads, fmtHz as decFmtHz, fmtRange, frequencies } from '../decoupling'
+import { fmtOhm } from '../../components/ComponentImpedancePreview'
+import { CHART_COLORS, cableBudgetSvg, conductedSvg, decouplingSvg, fmtHz, transientSvg } from './charts'
+import { SECTIONS, type DecouplingIcSection, type ReportData, type SectionId } from './model'
 
 /** Escape text for HTML element content and quoted attribute values alike. */
 export function esc(value: unknown): string {
@@ -109,6 +112,11 @@ ul { margin: 0 0 10px; padding-left: 20px; }
 .tag.new { background: #ffe3e3; color: #c92a2a; }
 .tag.fixed { background: #d3f9d8; color: #2b8a3e; }
 .in-report { margin: 0 0 10px; }
+.ic-ok { list-style: none; padding-left: 0; }
+.ic-ok li { padding: 2px 0; }
+.tag.ok { background: #d3f9d8; color: #2b8a3e; }
+.assumed-box { border: 1px solid #ffd43b; background: #fff9db; border-radius: 6px; padding: 8px 12px; margin: 0 0 12px; }
+.assumed-box strong { color: #e67700; }
 @media (max-width: 700px) { main { padding: 20px 16px; margin: 0; } }
 @page {
   size: A4;
@@ -176,6 +184,7 @@ ${row('Worker version', m.worker ? `${m.workerVersion} (${m.worker})` : m.worker
 ${row('Experimental features', [
     m.features.fullWave ? 'full-wave on' : 'full-wave off',
     m.features.smallPartSolve ? 'small-part solve on' : 'small-part solve off',
+    m.features.conducted ? 'conducted scan on' : 'conducted scan off',
   ].join(', '))}
 </tbody></table>
 <h3>Stackup</h3>
@@ -330,6 +339,99 @@ ${e.notes.length ? `<h3>Notes</h3>${list(e.notes)}` : ''}
 </section>`
 }
 
+const target = (ic: DecouplingIcSection, v: number) =>
+  `Target ${fmtOhm(ic.targetOhm)} up to ${decFmtHz(ic.bandHz)} (${v} V, ${ic.ripplePct} % ripple, ${ic.stepCurrentA} A step)`
+
+function decouplingIc(ic: DecouplingIcSection, v: number, freqs: number[]): string {
+  const assumed = ic.targetAssumed.length ? ` <span class="assumed">Assumed: ${esc(ic.targetAssumed.join(', '))}.</span>` : ''
+  if (ic.status === 'ok') {
+    return `<li><strong>${esc(ic.ref)}</strong> <span class="tag ok">ok</span> <span class="muted">${esc(target(ic, v))}.</span>${assumed}</li>`
+  }
+  const chart = decouplingSvg(freqs, ic.branches, ic.seriesLH, ic.targetOhm, ic.bandHz, ic.antiResonances)
+  return `<div class="card"><h4>${esc(ic.ref)} <span class="tag bad">${esc(ic.statusText)}</span></h4>
+<p>${esc(target(ic, v))}.${assumed}${ic.gaps.length ? ` Above it at ${esc(ic.gaps.map(fmtRange).join(', '))}.` : ''}${
+    ic.worst ? ` Worst: ${esc(fmt(ic.worst.excessDb, 1, 'dB'))} over at ${esc(decFmtHz(ic.worst.hz))}.` : ''}</p>
+${chart}
+${chart ? `<div class="legend"><span><span class="swatch" style="border-color:${CHART_COLORS.impedance}"></span>all parts</span><span><span class="swatch" style="border-color:${CHART_COLORS.part}"></span>each part</span><span><span class="swatch dashed" style="border-color:${CHART_COLORS.target}"></span>target</span><span><span class="dot" style="background:${CHART_COLORS.gap};opacity:.4;border-radius:0"></span>above target</span><span><span class="dot" style="background:${CHART_COLORS.over}"></span>anti-resonance</span></div>` : ''}
+${ic.antiResonances.length ? `<p class="muted">Anti-resonance: ${esc(ic.antiResonances.map((a) => `${fmtOhm(a.ohm)} at ${decFmtHz(a.hz)}`).join(', '))}.</p>` : ''}
+${ic.recommendations.length ? `<h4>What would help</h4><ol>${ic.recommendations.map((r) => `<li>${esc(r.text)} <span class="muted">${esc([
+      r.improvementDb > 0.1 ? `${r.improvementDb.toFixed(1)} dB lower at ${decFmtHz(r.atHz)}` : '',
+      r.fixes.length ? `fixes ${r.fixes.map(fmtRange).join(', ')}` : '',
+    ].filter(Boolean).join(', '))}</span></li>`).join('')}</ol>` : ''}
+${ic.caps.length ? `<table><thead><tr><th>Part</th><th>Value</th><th class="num">To pin</th><th class="num">Loop</th><th class="num">Useful to</th><th>Model</th></tr></thead><tbody>${
+    ic.caps.map((c) => `<tr><td>${esc(c.ref)}</td><td>${esc(c.cF > 0 ? fmtFarads(c.cF) : c.value)}${c.package ? ` ${esc(c.package)}` : ''}</td><td class="num">${esc(fmt(c.distanceMm, 1, 'mm'))}</td><td class="num">${esc(fmt(c.loopNh, 1, 'nH'))}</td><td class="num">${esc(decFmtHz(c.usefulToHz))}</td><td>${
+      c.model === 'assumed' ? `<span class="assumed">assumed${c.assumed.length ? `: ${esc(c.assumed.join(', '))}` : ''}</span>` : 'library'}</td></tr>`).join('')
+  }</tbody></table>` : '<p class="note-off">No capacitor is on this supply.</p>'}
+${ic.assumed.length ? `<p class="muted">Assumed from the layout: ${esc(ic.assumed.join(', '))}.</p>` : ''}
+</div>`
+}
+
+function decouplingSection(d: ReportData): string {
+  const s = d.decoupling!
+  const freqs = frequencies({ f_min_hz: s.grid.fMinHz, f_max_hz: s.grid.fMaxHz, points_per_decade: s.grid.pointsPerDecade })
+  const rails = s.rails.map((r) => {
+    const ok = r.ics.filter((ic) => ic.status === 'ok')
+    const gaps = r.ics.filter((ic) => ic.status !== 'ok')
+    return `<h3>${esc(r.net)} <span class="muted">${esc(`${r.v} V`)}${r.vAssumed ? ' <span class="assumed">assumed</span>' : ''}${
+      r.plane ? esc(`, plane on ${r.plane.layer}`) : ''}</span></h3>
+${gaps.map((ic) => decouplingIc(ic, r.v, freqs)).join('')}
+${ok.length ? `<ul class="ic-ok">${ok.map((ic) => decouplingIc(ic, r.v, freqs)).join('')}</ul>` : ''}
+${r.plane ? `<p class="muted">${esc(`Plane pair ${r.plane.layer} / ${r.plane.groundLayer}, ${r.plane.cavityMm} mm apart: ${fmtFarads(r.plane.cF)}. First resonance near ${decFmtHz(r.plane.resonanceHz)}.`)}</p>` : ''}`
+  }).join('')
+  return `<section class="page" id="decoupling"><h2>Decoupling</h2>
+<p>Each IC's supply impedance, estimated from the layout: every capacitor with its mounting loop, plus the plane pair where there is one, against a target from the rail voltage, ripple and current step. Where the impedance is above the target, the capacitors do not filter. An estimate for comparing layouts.</p>
+<p class="muted">${esc(s.note)}${s.stackupAssumed ? ' Stackup assumed.' : ''}</p>
+${rails || '<p class="muted">No IC supply pins found. ICs are parts named U or IC, on nets named like a supply (3V3, VDD, VCC).</p>'}
+</section>`
+}
+
+const signedDb = (v: number | null) => (v === null || !Number.isFinite(v) ? 'not computed' : `${v >= 0 ? '+' : ''}${v.toFixed(1)} dB`)
+
+function conductedSection(d: ReportData): string {
+  const c = d.conducted!
+  const field = new Map(PARAM_FIELDS.map((f) => [f.name, f]))
+  const assumed = c.assumed.length
+    ? `<div class="assumed-box"><strong>Assumed regulator settings.</strong> The level moves with each of these; they were not entered from a datasheet.
+<table><thead><tr><th>Regulator</th><th>Setting</th><th class="num">Value used</th><th>From</th></tr></thead><tbody>${
+      c.assumed.flatMap((r) => r.settings.map((s) => {
+        const f = field.get(s.name)
+        const shown = f ? `${+(s.value / f.scale).toFixed(f.decimals)} ${f.unit}` : String(s.value)
+        return `<tr><td>${esc(r.ref)}</td><td>${esc(f?.label ?? s.name)}</td><td class="num">${esc(shown)}</td><td>${esc(s.source === 'rail names' ? 'rail names' : 'default')}</td></tr>`
+      })).join('')
+    }</tbody></table></div>`
+    : c.regulators.length
+      ? '<p class="muted">Every regulator setting was entered; none is assumed.</p>'
+      : ''
+  const nothing = !c.entry
+    ? '<p class="note-warn">No power input was found, so nothing was measured. The notes below say why.</p>'
+    : !c.regulators.length ? '<p class="note-warn">No switching regulator was found on the power input.</p>' : ''
+  const over = c.worst && c.worst.marginDb < 0
+  const dom = c.dominant
+  return `<section class="page" id="conducted"><h2>Conducted emissions <span class="tag bad">experimental</span></h2>
+<div class="experimental-banner"><strong>Experimental.</strong> ${esc(c.why)}</div>
+<p>What the switching regulators put back onto the power input, through the input filter as laid out, at a LISN against FCC 15.107 class ${esc(c.standardClass)}.${
+    c.entry ? ` Power input ${esc(c.entry.net)} at ${esc(c.entry.connector)}.` : ''}</p>
+${nothing}
+${assumed}
+${nothing ? '' : `<p><strong${over ? ' class="note-off"' : ''}>${esc(c.verdict)}</strong>${c.worst ? ` <span class="muted">${esc(`${fmt(c.worst.dbuv, 1, 'dBuV')} at the LISN.`)}</span>` : ''}</p>`}
+${conductedSvg(c.lines, c.quasiPeak, c.average)}
+${c.lines.length ? `<div class="legend"><span><span class="swatch" style="border-color:${CHART_COLORS.under}"></span>harmonic, as laid out</span>${
+    c.lines.some((l) => l.marginAvgDb < 0) ? `<span><span class="swatch" style="border-color:${CHART_COLORS.over}"></span>over the average limit</span>` : ''}<span><span class="swatch" style="border-color:${CHART_COLORS.limit}"></span>average limit</span><span><span class="swatch dashed" style="border-color:${CHART_COLORS.limit}"></span>quasi-peak limit</span></div>
+<p class="muted">Each harmonic is a steady tone, which reads the same on both detectors, so the average limit decides.</p>` : ''}
+${dom && dom.cap && dom.capShare !== null ? `<p>${esc(`At ${condFmtHz(dom.frequencyHz)}, ${dom.cap}${dom.capValue ? ` (${dom.capValue})` : ''} carries ${(dom.capShare * 100).toFixed(0)} % of ${dom.regulator}'s ripple current${
+      dom.lisnShare !== null ? `; ${fmtShare(dom.lisnShare)} reaches the LISN` : ''}.`)}</p>` : ''}
+${c.whatIfs.length ? `<h3>What to change</h3><table><thead><tr><th>Change</th><th class="num">Worst margin</th></tr></thead><tbody>${
+    c.whatIfs.map((w) => `<tr><td>${esc(w.label)}</td><td class="num">${esc(signedDb(w.changeDb))}</td></tr>`).join('')
+  }</tbody></table><p class="muted">Change in the worst margin; positive is better. Added parts are generic 1206 capacitors and an ideal inductor.</p>` : ''}
+${c.caps.length ? `<h3>Capacitors on the input</h3><table><thead><tr><th>Part</th><th>Value</th><th>Model</th><th class="num">Margin without it</th></tr></thead><tbody>${
+    c.caps.map((p) => `<tr><td>${esc(p.ref)}</td><td>${esc(p.value)}</td><td>${p.assumed ? '<span class="assumed">assumed</span>' : 'library'}</td><td class="num">${esc(signedDb(p.withoutChangeDb))}</td></tr>`).join('')
+  }</tbody></table>` : ''}
+${c.skipped.length ? `<h3>Not scanned</h3><ul>${c.skipped.map((s) => `<li>${esc(s.ref)}: ${esc(s.why)}</li>`).join('')}</ul>` : ''}
+${c.assumptions.length || c.notes.length ? `<h3>Assumptions</h3>${list([...c.assumptions, ...c.notes])}` : ''}
+${c.notModelled.length ? `<h3>Not modelled</h3>${list(c.notModelled)}` : ''}
+</section>`
+}
+
 function changesSection(d: ReportData): string {
   const c = d.changes!
   const parts: string[] = []
@@ -393,8 +495,10 @@ export interface RenderOptions {
 const RENDER: Record<Exclude<SectionId, 'board'>, (d: ReportData) => string> = {
   findings: findingsSection,
   notes: notesSection,
+  decoupling: decouplingSection,
   cables: cablesSection,
   esd: esdSection,
+  conducted: conductedSection,
   changes: changesSection,
   experimental: experimentalSection,
 }
