@@ -90,6 +90,11 @@ END_CRITERIA = float(os.environ.get("END_CRITERIA", "1e-12"))
 #: Length of every record, in ns. 40 ns is four times the excitation; the 80 % check says
 #: whether it was enough.
 MAX_NS = float(os.environ.get("MAX_NS", "40"))
+#: A third run per case: the cable attached and the gap left open. Its gap voltage is V_oc
+#: with the cable present, which splits what is left of the error into "V_oc moved when the
+#: cable was attached" and "Z_ant is wrong". nec2c puts the first at 0-6 dB, depending on where
+#: the source is (research/verify_cable_tier_b_plate.py).
+VOC_CABLE = os.environ.get("VOC_CABLE", "1") == "1"
 #: Height of the cable above the reference ground, for nec2c. The standard test setup.
 HEIGHT_M = float(os.environ.get("HEIGHT_M", "1.0"))
 
@@ -220,8 +225,10 @@ def regrade_along_cable(built, anchor) -> float:
     return float(np.max(np.maximum(d[1:] / d[:-1], d[:-1] / d[1:])))
 
 
-def add_cable(built, anchor, length_m: float) -> None:
+def add_cable(built, anchor, length_m: float, bond: bool = True) -> None:
     """Turn the Tier B document into Tier C: bond the gap, and run the cable out.
+
+    ``bond=False`` leaves the gap at 1 MOhm, for V_OC_CABLE's run.
 
     The cable starts where the stub ends, so the two tiers share the stub exactly and differ
     only past it. It is a square PEC column one gap-cell across, which is what M0's wire was:
@@ -254,6 +261,8 @@ def add_cable(built, anchor, length_m: float) -> None:
     # normal is the exit axis, which is the direction the current flows.
     built.doc.add(csx.ProbeBox(name="cable_it", type=1, norm_dir=axis, weight=1.0,
                                primitives=[loop]))
+    if not bond:
+        return
     # Bond the gap. Only the resistance changes: same cells, same caps, same everything else.
     for prop in built.doc.properties:
         if isinstance(prop, csx.LumpedElement) and prop.name.endswith("_r") \
@@ -349,7 +358,8 @@ def _head(trace, fraction: float = 0.8):
     return post.ProbeTrace(trace.time_s[:n], trace.values[:n])
 
 
-def antenna(length_m: float, freqs: np.ndarray, gap_mm: float, board_span_m: float
+def antenna(length_m: float, freqs: np.ndarray, gap_mm: float, board_span_m: float,
+            board_width_m: float | None = None, board_offset_m: float | None = None,
             ) -> tuple[np.ndarray, np.ndarray]:
     """Z_ant and E_per_amp from nec2c, for **the structure the FDTD grid contains**.
 
@@ -366,17 +376,41 @@ def antenna(length_m: float, freqs: np.ndarray, gap_mm: float, board_span_m: flo
       cable is a square column one gap-cell across; the equivalent radius of a square of
       side *a* is about 0.59 a. Cable 4a measured how much this matters — 4 % of resonance
       across a 10x change in radius — so it is not a detail to leave at a default.
+
+    And two that make it the grid's structure rather than an approximation of it:
+
+    * **The board is a plate**, as the product now models it: the strip of board the grid
+      holds (``board_strip``). The first runs used a thin wire as long as the board, which
+      has a fraction of a board's capacitance; against a plate it read |Z_ant| 4-12 dB high
+      below the resonance, most of what this study then measured.
+    * **The cable is as long as Tier C's**: the stub and the gap are part of it there.
     """
     ring = nec.ObservationRing(distance_m=3.0)
     z, e = [], []
     for f in freqs:
-        deck = nec.Deck(length_m=length_m, frequency_hz=float(f), height_m=HEIGHT_M,
-                        board_span_m=board_span_m, far_end="open", ring=ring,
+        deck = nec.Deck(length_m=length_m + (gap_mm + 10.0) / 1000.0,
+                        frequency_hz=float(f), height_m=HEIGHT_M,
+                        board_span_m=board_span_m, board_width_m=board_width_m,
+                        board_offset_m=board_offset_m, far_end="open", ring=ring,
                         radius_m=0.59 * gap_mm / 1000.0, ground=False)
         r = nec.run(deck)
         z.append(r.z_in)
         e.append(r.e_per_amp())
     return np.asarray(z), np.asarray(e)
+
+
+def board_strip(board, transform, anchor) -> tuple[float, float]:
+    """Width and cable offset, in metres, of the board the grid holds: the ROI_MM strip
+    across the exit plus the copper margin the model keeps, clipped to the outline."""
+    from emi_worker.openems.model import COPPER_MARGIN_MM
+
+    bx0, by0, bx1, by1 = board_extent(board, transform)
+    along_x = abs(anchor.nx) >= abs(anchor.ny)
+    centre, lo_edge, hi_edge = ((anchor.y_mm, by0, by1) if along_x
+                                else (anchor.x_mm, bx0, bx1))
+    half = ROI_MM / 2 + COPPER_MARGIN_MM
+    lo, hi = max(lo_edge, centre - half), min(hi_edge, centre + half)
+    return (hi - lo) / 1000.0, (centre - lo) / 1000.0
 
 
 def first_resonance_hz(z: np.ndarray, freqs: np.ndarray) -> float:
@@ -462,11 +496,27 @@ def main() -> None:
             bx0, by0, bx1, by1 = board_extent(board, transform)
             arm_m = ((bx1 - bx0) if abs(anchor.nx) >= abs(anchor.ny)
                      else (by1 - by0)) / 1000.0
-            z_ant, e_per_amp = antenna(length_m, FREQS, b.cable_ports[0]["gap_mm"], arm_m)
+            width_m, offset_m = board_strip(board, transform, anchor)
+            z_ant, e_per_amp = antenna(length_m, FREQS, b.cable_ports[0]["gap_mm"], arm_m,
+                                       width_m, offset_m)
             pred = pred_from(gap_tr, u_tr, i_tr) / z_ant
             c_tr = post.read_probe(str(rc["wd"] / "cable_it"))
             meas = post._dft(c_tr, FREQS)
             err = 20.0 * np.log10(np.abs(pred) / np.abs(meas))
+            # What the first runs composed with: the board as a thin wire.
+            z_thin, _ = antenna(length_m, FREQS, b.cable_ports[0]["gap_mm"], arm_m)
+            err_thin = 20.0 * np.log10(np.abs(pred * z_ant / z_thin) / np.abs(meas))
+            voc_db = None
+            if VOC_CABLE:
+                o = build_model(board, transform, params)
+                regrade_along_cable(o, anchor)
+                o.doc.max_timesteps = b.doc.max_timesteps
+                add_cable(o, anchor, length_m, bond=False)
+                ro = solve(f"{tag}_Copen", o, FREQS)
+                voc_cable = pred_from(post.read_probe(str(ro["wd"] / probe)),
+                                      post.read_probe(str(ro["wd"] / "drv_ut")),
+                                      post.read_probe(str(ro["wd"] / "drv_it")))
+                voc_db = 20.0 * np.log10(np.abs(voc_cable) / np.abs(pred * z_ant))
             # The same on 80 % of each record: how far the result still depends on its tail.
             pred_s = pred_from(_head(gap_tr), _head(u_tr), _head(i_tr)) / z_ant
             meas_s = post._dft(_head(c_tr), FREQS)
@@ -488,6 +538,12 @@ def main() -> None:
             print(f"\n    below resonance: median {np.median(lo):.2f} dB, "
                   f"90th {np.percentile(lo, 90):.2f} dB, worst {lo.max():.2f} dB  "
                   f"{'PASS' if lo.max() <= 6.0 else 'FAIL'} (gate 6 dB)")
+            sel = below if below.any() else np.ones_like(below)
+            print(f"    signed mean below resonance: plate {np.mean(err[sel]):+.2f} dB, "
+                  f"thin wire {np.mean(err_thin[sel]):+.2f} dB")
+            if voc_db is not None:
+                print(f"    V_oc with the cable over V_oc without, below resonance: "
+                      f"{voc_db[sel].min():+.2f} to {voc_db[sel].max():+.2f} dB")
             print(f"    whole band:      median {np.median(np.abs(err)):.2f} dB, "
                   f"worst {np.abs(err).max():.2f} dB; record check {record_db:.3f} dB\n",
                   flush=True)
@@ -500,6 +556,8 @@ def main() -> None:
                 "e_per_amp": e_per_amp.tolist(),
                 "i_pred_abs": np.abs(pred).tolist(), "i_meas_abs": np.abs(meas).tolist(),
                 "error_db": err.tolist(),
+                "error_thin_wire_db": err_thin.tolist(),
+                "voc_cable_over_voc_db": None if voc_db is None else voc_db.tolist(),
                 "steps_b": rb["steps"],
                 "steps_c": rc["steps"],
                 "record_db": record_db,

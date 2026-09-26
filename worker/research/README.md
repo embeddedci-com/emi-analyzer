@@ -22,6 +22,7 @@ they are not maintained, not tested, and may no longer run against the current w
 | `ff_real_board.py` | What does the far field cost, and does it run, on a real board? |
 | `ff_explore.py` | Which knob moves a short dipole's far field? |
 | `verify_cable_tier_a.py` | Does nec2c's product deck agree with openEMS on the same wire? |
+| `verify_cable_tier_b_plate.py` | Why did Tier B read low: the board arm, or V_oc? (nec2c only) |
 | `sp_verify_lines.py` | Does a small-part coupon of a microstrip or stripline read its Z0, delay and S21? |
 | `sp_verify_via.py` | Does a via between planes read the two-post closed-form inductance? |
 | `sp_convergence.py` | Does the size of a coupon or the mesh preset change a small-part answer? |
