@@ -20,6 +20,7 @@ webapp/public/*.kicad_pcb
 worker/tests/fixtures/*.kicad_pcb
 !worker/tests/fixtures/tiny.kicad_pcb
 !worker/tests/fixtures/sample.kicad_pcb
+!worker/tests/fixtures/decoupling_demo.kicad_pcb
 # Hand-written, like tiny: a power input, a ferrite and a buck, for the conducted scan.
 !worker/tests/fixtures/buck.kicad_pcb
 
