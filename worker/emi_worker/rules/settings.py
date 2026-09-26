@@ -87,6 +87,8 @@ class NetGroupSetting:
     match: str = "*"
     netclass: str = ""
     params: dict[str, Value] = field(default_factory=dict)
+    #: The layer that declared the group, so the app can tell its own from the rules file's.
+    source: str = "default"
 
     def matches(self, net: str, netclass: str = "") -> bool:
         if self.netclass:
@@ -101,6 +103,7 @@ class Suppression:
     rule: str = "*"
     net: str = "*"
     reason: str = ""
+    source: str = "default"
 
     def covers(self, rule: str, net: str) -> bool:
         return fnmatch.fnmatch(rule, self.rule) and fnmatch.fnmatch(net or "", self.net)
@@ -286,6 +289,24 @@ RULE_CATALOGUE["cable-resonance"] = {
 }
 
 
+#: The parameters a rule looks up per net, and so the only ones a net group can change. The
+#: rest are read once for the whole board: a group that set one used to be accepted and then
+#: do nothing, which reads as "the override works" until someone checks the finding.
+#: Length matching asks with the group's reference net; impedance with each net.
+PER_NET_PARAMS: dict[str, tuple[str, ...]] = {
+    "ddr-skew": ("intra_pair_ps", "byte_lane_ps", "address_command_ps"),
+    "impedance": ("single_ended_ohm", "differential_ohm"),
+}
+
+
+def per_net_rule(key: str) -> str:
+    """The rule a per-net parameter belongs to, or "" when it is not one."""
+    for rule_id, keys in PER_NET_PARAMS.items():
+        if key in keys:
+            return rule_id
+    return ""
+
+
 #: Board-wide settings, not tied to one rule.
 BOARD_DEFAULTS: dict[str, Any] = {
     "max_frequency_hz": 1e9,
@@ -330,6 +351,17 @@ class Settings:
             if key in g.params and g.matches(net, netclass):
                 return g.params[key].value
         return self.rule(rule_id).get(key, RULE_CATALOGUE.get(rule_id, {}).get("params", {}).get(key))
+
+    def describe(self, rule_id: str, key: str, unit: str = "", net: str = "",
+                 netclass: str = "") -> str:
+        """Like RuleSetting.describe, but names the net group when one supplied the value."""
+        for g in reversed(self.groups):
+            if key in g.params and g.matches(net, netclass):
+                v = g.params[key]
+                name = f"netclass {g.netclass}" if g.netclass else g.match
+                return (f"{v.value}{(' ' + unit) if unit else ''}, from net group {name} "
+                        f"({_label(v.source).lower()})")
+        return self.rule(rule_id).describe(key, unit)
 
     def suppressed(self, rule_id: str, net: str = "") -> Suppression | None:
         for s in self.suppressions:
@@ -497,15 +529,25 @@ def _apply(s: Settings, source: str, doc: dict) -> None:
             continue
         params: dict[str, Value] = {}
         raw = g.get("params") or {}
+        name = g.get("netclass") or g.get("match", "*")
         for k, v in (raw.items() if isinstance(raw, dict) else ()):
+            if _param_default(k) is None:
+                s.warnings.append(f"{_label(source)}: group {name}: unknown parameter {k!r}; ignored")
+                continue
+            if not per_net_rule(k):
+                s.warnings.append(
+                    f"{_label(source)}: group {name}: {k} applies to the whole board, not per "
+                    f"net; set it under rules instead. Ignored")
+                continue
             try:
-                params[k] = Value(check_value(f"group {g.get('match', '*')}: {k}", v, _param_default(k)), source)
+                params[k] = Value(check_value(f"group {name}: {k}", v, _param_default(k)), source)
             except ValueError as exc:
                 s.warnings.append(f"{_label(source)}: {exc}; ignored")
         s.groups.append(NetGroupSetting(
             match=str(g.get("match", "*")),
             netclass=str(g.get("netclass", "") or ""),
             params=params,
+            source=source,
         ))
 
     cables = doc.get("cables")
@@ -540,9 +582,14 @@ def _apply(s: Settings, source: str, doc: dict) -> None:
         if not sup.get("reason"):
             # A suppression without a reason is a mystery to whoever finds it later.
             s.warnings.append(f"{_label(source)}: suppression for {sup.get('rule', '*')} has no reason")
+        rule = str(sup.get("rule", "*"))
+        if not any(fnmatch.fnmatch(rid, rule) for rid in RULE_CATALOGUE):
+            # Kept, since it hides nothing, but said: a misspelt id is a suppression that
+            # silently stopped working.
+            s.warnings.append(f"{_label(source)}: suppression names no known rule ({rule!r})")
         s.suppressions.append(Suppression(
-            rule=str(sup.get("rule", "*")), net=str(sup.get("net", "*")),
-            reason=str(sup.get("reason", "")),
+            rule=rule, net=str(sup.get("net", "*")),
+            reason=str(sup.get("reason", "")), source=source,
         ))
 
 
@@ -577,10 +624,11 @@ def snapshot(s: Settings) -> dict:
         },
         "groups": [
             {**({"match": g.match} if not g.netclass else {"netclass": g.netclass}),
-             "params": {k: v.value for k, v in g.params.items()}}
+             "params": {k: v.value for k, v in g.params.items()}, "source": g.source}
             for g in s.groups
         ],
-        "suppress": [{"rule": x.rule, "net": x.net, "reason": x.reason} for x in s.suppressions],
+        "suppress": [{"rule": x.rule, "net": x.net, "reason": x.reason, "source": x.source}
+                     for x in s.suppressions],
         "cables": s.cables,
         "cable_solver": s.cable_solver,
     }
@@ -602,7 +650,10 @@ def catalogue() -> list[dict]:
             "about": spec["about"],
             "category": spec.get("category", ""),
             "params": [
-                {"key": k, "default": v} for k, v in spec.get("params", {}).items()
+                {"key": k, "default": v,
+                 # Settable per net, in a net group. See PER_NET_PARAMS.
+                 **({"per_net": True} if k in PER_NET_PARAMS.get(rid, ()) else {})}
+                for k, v in spec.get("params", {}).items()
             ],
         }
         for rid, spec in RULE_CATALOGUE.items()

@@ -67,15 +67,18 @@
     "params": [
       {
         "key": "intra_pair_ps",
-        "default": 2.0
+        "default": 2.0,
+        "per_net": true
       },
       {
         "key": "byte_lane_ps",
-        "default": 10.0
+        "default": 10.0,
+        "per_net": true
       },
       {
         "key": "address_command_ps",
-        "default": 25.0
+        "default": 25.0,
+        "per_net": true
       },
       {
         "key": "lane_to_lane_ps",
@@ -95,11 +98,13 @@
     "params": [
       {
         "key": "single_ended_ohm",
-        "default": 0.0
+        "default": 0.0,
+        "per_net": true
       },
       {
         "key": "differential_ohm",
-        "default": 0.0
+        "default": 0.0,
+        "per_net": true
       },
       {
         "key": "tolerance_pct",
