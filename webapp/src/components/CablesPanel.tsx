@@ -33,9 +33,6 @@ interface LibraryCable {
 
 const LIBRARY: LibraryCable[] = (cableLibrary as { cables: LibraryCable[] }).cables
 
-/** The worker's `EDGE_TOLERANCE_MM` (cables/attach.py): a solve gives a cable only to these. */
-const EDGE_TOLERANCE_MM = 12
-
 interface Props {
   api: EmiApi
   projectId: string
@@ -221,7 +218,9 @@ export function CablesPanel({
             <Text size="xs">
               To add one, rename the part or give it a connector footprint, then press{' '}
               <Text span fw={600}>Run again</Text>. A solve only attaches a cable to a
-              connector within {EDGE_TOLERANCE_MM} mm of the board edge.
+              connector {d.edge_tolerance_mm != null
+                ? `within ${d.edge_tolerance_mm} mm of`
+                : 'near'} the board edge.
             </Text>
           </Stack>
         </Alert>

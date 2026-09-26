@@ -387,14 +387,19 @@ def run_ingest(ctx: StageContext) -> StageResult:
 
     # Suppressed findings are removed here rather than never generated, so the count of what
     # was hidden can be reported -- a silent filter is how a suppression file rots.
-    kept, hidden = [], 0
+    kept, hidden = [], []
     for f in rules_doc["findings"]:
-        if cfg.suppressed(f["rule"], f.get("net", "")):
-            hidden += 1
+        sup = cfg.suppressed(f["rule"], f.get("net", ""))
+        if sup:
+            # Enough to list what was hidden and why, not the finding itself: a suppressed
+            # finding is not something to act on.
+            hidden.append({"rule": f["rule"], "net": f.get("net", ""), "title": f["title"],
+                           "reason": sup.reason, "source": sup.source})
             continue
         kept.append(f)
     rules_doc["findings"] = kept
-    rules_doc["suppressed"] = hidden
+    rules_doc["suppressed"] = len(hidden)
+    rules_doc["suppressed_findings"] = hidden
     rules_doc["settings_warnings"] = cfg.warnings
     # What each check ran with and where every value came from, and the same without this
     # run's own layer: the app edits that layer, so it needs to know what is underneath to
@@ -421,7 +426,7 @@ def run_ingest(ctx: StageContext) -> StageResult:
     )
     if hidden:
         rules_doc["notes"].append(
-            f"{hidden} finding{'s' if hidden != 1 else ''} hidden by suppressions in your rules file."
+            f"{len(hidden)} finding{'s' if len(hidden) != 1 else ''} hidden by suppressions."
         )
 
     ctx.progress("upload", 80, "uploading normalised board")
