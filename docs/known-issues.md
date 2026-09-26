@@ -27,7 +27,7 @@ solver or a measurement — and passed. The gap between the two is most of this 
 | Board far field (NF2FF) | ✅ | ⚠️ matches nec2c on dipoles over the ground plane as the product runs it, 30 MHz up (§3); no board checked against a measurement | off, with full-wave |
 | Cable emissions, Tier B | ✅ | ❌ failed its real-board gate, 7-9 dB low on average on two boards below resonance. Cause found in nec2c (the board modelled as a wire, not a plate) and fixed; a residual of 0-5 dB low remains by where the source is. Needs the openEMS re-run — §3 | off, with full-wave |
 | Compliance estimate | ✅ | ❌ runs end to end on the fixture board; never checked against a lab or a second solver (§3) | off, with full-wave |
-| Conducted emissions scan (`conducted` run, ngspice), differential mode | ✅ | ⚠️ the LISN within the CISPR 16-1-2 tolerance, a buck's ripple and first harmonic and an LC filter within 0.1 dB of closed forms; no board against a measurement; regulator settings are assumed until entered ([verification/conducted-emissions.md](verification/conducted-emissions.md)) | **off** (`conducted`) |
+| Conducted emissions scan (`conducted` run, ngspice), differential mode | ✅ | ⚠️ the LISN within the CISPR 16-1-2 tolerance, a buck's and a boost's ripple and first harmonic, two phased bucks and an LC filter within 1 dB of closed forms; no board against a measurement; regulators found on all 4 private boards, each marked with how; regulator settings are assumed until entered ([verification/conducted-emissions.md](verification/conducted-emissions.md)) | **off** (`conducted`) |
 | Report export (HTML and JSON, built in the browser) | ✅ | — (nothing to verify: it restates results) | on |
 
 Everything marked **off** is behind the `full-wave` experimental feature, except small-part
@@ -146,17 +146,23 @@ Details and the full list: [`verification/small-part-solve.md`](verification/sma
 
 Experimental (`conducted`). What is modelled: two CISPR 16-1-2 50 Ω/50 µH LISNs on the board's
 power input; the input rail as laid out, through ferrites, inductors, fuses, series diodes,
-low-value resistors and eFuses, with each capacitor's library ESR and ESL, its via and the
-trace inductance between them; each buck regulator the `switch-node` check finds as a
-trapezoidal current source at its input pin, with the frequency, current, duty and edge the user
-enters or assumed defaults marked as assumed. Differential mode only, against the FCC 15.107
-quasi-peak and average limits; every harmonic is a steady tone, so the average limit decides.
+low-value resistors, eFuses and a charger or LDO a regulator draws from, with each capacitor's
+library ESR and ESL, its via and the trace inductance between them; each switching regulator on
+the rail as a current source at its input: a buck, an inverting stage or a four-switch
+buck-boost (in buck mode) as a trapezoid, a boost as its inductor current (a triangle,
+V_in·D/(f·L) peak to peak). Regulators are found by switch node, by inductor orientation, by an
+external high-side FET's drain on the rail, and by part number (modules with the inductor
+inside); each PMIC output is its own source. Each says how it was found and with what
+confidence, and the user can confirm it, change its type or remove it. The frequency, current,
+duty, edge, inductance and phase are what the user enters or assumed defaults marked as assumed.
+Differential mode only, against the FCC 15.107 quasi-peak and average limits; every harmonic is
+a steady tone, so the average limit decides.
 
 Not modelled: common-mode current (through the switch node's and the board's capacitance to the
 test bench's reference plane, which depends on the setup); spread spectrum, burst and
-pulse-skipping modes; boost, buck-boost and flyback input currents; controllers with external
-FETs; a PMIC's bucks as separate sources; inductor and ferrite self-resonance; DC-bias
-derating; the external power supply's own filter.
+pulse-skipping modes; flyback, SEPIC and charge-pump input currents; a buck-boost in boost mode;
+discontinuous conduction; a power input on a connector with a U reference or an unnamed net;
+inductor and ferrite self-resonance; DC-bias derating; the external power supply's own filter.
 
 | Check | Status |
 |---|---|
@@ -164,7 +170,9 @@ derating; the external power supply's own filter.
 | A buck's input ripple against I·D(1-D)/(f·C) | ✅ -0.10 dB |
 | Its first harmonic at the LISN against the closed form and a transient FFT | ✅ both within 0.01 dB |
 | An LC filter's attenuation against its closed form | ✅ within 0.012 dB, 150 kHz-30 MHz |
-| Real boards: the input, filter and regulators found | ⚠️ 4 private boards: the input on all, a regulator on one (a PMIC behind two eFuses); a boost, a missed switch node and an external-FET controller on the others |
+| A boost's input ripple against ΔI/(8·f·C), its first harmonic against the closed form and a transient FFT | ✅ -0.34 dB; within 0.01 dB |
+| Two bucks on one clock: in phase, 90° and 180° apart, against \|1 + e^(-jnφ)\| | ✅ within 0.02 dB; cancelled lines over 250 dB down |
+| Real boards: the input, filter and regulators found | ⚠️ 4 private boards: a regulator on each (a boost; seven PMIC bucks; a boost, an inverting stage and a buck module; an external-FET buck-boost controller); a second input on one is not recognised |
 | One board against a LISN measurement | ❌ |
 
 Details: [`verification/conducted-emissions.md`](verification/conducted-emissions.md).

@@ -5,6 +5,11 @@ to both LISN terminals, at exactly its harmonics, for the layout as it is and fo
 The harmonic's RMS current times that transfer is the level; the network is linear, so this is
 the same answer a transient simulation of the switching would give, without its runtime.
 
+Two regulators at the same frequency: if the user gave both a phase (the bucks of one PMIC, or two
+regulators on one clock), their lines are added as phasors, so two identical bucks 180° apart
+cancel at odd harmonics and add at even ones. Otherwise their relative phase is unknown and
+drifts, and the lines are added in magnitude, the worst case.
+
 Detector: a regulator's harmonic is a steady sine, and a steady sine reads the same on the peak,
 quasi-peak and average detectors (a receiver is calibrated to its RMS). So one level is compared
 with both limits, and the average limit, 10 dB lower, is the one that decides. A regulator that
@@ -92,9 +97,44 @@ def _limit_pair(std_class: str, f: float) -> tuple[float, float]:
     return limits.limit_at(qp, f), limits.limit_at(avg, f)
 
 
+def _phased(lines: list[dict]) -> list[dict]:
+    """Add as phasors the lines at one frequency from sources whose phase the user gave.
+
+    Each line carries its complex voltage at both LISNs ("_vp", "_vn"); the level is the larger
+    magnitude. A line that cancels to nothing is dropped.
+    """
+    out: list[dict] = []
+    by_f: dict[float, dict] = {}
+    for line in lines:
+        if "_vp" not in line:
+            out.append(line)
+            continue
+        if line.get("_phased"):
+            key = round(line["f_hz"], 3)
+            if key in by_f:
+                into = by_f[key]
+                into["_vp"] += line["_vp"]
+                into["_vn"] += line["_vn"]
+                into["sources"] = into["sources"] + line["sources"]
+                continue
+            line = dict(line)
+            by_f[key] = line
+        out.append(line)
+    kept = []
+    for line in out:
+        if "_vp" in line:
+            volts = max(abs(line.pop("_vp")), abs(line.pop("_vn")))
+            line.pop("_phased", None)
+            if volts <= 0:
+                continue
+            line["dbuv"] = lisn.dbuv(volts)
+        kept.append(line)
+    return kept
+
+
 def _combine(lines: list[dict]) -> list[dict]:
     """Merge lines a receiver cannot separate, adding their voltages."""
-    lines = sorted(lines, key=lambda x: x["f_hz"])
+    lines = sorted(_phased(lines), key=lambda x: x["f_hz"])
     out: list[dict] = []
     for line in lines:
         if out and line["f_hz"] - out[-1]["f_hz"] <= RBW_HZ:
@@ -141,7 +181,7 @@ def run(net: Network, regulators: list[RegulatorSource], std_class: str = "B",
         if last < first:
             notes.append(f"{reg.ref} switches at {f_sw / 1e3:.4g} kHz and has no harmonic between 150 kHz and 30 MHz")
             continue
-        harmonics = reg.harmonics(first, last)
+        harmonics = reg.phasors(first, last)
         keys = [f"v{j}" for j in range(len(vs))]
         deck, saves = build([(k, v.network, reg.ref) for k, v in zip(keys, vs)], f_sw, first, last,
                             title=f"emi conducted {reg.ref}")
@@ -152,14 +192,17 @@ def run(net: Network, regulators: list[RegulatorSource], std_class: str = "B",
         for k, v in zip(keys, vs):
             vp = abs(spectra[saves[k]["v_p"]])
             vn = abs(spectra[saves[k]["v_n"]])
+            cp, cn = spectra[saves[k]["v_p"]], spectra[saves[k]["v_n"]]
             for idx, (n, f, amps) in enumerate(harmonics):
-                volts = max(vp[idx], vn[idx]) * amps
+                volts = max(vp[idx], vn[idx]) * abs(amps)
                 if volts <= 0:
                     continue
                 level = lisn.dbuv(volts)
                 per_variant[v.id].append({
                     "f_hz": round(f, 3), "dbuv": level,
                     "sources": [{"ref": reg.ref, "harmonic": n, "dbuv": round(level, 2)}],
+                    "_vp": complex(cp[idx]) * amps, "_vn": complex(cn[idx]) * amps,
+                    "_phased": reg.phase_deg.source == "user",
                 })
             if v.id == "as_laid_out":
                 for idx, (n, f, _) in enumerate(harmonics):

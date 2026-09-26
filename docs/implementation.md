@@ -410,8 +410,11 @@ general. The findings come with the request and only ever change this list.
 Separate from the estimate above, and from full-wave: seconds of ngspice on any worker that has
 it. The stage (`stages/conducted.py`) finds the power input and the rail behind it
 (`conducted/rail.py`, following the `input-filter` and `switch-node` checks), builds a ladder of
-the rail's trace inductance and its capacitors (library ESR and ESL, one via), puts a trapezoidal
-current source at each buck's input pin (`conducted/sources.py`) and two CISPR 16-1-2 LISNs on the
+the rail's trace inductance and its capacitors (library ESR and ESL, one via), finds the
+regulators on it (`conducted/regulators.py`: switch nodes, inductor orientation, external FETs,
+part numbers; one source per PMIC output), puts a current source at each one's input
+(`conducted/sources.py`: a trapezoid for a buck, the inductor's triangle for a boost, with a
+phase that makes sources on one clock add as phasors) and two CISPR 16-1-2 LISNs on the
 input (`conducted/lisn.py`), and runs one AC analysis per regulator at exactly its harmonics
 (`conducted/scan.py`). The layout and each what-if (a capacitor at the connector, one at each
 regulator, an LC filter, and the layout without each capacitor in turn) are isolated circuits in

@@ -100,6 +100,10 @@ func TestConductedParamsAreChecked(t *testing.T) {
 		`{"regulators":{"U1":{"frequency_hz":1}}}`,
 		`{"regulators":{"U1":{"duty":1.2}}}`,
 		`{"regulators":{"U1":{"rise_s":0}}}`,
+		`{"regulators":{"U1":{"phase_deg":400}}}`,
+		`{"regulators":{"U1":{"inductance_h":1}}}`,
+		`{"regulators":{"U1":{"topology":"flyback"}}}`,
+		`{"regulators":{"U1":{"removed":"yes"}}}`,
 		`{"regulators":{"":{}}}`,
 		`{"regulators":{"U1\n.control":{}}}`,
 		`{"entry":"J1\u0000"}`,
@@ -111,6 +115,12 @@ func TestConductedParamsAreChecked(t *testing.T) {
 	}
 	p, err := validateConductedParams(json.RawMessage(`{"class":"a","entry":"J1:+12V"}`))
 	if err != nil || p.Class != "A" || p.Entry != "J1:+12V" {
+		t.Fatalf("got %+v, %v", p, err)
+	}
+	p, err = validateConductedParams(json.RawMessage(
+		`{"regulators":{"U1/VLX1":{"topology":"boost","phase_deg":180,"inductance_h":4.7e-6,"confirmed":true},"U2":{"removed":true}}}`))
+	if err != nil || p.Regulators["U1/VLX1"].Topology != "boost" || !p.Regulators["U1/VLX1"].Confirmed ||
+		*p.Regulators["U1/VLX1"].PhaseDeg != 180 || !p.Regulators["U2"].Removed {
 		t.Fatalf("got %+v, %v", p, err)
 	}
 	if p, err := validateConductedParams(nil); err != nil || p.Class != "B" {

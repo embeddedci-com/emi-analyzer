@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
-  assumedSummary, conductedParams, enteredFrom, fmtHz, fmtShare, PARAM_FIELDS, verdict, xOf,
+  assumedSummary, conductedParams, enteredFrom, fieldsFor, fmtHz, fmtShare, PARAM_FIELDS, upgradeDoc, verdict, xOf,
+  type Entered,
 } from './conducted'
-import type { ConductedDoc } from './conductedTypes'
+import type { ConductedDoc, ConductedRegulator, ConductedTopology } from './conductedTypes'
 
 describe('conducted params', () => {
   it('sends entered values in SI and leaves the rest assumed', () => {
@@ -28,11 +29,45 @@ describe('conducted params', () => {
 
   it('matches the worker\'s ranges', () => {
     // worker/emi_worker/conducted/sources.py LIMITS, in SI.
-    const worker = { frequency_hz: [10e3, 10e6], input_current_a: [1e-3, 100], duty: [0.02, 0.98], rise_s: [0.1e-9, 1e-6] }
+    const worker = {
+      frequency_hz: [10e3, 10e6], input_current_a: [1e-3, 100], duty: [0.02, 0.98], rise_s: [0.1e-9, 1e-6],
+      phase_deg: [0, 360], inductance_h: [10e-9, 10e-3],
+    }
     for (const f of PARAM_FIELDS) {
       expect(f.min * f.scale).toBeCloseTo(worker[f.name][0], 12)
       expect(f.max * f.scale).toBeCloseTo(worker[f.name][1], 12)
     }
+  })
+
+  it('sends a changed type, a removal and a confirmation, and reads them back', () => {
+    const entered: Entered = {
+      'U1/VLX1': { topology: 'boost', confirmed: true, phase_deg: 180, inductance_h: 4.7 },
+      U2: { removed: true },
+    }
+    const p = conductedParams('B', entered)
+    expect(p.regulators).toEqual({
+      'U1/VLX1': { topology: 'boost', confirmed: true, phase_deg: 180, inductance_h: 4.7e-6 },
+      U2: { removed: true },
+    })
+    expect(enteredFrom(p)).toEqual(entered)
+  })
+
+  it('reads a result from before regulators had ids as bucks', () => {
+    const old = {
+      format: 1,
+      regulators: [{ ref: 'U1', switch_net: '/SW', found_by: 'its name', params: {}, assumed: [] }],
+    } as unknown as ConductedDoc
+    const r = upgradeDoc(old).regulators[0]
+    expect([r.id, r.topology, r.found_as, r.group, r.confirmed]).toEqual(['U1', 'buck', 'buck', 'U1', false])
+    expect(r.found_by).toBe('switch node /SW (its name)')
+  })
+
+  it('shows the fields each topology depends on', () => {
+    const reg = { params: { phase_deg: { value: 0, source: 'assumed', assumed: true } } } as unknown as ConductedRegulator
+    const names = (t: ConductedTopology, shared: boolean) => fieldsFor(reg, t, shared).map((f) => f.name)
+    expect(names('buck', false)).toEqual(['frequency_hz', 'input_current_a', 'duty', 'rise_s'])
+    expect(names('boost', false)).toEqual(['frequency_hz', 'input_current_a', 'duty', 'inductance_h'])
+    expect(names('buck', true)).toContain('phase_deg')
   })
 })
 
@@ -47,11 +82,12 @@ describe('conducted wording', () => {
   it('names the assumed settings', () => {
     const doc = {
       regulators: [
-        { ref: 'U3', assumed: ['frequency_hz', 'input_current_a'] },
-        { ref: 'U4', assumed: [] },
+        { id: 'U3', ref: 'U3', assumed: ['frequency_hz', 'input_current_a'] },
+        { id: 'U4', ref: 'U4', assumed: [] },
+        { id: 'U1/VLX2', ref: 'U1', assumed: ['phase_deg', 'inductance_h'] },
       ],
     } as unknown as ConductedDoc
-    expect(assumedSummary(doc)).toBe('U3 (frequency, current)')
+    expect(assumedSummary(doc)).toBe('U3 (frequency, current), U1/VLX2 (phase, inductor)')
   })
 
   it('keeps small shares readable', () => {

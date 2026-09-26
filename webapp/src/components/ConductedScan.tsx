@@ -18,10 +18,11 @@ import { Link } from 'react-router'
 import { useEmiBase } from '../host'
 import { EmiApi, TERMINAL_STATUSES, type Run, type WorkerInfo } from '../lib/emiApi'
 import {
-  assumedSummary, conductedParams, enteredFrom, fmtChange, fmtHz, fmtShare, PARAM_FIELDS, toDisplay, verdict,
+  assumedSummary, conductedParams, enteredFrom, fieldsFor, fmtChange, fmtHz, fmtShare, TOPOLOGIES, toDisplay, upgradeDoc,
+  verdict,
   type Entered,
 } from '../lib/conducted'
-import type { ConductedDoc, ConductedParams, ConductedRegulator } from '../lib/conductedTypes'
+import type { ConductedDoc, ConductedParams, ConductedRegulator, ConductedTopology } from '../lib/conductedTypes'
 import { ConductedChart } from './ConductedChart'
 import { EXPERIMENTAL, Experimental } from './Experimental'
 import { RunProgress } from './RunProgress'
@@ -72,14 +73,15 @@ export function ConductedScan({ api, projectId, boardId, runs, workers, onFocus,
     },
   })
 
-  const setField = (ref: string, name: string, value: number | null) => {
-    const next: Entered = { ...entered, [ref]: { ...(entered[ref] ?? {}) } }
-    if (value === null) delete next[ref][name as keyof Entered[string]]
-    else next[ref][name as keyof Entered[string]] = value
+  const setField = (id: string, name: string, value: number | ConductedTopology | boolean | null) => {
+    const next: Entered = { ...entered, [id]: { ...(entered[id] ?? {}) } }
+    const fields = next[id] as Record<string, unknown>
+    if (value === null || value === false) delete fields[name]
+    else fields[name] = value
     setEdited(next)
   }
 
-  const doc = result.data
+  const doc = result.data ? upgradeDoc(result.data) : undefined
   return (
     <Stack gap="md">
       <Group gap={6} wrap="nowrap" align="flex-start">
@@ -131,13 +133,32 @@ export function ConductedScan({ api, projectId, boardId, runs, workers, onFocus,
       {result.isLoading && <Loader size="sm" />}
       {result.isError && <Alert color="red" variant="light">{(result.error as Error).message}</Alert>}
 
-      {doc && doc.regulators.length > 0 && (
+      {doc && (doc.regulators.length > 0 || (doc.removed ?? []).length > 0) && (
         <Stack gap="xs">
           <Text size="xs" fw={500}>Regulators</Text>
+          <Text size="10px" c="dimmed">
+            Found from the layout and part numbers. Check each one: confirm it, change its type, or
+            remove it. Changes apply to the next scan.
+          </Text>
           {doc.regulators.map((r) => (
-            <RegulatorForm key={r.ref} reg={r} entered={entered[r.ref] ?? {}} onFocus={onFocus}
-                           onChange={(name, v) => setField(r.ref, name, v)} />
+            <RegulatorForm key={r.id} reg={r} entered={entered[r.id] ?? {}} onFocus={onFocus}
+                           shared={doc.regulators.filter((o) => o.group === r.group).length > 1}
+                           onChange={(name, v) => setField(r.id, name, v)} />
           ))}
+          {(doc.removed ?? []).map((r) => {
+            // The last run's params carry the removal, so an untouched form keeps it out.
+            const out = !!entered[r.id]?.removed
+            return (
+              <Group key={r.id} gap={6} wrap="nowrap">
+                <Text size="xs" c="dimmed" style={{ flex: 1 }}>
+                  {out ? `${r.id} (${r.topology}) is left out.` : `${r.id} will be scanned again.`}
+                </Text>
+                <Button size="compact-xs" variant="subtle" onClick={() => setField(r.id, 'removed', !out)}>
+                  {out ? 'Restore' : 'Undo'}
+                </Button>
+              </Group>
+            )
+          })}
         </Stack>
       )}
 
@@ -148,28 +169,54 @@ export function ConductedScan({ api, projectId, boardId, runs, workers, onFocus,
   )
 }
 
-function RegulatorForm({ reg, entered, onChange, onFocus }: {
+const CONFIDENCE_COLOR = { high: 'teal', medium: 'blue', low: 'orange' } as const
+
+function RegulatorForm({ reg, entered, shared, onChange, onFocus }: {
   reg: ConductedRegulator
   entered: Entered[string]
-  onChange: (name: string, value: number | null) => void
+  /** Another source shares this one's clock, so its phase matters. */
+  shared: boolean
+  onChange: (name: string, value: number | ConductedTopology | boolean | null) => void
   onFocus: (x: number, y: number) => void
 }) {
+  const topology = entered.topology ?? reg.topology
+  const confirmed = entered.confirmed ?? reg.confirmed
+  const focus = () => reg.x !== undefined && reg.y !== undefined && onFocus(reg.x, reg.y)
+  if (entered.removed) {
+    return (
+      <Group gap={6} wrap="nowrap" p={6}
+             style={{ border: '1px dashed var(--mantine-color-default-border)', borderRadius: 4 }}>
+        <Text size="xs" c="dimmed" style={{ flex: 1 }}>{reg.id} will be left out of the next scan.</Text>
+        <Button size="compact-xs" variant="subtle" onClick={() => onChange('removed', null)}>Undo</Button>
+      </Group>
+    )
+  }
+  const path = [reg.input_net, reg.switch_net, reg.output_net].filter(Boolean).join(' to ')
   return (
     <Stack gap={4} p={6} style={{ border: '1px solid var(--mantine-color-default-border)', borderRadius: 4 }}>
       <Group gap={6} wrap="nowrap">
-        <Anchor size="xs" fw={500} component="button" type="button"
-                onClick={() => reg.x !== undefined && reg.y !== undefined && onFocus(reg.x, reg.y)}>
-          {reg.ref}
-        </Anchor>
-        <Text size="xs" c="dimmed" truncate>
-          {reg.input_net} to {reg.switch_net}{reg.output_net ? ` to ${reg.output_net}` : ''}
-        </Text>
+        <Anchor size="xs" fw={500} component="button" type="button" onClick={focus}>{reg.id}</Anchor>
+        <Text size="xs" c="dimmed" truncate style={{ flex: 1 }}>{path}</Text>
+        {confirmed
+          ? <Badge size="xs" variant="light" color="teal" tt="none">confirmed</Badge>
+          : <Badge size="xs" variant="light" color={CONFIDENCE_COLOR[reg.confidence]} tt="none">
+              {reg.confidence} confidence
+            </Badge>}
+      </Group>
+      <Text size="10px" c="dimmed">Found by {reg.found_by}.</Text>
+      <Group gap={6} wrap="nowrap" align="flex-end">
+        <Select size="xs" label="Type" data={TOPOLOGIES} value={topology} allowDeselect={false} style={{ flex: 1 }}
+                onChange={(v) => onChange('topology', v && v !== reg.found_as ? (v as ConductedTopology) : null)} />
+        <Button size="xs" variant={confirmed ? 'light' : 'default'} onClick={() => onChange('confirmed', !confirmed)}>
+          {confirmed ? 'Unconfirm' : 'Confirm'}
+        </Button>
+        <Button size="xs" variant="subtle" color="red" onClick={() => onChange('removed', true)}>Remove</Button>
       </Group>
       <SimpleGrid cols={2} spacing={6} verticalSpacing={4}>
-        {PARAM_FIELDS.map((f) => {
+        {fieldsFor(reg, topology, shared).map((f) => {
           const typed = entered[f.name]
           const shown = reg.params[f.name]
-          const assumed = typed === undefined && shown.assumed
+          const assumed = typed === undefined && (shown?.assumed ?? true)
           return (
             <NumberInput
               key={f.name}
@@ -179,15 +226,13 @@ function RegulatorForm({ reg, entered, onChange, onFocus }: {
                 <Group gap={4} wrap="wrap">
                   <Text size="xs">{f.label}, {f.unit}</Text>
                   {assumed && (
-                    <Tooltip label={shown.source === 'rail names'
-                      ? 'Worked out from the input and output rail names. Enter it to confirm it.'
-                      : 'Not on the board. This default is assumed; enter the real value.'} withArrow multiline w={220}>
+                    <Tooltip label={assumedWhy(f.name, shown?.source)} withArrow multiline w={220}>
                       <Badge size="xs" variant="light" color="yellow" tt="none">assumed</Badge>
                     </Tooltip>
                   )}
                 </Group>
               }
-              placeholder={String(toDisplay(f, shown.value))}
+              placeholder={shown ? String(toDisplay(f, shown.value)) : ''}
               value={typed ?? ''}
               min={f.min}
               max={f.max}
@@ -198,8 +243,21 @@ function RegulatorForm({ reg, entered, onChange, onFocus }: {
           )
         })}
       </SimpleGrid>
+      {topology === 'boost' && reg.input_ripple_a && (
+        <Text size="10px" c="dimmed">
+          Input ripple {(reg.input_ripple_a.value * 1e3).toPrecision(3)} mA peak to peak,{' '}
+          {reg.input_ripple_a.source === 'assumed' ? 'assumed to be 30 % of the input current' : 'from the inductor'}.
+        </Text>
+      )}
     </Stack>
   )
+}
+
+function assumedWhy(name: string, source: string | undefined): string {
+  if (source === 'rail names') return 'Worked out from the input and output rail names. Enter it to confirm it.'
+  if (name === 'phase_deg') return 'Unknown, so sources on this clock are added as if in phase. Enter it to use it.'
+  if (name === 'inductance_h') return 'Not read from the board, so the ripple is assumed to be 30 % of the input current.'
+  return 'Not on the board. This default is assumed; enter the real value.'
 }
 
 function ResultView({ doc, compareId, onCompare, onFocus }: {

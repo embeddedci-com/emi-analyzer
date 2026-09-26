@@ -25,6 +25,13 @@ The KiCad plugin is versioned and released separately; see
   margin, which capacitor carries the ripple, what adding a capacitor or an LC filter would
   change, and what each input capacitor is worth. Differential mode only; see
   [docs/verification/conducted-emissions.md](docs/verification/conducted-emissions.md).
+- The conducted scan finds more regulators: boosts (modelled by their inductor ripple, not as
+  pulses), inverting stages, controllers with external FETs (drawing through the high-side
+  drain), buck modules by part number, and each output of a PMIC as its own source with its own
+  frequency and phase. The rail also follows a charger or LDO a regulator draws from, and a
+  supply connector away from the board edge can be the power input. Each regulator says how it
+  was found and with what confidence, and can be confirmed, given another type or removed in
+  the tab.
 
 - Report export from the board menu: a self-contained HTML report (prints to PDF) or JSON, with
   the findings on a board image, notes, decoupling, cable budgets, ESD results, the conducted

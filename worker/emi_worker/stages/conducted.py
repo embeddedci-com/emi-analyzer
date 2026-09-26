@@ -24,7 +24,7 @@ from .ingest import DEFAULT_MAX_FREQUENCY_HZ, load_board, load_sidecars
 
 log = logging.getLogger(__name__)
 
-FORMAT = 1
+FORMAT = 2
 MAX_REGULATORS = 20
 
 ASSUMPTIONS = [
@@ -36,8 +36,12 @@ ASSUMPTIONS = [
     "Each harmonic is a steady sine, which reads the same on the peak, quasi-peak and average "
     "detectors, so one level is compared with both limits and the average limit decides.",
     "A buck's input current is a trapezoid: I_in / D high for D of each period, with the given "
-    "edges and a 30 % ripple on its top. Boost converters draw continuous current and are not "
-    "modelled.",
+    "edges and a 30 % ripple on its top. An inverting converter draws the same shape, and a "
+    "four-switch buck-boost is modelled in buck mode, which draws it too.",
+    "A boost's input current is its inductor current: I_in with a triangle on top, V_in·D/(f·L) "
+    "peak to peak from the inductor's value, or 30 % of I_in when that cannot be worked out.",
+    "Sources that share a clock (the outputs of one PMIC) add as if in phase until their phases "
+    "are given; sources with a given phase add as phasors.",
     "Capacitors use the component library's ESR and ESL, plus one via and the track to it; parts "
     "the library does not know get an assumed ESR and ESL, and say so. Capacitance is nominal: "
     "no DC-bias derating, and a ceramic near its rated voltage has well below its nominal value.",
@@ -52,10 +56,20 @@ NOT_MODELLED = [
     "to the test bench's reference plane, which depends on the setup and the enclosure.",
     "Spread-spectrum clocking, burst or pulse-skipping modes, which lower quasi-peak and average "
     "readings.",
-    "Boost, buck-boost and flyback input currents; regulators fed from another regulator.",
+    "Flyback, SEPIC and charge-pump input currents; regulators fed from another regulator; a "
+    "buck-boost in boost mode; discontinuous conduction.",
     "Radiated coupling from the switch node or the inductor into the input wiring.",
     "Self-resonance of an inductor or ferrite in the input path, and a bead's resistive peak.",
 ]
+
+
+def _flag(given: dict, name: str) -> bool:
+    raw = given.get(name)
+    if raw is None:
+        return False
+    if not isinstance(raw, bool):
+        raise StageError(f"{name} must be true or false")
+    return raw
 
 
 def _regulator_params(ctx: StageContext) -> dict[str, dict]:
@@ -65,6 +79,24 @@ def _regulator_params(ctx: StageContext) -> dict[str, dict]:
     if not isinstance(raw, dict):
         raise StageError("regulators must be an object keyed by reference designator")
     return {str(k): v for k, v in raw.items() if isinstance(v, dict)}
+
+
+def _regulator(r, s: sources.RegulatorSource, given: dict, at) -> dict:
+    """One regulator in the result: what it is, how it was found, and the settings used."""
+    out = {
+        "id": r.id, "ref": r.ref, "topology": s.topology,
+        # "user" when the user changed it; otherwise what the discovery went by.
+        "topology_from": "user" if given.get("topology") not in (None, r.topology) else r.topology_from,
+        "found_as": r.topology, "found_by": r.how, "confidence": r.confidence,
+        "confirmed": bool(given.get("confirmed")),
+        "switch_net": r.switch_net, "input_net": r.input_net, "output_net": r.output_net,
+        "inductor": r.inductor, "group": r.group, **at(r.input_pad),
+        "params": s.as_dict(), "assumed": s.assumed,
+    }
+    if not s.pulsed:
+        ripple, source = s.ripple_pp()
+        out["input_ripple_a"] = {"value": round(ripple, 6), "source": source}
+    return out
 
 
 def run_conducted(ctx: StageContext) -> StageResult:
@@ -113,19 +145,36 @@ def run_conducted(ctx: StageContext) -> StageResult:
     found = crail.discover(rctx, choice, 5.0 if edge is None else float(edge))
     notes = list(found.notes) + list(electrics.notes)
 
-    regs = found.regulators[:MAX_REGULATORS]
-    if len(found.regulators) > MAX_REGULATORS:
-        notes.append(f"{len(found.regulators)} regulators; the first {MAX_REGULATORS} were scanned")
-    unknown = sorted(set(given) - {r.ref for r in regs})
+    removed = [r for r in found.regulators if _flag(given.get(r.id, {}), "removed")]
+    kept = [r for r in found.regulators if r.id not in {x.id for x in removed}]
+    for r in found.regulators:
+        _flag(given.get(r.id, {}), "confirmed")
+    regs = kept[:MAX_REGULATORS]
+    # A removed regulator is not a source, and a what-if does not put a capacitor at its pin.
+    found.network.sources = {k: v for k, v in found.network.sources.items() if k in {r.id for r in regs}}
+    if len(kept) > MAX_REGULATORS:
+        notes.append(f"{len(kept)} regulators; the first {MAX_REGULATORS} were scanned")
+    unknown = sorted(set(given) - {r.id for r in found.regulators})
     if unknown:
         notes.append(f"no regulator on the input rail is called {', '.join(unknown)}; "
                      f"{'its' if len(unknown) == 1 else 'their'} settings were not used")
+    groups: dict[str, int] = {}
+    for r in regs:
+        groups[r.group] = groups.get(r.group, 0) + 1
     srcs = []
     for r in regs:
         try:
-            srcs.append(sources.from_params(r.ref, given.get(r.ref), r.duty_from_rails))
+            srcs.append(sources.from_params(r.id, given.get(r.id), r.duty_from_rails, r.topology,
+                                            r.inductance_h, r.v_in, phased=groups[r.group] > 1))
         except ValueError as exc:
             raise StageError(str(exc)) from exc
+    for s in srcs:
+        if not s.pulsed:
+            s.ripple_pp()
+        if s.capped:
+            notes.append(f"{s.ref}: the inductor ripple worked out from its inductance is more than twice "
+                         f"the input current, so it runs in discontinuous mode, which is not modelled; the "
+                         f"ripple was capped at twice the input current")
 
     def progress(i: int, n: int, ref: str) -> None:
         ctx.progress("simulate", 40 + 50 * i / max(n, 1), f"{ref} ({i + 1} of {n})")
@@ -153,11 +202,9 @@ def run_conducted(ctx: StageContext) -> StageResult:
                    **at(found.entry.pad)} if found.entry else None),
         "entries": [e.id for e in found.entries],
         "rail_nets": found.rail_nets,
-        "regulators": [
-            {"ref": r.ref, "switch_net": r.switch_net, "found_by": r.how, "input_net": r.input_net,
-             "output_net": r.output_net, **at(r.input_pad), "params": s.as_dict(), "assumed": s.assumed}
-            for r, s in zip(regs, srcs)
-        ],
+        "regulators": [_regulator(r, s, given.get(r.id) or {}, at) for r, s in zip(regs, srcs)],
+        "removed": [{"id": r.id, "ref": r.ref, "topology": r.topology, "found_by": r.how,
+                     "confidence": r.confidence, **at(r.input_pad)} for r in removed],
         "skipped": [{"ref": ref, "why": why} for ref, why in found.skipped],
         "network": {
             "caps": [
