@@ -163,11 +163,13 @@ def run(net: Network, regulators: list[RegulatorSource], std_class: str = "B",
                 })
             if v.id == "as_laid_out":
                 for idx, (n, f, _) in enumerate(harmonics):
-                    row = [{"ref": c.ref, "share": round(float(abs(spectra[saves[k][f"i:{ci}"]][idx])), 4)}
+                    # Three significant figures, not decimal places: the LISN's share is often a
+                    # few parts per million, and rounding it to 0 said nothing reaches it.
+                    row = [{"ref": c.ref, "share": float(f"{abs(spectra[saves[k][f'i:{ci}']][idx]):.3g}")}
                            for ci, c in enumerate(v.network.shunts)]
                     z_lisn = abs(lisn.network_impedance(f))
                     into = max(float(vp[idx]), float(vn[idx])) / z_lisn
-                    row.append({"ref": "LISN", "share": round(into, 4)})
+                    row.append({"ref": "LISN", "share": float(f"{into:.3g}")})
                     shares[(reg.ref, n)] = sorted(row, key=lambda r: -r["share"])
 
     results = []
