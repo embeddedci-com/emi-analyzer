@@ -406,6 +406,26 @@ def _copper_features(
             note(bx + half, by + half)
             note(bx, by)
 
+        # A diagonal segment is a staircase, and the staircase only joins up where there are
+        # grid lines under it. With lines at its ends alone, the mesh between them graded out to
+        # 0.7 mm under a 0.3 mm trace at 45 degrees, whose span along x is 0.42 mm: whole
+        # columns of cells missed it, and a synthetic clock net came out cut in two, its far
+        # port 80 dB down on every preset. So a diagonal gets lines along both axes it spans, at
+        # the preset's cell or 0.7 of its width if that is finer: a trace's span along either
+        # axis is at least its width, so no column of cells can then fall between two lines
+        # that both miss it.
+        if cell_mm > 0:
+            pts = [transform.pt(px, py) for px, py in track.pts]
+            step = min(cell_mm, 0.7 * track.width_mm) if track.width_mm > 0 else cell_mm
+            for (ax, ay), (bx, by) in zip(pts, pts[1:]):
+                if abs(ax - bx) < 1e-6 or abs(ay - by) < 1e-6:
+                    continue
+                for lo, hi, axis in ((min(ax, bx), max(ax, bx), 0), (min(ay, by), max(ay, by), 1)):
+                    n = int(math.ceil((hi - lo) / step))
+                    for k in range(1, n):
+                        v = lo + (hi - lo) * k / n
+                        note(v, math.nan) if axis == 0 else note(math.nan, v)
+
     for pad in model.pads:
         for px, py in pad.ring:
             bx, by = transform.pt(px, py)

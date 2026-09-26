@@ -230,3 +230,24 @@ def test_a_small_part_mesh_holds_the_bands_coarsest_cell_on_every_preset(board, 
     region = build_model(cut, t, SolveParams(roi=c.roi, frequencies_hz=[1e8, 2e9], ports=c.ports,
                                              dx_um=dx, dy_um=dy, dz_um=dz))
     assert region.mesh.max_cell_mm > limit
+
+
+@pytest.mark.parametrize("cell_um", [150, 75])
+def test_a_diagonal_trace_has_grid_lines_all_along_it(cell_um):
+    # Lines at a 45-degree trace's ends alone graded out to 0.7 mm under it, whole columns of
+    # cells missed its 0.42 mm span along x, and the net came out cut in two.
+    import numpy as np
+
+    text = BOARD.replace('(segment (start 10 22) (end 30 22) (width 0.2) (layer "F.Cu") (net 3))',
+                         '(segment (start 10 22) (end 20 32) (width 0.2) (layer "F.Cu") (net 3))')
+    b = parse_board(parse(text))
+    t = board_extent(b)
+    c = coupon.plan(b, t, ["OTHER"])
+    cut, _ = coupon.extract(b, t, ["OTHER"], c.roi)
+    built = build_model(cut, t, SolveParams(roi=c.roi, frequencies_hz=[1e8, 2e9], ports=c.ports,
+                                            dx_um=cell_um, dy_um=cell_um, dz_um=100))
+    (x0, y0), (x1, y1) = t.pt(10, 22), t.pt(20, 32)
+    step = min(cell_um / 1000.0, 0.7 * 0.2) * 1.0001
+    for lines, lo, hi in ((built.mesh.x, x0, x1), (built.mesh.y, min(y0, y1), max(y0, y1))):
+        inside = lines[(lines >= lo) & (lines <= hi)]
+        assert np.diff(inside).max() <= step
