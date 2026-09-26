@@ -253,11 +253,13 @@ const conductedLine = (f: number, dbuv: number) => ({
   f_hz: f, dbuv, sources: [], qp_limit: 56, avg_limit: 46, margin_qp_db: 56 - dbuv, margin_avg_db: 46 - dbuv,
 })
 const conducted: ConductedDoc = {
-  format: 1,
+  format: 2,
   entry: { id: 'J1:+12V', connector: `J1${EVIL}`, net: '+12V', ground_net: 'GND' },
   entries: ['J1:+12V'], rail_nets: ['+12V'],
   regulators: [{
-    ref: `U3${EVIL}`, switch_net: 'SW', found_by: 'inductor', input_net: '+12V', output_net: '+5V',
+    id: `U3${EVIL}`, ref: `U3${EVIL}`, topology: 'buck', topology_from: 'layout', found_as: 'buck',
+    confidence: 'high', confirmed: false, inductor: 'L1', group: 'U3',
+    switch_net: 'SW', found_by: 'inductor', input_net: '+12V', output_net: '+5V',
     params: {
       frequency_hz: { value: 500e3, source: 'assumed', assumed: true },
       input_current_a: { value: 1, source: 'user', assumed: false },

@@ -66,8 +66,10 @@ export interface ConductedRegulator {
   group: string
   x?: number
   y?: number
-  params: Record<Exclude<ConductedParamName, 'inductance_h'>, ConductedParamValue> &
-    Partial<Record<'inductance_h', ConductedParamValue>>
+  /** Phase and inductance are absent from results written before they existed, and inductance
+   * from any regulator that has no inductor value to read. */
+  params: Record<Exclude<ConductedParamName, 'inductance_h' | 'phase_deg'>, ConductedParamValue> &
+    Partial<Record<'inductance_h' | 'phase_deg', ConductedParamValue>>
   /** The parameter names still at an assumed value. */
   assumed: ConductedParamName[]
   /** A boost's input ripple, peak to peak. */

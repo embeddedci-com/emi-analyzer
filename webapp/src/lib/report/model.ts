@@ -596,14 +596,17 @@ function conductedSection(doc: ConductedDoc): ConductedSection {
     worst: doc.worst
       ? { frequencyHz: doc.worst.f_hz, marginDb: doc.worst.margin_db, dbuv: doc.worst.dbuv, detector: doc.worst.detector }
       : null,
-    regulators: doc.regulators.map((r) => r.ref),
+    // A result from before regulators had ids (format 1) names them by reference.
+    regulators: doc.regulators.map((r) => r.id ?? r.ref),
     assumed: doc.regulators
       .filter((r) => r.assumed.length > 0)
       .map((r) => ({
-        ref: r.ref,
+        ref: r.id ?? r.ref,
         settings: r.assumed
-          .filter((name) => r.params[name])
-          .map((name) => ({ name, value: r.params[name].value, source: r.params[name].source })),
+          .flatMap((name) => {
+            const p = r.params[name]
+            return p ? [{ name, value: p.value, source: p.source }] : []
+          }),
       })),
     lines: (laid?.lines ?? []).map((l) => ({
       frequencyHz: l.f_hz, dbuv: l.dbuv, qpLimit: l.qp_limit, avgLimit: l.avg_limit, marginAvgDb: l.margin_avg_db,
