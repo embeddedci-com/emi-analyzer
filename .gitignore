@@ -23,6 +23,8 @@ worker/tests/fixtures/*.kicad_pcb
 !worker/tests/fixtures/decoupling_demo.kicad_pcb
 # Hand-written, like tiny: a power input, a ferrite and a buck, for the conducted scan.
 !worker/tests/fixtures/buck.kicad_pcb
+# Hand-written: a 12 V input feeding a two-buck PMIC, a boost and a buck module.
+!worker/tests/fixtures/regulators.kicad_pcb
 
 # The gerber fixture is generated from tiny.kicad_pcb and IS committed, so the test suite
 # runs without KiCad installed. Regenerate with worker/scripts/make_gerber_fixture.py.

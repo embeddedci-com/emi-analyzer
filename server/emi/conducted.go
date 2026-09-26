@@ -8,14 +8,26 @@ import (
 	"strings"
 )
 
-// ConductedRegulator is what a user says about one switching regulator. Every field left out is
-// an assumed default in the worker, and the result says so; nothing here is required.
+// ConductedRegulator is what a user says about one switching regulator, keyed by the id the
+// scan gave it (a reference, or "U1/VLX1" for one output of a part with several). Every field
+// left out is an assumed default in the worker, and the result says so; nothing here is required.
 type ConductedRegulator struct {
 	FrequencyHz   *float64 `json:"frequency_hz,omitempty"`
 	InputCurrentA *float64 `json:"input_current_a,omitempty"`
 	Duty          *float64 `json:"duty,omitempty"`
 	RiseS         *float64 `json:"rise_s,omitempty"`
+	PhaseDeg      *float64 `json:"phase_deg,omitempty"`
+	InductanceH   *float64 `json:"inductance_h,omitempty"`
+	// Topology replaces the one the scan recognised: one of conductedTopologies.
+	Topology string `json:"topology,omitempty"`
+	// Removed leaves the regulator out of the scan; Confirmed says the user checked what the
+	// scan recognised. Neither changes a number.
+	Removed   bool `json:"removed,omitempty"`
+	Confirmed bool `json:"confirmed,omitempty"`
 }
+
+// conductedTopologies are the worker's (worker/emi_worker/conducted/regulators.py).
+var conductedTopologies = map[string]bool{"buck": true, "boost": true, "buck-boost": true, "inverting": true}
 
 // ConductedParams is what a conducted run accepts.
 type ConductedParams struct {
@@ -39,6 +51,8 @@ var conductedRanges = []struct {
 	{"input_current_a", 1e-3, 100, func(r ConductedRegulator) *float64 { return r.InputCurrentA }},
 	{"duty", 0.02, 0.98, func(r ConductedRegulator) *float64 { return r.Duty }},
 	{"rise_s", 0.1e-9, 1e-6, func(r ConductedRegulator) *float64 { return r.RiseS }},
+	{"phase_deg", 0, 360, func(r ConductedRegulator) *float64 { return r.PhaseDeg }},
+	{"inductance_h", 10e-9, 10e-3, func(r ConductedRegulator) *float64 { return r.InductanceH }},
 }
 
 // printable is true for a short reference or net name with nothing a netlist or a log could
@@ -81,6 +95,9 @@ func validateConductedParams(raw json.RawMessage) (ConductedParams, error) {
 	for ref, r := range p.Regulators {
 		if !printable(ref, 64) {
 			return p, errors.New("regulators must be keyed by reference designator")
+		}
+		if r.Topology != "" && !conductedTopologies[r.Topology] {
+			return p, fmt.Errorf("%s: topology must be buck, boost, buck-boost or inverting", ref)
 		}
 		for _, rg := range conductedRanges {
 			v := rg.get(r)

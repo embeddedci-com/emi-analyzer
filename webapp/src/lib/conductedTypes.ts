@@ -4,15 +4,29 @@
  * (server/emi/conducted.go).
  */
 
-/** What the user says about one regulator. Anything left out is an assumed default. */
-export interface ConductedRegulatorParams {
+export type ConductedTopology = 'buck' | 'boost' | 'buck-boost' | 'inverting'
+
+/** The numbers a user can give for one regulator. Anything left out is an assumed default. */
+export interface ConductedRegulatorValues {
   frequency_hz?: number
   input_current_a?: number
   duty?: number
   rise_s?: number
+  phase_deg?: number
+  inductance_h?: number
 }
 
-export type ConductedParamName = keyof ConductedRegulatorParams
+export type ConductedParamName = keyof ConductedRegulatorValues
+
+/** What the user says about one regulator, keyed by its id. */
+export interface ConductedRegulatorParams extends ConductedRegulatorValues {
+  /** Replaces the topology the scan recognised. */
+  topology?: ConductedTopology
+  /** Leaves the regulator out of the scan. */
+  removed?: boolean
+  /** The user checked what the scan recognised. */
+  confirmed?: boolean
+}
 
 export interface ConductedParams {
   class?: 'A' | 'B'
@@ -23,22 +37,41 @@ export interface ConductedParams {
 
 export interface ConductedParamValue {
   value: number
-  /** "user", "assumed", or "rail names" for a duty worked out from the net names. */
-  source: 'user' | 'assumed' | 'rail names'
+  /**
+   * "user", "assumed", "rail names" for a duty worked out from the net names, or "board" for an
+   * inductance read from the part's value.
+   */
+  source: 'user' | 'assumed' | 'rail names' | 'board'
   assumed: boolean
 }
 
 export interface ConductedRegulator {
+  /** The part's reference, or "U1/VLX1" for one output of a part with several. */
+  id: string
   ref: string
-  switch_net: string
+  topology: ConductedTopology
+  /** Where the topology came from: the layout, the part number, the user, or a default. */
+  topology_from: 'layout' | 'part number' | 'user' | 'assumed'
+  /** The topology the scan recognised, before any change by the user. */
+  found_as: ConductedTopology
+  /** How it was recognised, cue by cue. */
   found_by: string
+  confidence: 'high' | 'medium' | 'low'
+  confirmed: boolean
+  switch_net: string
   input_net: string
   output_net: string
+  inductor: string
+  /** Sources of one part share its clock. */
+  group: string
   x?: number
   y?: number
-  params: Record<ConductedParamName, ConductedParamValue>
+  params: Record<Exclude<ConductedParamName, 'inductance_h'>, ConductedParamValue> &
+    Partial<Record<'inductance_h', ConductedParamValue>>
   /** The parameter names still at an assumed value. */
   assumed: ConductedParamName[]
+  /** A boost's input ripple, peak to peak. */
+  input_ripple_a?: { value: number; source: string }
 }
 
 export interface ConductedSource {
@@ -95,6 +128,8 @@ export interface ConductedDoc {
   entries: string[]
   rail_nets: string[]
   regulators: ConductedRegulator[]
+  /** Regulators the user removed: found, and left out of the scan. */
+  removed?: { id: string; ref: string; topology: ConductedTopology; found_by: string; confidence: string; x?: number; y?: number }[]
   skipped: { ref: string; why: string }[]
   network: {
     caps: ConductedCap[]

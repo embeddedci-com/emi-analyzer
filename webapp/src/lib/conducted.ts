@@ -7,7 +7,8 @@
  */
 
 import type {
-  ConductedDoc, ConductedParamName, ConductedParams, ConductedRegulatorParams, ConductedWorst,
+  ConductedDoc, ConductedParamName, ConductedParams, ConductedRegulator, ConductedRegulatorParams, ConductedTopology,
+  ConductedWorst,
 } from './conductedTypes'
 
 export interface ParamField {
@@ -27,10 +28,39 @@ export const PARAM_FIELDS: ParamField[] = [
   { name: 'input_current_a', label: 'Input current', unit: 'A', scale: 1, min: 0.001, max: 100, decimals: 3 },
   { name: 'duty', label: 'Duty', unit: '%', scale: 0.01, min: 2, max: 98, decimals: 1 },
   { name: 'rise_s', label: 'Edge', unit: 'ns', scale: 1e-9, min: 0.1, max: 1000, decimals: 1 },
+  { name: 'inductance_h', label: 'Inductor', unit: 'µH', scale: 1e-6, min: 0.01, max: 10000, decimals: 2 },
+  { name: 'phase_deg', label: 'Phase', unit: '°', scale: 1, min: 0, max: 360, decimals: 0 },
 ]
 
-/** What the user has typed, per regulator, in display units. A missing field stays assumed. */
-export type Entered = Record<string, Partial<Record<ConductedParamName, number>>>
+export const TOPOLOGIES: { value: ConductedTopology; label: string }[] = [
+  { value: 'buck', label: 'Buck' },
+  { value: 'boost', label: 'Boost' },
+  { value: 'buck-boost', label: 'Buck-boost' },
+  { value: 'inverting', label: 'Inverting' },
+]
+
+/**
+ * What the user has said, per regulator id: numbers in display units (a missing one stays
+ * assumed), a changed topology, and whether it is removed or confirmed.
+ */
+export type Entered = Record<string, Partial<Record<ConductedParamName, number>> & {
+  topology?: ConductedTopology
+  removed?: boolean
+  confirmed?: boolean
+}>
+
+/**
+ * The fields a regulator's waveform depends on: a boost has no switching edge in its input
+ * current but an inductor ripple, and the phase matters only between sources on one clock.
+ */
+export function fieldsFor(reg: ConductedRegulator, topology: ConductedTopology, shared: boolean): ParamField[] {
+  return PARAM_FIELDS.filter((f) => {
+    if (f.name === 'rise_s') return topology !== 'boost'
+    if (f.name === 'inductance_h') return topology === 'boost'
+    if (f.name === 'phase_deg') return shared || reg.params.phase_deg?.source === 'user'
+    return true
+  })
+}
 
 export function toDisplay(field: ParamField, si: number): number {
   const v = si / field.scale
@@ -48,6 +78,9 @@ export function conductedParams(cls: 'A' | 'B', entered: Entered, entry?: string
       if (typeof v !== 'number' || !Number.isFinite(v) || v < field.min || v > field.max) continue
       out[field.name] = v * field.scale
     }
+    if (fields.topology) out.topology = fields.topology
+    if (fields.removed) out.removed = true
+    if (fields.confirmed) out.confirmed = true
     if (Object.keys(out).length > 0) regulators[ref] = out
   }
   const params: ConductedParams = { class: cls }
@@ -60,14 +93,40 @@ export function conductedParams(cls: 'A' | 'B', entered: Entered, entry?: string
 export function enteredFrom(params: ConductedParams | null | undefined): Entered {
   const out: Entered = {}
   for (const [ref, given] of Object.entries(params?.regulators ?? {})) {
-    const fields: Partial<Record<ConductedParamName, number>> = {}
+    const fields: Entered[string] = {}
     for (const field of PARAM_FIELDS) {
       const v = given[field.name]
       if (typeof v === 'number') fields[field.name] = toDisplay(field, v)
     }
+    if (given.topology) fields.topology = given.topology
+    if (given.removed) fields.removed = true
+    if (given.confirmed) fields.confirmed = true
     out[ref] = fields
   }
   return out
+}
+
+/**
+ * A result written before regulators had ids and topologies (format 1): every regulator was a
+ * buck found by its switch node, one source per part.
+ */
+export function upgradeDoc(doc: ConductedDoc): ConductedDoc {
+  if (doc.format >= 2) return doc
+  return {
+    ...doc,
+    regulators: doc.regulators.map((r) => ({
+      ...r,
+      id: r.id ?? r.ref,
+      topology: r.topology ?? 'buck',
+      topology_from: r.topology_from ?? 'layout',
+      found_as: r.found_as ?? 'buck',
+      found_by: r.found_by ? `switch node ${r.switch_net} (${r.found_by})` : `switch node ${r.switch_net}`,
+      confidence: r.confidence ?? 'medium',
+      confirmed: r.confirmed ?? false,
+      inductor: r.inductor ?? '',
+      group: r.group ?? r.ref,
+    })),
+  }
 }
 
 export function fmtHz(hz: number): string {
@@ -87,10 +146,11 @@ export function verdict(worst: ConductedWorst | null): string {
 export function assumedSummary(doc: ConductedDoc): string | null {
   const short: Record<ConductedParamName, string> = {
     frequency_hz: 'frequency', input_current_a: 'current', duty: 'duty', rise_s: 'edge',
+    inductance_h: 'inductor', phase_deg: 'phase',
   }
   const parts = doc.regulators
     .filter((r) => r.assumed.length > 0)
-    .map((r) => `${r.ref} (${r.assumed.map((n) => short[n]).join(', ')})`)
+    .map((r) => `${r.id ?? r.ref} (${r.assumed.map((n) => short[n]).join(', ')})`)
   return parts.length > 0 ? parts.join(', ') : null
 }
 

@@ -32,7 +32,8 @@ class Series:
     b: str
     l_h: float
     r_ohm: float = 0.0
-    #: "trace", "via", "inductor", "ferrite", "resistor", "fuse", "diode" or "added".
+    #: "trace", "via", "inductor", "ferrite", "resistor", "fuse", "diode", "switch" (an eFuse),
+    #: "pass" (a charger or LDO a regulator draws from) or "added".
     kind: str = "trace"
     ref: str = ""
     value: str = ""

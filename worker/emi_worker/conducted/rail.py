@@ -1,12 +1,16 @@
 """From the layout to an input filter: the power entry, the rail behind it, and its regulators.
 
-Discovery follows the ``input-filter`` and ``switch-node`` checks, so the scan looks at the
-connector and the regulators those checks report and cannot find a different set:
+Discovery follows the ``input-filter`` and ``switch-node`` checks and goes further where they
+stop (``regulators.py`` says where and why):
 
-  * the power entry is a supply net crossing an edge connector (``input-filter``);
+  * the power entry is a supply net crossing a connector; one at the board edge, as the
+    ``input-filter`` check finds them, or any other connector's supply (a screw terminal whose
+    pads sit 7.6 mm in from the edge was a real board's only input);
   * the input rail is that net and whatever is one series part behind it -- a ferrite, an
-    inductor, a fuse, a series diode, a low-value resistor -- up to three parts deep;
-  * a regulator is a part with one pad on a switch node (``switch-node``) and one on the rail.
+    inductor, a fuse, a series diode, a low-value resistor, an eFuse, or a charger, power path or
+    LDO that a regulator draws from -- up to three parts deep;
+  * a regulator is a switch node's part (or a module known by part number) with a pad on the
+    rail, or an inductor from the rail to its switch node (a boost).
 
 Each net of the rail becomes a ladder ordered by routed distance from where the rail enters that
 net. A capacitor on a stub off the main run is therefore treated as if it sat on the run at the
@@ -28,6 +32,7 @@ from ..rules import emc
 from ..rules.decoupling import CAP_RE, IC_RE, cap_farads
 from ..rules.model import RuleContext
 from ..transient import lines as tlines
+from . import regulators as regs
 from .network import Network, Series, Shunt
 
 #: How many series parts deep the input rail is followed.
@@ -51,7 +56,6 @@ POUR_WIDTH_MM = (1.0, 20.0)
 
 FUSE_RE = re.compile(r"^F\d", re.I)
 DIODE_RE = re.compile(r"^D\d", re.I)
-SWITCH_PART_RE = re.compile(r"^(U|IC|Q)\d", re.I)
 BULK_HINT = re.compile(r"cp_|elec|tantal|polar|radial|\bcp\b|_cp", re.I)
 _HENRIES = re.compile(r"^\s*(\d+(?:[.,]\d+)?)\s*([pnuµm]?)(\d*)\s*h?\b", re.I)
 _PREFIX = {"": 1.0, "p": 1e-12, "n": 1e-9, "u": 1e-6, "µ": 1e-6, "m": 1e-3}
@@ -85,6 +89,7 @@ class Entry:
     net: str
     pad: object
     ground_pad: object | None
+    at_edge: bool = True
 
     @property
     def id(self) -> str:
@@ -92,14 +97,7 @@ class Entry:
 
 
 @dataclass
-class Regulator:
-    ref: str
-    switch_net: str
-    how: str
-    input_pad: object
-    input_net: str
-    output_net: str = ""
-    duty_from_rails: float | None = None
+class Regulator(regs.Found):
     node: str = ""
 
 
@@ -144,16 +142,15 @@ class _Electrics(tlines._Electrics):
 
 
 def entries(ctx: RuleContext, edge_mm: float = 5.0) -> list[Entry]:
-    """Every supply net crossing an edge connector, as the input-filter check finds them."""
+    """Every supply net crossing a connector, marked whether the connector is at the edge."""
     parts = emc._parts(ctx)
     out: list[Entry] = []
     for ref, pads in sorted(parts.connectors.items()):
-        if not parts.external(pads, edge_mm):
-            continue
+        edge = parts.external(pads, edge_mm)
         ground = next((p for p in pads if p.net and emc._kind(p.net) == "ground"), None)
         for net, pad in sorted(parts.lines_leaving(pads).items()):
             if emc._power_entry(net):
-                out.append(Entry(connector=ref, net=net, pad=pad, ground_pad=ground))
+                out.append(Entry(connector=ref, net=net, pad=pad, ground_pad=ground, at_edge=edge))
     return out
 
 
@@ -163,7 +160,8 @@ def _same_supply(a: str, b: str) -> bool:
     return va is not None and vb is not None and abs(va - vb) <= 0.05 * max(va, vb)
 
 
-def _series_parts(parts, net: str, switch: set[str]) -> list[tuple[str, object, object, str]]:
+def _series_parts(parts, net: str, switch: set[str], wanted: set[str] = frozenset(),
+                  regulator_refs: set[str] = frozenset()) -> list[tuple[str, object, object, str]]:
     """(ref, pad on this net, pad on the far net, kind) for the parts the supply passes through."""
     out = []
     for ref, pads in parts.by_ref.items():
@@ -178,6 +176,19 @@ def _series_parts(parts, net: str, switch: set[str]) -> list[tuple[str, object, 
                     if far.net and far.net != net and emc._power_entry(far.net) and _same_supply(net, far.net):
                         out.append((ref, near, far, "switch"))
                         break
+                else:
+                    # A charger, power path or LDO that a regulator draws from: on a real board a
+                    # boost ran from a linear charger's system output, and the rail stopped at the
+                    # charger. Only toward a net a regulator draws from, only a small part (not an
+                    # MCU with pads on two supplies), and never up to a higher named voltage.
+                    if ref not in regulator_refs and len(pads) <= regs.MAX_PASS_PADS:
+                        v_near = tlines.named_volts(net)
+                        for far in pads:
+                            v_far = tlines.named_volts(far.net)
+                            if (far.net in wanted and far.net != net
+                                    and not (v_near and v_far and v_far > v_near * 1.05)):
+                                out.append((ref, near, far, "pass"))
+                                break
             continue
         if len(pads) != 2 or not all(p.net for p in pads):
             continue
@@ -230,6 +241,11 @@ def _series_element(ref: str, pad, kind: str) -> tuple[Series, str | None]:
     if kind == "switch":
         return (Series("", "", 0.0, ASSUMED_SWITCH_OHM, kind, ref, value, True),
                 f"{ref} ({value}) passes the supply through; modelled as {ASSUMED_SWITCH_OHM * 1e3:g} mΩ")
+    if kind == "pass":
+        return (Series("", "", 0.0, ASSUMED_SWITCH_OHM, kind, ref, value, True),
+                f"{ref} ({value}) passes the supply to a regulator behind it; modelled as a "
+                f"{ASSUMED_SWITCH_OHM * 1e3:g} mΩ switch, the worst case: a linear regulator or charger "
+                f"passes less of the ripple back")
     return Series("", "", 0.0, ASSUMED_DIODE_OHM, kind, ref, value, True), None
 
 
@@ -256,22 +272,32 @@ def _shunt(ref: str, pad, gnd_pad, mount_h: float) -> tuple[Shunt, str | None]:
 def discover(ctx: RuleContext, choice: str | None = None, edge_mm: float = 5.0) -> Discovery:
     d = Discovery(entries=entries(ctx, edge_mm))
     if not d.entries:
-        d.notes.append("no supply net crosses an edge connector, so there is no power input to measure")
+        d.notes.append("no supply net crosses a connector, so there is no power input to measure")
         return d
-    # By default the highest named voltage: on real boards the first connector by reference
-    # was often a +3V3 pin going out to a daughter board, which is a regulator's output.
-    default = max(d.entries, key=lambda e: tlines.named_volts(e.net) or 0.0)
+    parts = emc._parts(ctx)
+    cands = regs.find(ctx, parts)
+    # By default the highest named voltage, at the edge before inside: on real boards the first
+    # connector by reference was often a +3V3 pin going out to a daughter board, which is a
+    # regulator's output. A regulator's output is never the default.
+    nets = {e.net for e in d.entries}
+    made = {c.far_net for c in cands if c.far_net in nets and regs.makes(c, nets)}
+    usable = [e for e in d.entries if e.net not in made] or d.entries
+    default = max(usable, key=lambda e: (tlines.named_volts(e.net) or 0.0, e.at_edge))
     d.entry = next((e for e in d.entries if e.id == choice), default)
     if choice and d.entry.id != choice:
         d.notes.append(f"{choice} is not a power input on this board; {d.entry.id} was used")
+    if not d.entry.at_edge:
+        d.notes.append(f"{d.entry.connector} is more than {edge_mm:g} mm from the board edge; it was taken as "
+                       f"the power input because it carries the highest named voltage")
 
-    parts = emc._parts(ctx)
     el = _Electrics(ctx)
     drills = [v.drill_mm for v in ctx.model.vias if v.drill_mm > 0]
     via_h = tlines.via_inductance_nh(
         ctx.model.thickness_mm / 2.0, statistics.median(drills) if drills else tlines.DEFAULT_DRILL_MM) * 1e-9
     stitches = parts.ground_stitches()
-    switch = emc.switch_nodes(ctx)
+    switch = {n for c in cands for n in c.switch_nets}
+    wanted = regs.wanted_nets(cands, parts)
+    reg_refs = {c.ref for c in cands if c.kind != "unmatched"}
 
     # The rail: nets reachable from the entry through series parts, breadth first.
     rail: dict[str, tuple[object, str]] = {d.entry.net: (d.entry.pad, "in")}
@@ -280,7 +306,7 @@ def discover(ctx: RuleContext, choice: str | None = None, edge_mm: float = 5.0) 
     for _ in range(MAX_DEPTH):
         nxt = []
         for net in frontier:
-            for ref, near, far, kind in _series_parts(parts, net, set(switch)):
+            for ref, near, far, kind in _series_parts(parts, net, switch, wanted, reg_refs):
                 if far.net in rail:
                     continue
                 crossings.setdefault(net, []).append((ref, near, far, kind))
@@ -289,60 +315,11 @@ def discover(ctx: RuleContext, choice: str | None = None, edge_mm: float = 5.0) 
         frontier = nxt
     d.rail_nets = list(rail)
 
-    # Regulators: a part on a switch node and on the rail.
-    #
-    # A switch node whose inductor lands on the rail is either a buck making that rail -- the
-    # power input is then one of its outputs, as when a +3V3 pin carries a board's own supply
-    # out to a connector -- or a boost fed from it. Both were first read as bucks drawing from
-    # the rail, on real boards, and the part's other switch nodes with them. Neither is a load
-    # this model can put on the input, so the part is skipped and says why.
-    def inductor_on(sw: str) -> tuple[str, str] | None:
-        for r, pads in sorted(parts.by_ref.items()):
-            if emc.IND_RE.match(r) and len(pads) == 2 and sw in {p.net for p in pads}:
-                return r, next(p.net for p in pads if p.net != sw)
-        return None
-
-    feeds_rail: dict[str, tuple[str, str, str]] = {}
-    for sw in sorted(switch):
-        ind = inductor_on(sw)
-        if ind and ind[1] in rail:
-            for ref in sorted({p.ref for p in parts.by_net[sw] if SWITCH_PART_RE.match(p.ref)}):
-                feeds_rail.setdefault(ref, (sw, ind[0], ind[1]))
-    for ref, (sw, lref, net) in sorted(feeds_rail.items()):
-        d.skipped.append((ref, f"{sw} reaches {net} through {lref}, so {net} is this regulator's output (or "
-                               f"it is a boost fed from it); neither is modelled as a load on the input"))
-
-    for sw, how in sorted(switch.items()):
-        on_sw = sorted({p.ref for p in parts.by_net[sw] if SWITCH_PART_RE.match(p.ref)})
-        for ref in on_sw:
-            if ref in feeds_rail:
-                continue
-            sw_pad = next(p for p in parts.by_ref[ref] if p.net == sw)
-            ins = [p for p in parts.by_ref[ref] if p.net in rail]
-            if not ins:
-                if IC_RE.match(ref) and all(r != ref for r, _ in d.skipped):
-                    d.skipped.append((ref, f"not fed from {d.entry.net}: its input ripple reaches the power "
-                                           f"input only through another regulator, which is not modelled"))
-                continue
-            pin = min(ins, key=lambda p: math.dist((p.x, p.y), (sw_pad.x, sw_pad.y)))
-            reg = Regulator(ref=ref, switch_net=sw, how=how, input_pad=pin, input_net=pin.net)
-            ind = inductor_on(sw)
-            if ind:
-                reg.output_net = ind[1]
-                v_in = tlines.named_volts(pin.net) or tlines.named_volts(d.entry.net)
-                v_out = tlines.named_volts(reg.output_net)
-                if v_in and v_out and 0 < v_out < v_in:
-                    reg.duty_from_rails = round(v_out / v_in, 3)
-            if any(r.ref == ref for r in d.regulators):
-                note = (f"{ref} has more than one switch node; it is modelled as one source, at the "
-                        f"first, with the settings given for it")
-                if note not in d.notes:
-                    d.notes.append(note)
-                continue
-            d.regulators.append(reg)
-    # A controller and its external switch are both on the node; one source is the regulator.
-    controllers = {r.switch_net: r for r in d.regulators if IC_RE.match(r.ref)}
-    d.regulators = [r for r in d.regulators if IC_RE.match(r.ref) or r.switch_net not in controllers]
+    # Regulators: what the rail feeds, each with how it was recognised.
+    others = {e.net for e in d.entries if e.net != d.entry.net}
+    found, skipped = regs.attach(cands, set(rail), d.entry.net, others, parts)
+    d.regulators = [Regulator(**vars(f)) for f in found]
+    d.skipped += skipped
 
     # The ladders.
     net_model = d.network
@@ -391,7 +368,7 @@ def discover(ctx: RuleContext, choice: str | None = None, edge_mm: float = 5.0) 
                     d.notes.append(note)
             elif what == "reg":
                 obj.node = node
-                net_model.sources[obj.ref] = node
+                net_model.sources[obj.id] = node
             else:
                 ref, far, kind = obj
                 element, note = _series_element(ref, pad, kind)

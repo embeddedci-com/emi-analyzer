@@ -86,6 +86,63 @@ def test_an_edge_that_does_not_fit_the_pulse_is_refused():
         _src(f=5e6, d=0.02, tr=50e-9).harmonics(1, 2)
 
 
+def _boost(d=0.4, l_h=None, v_in=5.0, i=1.0, f=500e3):
+    return sources.from_params("U3", {"frequency_hz": f, "input_current_a": i, "duty": d}, None, "boost",
+                               l_h, v_in)
+
+
+def test_a_boost_draws_a_triangle_with_the_textbook_harmonics():
+    s = _boost(d=0.4)  # no inductance: the assumed 30 % ripple
+    ripple, source = s.ripple_pp()
+    assert (ripple, source) == (pytest.approx(0.3), "assumed")
+    for n, _, amps in s.harmonics(1, 6):
+        # A triangle ΔI peak to peak, rising for D: ΔI·|sin(πnD)| / (π²n²D(1-D)) peak.
+        expect = 0.3 * abs(math.sin(math.pi * n * 0.4)) / (math.pi ** 2 * n * n * 0.4 * 0.6) / math.sqrt(2)
+        assert amps == pytest.approx(expect, rel=1e-6, abs=1e-12), n
+    assert s.assumed == ["inductance_h"]
+
+
+def test_a_boost_ripple_comes_from_its_inductor_and_is_capped_at_discontinuous_mode():
+    s = _boost(d=0.4, l_h=4.7e-6, v_in=5.0)
+    ripple, source = s.ripple_pp()
+    assert ripple == pytest.approx(5.0 * 0.4 / (500e3 * 4.7e-6)) and source == "inductor"
+    assert s.inductance_h.source == "board" and "inductance_h" not in s.assumed
+    assert "rise_s" not in s.relevant(), "a triangle has no switching edges"
+    tiny = _boost(d=0.4, l_h=0.1e-6, v_in=5.0, i=0.1)
+    ripple, source = tiny.ripple_pp()
+    assert ripple == pytest.approx(0.2) and tiny.capped and "capped" in source
+
+
+def test_a_phase_delays_harmonic_n_by_n_times_the_phase():
+    a = sources.from_params("U1/VLX1", {"frequency_hz": 1e6, "duty": 0.3, "phase_deg": 0}, None)
+    b = sources.from_params("U1/VLX2", {"frequency_hz": 1e6, "duty": 0.3, "phase_deg": 90}, None)
+    for (n, _, pa), (_, _, pb) in zip(a.phasors(1, 4), b.phasors(1, 4)):
+        assert abs(pa) == pytest.approx(abs(pb))
+        assert cmath.phase(pb / pa) == pytest.approx(cmath.phase(cmath.exp(-1j * n * math.pi / 2)), abs=1e-9)
+    assert "phase_deg" in b.relevant() and "phase_deg" not in b.assumed
+    shared = sources.from_params("U1/VLX1", {}, None, phased=True)
+    assert "phase_deg" in shared.assumed, "one of a PMIC's outputs: its phase matters"
+    alone = sources.from_params("U2", {}, None)
+    assert "phase_deg" not in alone.assumed
+
+
+def test_a_topology_the_user_chose_replaces_the_one_found():
+    s = sources.from_params("U1", {"topology": "boost"}, 0.275, "buck")
+    assert s.topology == "boost" and s.duty.source == "assumed", "the rail names' duty was for a buck"
+    with pytest.raises(ValueError, match="topology"):
+        sources.from_params("U1", {"topology": "flyback"}, None)
+
+
+def test_phased_lines_add_as_phasors_and_the_rest_in_magnitude():
+    def line(ref, vp, phased):
+        return {"f_hz": 1e6, "dbuv": lisn.dbuv(abs(vp)), "sources": [{"ref": ref}], "_vp": vp, "_vn": -vp,
+                "_phased": phased}
+    out = scan._combine([line("A", 1e-3, True), line("B", -1e-3, True), line("C", 1e-3, False)])
+    assert len(out) == 1 and out[0]["dbuv"] == pytest.approx(60.0), "A and B cancel; C is left"
+    both = scan._combine([line("A", 1e-3, False), line("B", -1e-3, False)])
+    assert both[0]["dbuv"] == pytest.approx(66.02, abs=0.01), "phase unknown: the worst case"
+
+
 def test_harmonics_in_band():
     assert network.harmonic_sweep(500e3) == (1, 60)
     assert network.harmonic_sweep(100e3) == (2, 300)
@@ -217,10 +274,141 @@ def test_a_pour_is_wider_than_its_tracks():
     assert el.width("GND", "F.Cu") != 10.0
 
 
-def test_a_boost_is_skipped_with_a_reason():
+def test_a_boost_fed_from_the_rail_draws_through_its_inductor():
     d = _discover(_buck_board(boost=True))
+    assert [(r.id, r.topology, r.topology_from) for r in d.regulators] == [("U1", "boost", "layout")]
+    reg = d.regulators[0]
+    # The input current flows into the inductor, so the source sits at its pad, not at U1's.
+    assert reg.input_pad.ref == "L1" and reg.input_net == "/VIN"
+    assert reg.inductance_h == pytest.approx(4.7e-6) and reg.v_in == 12.0
+    assert "inductor L1 from the input rail" in reg.how and reg.confidence == "high"
+
+
+def _ctx(m):
+    from emi_worker import topology
+    ctx = ctx_for(m)
+    ctx.topology = topology.build(m)
+    return ctx
+
+
+def _entry(m, net="+24V", x=1, y=20):
+    m.pads += [pad("J1", "1", net, x, y, footprint="Connector:Barrel_Jack"),
+               pad("J1", "2", "GND", x, y + 4, footprint="Connector:Barrel_Jack"),
+               pad("C1", "1", net, x + 5, y, value="10uF", footprint="Capacitor_SMD:C_1206_3216Metric"),
+               pad("C1", "2", "GND", x + 5, y + 2, value="10uF", footprint="Capacitor_SMD:C_1206_3216Metric")]
+
+
+def test_a_controller_with_external_fets_draws_through_the_high_side_drain():
+    """The layout of a real board: a sense resistor into the high-side FET's drain, the
+    controller's own VIN through 10 Ω, and an inductor with a U reference."""
+    m = board(60)
+    _entry(m)
+    m.pads += [
+        pad("R1", "1", "+24V", 10, 20, value="4m"), pad("R1", "2", "Net-(Q1-D)", 12, 20, value="4m"),
+        pad("R2", "1", "+24V", 10, 30, value="10"), pad("R2", "2", "Net-(U2-VIN)", 12, 30, value="10"),
+        pad("Q1", "1", "/UG", 14, 22), pad("Q1", "2", "/PHASE", 16, 22), pad("Q1", "5", "Net-(Q1-D)", 15, 20),
+        pad("Q2", "1", "/LG", 14, 26), pad("Q2", "2", "GND", 16, 26), pad("Q2", "5", "/PHASE", 15, 24),
+        pad("U2", "1", "Net-(U2-VIN)", 20, 30), pad("U2", "2", "/UG", 20, 31), pad("U2", "3", "/PHASE", 20, 32),
+        pad("U2", "4", "/LG", 20, 33), pad("U2", "5", "GND", 20, 34),
+        pad("U3", "1", "/PHASE", 18, 24, value="6.8uH", footprint="lib:IND-SMD_L17_0-W17_0"),
+        pad("U3", "2", "+5V_OUT", 24, 24, value="6.8uH", footprint="lib:IND-SMD_L17_0-W17_0"),
+        pad("C5", "1", "+5V_OUT", 26, 24, value="22uF"), pad("C5", "2", "GND", 26, 26, value="22uF"),
+    ]
+    d = rail.discover(_ctx(m))
+    assert [(r.id, r.topology) for r in d.regulators] == [("U2", "buck")]
+    reg = d.regulators[0]
+    assert reg.input_pad.ref == "Q1" and reg.input_net == "Net-(Q1-D)"
+    assert reg.output_net == "+5V_OUT" and reg.inductor == "U3"
+    assert reg.duty_from_rails == pytest.approx(5 / 24, abs=1e-3)
+    assert "external switches Q1, Q2 driven by U2" in reg.how and "Q1's drain" in reg.how
+
+
+def test_each_buck_of_a_pmic_is_its_own_source():
+    m = board(60)
+    _entry(m, "+5V")
+    m.pads += [pad("U1", "1", "+5V", 20, 20), pad("U1", "2", "Net-(U1-VLX1)", 22, 20),
+               pad("U1", "3", "+5V", 20, 24), pad("U1", "4", "Net-(U1-VLX2)", 22, 24),
+               pad("U1", "5", "GND", 21, 22), pad("U1", "6", "VDDCORE", 21, 26)]
+    for i, (y, out) in enumerate(((20, "+3V3"), (24, "VDDCORE")), start=1):
+        m.pads += [pad(f"L{i}", "1", f"Net-(U1-VLX{i})", 26, y, value="1uH"),
+                   pad(f"L{i}", "2", out, 28, y, value="1uH"),
+                   pad(f"C{i + 5}", "1", out, 30, y, value="22uF"),
+                   pad(f"C{i + 5}", "2", "GND", 30, y + 1, value="22uF")]
+    d = rail.discover(_ctx(m))
+    got = {r.id: r for r in d.regulators}
+    assert set(got) == {"U1/VLX1", "U1/VLX2"}
+    assert {r.group for r in d.regulators} == {"U1"}
+    assert got["U1/VLX1"].duty_from_rails == pytest.approx(0.66) and got["U1/VLX2"].duty_from_rails is None
+    assert got["U1/VLX1"].input_pad.number == "1" and got["U1/VLX2"].input_pad.number == "3", "the nearest input pin"
+    assert set(d.network.sources) == {"U1/VLX1", "U1/VLX2"}
+    assert "one of 2 outputs of U1" in got["U1/VLX1"].how
+
+
+def test_a_buck_module_is_known_by_its_part_number():
+    m = board(60)
+    _entry(m, "+5V")
+    m.pads += [pad("U30", "1", "+5V", 20, 20, value="TPS82130SILR"),
+               pad("U30", "2", "GND", 20, 22, value="TPS82130SILR"),
+               pad("U30", "3", "+3V3", 22, 20, value="TPS82130SILR"),
+               pad("C9", "1", "+3V3", 24, 20, value="22uF"), pad("C9", "2", "GND", 24, 22, value="22uF")]
+    d = rail.discover(_ctx(m))
+    reg = d.regulators[0]
+    assert (reg.id, reg.topology, reg.topology_from, reg.confidence) == ("U30", "buck", "part number", "medium")
+    assert reg.output_net == "+3V3" and reg.duty_from_rails == pytest.approx(0.66)
+    assert "buck module" in reg.how
+
+
+def test_the_rail_follows_a_charger_to_the_boost_behind_it():
+    """A real board: USB into a linear charger, whose system output feeds a boost."""
+    m = board(60)
+    _entry(m, "+5V")
+    sys_net = "Net-(U7-SYS)"
+    m.pads += [pad("U7", "1", "+5V", 12, 20, value="BQ25185"), pad("U7", "2", sys_net, 14, 20, value="BQ25185"),
+               pad("U7", "3", "/BAT", 14, 22, value="BQ25185"), pad("U7", "4", "GND", 12, 22, value="BQ25185"),
+               pad("C7", "1", sys_net, 16, 20, value="10uF"), pad("C7", "2", "GND", 16, 22, value="10uF"),
+               pad("L1", "1", sys_net, 18, 20, value="1uH"), pad("L1", "2", "/SW", 20, 20, value="1uH"),
+               pad("U3", "1", sys_net, 22, 22, value="TPS61023DRLR"), pad("U3", "2", "/SW", 22, 20, value="TPS61023DRLR"),
+               pad("U3", "3", "GND", 22, 24, value="TPS61023DRLR"), pad("U3", "4", "/VOUT", 24, 20, value="TPS61023DRLR")]
+    d = rail.discover(_ctx(m))
+    assert d.rail_nets == ["+5V", sys_net]
+    passed = next(s for s in d.network.series if s.ref == "U7")
+    assert passed.kind == "pass" and passed.assumed
+    assert [(r.id, r.topology, r.confidence) for r in d.regulators] == [("U3", "boost", "high")]
+    assert any("worst case" in n for n in d.notes)
+
+
+def test_an_inverting_stage_is_an_inductor_to_ground():
+    m = board(60)
+    _entry(m, "+5V")
+    m.pads += [pad("U4", "1", "+5V", 20, 20), pad("U4", "2", "/SWN", 22, 20), pad("U4", "3", "GND", 20, 22),
+               pad("U4", "4", "-12V", 24, 22),
+               pad("L4", "1", "/SWN", 22, 24, value="10uH"), pad("L4", "2", "GND", 22, 26, value="10uH"),
+               pad("D4", "1", "/SWN", 24, 20), pad("D4", "2", "-12V", 26, 20),
+               pad("C4", "1", "-12V", 28, 20, value="10uF"), pad("C4", "2", "GND", 28, 22, value="10uF")]
+    d = rail.discover(_ctx(m))
+    reg = d.regulators[0]
+    assert (reg.topology, reg.output_net) == ("inverting", "-12V")
+    assert reg.duty_from_rails == pytest.approx(12 / 17, abs=1e-3)
+
+
+def test_a_pin_named_like_a_switch_node_with_no_inductor_is_reported_not_scanned():
+    m = board(60)
+    _entry(m, "+5V")
+    m.pads += [pad("U5", "1", "+5V", 20, 20), pad("U5", "2", "/PH0", 22, 20), pad("U5", "3", "GND", 20, 22)]
+    d = rail.discover(_ctx(m))
     assert d.regulators == []
-    assert d.skipped and "boost" in d.skipped[0][1]
+    assert d.skipped == [("U5", "/PH0 is named like a switch node but has no inductor on it")]
+
+
+def test_a_supply_connector_away_from_the_edge_is_a_power_input():
+    m = board(60)
+    _entry(m, "+24V", x=12)  # 12 mm in: a screw terminal's pads sit well inside its body
+    m.pads += [pad("J2", "1", "+5V", 1, 40, footprint="Connector:PinHeader"),
+               pad("J2", "2", "GND", 1, 42, footprint="Connector:PinHeader"),
+               pad("C2", "1", "+5V", 5, 40, value="1uF"), pad("C2", "2", "GND", 5, 42, value="1uF")]
+    d = rail.discover(_ctx(m))
+    assert [(e.id, e.at_edge) for e in d.entries] == [("J1:+24V", False), ("J2:+5V", True)]
+    assert d.entry.id == "J1:+24V" and "more than 5 mm from the board edge" in d.notes[0]
 
 
 def test_a_power_input_that_is_a_regulators_output_is_not_its_load():
@@ -234,7 +422,7 @@ def test_a_power_input_that_is_a_regulators_output_is_not_its_load():
     ctx.topology = topology.build(m)
     d = rail.discover(ctx, "J2:+3V3")
     assert d.regulators == []
-    assert "output" in d.skipped[0][1]
+    assert "is its output, not its input" in d.skipped[0][1]
     # With no choice the highest voltage wins, and there U1 is a load again.
     assert [r.ref for r in rail.discover(ctx).regulators] == ["U1"]
 
@@ -275,16 +463,17 @@ def test_henries_and_ferrite_values():
 # ---- a real KiCad file ------------------------------------------------------------------------
 
 FIXTURE = Path(__file__).parent / "fixtures" / "buck.kicad_pcb"
+REGULATORS_FIXTURE = Path(__file__).parent / "fixtures" / "regulators.kicad_pcb"
 
 
-def fixture_context():
-    """The buck fixture parsed the way the stage parses an upload, with its ground plane."""
+def fixture_context(path=FIXTURE):
+    """A fixture parsed the way the stage parses an upload, with its ground plane."""
     from emi_worker import stackup, topology
     from emi_worker.kicad.normalize import board_extent
     from emi_worker.rules.model import RuleContext
     from emi_worker.stages.ingest import load_board
 
-    model, _, _ = load_board(FIXTURE.read_bytes())
+    model, _, _ = load_board(path.read_bytes())
     return RuleContext(model=model, transform=board_extent(model), max_frequency_hz=1e9,
                        electrics=stackup.analyse(model, {"B.Cu"}), topology=topology.build(model))
 
@@ -305,3 +494,17 @@ def test_the_fixture_board_is_read_as_a_filtered_buck():
     # 10 mm of 1 mm track over 1.53 mm of FR-4 to FB1, then 14 mm to U1: a few nH per cm.
     traces = sum(s.l_h for s in d.network.series if s.kind == "trace")
     assert 5e-9 < traces < 40e-9
+
+
+def test_the_regulators_fixture_is_read_as_two_bucks_a_boost_and_a_module():
+    d = rail.discover(fixture_context(REGULATORS_FIXTURE))
+    got = {r.id: (r.topology, r.topology_from, r.confidence, r.input_pad.ref, r.output_net, r.duty_from_rails)
+           for r in d.regulators}
+    assert got == {
+        "U1/LX1": ("buck", "layout", "high", "U1", "+3V3", 0.275),
+        "U1/LX2": ("buck", "layout", "high", "U1", "+1V8", 0.15),
+        "U2": ("boost", "layout", "high", "L3", "+24V", 0.5),
+        "U3": ("buck", "part number", "medium", "U3", "+5V", 0.417),
+    }
+    assert d.rail_nets == ["+12V"] and d.routed and d.skipped == []
+    assert [c.ref for c in sorted(d.network.shunts, key=lambda c: c.distance_mm)] == ["C1", "C2", "C5", "C7"]

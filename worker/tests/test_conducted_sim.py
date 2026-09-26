@@ -154,6 +154,133 @@ def test_buck_input_ripple_and_first_harmonic_match_closed_form():
     assert abs(got["dbuv"] - lisn.dbuv(fft_v1)) < 1.0
 
 
+# ---- a boost's input -----------------------------------------------------------------------
+
+BOOST_D = 0.4
+BOOST_RIPPLE = 0.3  # the assumed 30 % of 1 A, peak to peak
+
+
+def _boost() -> sources.RegulatorSource:
+    return sources.from_params("U3", {"frequency_hz": F_SW, "input_current_a": I_IN, "duty": BOOST_D},
+                               None, "boost")
+
+
+def _triangle_periodic(ripple: float, d: float, periods: int) -> str:
+    """The boost's input current less its mean, repeated, starting where the rising edge crosses
+    zero (for the same reason the buck's starts at zero). Only the phase differs from waveform()."""
+    period = 1 / F_SW
+    pts = [(0.0, 0.0)]
+    for k in range(periods):
+        t0 = k * period
+        pts.append((t0 + d * period / 2, ripple / 2))
+        pts.append((t0 + d * period / 2 + (1 - d) * period, -ripple / 2))
+    pts.append((periods * period, 0.0))
+    return " ".join(f"{a:.9g} {b:.6g}" for a, b in pts)
+
+
+def test_boost_input_ripple_and_first_harmonic_match_closed_form():
+    src = _boost()
+    ripple_a, source = src.ripple_pp()
+    assert (ripple_a, source) == (pytest.approx(BOOST_RIPPLE), "assumed")
+    periods = 60
+    deck = "\n".join([
+        "* boost input",
+        *lisn.lines("k", "p", "k_in"),
+        *lisn.lines("k", "n", "k_gnd"),
+        f"Rk_esr k_in k_c {ESR}",
+        f"Ck_in k_c k_gnd {C_IN}",
+        f"Ik k_in k_gnd PWL({_triangle_periodic(ripple_a, BOOST_D, periods)})",
+        ".options interp",
+        f".tran 2n {periods / F_SW:.9g} 0 2n",
+        ".save v(k_in) v(k_gnd)",
+        ".end",
+    ]) + "\n"
+    r = ngspice.run(deck, expect_end_s=periods / F_SW)
+    t = r.time
+    period = 1 / F_SW
+    grid = np.linspace((periods - 1) * period, periods * period, 2001)
+    v = np.interp(grid, t, r["v(k_in)"] - r["v(k_gnd)"])
+    v = v - np.linspace(v[0], v[-1], len(v))  # the networks' slow ringing, as for the buck
+    ripple = float(v.max() - v.min())
+    # A triangle ΔI peak to peak into C: the charge above the mean is a triangle half a period
+    # wide and ΔI/2 high, ΔI·T/8 whatever D is, so ΔV = ΔI/(8·f·C); ESR adds at most ΔI·ESR.
+    closed = ripple_a / (8 * F_SW * C_IN) + ripple_a * ESR
+    print(f"\nboost ripple: {ripple * 1e3:.3f} mV p-p, closed form {closed * 1e3:.3f} mV, "
+          f"{_db(ripple / closed):+.2f} dB")
+    assert abs(_db(ripple / closed)) < 1.0
+
+    net = Network()
+    net.shunts.append(Shunt("in", "C1", "10uF", C_IN, ESR, 0.0))
+    net.sources["U3"] = "in"
+    got = scan.run(net, [src], "B")["variants"][0]["lines"][0]
+    # The triangle's first harmonic: ΔI·sin(πD) / (π²·D·(1-D)) peak.
+    i1 = ripple_a * math.sin(math.pi * BOOST_D) / (math.pi ** 2 * BOOST_D * (1 - BOOST_D)) / math.sqrt(2)
+    closed_v1 = _to_lisn(F_SW, _zc(F_SW), i1)
+    window = t >= (periods - 50) * period
+    grid = np.linspace((periods - 50) * period, periods * period, 50 * 400, endpoint=False)
+    vp = np.interp(grid, t[window], r["v(k_in)"][window])
+    spectrum = np.fft.rfft(vp * np.hanning(len(grid))) / (len(grid) * 0.5)
+    fft_v1 = 2 * abs(spectrum[50]) / math.sqrt(2)
+    print(f"boost first harmonic: scan {got['dbuv']:.2f} dBµV, closed form {lisn.dbuv(closed_v1):.2f}, "
+          f"transient FFT {lisn.dbuv(fft_v1):.2f}")
+    assert got["f_hz"] == pytest.approx(F_SW)
+    assert abs(got["dbuv"] - lisn.dbuv(closed_v1)) < 1.0
+    assert abs(got["dbuv"] - lisn.dbuv(fft_v1)) < 1.0
+    one = _one_cap()
+    one.sources["U1"] = "in"
+    buck = scan.run(one, [_buck(0.3)], "B")["variants"][0]["lines"][0]
+    print(f"a buck of the same input current: {buck['dbuv']:.2f} dBµV")
+    assert buck["dbuv"] - got["dbuv"] > 15, "a boost's continuous input is far quieter than a buck's pulses"
+
+
+# ---- two bucks on one rail ---------------------------------------------------------------------
+
+def _one_cap() -> Network:
+    net = Network()
+    net.shunts.append(Shunt("in", "C1", "10uF", C_IN, ESR, 0.0))
+    return net
+
+
+def _pair(phase_a: float | None, phase_b: float | None) -> dict[int, float]:
+    """Two identical bucks on one node: their lines at the LISN, by harmonic number."""
+    net = _one_cap()
+    srcs = []
+    for ref, phase in (("U1/A", phase_a), ("U1/B", phase_b)):
+        given = {"frequency_hz": F_SW, "input_current_a": I_IN, "duty": DUTY, "rise_s": 10e-9}
+        if phase is not None:
+            given["phase_deg"] = phase
+        srcs.append(sources.from_params(ref, given, None, phased=True))
+        net.sources[ref] = "in"
+    lines = scan.run(net, srcs, "B")["variants"][0]["lines"]
+    return {round(line["f_hz"] / F_SW): line["dbuv"] for line in lines}
+
+
+def test_two_bucks_add_and_cancel_as_their_phases_say():
+    net = _one_cap()
+    net.sources["U1"] = "in"
+    lines = scan.run(net, [_buck(sources.RIPPLE)], "B")["variants"][0]["lines"]
+    single = {round(x["f_hz"] / F_SW): x["dbuv"] for x in lines}
+    in_phase = _pair(0, 0)
+    opposite = _pair(0, 180)
+    quarter = _pair(0, 90)
+    unknown = _pair(None, None)
+    gone = lambda got, n: got.get(n, -math.inf) - single[n]  # noqa: E731
+    print(f"\ntwo bucks against one: in phase {in_phase[1] - single[1]:+.2f} dB at n=1, "
+          f"{in_phase[2] - single[2]:+.2f} at n=2; 180° {gone(opposite, 1):+.0f} dB at n=1, "
+          f"{opposite[2] - single[2]:+.2f} at n=2; 90° {quarter[1] - single[1]:+.2f} dB at n=1, "
+          f"{gone(quarter, 2):+.0f} at n=2; phases unknown {unknown[1] - single[1]:+.2f} dB at n=1")
+    # Closed forms: |1 + e^(-jnφ)| is 2 in phase (+6.02 dB), 0 at odd n and 2 at even n for 180°,
+    # √2 at n = 1 (+3.01 dB) and 0 at n = 2 for 90°.
+    for n in (1, 2, 3):
+        assert in_phase[n] - single[n] == pytest.approx(6.02, abs=0.02)
+        assert unknown[n] - single[n] == pytest.approx(6.02, abs=0.02), "unknown phases: the worst case"
+    for n in (1, 3):
+        assert n not in opposite or opposite[n] < single[n] - 100
+    assert opposite[2] - single[2] == pytest.approx(6.02, abs=0.02)
+    assert quarter[1] - single[1] == pytest.approx(3.01, abs=0.02)
+    assert 2 not in quarter or quarter[2] < single[2] - 100
+
+
 # ---- an ideal filter -------------------------------------------------------------------------
 
 def test_an_lc_filter_attenuates_as_the_closed_form_says():
@@ -223,7 +350,7 @@ class _Client:
         return {"name": name, "size_bytes": len(blob)}
 
 
-def _stage(tmp_path, params: dict) -> tuple[dict, dict]:
+def _stage(tmp_path, params: dict, board=None) -> tuple[dict, dict]:
     import json
 
     from emi_worker.client import RunToken
@@ -231,7 +358,7 @@ def _stage(tmp_path, params: dict) -> tuple[dict, dict]:
 
     from .test_conducted import FIXTURE
 
-    client = _Client(FIXTURE.read_bytes())
+    client = _Client((board or FIXTURE).read_bytes())
     ctx = StageContext(client=client, token=RunToken(token="t", run_id="r1", jti="j", expires_in=3600),
                        run={"params": params}, workdir=str(tmp_path), cores=1, max_cells=10**9,
                        should_stop=lambda: False)
@@ -263,3 +390,57 @@ def test_a_setting_out_of_range_fails_the_run_with_the_reason(tmp_path):
 
     with pytest.raises(StageError, match="frequency_hz"):
         _stage(tmp_path, {"regulators": {"U1": {"frequency_hz": 5}}})
+
+
+def test_a_board_with_a_pmic_a_boost_and_a_module_scans_each_source(tmp_path):
+    from .test_conducted import REGULATORS_FIXTURE
+
+    doc, summary = _stage(tmp_path, {}, REGULATORS_FIXTURE)
+    got = {r["id"]: r for r in doc["regulators"]}
+    assert set(got) == {"U1/LX1", "U1/LX2", "U2", "U3"} and summary["regulators"] == 4
+    assert got["U2"]["topology"] == "boost" and got["U2"]["input_ripple_a"]["source"] == "inductor"
+    # The PMIC's bucks share a clock: their phase is asked for, and assumed until given.
+    assert "phase_deg" in got["U1/LX1"]["assumed"] and "phase_deg" not in got["U3"]["assumed"]
+    worst = doc["worst"]
+    print(f"\nregulators fixture, assumed settings: worst {worst['margin_db']} dB at {worst['f_hz']:.0f} Hz "
+          f"from {[s['ref'] for s in worst['sources']]}")
+
+    # The two bucks at the same frequency, given 180° apart, cancel at the odd harmonics
+    # where they are equal; the boost and the module are moved off 500 kHz to keep them apart.
+    same = {"frequency_hz": 1e6, "input_current_a": 0.5, "duty": 0.3}
+    params = {"regulators": {"U1/LX1": {**same, "phase_deg": 0}, "U1/LX2": {**same, "phase_deg": 180},
+                             "U2": {"frequency_hz": 1.2e6}, "U3": {"frequency_hz": 2.3e6}}}
+    apart, _ = _stage(tmp_path, params, REGULATORS_FIXTURE)
+    params["regulators"]["U1/LX2"]["phase_deg"] = 0
+    together, _ = _stage(tmp_path, params, REGULATORS_FIXTURE)
+
+    def at(d, f):
+        return next((x["dbuv"] for x in d["variants"][0]["lines"] if abs(x["f_hz"] - f) < 1), None)
+
+    print(f"U1 at 1 MHz: in phase {at(together, 1e6)} dBµV, 180° apart {at(apart, 1e6)}")
+    # Not to nothing: the two input pins are 2 mm apart, so the two transfers differ slightly.
+    assert at(apart, 1e6) is None or at(apart, 1e6) < at(together, 1e6) - 15
+    assert at(apart, 2e6) == pytest.approx(at(together, 2e6), abs=0.05)
+
+
+def test_the_user_can_confirm_retype_or_remove_a_regulator(tmp_path):
+    doc, _ = _stage(tmp_path, {})
+    reg = doc["regulators"][0]
+    assert (reg["id"], reg["topology"], reg["topology_from"], reg["confidence"]) == ("U1", "buck", "layout", "high")
+    assert "switch node" in reg["found_by"] and reg["confirmed"] is False
+
+    doc, _ = _stage(tmp_path, {"regulators": {"U1": {"topology": "boost", "confirmed": True}}})
+    reg = doc["regulators"][0]
+    assert (reg["topology"], reg["topology_from"], reg["found_as"], reg["confirmed"]) == ("boost", "user", "buck", True)
+    assert reg["input_ripple_a"]["source"].startswith("inductor")  # the fixture's 4.7 µH from 12 V
+    assert any("discontinuous" in n for n in doc["notes"]), "0.5 A assumed is below the ripple: said so"
+
+    doc, summary = _stage(tmp_path, {"regulators": {"U1": {"removed": True}}})
+    assert doc["regulators"] == [] and summary["regulators"] == 0
+    assert [r["id"] for r in doc["removed"]] == ["U1"]
+    assert doc["variants"][0]["lines"] == []
+
+    from emi_worker.stages import StageError
+
+    with pytest.raises(StageError, match="removed"):
+        _stage(tmp_path, {"regulators": {"U1": {"removed": "yes"}}})
