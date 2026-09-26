@@ -76,7 +76,7 @@ by letter only.
 | 4 | Via inductance, parallel-plate | within 10 % of two posts | normal ✅ (worst +7.7 %); coarse ❌ (+10.1 % at one point). The limit stays; a coarse part with vias says so (below) |
 | 5 | Synthetic coupon, 3 margins and 2 presets | hotspot, level 1 dB, \|Z\| 5 %, S21 0.5 dB | ✅ margins and presets |
 | 6 | Real coupons, 3 margins and 2 presets | the same | ❌ C ✅ and D ✅; B ✅ on margins, ❌ on level between presets (3.3 dB) |
-| 7 | Slow tests (`EMI_SLOW_TESTS=1`) | pass in the image | ✅ 1016 passed, the 3 small-part solves among them |
+| 7 | Slow tests (`EMI_SLOW_TESTS=1`) | pass in the image | ✅ the 3 small-part solves, on openEMS 0.0.35 and on the from-source openEMS the released image now builds on |
 | 8 | A small-part solve from the Part solve tab | runs end to end | ⚠️ the synthetic board ✅; the sample board's CLK net ran and gave no numbers (it did not settle) |
 
 The hotspot criterion changed in the third pass (September 2026), by the user's decision: a
@@ -200,6 +200,13 @@ Two things were fixed from this pass in the app: the loudest spots were never ma
 board after a solve (the set-up ports still on screen hid them), and orange markers vanished on
 orange copper.
 
+### Which openEMS
+
+Checks 6 and 8 ran on the Debian openEMS 0.0.35. The released image moved to an openEMS built
+from source while this pass ran; on it the three small-part slow tests pass (1030 of 1031 in
+the suite; the one failure is a far-field test, whose reader does not yet know the new build's
+HDF5 layout). The real coupons have not been re-run on it.
+
 ## Verdict
 
 **Stays off.** Checks 1-3, 5 and 7 pass; 4 fails on coarse by the rule the user kept, and the
@@ -228,7 +235,7 @@ product now says so. What fails:
 4. The browser estimate chose coarse for the synthetic board ("over budget on normal"); check
    `CELL_FIT` against the real normal mesh, since the rule is normal whenever it fits.
 5. Optional: the stripline delay by difference, to confirm the +1.2 % is the ends.
-6. When 1-3 pass: set `SmallPartSolveByDefault = true` and update the README's experimental
+6. When 1-3 pass, on the openEMS the released image ships: set `SmallPartSolveByDefault = true` and update the README's experimental
    table, known-issues, `EXPERIMENTAL.smallPart` and the limitations page.
 
 Known limitations that stay after that:
