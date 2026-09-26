@@ -16,7 +16,8 @@ import type { BoardDoc } from '../lib/boardTypes'
 import { formatDuration } from '../lib/estimate'
 import { harmonics, isReferenceNet, type PortSpec } from '../lib/portPlacement'
 import {
-  BANDS, estimateSmallPart, hasVias, pairOf, planCoupon, PRESETS, smallPartParams, type Roi,
+  BANDS, estimateSmallPart, hasVias, pairOf, planCoupon, PRESETS, smallPartParams,
+  thinDielectricUm, type Roi,
 } from '../lib/smallPart'
 import { EXPERIMENTAL, Experimental } from './Experimental'
 
@@ -183,6 +184,12 @@ export function SmallPartSetup({
       )}
       {presetValue === 'coarse' && by === 'net' && hasVias(doc, chosen) && (
         <Text size="xs" c="dimmed">Coarse mesh: via inductance can read up to about 10% high.</Text>
+      )}
+      {presetValue === 'coarse' && by === 'net' && thinDielectricUm(doc, chosen, preset.dz) > 0 && (
+        <Text size="xs" c="dimmed">
+          Coarse mesh: the {thinDielectricUm(doc, chosen, preset.dz).toFixed(0)} µm dielectric under
+          this net is one cell thick, so its impedance can read about 10% low.
+        </Text>
       )}
       <NumberInput
         size="xs" label="Clock, for maps at its harmonics (optional)" suffix=" MHz" min={1} max={3000}

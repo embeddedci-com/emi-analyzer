@@ -9,7 +9,7 @@ import fixtures from '../../../server/emi/testdata/small_part_fixtures.json'
 import {
   BANDS, estimateSmallPart, END_CRITERIA_DB, marginFor, MAX_CELL_STEPS, MAX_CELLS, MAX_SIDE_MM,
   MARGIN_HEIGHTS, MIN_MARGIN_MM, MIN_RECORD_S, netEnds, OPEN_END_LOAD_OHM, pairOf, planCoupon, PORT_HALF_WIDTH_MM,
-  PRESETS, smallPartParams, hasVias, spotsFor,
+  PRESETS, smallPartParams, hasVias, spotsFor, thinDielectricUm,
 } from './smallPart'
 
 function doc(over: Partial<BoardDoc> = {}): BoardDoc {
@@ -118,6 +118,14 @@ describe('the estimate', () => {
     expect(p.frequencies_hz).toEqual([300e6])
     expect(p.coupon).toEqual({ nets: ['CLK'] })
     expect(p.ports[0]).toMatchObject({ pad: 'U1.1', excited: true, net: 'CLK' })
+  })
+
+  it('knows when a net sits on a one-cell dielectric, for the coarse-mesh note', () => {
+    expect(thinDielectricUm(doc(), ['CLK'], 100)).toBe(0)
+    const thin = doc()
+    thin.stackup[1] = { ...thin.stackup[1], thickness_mm: 0.0764 }
+    expect(thinDielectricUm(thin, ['CLK'], 100)).toBeCloseTo(76.4)
+    expect(thinDielectricUm(thin, ['CLK'], 50)).toBe(0)
   })
 
   it('knows when a part has vias, for the coarse-mesh note', () => {

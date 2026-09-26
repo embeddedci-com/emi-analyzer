@@ -76,6 +76,13 @@ COARSE_VIA_UM = 150.0
 
 COARSE_VIA_NOTE = "coarse mesh: via inductance can read up to about 10% high"
 
+#: A dielectric no thicker than the preset's dz is one cell through. On the coarse preset a
+#: 0.1 mm microstrip on 76 um of FR-4 (board B's clock) read Z0 9 % low against
+#: Hammerstad-Jensen, where normal, with two cells, read 1.5 % low (docs/verification/
+#: small-part-solve.md, check 1b). So a coarse part over one says so, like a via.
+COARSE_THIN_NOTE = ("coarse mesh: the {um:.0f} um dielectric under this net is one cell thick, so "
+                    "its impedance can read about 10% low")
+
 #: The largest mesh a small-part solve will build, in cells (216 MB at 72 bytes a cell).
 MAX_CELLS = 3_000_000
 
@@ -207,7 +214,31 @@ def cut(board, transform, p: dict, params: SolveParams):
         )
     if _coarse(params) and any(v.net in nets for v in reduced.vias):
         cut_notes.append(COARSE_VIA_NOTE)
+    thin = thin_dielectric_um(reduced, nets, params.dz_um)
+    if _coarse(params) and thin:
+        cut_notes.append(COARSE_THIN_NOTE.format(um=thin))
     return reduced, notes + cut_notes, added
+
+
+def thin_dielectric_um(board, nets: list[str], dz_um: float) -> float:
+    """The thinnest dielectric beside a copper layer the nets are on, um, when it is no thicker
+    than ``dz_um`` (one cell through); else 0. See ``COARSE_THIN_NOTE``."""
+    stack = [s for s in board.stackup if s.thickness_mm > 0 or s.is_copper]
+    copper = [s.name for s in stack if s.is_copper]
+    want = set(nets)
+    used: set[str] = set()
+    for t in board.tracks:
+        if t.net in want:
+            used.add(t.layer)
+    for q in list(board.pads) + list(board.vias):
+        if q.net in want:
+            for layer in q.layers or []:
+                used.update(copper if layer == "*.Cu" else [layer])
+    thin = [s.thickness_mm * 1000.0
+            for k, c in enumerate(stack) if c.is_copper and c.name in used
+            for j in (k - 1, k + 1) if 0 <= j < len(stack)
+            for s in [stack[j]] if s.is_dielectric and 0 < s.thickness_mm * 1000.0 <= dz_um]
+    return min(thin) if thin else 0.0
 
 
 def _coarse(params: SolveParams) -> bool:

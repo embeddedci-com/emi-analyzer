@@ -287,6 +287,28 @@ export function hasVias(doc: BoardDoc, nets: string[]): boolean {
   return doc.vias.some((v) => want.has(v.net))
 }
 
+/**
+ * The thinnest dielectric beside a layer these nets are on, µm, when it is no thicker than
+ * `dzUm` (one cell through); else 0. On the coarse mesh a 0.1 mm microstrip on 76 µm read its
+ * impedance 9 % low (docs/verification/small-part-solve.md, check 1b). The worker says it
+ * again in the result (`COARSE_THIN_NOTE`).
+ */
+export function thinDielectricUm(doc: BoardDoc, nets: string[], dzUm: number): number {
+  const stack = doc.stackup.filter((s) => s.thickness_mm > 0 || s.role === 'copper')
+  const want = new Set(nets)
+  const used = new Set(doc.nets.filter((n) => want.has(n.name)).flatMap((n) => n.layers))
+  let thin = 0
+  stack.forEach((s, k) => {
+    if (s.role !== 'copper' || !used.has(s.name)) return
+    for (const j of [k - 1, k + 1]) {
+      const d = stack[j]
+      const um = d && d.role === 'dielectric' ? d.thickness_mm * 1000 : 0
+      if (um > 0 && um <= dzUm && (thin === 0 || um < thin)) thin = um
+    }
+  })
+  return thin
+}
+
 /** One of a map's loudest spots, as the worker lists them (`openems/hotspots.py`). */
 export interface HotSpot {
   x_mm: number

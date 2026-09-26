@@ -224,6 +224,23 @@ def test_a_probe_average_settles_with_the_mesh_where_the_peak_point_does_not():
     assert abs(averaged[0] - averaged[1]) < 1
 
 
+def test_a_coarse_part_over_a_one_cell_dielectric_says_its_impedance_can_read_low():
+    # Check 1b: a 0.1 mm microstrip on 76 um read Z0 9 % low on coarse, 1.5 % low on normal.
+    b, t = _coupon_board(False)
+    assert small_part.thin_dielectric_um(b, ["CLK"], 100) == 0  # 0.2 mm prepreg: two cells
+    under = next(s for s in b.stackup if s.name == "dielectric 1")
+    under.thickness_mm = 0.0764
+    c = coupon.plan(b, t, ["CLK"])
+    params = SolveParams(roi=c.roi, frequencies_hz=[1e8, 1e9], ports=c.ports,
+                         dx_um=150, dy_um=150, dz_um=100)
+    _, notes, _ = small_part.cut(b, t, {"mode": "small_part", "coupon": {"nets": ["CLK"]}}, params)
+    assert small_part.COARSE_THIN_NOTE.format(um=76.4) in notes
+    params.dx_um = params.dy_um = 75
+    params.dz_um = 50
+    _, notes, _ = small_part.cut(b, t, {"mode": "small_part", "coupon": {"nets": ["CLK"]}}, params)
+    assert not any("one cell thick" in n for n in notes)
+
+
 def _coupon_board(with_via: bool):
     from tests.test_coupon import BOARD
 

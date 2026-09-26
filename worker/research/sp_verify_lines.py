@@ -44,7 +44,10 @@ from emi_worker.openems.model import Port, _layer_z  # noqa: E402
 
 ER = 4.4
 TAN_D = 0.02
-MS_H = 0.2
+#: The microstrip's dielectric, mm, and its width (0: the 50 ohm width). A narrow line on a
+#: thin prepreg, like board B's 0.1 mm clock on 76 um, is narrower than two cells.
+MS_H = float(os.environ.get("MS_H", "0.2"))
+MS_W = float(os.environ.get("MS_W", "0"))
 LINE = (5.0, 30.0)
 Y = 10.0
 CHECK_HZ = np.array([0.5e9, 0.75e9, 1e9, 1.5e9, 2e9])
@@ -198,7 +201,7 @@ def main() -> int:
     report: dict = {}
 
     if "microstrip" in which:
-        w = h.width_for(50.0, lambda x: h.hammerstad_jensen(x, MS_H, ER)[0])
+        w = MS_W or h.width_for(50.0, lambda x: h.hammerstad_jensen(x, MS_H, ER)[0])
         z_hj, e_hj = h.hammerstad_jensen(w, MS_H, ER)
         text = microstrip_board(w)
         params, c = h.coupon_params(text, ["SIG"])
