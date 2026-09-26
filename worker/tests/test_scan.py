@@ -37,8 +37,12 @@ HALF = 0.05          # a 100 mm box
 N = 41               # 2.5 mm samples
 
 
-def write_box(wd, fields, freqs=FREQS, lines=None, drop_last=None):
-    """Write the twelve dumps. ``fields(points, k)`` returns (E, H) at (..., 3) points."""
+def write_box(wd, fields, freqs=FREQS, lines=None, drop_last=None, layout="split"):
+    """Write the twelve dumps. ``fields(points, k)`` returns (E, H) at (..., 3) points.
+
+    ``layout="complex"`` writes them the way the from-source openEMS does: one complex dataset
+    per frequency, (component, x, y, z), with ``d_order``.
+    """
     lines = lines if lines is not None else np.linspace(-HALF, HALF, N)
     for name, axis, sign in scan._FACES:
         mesh = [lines, lines, lines]
@@ -56,8 +60,29 @@ def write_box(wd, fields, freqs=FREQS, lines=None, drop_last=None):
                 for i, freq in enumerate(freqs):
                     e, h = fields(pts, 2 * np.pi * freq / C0)
                     v = np.moveaxis(e if kind == "E" else h, -1, 0)
-                    fd[f"f{i}_real"] = v.real.astype(np.float32)
-                    fd[f"f{i}_imag"] = v.imag.astype(np.float32)
+                    if layout == "complex":
+                        fd[f"f{i}"] = v.transpose(0, 3, 2, 1).astype(np.complex64)
+                        fd[f"f{i}"].attrs["d_order"] = "NXYZ"
+                    else:
+                        fd[f"f{i}_real"] = v.real.astype(np.float32)
+                        fd[f"f{i}_imag"] = v.imag.astype(np.float32)
+
+
+def test_both_openems_dump_layouts_read_as_the_same_surface(tmp_path):
+    """The from-source openEMS writes the faces as complex (component, x, y, z); read the old
+    way, the first far-field solve on it failed on "object 'f0_real' doesn't exist". The source
+    is off centre and tilted, so a transpose that swaps two in-plane axes changes the currents."""
+    m = np.array([1e-3, 0.0, 2e-3])
+    surfaces = {}
+    for layout in ("split", "complex"):
+        wd = tmp_path / layout
+        wd.mkdir()
+        write_box(wd, lambda p, k: dipole_eh(p, np.array([0.004, -0.007, 0.011]), m, k),
+                  layout=layout)
+        surfaces[layout] = scan.read_surface(str(wd), FREQS)
+    a, b = surfaces["split"], surfaces["complex"]
+    assert np.allclose(a.pos, b.pos) and a.box == pytest.approx(b.box)
+    assert np.allclose(a.j, b.j) and np.allclose(a.m, b.m)
 
 
 def db(a, b):
