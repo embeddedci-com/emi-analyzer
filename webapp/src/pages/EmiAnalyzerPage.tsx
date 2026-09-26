@@ -230,8 +230,8 @@ export function EmiAnalyzerPage({ api, deployment = 'hosted', host }: EmiAnalyze
                     </Group>
                   ) : (
                     <Text size="xs" c="dimmed" ta="center">
-                      A <Text span ff="monospace" size="xs">.kicad_pcb</Text>, a zipped KiCad
-                      project, or a zip of Gerbers with the drill file and an IPC-D-356 netlist.
+                      A <Text span ff="monospace" size="xs">.kicad_pcb</Text>, a KiCad project
+                      zip, or a Gerber zip with drill file and IPC-D-356 netlist.
                     </Text>
                   )}
                 </Box>

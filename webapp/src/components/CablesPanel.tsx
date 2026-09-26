@@ -246,20 +246,12 @@ export function CablesPanel({
 
       {d && connectors.length === 0 && (
         <Alert color="blue" variant="light" title="No connectors found">
-          <Stack gap={4}>
-            <Text size="xs">
-              A part counts as a connector when its reference is J, P, CN, CON, USB, FPC or FFC
-              plus a number (J1, CN3), or its footprint or value names one (USB, RJ45, header,
-              terminal, JST, jack).
-            </Text>
-            <Text size="xs">
-              To add one, rename the part or give it a connector footprint, then press{' '}
-              <Text span fw={600}>Run again</Text>. A solve only attaches a cable to a
-              connector {d.edge_tolerance_mm != null
-                ? `within ${d.edge_tolerance_mm} mm of`
-                : 'near'} the board edge.
-            </Text>
-          </Stack>
+          <Text size="xs">
+            A connector is a part named J, P, CN, CON, USB, FPC or FFC plus a number, or with a
+            connector footprint (USB, RJ45, header, JST, jack). A cable attaches only{' '}
+            {d.edge_tolerance_mm != null ? `within ${d.edge_tolerance_mm} mm of` : 'near'} the
+            board edge.
+          </Text>
         </Alert>
       )}
 
