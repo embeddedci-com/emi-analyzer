@@ -229,12 +229,17 @@ export function rankRecommendations(
       if (!fixed && start >= 0) { fixesNow.push([freqs[start], freqs[i - 1]]); start = -1 }
     }
     if (start >= 0) fixesNow.push([freqs[start], freqs[k - 1]])
-    return { ...r, improvementDb, atHz: worst.hz, fixesNow, reduction }
+    const fixedDecades = fixesNow.reduce((s, [lo, hi]) => s + Math.log10(hi / lo), 0)
+    return { ...r, improvementDb, atHz: worst.hz, fixesNow, reduction, fixedDecades }
   })
+  // As the worker: what helps the worst point first, then what closes a gap elsewhere.
   return scored
-    .filter((r) => r.improvementDb > 0.1 && r.reduction > 0.1)
-    .sort((a, b) => b.reduction - a.reduction || b.improvementDb - a.improvementDb)
-    .map(({ reduction: _r, ...r }) => r)
+    .filter((r) => (r.improvementDb > 0.1 && r.reduction > 0.1) || r.fixedDecades > 0)
+    .sort((a, b) =>
+      Math.max(b.reduction, 0) - Math.max(a.reduction, 0)
+      || Math.max(b.improvementDb, 0) - Math.max(a.improvementDb, 0)
+      || b.fixedDecades - a.fixedDecades)
+    .map(({ reduction: _r, fixedDecades: _d, ...r }) => r)
 }
 
 export interface NoiseMark {
@@ -280,6 +285,7 @@ export const fmtFarads = (c: number): string =>
 export function fmtRange([lo, hi]: [number, number]): string {
   const a = fmtHz(lo)
   const b = fmtHz(hi)
+  if (a === b) return a
   const ua = a.split(' ')[1]
   const ub = b.split(' ')[1]
   return ua === ub ? `${a.split(' ')[0]} to ${b}` : `${a} to ${b}`

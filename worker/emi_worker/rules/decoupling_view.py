@@ -696,14 +696,20 @@ def _recommend(e: _Entry, before: np.ndarray, target: float, ranked, branches, m
         improvement = 20.0 * math.log10(before[wi] / after[wi])
         new_excess = pdn.worst_excess_db(after, target)[0]
         reduction = excess0 - max(new_excess, 0.0)
-        if improvement <= 0.1 or reduction <= 0.1:
+        fixes = _fixes(f, before, after, target)
+        # A change that does nothing at the worst frequency can still close a gap elsewhere:
+        # moving a capacitor never helps at 100 kHz, where only more capacitance does, and
+        # hiding it would leave a rail with a 100 kHz gap and a 50 MHz one showing a fix for
+        # only the first. It ranks after everything that helps the worst point.
+        fixed_decades = sum(math.log10(hi / lo) for lo, hi in fixes) if fixes else 0.0
+        if not ((improvement > 0.1 and reduction > 0.1) or fixed_decades > 0):
             continue
         scored.append({
             "kind": kind, "text": text, "change": change,
             "improvement_db": round(improvement, 2), "at_hz": float(f[wi]),
             "worst_after_db": round(new_excess, 2),
-            "fixes": _fixes(f, before, after, target),
-            "_rank": (reduction, improvement),
+            "fixes": fixes,
+            "_rank": (max(reduction, 0.0), max(improvement, 0.0), fixed_decades),
         })
     scored.sort(key=lambda r: r["_rank"], reverse=True)
     for r in scored:

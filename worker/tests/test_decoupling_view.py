@@ -309,3 +309,28 @@ def test_the_webapp_fixture_is_current():
     assert mod.OUT.exists(), "run python scripts/gen_decoupling_fixture.py"
     assert json.loads(mod.OUT.read_text(encoding="utf-8")) == json.loads(mod.render()), (
         "decouplingFixture.json is stale; run python scripts/gen_decoupling_fixture.py")
+
+
+def test_the_demo_board_end_to_end():
+    """tests/fixtures/decoupling_demo.kicad_pcb, the public board the app is checked on
+    (scripts/make_decoupling_fixture_board.py): read from KiCad text, planes from its pours."""
+    from pathlib import Path
+
+    from emi_worker.kicad import parse, parse_board
+    from emi_worker.kicad.normalize import board_extent
+    from emi_worker.rules.model import RuleContext
+
+    path = Path(__file__).parent / "fixtures" / "decoupling_demo.kicad_pcb"
+    m = parse_board(parse(path.read_text()))
+    d = dv.build(RuleContext(model=m, transform=board_extent(m), max_frequency_hz=1e9))
+    rails = {r["net"]: r for r in d["rails"]}
+    assert set(rails) == {"+1V8", "+3V3", "VIN"}
+    assert rails["+3V3"]["plane"]["layer"] == "In2.Cu"
+    assert rails["+1V8"]["plane"] is None
+    u1 = next(i for i in rails["+3V3"]["ics"] if i["ref"] == "U1")
+    assert len(u1["caps"]) == 6 and u1["noise"][0]["hz"] == 16e6
+    # U2's only capacitor is 8 mm away with no bulk: 100 kHz is the worst of it.
+    u2 = rails["+1V8"]["ics"][0]
+    assert u2["status"] == "gaps" and u2["worst"]["hz"] == pytest.approx(1e5)
+    assert u2["recommendations"][0]["kind"] == "add"
+    assert {r["kind"] for r in u2["recommendations"]} >= {"via", "move"}

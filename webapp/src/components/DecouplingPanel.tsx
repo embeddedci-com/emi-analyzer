@@ -219,8 +219,10 @@ function IcDetail({ doc, rail, ic, cap, whatIf, onCap, onWhatIf }: {
                             }}>
               <Text size="xs">{r.text}</Text>
               <Text size="xs" c="dimmed">
-                {r.improvementDb.toFixed(1)} dB lower at {fmtHz(r.atHz)}
-                {r.fixesNow.length ? `, fixes ${r.fixesNow.map(fmtRange).join(', ')}` : ''}
+                {[
+                  r.improvementDb > 0.1 ? `${r.improvementDb.toFixed(1)} dB lower at ${fmtHz(r.atHz)}` : '',
+                  r.fixesNow.length ? `fixes ${r.fixesNow.map(fmtRange).join(', ')}` : '',
+                ].filter(Boolean).join(', ')}
               </Text>
             </UnstyledButton>
           ))}
