@@ -193,6 +193,8 @@ def test_the_port_is_not_a_hotspot_and_a_map_of_residue_has_none():
     assert [(s["x_mm"], s["y_mm"]) for s in got] == [(15, 5)]
     x, y, db = _map([(5, 5, -57)], floor_db=-80)
     assert hotspots.spots(x, y, db, [], -60) == []
+    x, y, db = _map([(5, 5, -45)], floor_db=-80)  # above the floor, far below the run's peak
+    assert hotspots.spots(x, y, db, [], -60) == []
 
 
 def _coupon_board(with_via: bool):

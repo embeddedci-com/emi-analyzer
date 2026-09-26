@@ -37,6 +37,10 @@ MAX_SPOTS = 5
 #: A map whose loudest point is within this of the floor carries no field worth a spot, dB.
 NOISE_MARGIN_DB = 6.0
 
+#: Nor does one whose loudest point is this far below the run's loudest, dB. A plane layer under
+#: a supply net on a real board listed "spots" at -54 dB: residue, not an issue to act on.
+QUIET_DB = -40.0
+
 #: A part is named when one of its pads is this close to the spot, mm.
 PART_WITHIN_MM = 2.0
 
@@ -45,7 +49,8 @@ def spots(x_mm: np.ndarray, y_mm: np.ndarray, db: np.ndarray, ports: list[tuple[
           floor_db: float) -> list[dict]:
     """Separate spots within ``WITHIN_DB`` of the map's loudest point away from the ports.
 
-    ``db`` is (ny, nx) on the grid lines ``x_mm`` and ``y_mm``, in the manifest's dB. Loudest
+    ``db`` is (ny, nx) on the grid lines ``x_mm`` and ``y_mm``, in the manifest's dB (0 is the
+    run's loudest point). Loudest
     first; each is ``{x_mm, y_mm, db, below_peak_db}``.
     """
     X, Y = np.meshgrid(x_mm, y_mm)
@@ -55,7 +60,7 @@ def spots(x_mm: np.ndarray, y_mm: np.ndarray, db: np.ndarray, ports: list[tuple[
     if not allowed.any():
         return []
     peak = float(db[allowed].max())
-    if peak <= floor_db + NOISE_MARGIN_DB:
+    if peak <= max(floor_db + NOISE_MARGIN_DB, QUIET_DB):
         return []
     hot = allowed & (db >= peak - WITHIN_DB)
     ny, nx = db.shape
