@@ -94,14 +94,22 @@ DIVERGENCE_RATIO = 1e3
 #: number that stops a healthy ramp being read as a blow-up.
 DECAY_MARGIN_DB = 20.0
 
-#: How many progress reports in a row must read below ``stop_below_db`` before the runner
-#: stops openEMS. One was enough until a real coupon (docs/verification/small-part-solve.md,
-#: board D) said it had settled at -50 dB while it was still ringing: its energy swung -49.6,
-#: -38.6, then -57.0 dB between reports, and the run stopped on the -57 dB sample with the
-#: swing still reaching about -39 dB. openEMS reports every few seconds of wall clock, so the
-#: samples land at unrelated phases of the ringing; three in a row below the limit means the
-#: envelope is there, not one trough. It costs two more reports, about 8 s.
+#: How many progress reports in a row must read below ``stop_below_db``, over at least how
+#: much simulated time, before the runner stops openEMS.
+#:
+#: One report was enough until a real coupon (docs/verification/small-part-solve.md, board D)
+#: said it had settled at -50 dB while it was still ringing: its energy swung -49.6, -38.6,
+#: then -57.0 dB between reports, and the run stopped on the -57 dB sample with the swing still
+#: reaching about -39 dB.
+#:
+#: Three reports in a row were not enough either. openEMS reports every few seconds of wall
+#: clock, which on a million-cell mesh is 60 ps of simulated time, and a ringing coupon's energy
+#: swings over a few hundred: board C's pair on normal swung 12 dB with a period of 0.36 ns,
+#: three reports fell in one trough (-50.8, -62.8, -50.2 dB) with the peaks still at -47, and the
+#: next report read -46.9. So the reports below must also span ``END_HOLD_S``, which holds two
+#: of those swings and costs a short run about a nanosecond.
 END_HOLD_READINGS = 3
+END_HOLD_S = 1e-9
 
 
 @dataclass
@@ -199,6 +207,7 @@ def run_openems(
     excitation_s: float | None = None,
     stop_below_db: float | None = None,
     hold_readings: int = END_HOLD_READINGS,
+    hold_s: float = END_HOLD_S,
 ) -> RunResult:
     """Run openEMS to completion, streaming progress.
 
@@ -211,8 +220,9 @@ def run_openems(
 
     ``stop_below_db`` moves the end criterion out of openEMS and into this loop: once openEMS's
     own excitation has finished and its energy has read that far below its running maximum
-    ``hold_readings`` reports in a row (``END_HOLD_READINGS``), an ``ABORT`` file is written in
-    ``workdir``, which openEMS polls for and treats as a normal end, writing every dump. openEMS checks its own criterion while the source is still on,
+    ``hold_readings`` reports in a row, over ``hold_s`` of simulated time (``END_HOLD_S``), an
+    ``ABORT`` file is written in ``workdir``, which openEMS polls for and treats as a normal
+    end, writing every dump. openEMS checks its own criterion while the source is still on,
     and stopped a real board's 30 MHz-1 GHz solve on a dip between two lobes of the pulse
     (``RunResult.stopped_inside_the_source``); a caller using this gives openEMS an
     unreachable criterion of its own.
@@ -260,8 +270,10 @@ def run_openems(
     energy_steps: list[int] = []
     cancelled = False
     aborted_at = 0
-    # Reports in a row below ``stop_below_db`` since the source ended; one above resets it.
+    # Reports in a row below ``stop_below_db`` since the source ended, and the timestep of the
+    # first of them; one above resets both.
     below = 0
+    below_since = 0
 
     assert proc.stdout is not None
     try:
@@ -315,8 +327,14 @@ def run_openems(
                 source_done = excitation_steps or (
                     int(excitation_s / dt) if excitation_s and dt > 0 else 0)
                 if stop_below_db is not None and source_done and last.timestep > source_done:
-                    below = below + 1 if last.energy_db <= stop_below_db else 0
-                if not aborted_at and below >= max(1, hold_readings):
+                    if last.energy_db > stop_below_db:
+                        below = 0
+                    elif below == 0:
+                        below, below_since = 1, last.timestep
+                    else:
+                        below += 1
+                held = dt <= 0 or (last.timestep - below_since) * dt >= hold_s
+                if not aborted_at and below >= max(1, hold_readings) and held:
                     aborted_at = last.timestep
                     try:
                         with open(abort_file, "w"):

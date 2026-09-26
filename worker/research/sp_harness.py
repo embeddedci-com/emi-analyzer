@@ -102,7 +102,7 @@ def solve(board_text: str, params: dict, name: str, *, keep: bool = True) -> Sol
     elapsed = time.monotonic() - started
     peak = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss / 1024.0
     (work / "summary.json").write_text(json.dumps(result.summary, indent=2) + "\n")
-    for fname in ("manifest.json", "network.json", "sparams.json"):
+    for fname in ("manifest.json", "network.json", "sparams.json", "solver.log"):
         if fname in client.files:
             (work / fname).write_bytes(client.files[fname])
     return Solved(summary=result.summary, files=client.files,

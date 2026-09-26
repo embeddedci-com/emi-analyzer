@@ -237,6 +237,26 @@ def test_one_trough_in_a_ringing_run_does_not_end_it(tmp_path, monkeypatch):
     assert r.converged is True
 
 
+def test_the_reports_below_must_also_span_a_nanosecond(tmp_path, monkeypatch):
+    """Board C's pair: three reports fell in one trough of a 0.36 ns swing, 60 ps apart, and
+    the next read -46.9 dB. With dt known, the reports below must span ``END_HOLD_S``."""
+    from emi_worker.openems import run as runmod
+
+    fake = _abortable_openems(tmp_path, [(2000, -50.8), (2100, -62.8), (2200, -50.2),
+                                          (2300, -46.9), (2400, -52.0), (2600, -55.0),
+                                          (2800, -53.0), (3000, -58.0), (3200, -57.0),
+                                          (3400, -56.0), (3600, -59.0)])
+    # 1 ps a step: the reports are 0.1-0.2 ns apart, like a million-cell mesh's.
+    text = open(fake).read().replace(
+        "#!/bin/sh\n", "#!/bin/sh\necho 'FDTD timestep is: 1e-12 s'\n", 1)
+    open(fake, "w").write(text)
+    monkeypatch.setattr(runmod, "OPENEMS_BIN", fake)
+    assert runmod.END_HOLD_S == 1e-9
+    r = runmod.run_openems("model.xml", str(tmp_path), stop_below_db=-50.0)
+    assert r.stopped_on_energy_at == 3400  # from 2400: 0.8 ns at 3200, 1.0 ns at 3400
+    assert r.converged is True
+
+
 def test_a_ringing_run_that_never_holds_goes_to_its_cap(tmp_path, monkeypatch):
     from emi_worker.openems import run as runmod
 
