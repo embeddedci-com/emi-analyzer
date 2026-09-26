@@ -163,6 +163,8 @@ export interface RulesDoc {
   /** The settings the checks ran with. Absent on boards analysed before it existed. */
   settings?: import('./rulesSettings').RulesSettingsReport
   format_version: number
+  /** Per rail and IC, the supply impedance the capacitors present. See lib/decoupling.ts. */
+  decoupling?: import('./decoupling').DecouplingDoc
   findings: RuleFinding[]
   summary: {
     critical: number

@@ -5,6 +5,8 @@ get:
 
 - **geometric EMI/EMC checks** — return paths, plane gaps and stitching, decoupling, impedance,
   ESD protection at connectors, shield grounding, reset lines, switching-regulator layout;
+- **a decoupling view** — per supply rail and IC, the impedance the capacitors present against a
+  target, where it falls short and what would fix it (a lumped estimate from the layout);
 - **ESD discharge simulation** — IEC 61000-4-2 contact discharge into each exposed line, with
   ngspice;
 - **a cable budget** — how much common-mode current each connector's cable can carry before it

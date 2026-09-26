@@ -11,6 +11,13 @@ The KiCad plugin is versioned and released separately; see
 
 ### Added
 
+- A Decoupling tab: per supply rail and IC, a lumped estimate of the supply impedance from the
+  layout (each capacitor as a series R-L-C with its mounting loop, plus the plane pair), against
+  a target from the rail voltage, ripple and current step. It shades where the impedance is
+  above the target, marks anti-resonances and clock harmonics that are not filtered, lists the
+  capacitors, and ranks computed fixes (move a part, add a via, add or remove a part) by how
+  much of the worst gap they close. The target is editable in the tab and in the decoupling
+  check's settings (`ripple_pct`, `step_current_a`, `board_max_hz`, `clock_hz`, `switching_hz`).
 - An experimental conducted-emissions scan (`EMI_EXPERIMENTAL=conducted`), on a Conducted tab:
   the board's power input through two CISPR 16-1-2 LISNs, the input filter as laid out and each
   buck regulator as a trapezoidal current source, simulated with ngspice against the FCC

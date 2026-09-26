@@ -1,0 +1,245 @@
+{
+ "format_version": 1,
+ "f_min_hz": 100000.0,
+ "f_max_hz": 1000000000.0,
+ "points_per_decade": 40,
+ "stackup_assumed": true,
+ "note": "Estimate: lumped model from the layout. No power plane pair, so no plane capacitance or resonances.",
+ "rails": [
+  {
+   "net": "+3V3",
+   "v": 3.3,
+   "v_assumed": false,
+   "plane": null,
+   "status": "gaps",
+   "parts": {
+    "C1": {
+     "value": "100nF",
+     "package": "0402",
+     "c_f": 1e-07,
+     "esl_h": 4.5e-10,
+     "esr_ohm": 0.06,
+     "source": "library",
+     "model": "100 nF 0402 (generic)",
+     "assumed": [],
+     "x": 11.5,
+     "y": 30.0
+    },
+    "C2": {
+     "value": "10nF",
+     "package": "0402",
+     "c_f": 1e-08,
+     "esl_h": 4.5e-10,
+     "esr_ohm": 0.12,
+     "source": "library",
+     "model": "10 nF 0402 (generic)",
+     "assumed": [],
+     "x": 18,
+     "y": 30.0
+    },
+    "C3": {
+     "value": "10uF",
+     "package": "0805",
+     "c_f": 1e-05,
+     "esl_h": 9e-10,
+     "esr_ohm": 0.015,
+     "source": "library",
+     "model": "10 µF 0805 (generic)",
+     "assumed": [],
+     "x": 25,
+     "y": 20.0
+    }
+   },
+   "ics": [
+    {
+     "ref": "U1",
+     "pins": [
+      "1"
+     ],
+     "x": 10.0,
+     "y": 30.0,
+     "ripple_pct": 5.0,
+     "step_current_a": 0.5,
+     "target_ohm": 0.33,
+     "band_hz": 100000000.0,
+     "series_l_h": 0.0,
+     "plane_branch": null,
+     "caps": [
+      {
+       "ref": "C1",
+       "pin": "1",
+       "mount_l_h": 2.702e-09,
+       "l_h": 3.152e-09,
+       "distance_mm": 1.5,
+       "useful_up_to_hz": 8965000.0,
+       "loop_mm": 2.86,
+       "height_mm": 1.6,
+       "ground_vias": 1,
+       "ground_via_mm": 0.36,
+       "spreading_nh": 0.0,
+       "connection_nh": 2.702
+      },
+      {
+       "ref": "C2",
+       "pin": "1",
+       "mount_l_h": 6.797e-09,
+       "l_h": 7.247e-09,
+       "distance_mm": 8.0,
+       "useful_up_to_hz": 18700000.0,
+       "loop_mm": 9.36,
+       "height_mm": 1.6,
+       "ground_vias": 1,
+       "ground_via_mm": 0.36,
+       "spreading_nh": 0.0,
+       "connection_nh": 6.797
+      },
+      {
+       "ref": "C3",
+       "pin": "1",
+       "mount_l_h": 2e-08,
+       "l_h": 2.09e-08,
+       "distance_mm": 18.03,
+       "useful_up_to_hz": 348100.0,
+       "loop_mm": 30.87,
+       "height_mm": 1.6,
+       "ground_vias": 1,
+       "ground_via_mm": 11.85,
+       "spreading_nh": 0.0,
+       "connection_nh": 20.0
+      }
+     ],
+     "assumed": [
+      "height to ground"
+     ],
+     "noise": [
+      {
+       "hz": 16000000.0,
+       "source": "Y1 16MHz"
+      }
+     ],
+     "recommendations": [
+      {
+       "kind": "add",
+       "text": "Add 470 nF 0402 within 3 mm of U1 (self-resonance 3.58 MHz)",
+       "change": {
+        "op": "add",
+        "branch": {
+         "id": "new",
+         "c_f": 4.7e-07,
+         "l_h": 4.215e-09,
+         "r_ohm": 0.03494,
+         "kind": "cap"
+        }
+       },
+       "improvement_db": 35.67,
+       "at_hz": 3162000.0,
+       "worst_after_db": 8.12,
+       "fixes": [
+        [
+         1884000.0,
+         4732000.0
+        ],
+        [
+         31620000.0,
+         39810000.0
+        ]
+       ]
+      },
+      {
+       "kind": "move",
+       "text": "Move C3 to within 3 mm of U1.1",
+       "change": {
+        "op": "replace",
+        "branch": {
+         "id": "C3",
+         "c_f": 1e-05,
+         "l_h": 1.169e-08,
+         "r_ohm": 0.015,
+         "kind": "cap"
+        }
+       },
+       "improvement_db": 14.21,
+       "at_hz": 3162000.0,
+       "worst_after_db": 11.86,
+       "fixes": [
+        [
+         1884000.0,
+         2661000.0
+        ],
+        [
+         31620000.0,
+         31620000.0
+        ]
+       ]
+      },
+      {
+       "kind": "via",
+       "text": "Add a ground via at C3's ground pad",
+       "change": {
+        "op": "replace",
+        "branch": {
+         "id": "C3",
+         "c_f": 1e-05,
+         "l_h": 1.383e-08,
+         "r_ohm": 0.015,
+         "kind": "cap"
+        }
+       },
+       "improvement_db": 10.72,
+       "at_hz": 3162000.0,
+       "worst_after_db": 13.6,
+       "fixes": [
+        [
+         1884000.0,
+         2371000.0
+        ],
+        [
+         31620000.0,
+         31620000.0
+        ]
+       ]
+      },
+      {
+       "kind": "remove",
+       "text": "Remove C2 (10 nF)",
+       "change": {
+        "op": "remove",
+        "id": "C2"
+       },
+       "improvement_db": 0.95,
+       "at_hz": 3162000.0,
+       "worst_after_db": 16.72,
+       "fixes": []
+      }
+     ],
+     "anti_resonances": [
+      {
+       "hz": 3139000.0,
+       "ohm": 2.53
+      },
+      {
+       "hz": 16080000.0,
+       "ohm": 0.3273
+      }
+     ],
+     "gaps": [
+      [
+       1884000.0,
+       4732000.0
+      ],
+      [
+       31620000.0,
+       100000000.0
+      ]
+     ],
+     "status": "gaps",
+     "worst": {
+      "hz": 3162000.0,
+      "ohm": 2.517,
+      "excess_db": 17.65
+     }
+    }
+   ]
+  }
+ ]
+}

@@ -19,6 +19,7 @@ Start with the [README](../README.md), which covers installing and using the app
 | [limits-and-decisions.md](limits-and-decisions.md) | The limits library (FCC Part 15, CISPR 32), where each number came from, and the decisions behind the model. |
 | [esd-transient-simulation.md](esd-transient-simulation.md) | Design and as-built notes for the ESD discharge simulation. |
 | [verification/conducted-emissions.md](verification/conducted-emissions.md) | The experimental conducted-emissions scan: what it models, what it was checked against, what is left. |
+| [verification/decoupling.md](verification/decoupling.md) | The decoupling view: its lumped model, the checks against closed forms and a published table, and what is left. |
 | [length-matching-and-impedance.md](length-matching-and-impedance.md) | Design note for length matching, impedance and rule settings. |
 | [csx-xml-notes.md](csx-xml-notes.md) | openEMS CSX XML schema notes, verified against the solver. |
 

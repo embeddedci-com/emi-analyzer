@@ -27,6 +27,7 @@ import { NetPicker } from '../components/NetPicker'
 import { NetsExportButton } from '../components/NetsExportButton'
 import { NearFieldImport } from '../components/NearFieldImport'
 import { RuleFindings } from '../components/RuleFindings'
+import { DecouplingPanel, decouplingMarkers, type DecouplingSelection } from '../components/DecouplingPanel'
 import { AnalysisNotes } from '../components/AnalysisNotes'
 import { ChecksSettings } from '../components/ChecksSettings'
 import { WhatNext } from '../components/WhatNext'
@@ -94,6 +95,8 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
   const [selectedSolveId, setSelectedSolveId] = useState<string | null>(null)
   // The line to open in the ESD tab, when arriving there from a finding.
   const [esdNet, setEsdNet] = useState<string | null>(null)
+  // The IC and capacitor picked in the Decoupling tab, marked on the board while it is open.
+  const [decoupling, setDecoupling] = useState<DecouplingSelection | null>(null)
   // Which part of the full-wave workflow is showing: setting one up, its result, or the
   // libraries that feed it.
   const [solveView, setSolveView] = useState<SolveView>('setup')
@@ -449,8 +452,9 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
   const findingList = (rules.data as RulesDoc | null | undefined)?.findings
   const findingNumbers = useMemo(() => numberFindings(findingList ?? []), [findingList])
   // Every finding with a place, numbered as in the list. Not over a solve's set-up or result:
-  // there the ports and the loudest spots are what the board is showing.
-  const findingsOnBoard = tab !== 'part' && tab !== 'fullwave'
+  // there the ports and the loudest spots are what the board is showing. Nor in Decoupling,
+  // which marks the IC and capacitors it is talking about.
+  const findingsOnBoard = tab !== 'part' && tab !== 'fullwave' && tab !== 'decoupling'
   const findingMarks = useMemo(
     () => findingMarkers(findingList ?? [], findingNumbers), [findingList, findingNumbers])
   // The ports being set up, or — when there are none — the ports of the solve on screen. A
@@ -469,8 +473,10 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
       const color = hexToRgb(HOTSPOT_MARKER_HEX)
       spots.forEach((s, i) => out.push({ x: s.x_mm, y: s.y_mm, label: String(i + 1), color }))
     }
+    if (tab === 'decoupling' && decoupling) out.push(...decouplingMarkers(decoupling))
     return out
-  }, [ports, activeSolve, activePart, tab, spots, findingsOnBoard, showFindings, findingMarks])
+  }, [ports, activeSolve, activePart, tab, spots, findingsOnBoard, showFindings, findingMarks,
+      decoupling])
 
   const onFocusFinding = (f: RuleFinding) => {
     setSelectedFinding(f.id)
@@ -818,6 +824,7 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
               </Tabs.Tab>
               {smallPart && <Tabs.Tab value="part" px={6}>Part solve</Tabs.Tab>}
               {fullWave && <Tabs.Tab value="fullwave" px={6}>Full-wave</Tabs.Tab>}
+              <Tabs.Tab value="decoupling" px={6}>Decoupling</Tabs.Tab>
               <Tabs.Tab value="cables" px={6}>Cables</Tabs.Tab>
               {fullWave && <Tabs.Tab value="compliance" px={6}>Compliance</Tabs.Tab>}
               <Tabs.Tab value="esd" px={6}>ESD</Tabs.Tab>
@@ -1028,6 +1035,19 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
               </Stack>
             </Tabs.Panel>
             )}
+
+            <Tabs.Panel value="decoupling" p="sm">
+              {!ingestDone && (
+                <Text size="sm" c="dimmed">The decoupling view appears when the analysis finishes.</Text>
+              )}
+              {ingestDone && rules.isSuccess && (
+                <DecouplingPanel
+                  doc={(rules.data as RulesDoc | null)?.decoupling}
+                  onSelect={(s) => { setDecoupling(s); if (s) setNet(s.rail.net) }}
+                  onFocus={(x, y) => setFocus({ x, y, zoom: 28 })}
+                />
+              )}
+            </Tabs.Panel>
 
             <Tabs.Panel value="cables" p="sm">
               {/* Keyed by version: the panel holds the run it shows, and must not carry it over. */}
