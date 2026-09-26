@@ -12,10 +12,16 @@ Programs the worker runs
 ------------------------
 
   openEMS, CSXCAD and nf2ff
-    Debian package openems (with libopenems0, libcsxcad0, libnf2ff0)
+    Compiled from source, unmodified, and installed under /usr/local, with their Python
+    bindings in /usr/local/venv. The source is the upstream repository at one commit:
+      https://github.com/thliebig/openEMS-Project
+      commit f73bf97906a38ef1693f59f311ce13cc1b531474, with its submodules
+    /usr/share/doc/emi-worker/openems-source.txt lists that commit and each submodule's.
+    The build recipe is worker/openems-image/Dockerfile in the EMI Analyzer repository.
     License: GPL-3.0-or-later (openEMS, nf2ff), LGPL-3.0-or-later (CSXCAD)
-    Upstream: https://github.com/thliebig/openEMS-Project
     Used by the experimental full-wave solve.
+    An image built with OPENEMS_SOURCE=apt has the Debian package openems instead (with
+    libopenems0, libcsxcad0, libnf2ff0), whose source is found as below.
 
   nec2c
     Debian package nec2c
@@ -54,6 +60,10 @@ version installed, is published by Debian:
 or, on any Debian system with source repositories enabled:
 
   apt-get source <package>=<version>
+
+For openEMS, CSXCAD and nf2ff the complete corresponding source is the upstream commit
+named above and in openems-source.txt, together with the build recipe
+(worker/openems-image/Dockerfile) at the EMI Analyzer release the image was built from.
 
 This is also a written offer, valid for three years from the date of the image you received:
 on request we will provide the complete corresponding source for any GPL or LGPL program in
