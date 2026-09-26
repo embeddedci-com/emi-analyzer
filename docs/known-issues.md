@@ -250,11 +250,13 @@ Details: [`verification/decoupling.md`](verification/decoupling.md).
 ## 4. Gaps in what is built
 
 - **The report export leaves some things out.** It has the title page, board image with
-  numbered findings, findings, notes, cable budgets, ESD results and changes since an earlier
-  version. It does not include hotspot or near-field maps, far-field or compliance spectra (an
-  experimental section lists which solves ran and, with full-wave on, the compliance margin and
-  its gaps), the nets table (use the CSV export on the Board tab), or the ESD waveforms past
-  10 ns. The PDF is the browser's print of the HTML; the page footer and page numbers need a
+  numbered findings, findings, notes, decoupling, cable budgets, ESD results, the conducted scan
+  (with `conducted` on) and changes since an earlier version. It does not include hotspot or
+  near-field maps, far-field or compliance spectra (an experimental section lists which solves
+  ran and, with full-wave on, the compliance margin and its gaps), the nets table (use the CSV
+  export on the Board tab), or the ESD waveforms past 10 ns. Decoupling uses the target the
+  analysis ran with, not one edited in the tab, and lists the top three fixes per IC; the
+  conducted section shows the as-laid-out spectrum, not the what-if curves. The PDF is the browser's print of the HTML; the page footer and page numbers need a
   browser that supports CSS page margin boxes (Chrome, Edge); others print the disclaimer on
   the first page only. The app version reads "dev" in a build from source, and the worker
   version is "not recorded" for boards analyzed before this release.

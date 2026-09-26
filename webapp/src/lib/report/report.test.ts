@@ -2,11 +2,14 @@ import { describe, expect, it } from 'vitest'
 import type { BoardDoc, RuleFinding, RulesDoc } from '../boardTypes'
 import type { CablesDoc } from '../cableTypes'
 import type { Run } from '../emiApi'
+import type { ConductedDoc } from '../conductedTypes'
+import type { DecouplingDoc } from '../decoupling'
+import decouplingFixture from '../decouplingFixture.json'
 import type { TransientDoc } from '../transientTypes'
-import { cableBudgetSvg, transientSvg } from './charts'
+import { cableBudgetSvg, conductedSvg, decouplingSvg, transientSvg } from './charts'
 import { esc, renderReportHtml } from './html'
 import {
-  DISCLAIMER, SECTIONS, assembleReport, changedSettings, groupFindings, reportFileName, reportJson,
+  CONDUCTED_WHY, DISCLAIMER, SECTIONS, assembleReport, changedSettings, groupFindings, reportFileName, reportJson,
   safeImage, type ReportInput, type SectionId,
 } from './model'
 
@@ -236,6 +239,141 @@ describe('renderReportHtml', () => {
   })
 })
 
+const decoupling = decouplingFixture as unknown as DecouplingDoc
+const okIc = { ...decoupling.rails[0].ics[0], ref: `U9${EVIL}`, status: 'ok' as const, gaps: [], worst: null }
+const rulesWithDecoupling: RulesDoc = {
+  ...rules,
+  decoupling: {
+    ...decoupling,
+    rails: [{ ...decoupling.rails[0], net: `+3V3${EVIL}`, ics: [...decoupling.rails[0].ics, okIc] }],
+  },
+}
+
+const conductedLine = (f: number, dbuv: number) => ({
+  f_hz: f, dbuv, sources: [], qp_limit: 56, avg_limit: 46, margin_qp_db: 56 - dbuv, margin_avg_db: 46 - dbuv,
+})
+const conducted: ConductedDoc = {
+  format: 1,
+  entry: { id: 'J1:+12V', connector: `J1${EVIL}`, net: '+12V', ground_net: 'GND' },
+  entries: ['J1:+12V'], rail_nets: ['+12V'],
+  regulators: [{
+    ref: `U3${EVIL}`, switch_net: 'SW', found_by: 'inductor', input_net: '+12V', output_net: '+5V',
+    params: {
+      frequency_hz: { value: 500e3, source: 'assumed', assumed: true },
+      input_current_a: { value: 1, source: 'user', assumed: false },
+      duty: { value: 0.42, source: 'rail names', assumed: true },
+      rise_s: { value: 5e-9, source: 'user', assumed: false },
+    },
+    assumed: ['frequency_hz', 'duty'],
+  }],
+  skipped: [],
+  network: {
+    caps: [{ ref: 'C7', value: '10uF', c_f: 10e-6, esr_ohm: 0.005, esl_nh: 0.5, mount_nh: 1, distance_mm: 3, model: 'generic', assumed: true }],
+    series: [], trace_nh: 5, routed: true,
+  },
+  standard: { class: 'B', quasi_peak: 'fcc-15b-conducted-qp', average: 'fcc-15b-conducted-avg' },
+  variants: [{
+    id: 'as_laid_out', label: 'As laid out', worst: null,
+    lines: [conductedLine(500e3, 52), conductedLine(1e6, 40), conductedLine(1.5e6, 30)],
+  }],
+  worst: { f_hz: 500e3, margin_db: -6, dbuv: 52, detector: 'average', sources: [] },
+  dominant: { f_hz: 500e3, regulator: 'U3', harmonic: 1, shares: [{ ref: 'C7', share: 0.97 }, { ref: 'LISN', share: 0.0004 }] },
+  suggestions: [{ id: 'lc_filter', label: 'Add an LC filter', worst: null, change_db: 24.5 }],
+  components: [{ ref: 'C7', without_change_db: -11.2 }],
+  assumptions: ['Differential mode only.'], not_modelled: ['Common-mode current.'], notes: [],
+}
+
+describe('decoupling and conducted', () => {
+  it('includes decoupling when the analysis has it', () => {
+    expect(assembleReport(input()).sections).not.toContain('decoupling')
+    const d = assembleReport(input({ rules: rulesWithDecoupling }))
+    expect(d.sections).toEqual(['board', 'findings', 'notes', 'decoupling', 'cables', 'esd'])
+    const ics = d.decoupling!.rails[0].ics
+    expect(ics[0].status).toBe('gaps')
+    expect(ics[0].statusText).toMatch(/^gaps at .+ and 1 more$/)
+    expect(ics[0].recommendations.length).toBeGreaterThan(0)
+    expect(ics[0].recommendations.length).toBeLessThanOrEqual(3)
+    expect(ics[0].targetAssumed).toContain('current step')
+  })
+
+  it('draws a chart for an IC with gaps and one line for an IC that is ok', () => {
+    const html = renderReportHtml(assembleReport(input({ rules: rulesWithDecoupling })), board)
+    const section = html.slice(html.indexOf('id="decoupling"'), html.indexOf('id="cables"'))
+    expect(section.match(/<svg class="chart"/g)?.length).toBe(1)
+    expect(section).toContain('Supply impedance against frequency')
+    expect(section).toContain('What would help')
+    expect(section).toContain('<th class="num">Useful to</th>')
+    expect(section).toContain('<span class="tag ok">ok</span>')
+    expect(section).toContain('Assumed: current step.')
+    expect(section).toContain(esc(`U9${EVIL}`))
+    expect(section).not.toContain('<script')
+  })
+
+  it('never includes the conducted scan while its feature is off', () => {
+    const off = assembleReport(input({ conducted: { run: run('conducted'), doc: conducted } }))
+    expect(off.sections).not.toContain('conducted')
+    expect(off.conducted).toBeNull()
+    const none = assembleReport(input({ features: { full_wave: false, conducted: true } }))
+    expect(none.sections).not.toContain('conducted')
+  })
+
+  it('labels the conducted scan experimental, with its assumed inputs and chart', () => {
+    const d = assembleReport(input({
+      features: { full_wave: false, conducted: true }, conducted: { run: run('conducted'), doc: conducted },
+    }))
+    expect(d.sections).toContain('conducted')
+    expect(d.conducted!.worst?.marginDb).toBe(-6)
+    const html = renderReportHtml(d, board)
+    const section = html.slice(html.indexOf('id="conducted"'))
+    expect(section).toContain('<strong>Experimental.</strong> Differential mode only')
+    expect(section).toContain('Assumed regulator settings.')
+    expect(section).toMatch(/Frequency<\/td><td class="num">500 kHz<\/td><td>default/)
+    expect(section).toMatch(/Duty<\/td><td class="num">42 %<\/td><td>rail names/)
+    expect(section).toContain('Conducted spectrum at the LISN against the limits')
+    expect(section).toContain('Over the limit by 6.0 dB')
+    expect(section).toContain('+24.5 dB')
+    expect(section).toContain(esc(`U3${EVIL}`))
+    expect(section).not.toContain('<script')
+    expect(section).not.toContain('—')
+  })
+
+  it('says so when the scan found no power input, rather than a verdict', () => {
+    const empty: ConductedDoc = {
+      ...conducted, entry: null, regulators: [], variants: [], worst: null, dominant: null,
+      notes: ['No supply net crosses an edge connector, so there is no power input to measure'],
+    }
+    const html = renderReportHtml(assembleReport(input({
+      features: { full_wave: false, conducted: true }, conducted: { run: run('conducted'), doc: empty },
+    })), board)
+    expect(html).toContain('No power input was found, so nothing was measured.')
+    expect(html).not.toContain('No harmonic falls between')
+    expect(html).not.toContain('Every regulator setting was entered')
+  })
+
+  it('still loads nothing from anywhere with both sections in', () => {
+    const html = renderReportHtml(assembleReport(input({
+      rules: rulesWithDecoupling,
+      features: { full_wave: false, conducted: true },
+      conducted: { run: run('conducted'), doc: conducted },
+    })), board)
+    const refs = [...html.matchAll(/\b(?:src|href|xlink:href)\s*=\s*"([^"]*)"/g)].map((m) => m[1])
+    expect(refs).toEqual([])
+    expect(html).not.toMatch(/url\(|@import|https?:\/\//)
+  })
+
+  it('carries both in the JSON export', () => {
+    const parsed = JSON.parse(reportJson(assembleReport(input({
+      rules: rulesWithDecoupling,
+      features: { full_wave: false, conducted: true },
+      conducted: { run: run('conducted'), doc: conducted },
+    }))))
+    expect(parsed.decoupling.rails[0].ics[0].branches.length).toBeGreaterThan(0)
+    expect(parsed.conducted.why).toBe(CONDUCTED_WHY)
+    expect(parsed.conducted.assumed[0].settings.map((s: { name: string }) => s.name)).toEqual(['frequency_hz', 'duty'])
+    expect(parsed.meta.features.conducted).toBe(true)
+  })
+})
+
 describe('the JSON export', () => {
   it('carries the same data and the disclaimer, without the picture', () => {
     const d = assembleReport(input({ boardImage: { src: 'data:image/png;base64,AAAA', widthPx: 1, heightPx: 1 } }))
@@ -263,5 +401,7 @@ describe('helpers', () => {
   it('draws nothing from too few points', () => {
     expect(cableBudgetSvg([])).toBe('')
     expect(transientSvg([0], [{ color: '#000', values: [1] }])).toBe('')
+    expect(decouplingSvg([1e6, 1e7], [], 0, 0.1, 1e8)).toBe('')
+    expect(conductedSvg([], 'fcc-15b-conducted-qp', 'fcc-15b-conducted-avg')).toBe('')
   })
 })
