@@ -29,5 +29,9 @@ def test_the_exported_rules_file_reads_back_without_warnings():
     # The group written from the rules file it came from, still scoped to its nets.
     assert cfg.param("ddr-skew", "byte_lane_ps", net="DDR_DQ3") == 5
     assert cfg.suppressed("edge-proximity", "GND").reason == "guard ring, intentional"
+    # And the ones added in the app, written beside them.
+    assert cfg.param("impedance", "single_ended_ohm", net="CLK_A") == 50
+    assert cfg.param("impedance", "single_ended_ohm", net="DATA") == 0
+    assert cfg.suppressed("plane-gap", "DATA").reason == "slot is intentional"
     # Untouched values are left to the defaults rather than written out.
     assert cfg.rule("ddr-skew").params["intra_pair_ps"].source == "default"

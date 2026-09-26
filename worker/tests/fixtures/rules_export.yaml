@@ -19,7 +19,13 @@ groups:
   - match: "DDR_DQ*"
     params:
       byte_lane_ps: 5
+  - match: "CLK*"
+    params:
+      single_ended_ohm: 50
 suppress:
   - rule: edge-proximity
     net: GND
     reason: "guard ring, intentional"
+  - rule: plane-gap
+    net: DATA
+    reason: "slot is intentional"

@@ -584,6 +584,8 @@ def check_length_matching(ctx: RuleContext) -> Iterator[Finding]:
     if not ctx.enabled("ddr-skew") or not ctx.groups or not ctx.electrics:
         return
 
+    yield from _lane_to_lane(ctx)
+
     for group in ctx.groups:
         tol = float(ctx.setting("ddr-skew", group.tolerance_key, net=group.reference) or 0.0)
         if tol <= 0:
@@ -622,7 +624,7 @@ def check_length_matching(ctx: RuleContext) -> Iterator[Finding]:
                 detail=(
                     f"In {group.name}, {net} arrives {abs(skew):.0f} ps {longer} than its "
                     f"reference {group.reference} — about {abs(mm):.1f} mm of trace. The "
-                    f"budget is ±{tol:.0f} ps ({ctx.settings.rule('ddr-skew').describe(group.tolerance_key, 'ps') if ctx.settings else ''}). "
+                    f"budget is ±{tol:.0f} ps ({_describe_tolerance(ctx, group)}). "
                     f"{_path_summary(ctx, net)} "
                     f"Group identified by {group.source}."
                     + (f" {group.note}" if group.note else "")
@@ -631,6 +633,59 @@ def check_length_matching(ctx: RuleContext) -> Iterator[Finding]:
                 x=where[0] if where else None,
                 y=where[1] if where else None,
             )
+
+
+def _lane_to_lane(ctx: RuleContext) -> Iterator[Finding]:
+    """Byte lanes against each other, compared by their strobes. Off unless lane_to_lane_ps > 0.
+
+    A controller with write levelling absorbs the difference between lanes, so by default this
+    compares nothing: on a correct DDR3/DDR4 board it would be a wall of findings. It is for
+    parts without levelling (DDR2, some LPDDR and FPGA soft controllers). The parameter was in
+    the catalogue and the docs for a release before anything read it, so setting it silently
+    did nothing.
+
+    Each lane is compared with the median lane rather than the fastest, so one outlier is
+    reported as the outlier instead of making every other lane look late.
+    """
+    tol = float(ctx.setting("ddr-skew", "lane_to_lane_ps") or 0.0)
+    if tol <= 0:
+        return
+    lanes = [(g, _group_delay(ctx, g.reference)) for g in ctx.groups if g.kind == "byte-lane"]
+    lanes = [(g, d) for g, d in lanes if d is not None]
+    if len(lanes) < 2:
+        return
+    delays = sorted(d for _, d in lanes)
+    mid = len(delays) // 2
+    median = delays[mid] if len(delays) % 2 else (delays[mid - 1] + delays[mid]) / 2
+    for group, delay in lanes:
+        skew = delay - median
+        if abs(skew) <= tol:
+            continue
+        where = _net_midpoint(ctx, group.reference)
+        later = "later" if skew > 0 else "earlier"
+        yield Finding(
+            rule="ddr-skew",
+            severity=ctx.settings.severity("ddr-skew", "warning") if ctx.settings else "warning",
+            title=f"{group.name} arrives {abs(skew):.0f} ps {later} than the other lanes",
+            detail=(
+                f"Its strobe {group.reference} is {abs(skew):.0f} ps {later} than the median of "
+                f"{len(lanes)} byte lanes. The lane-to-lane budget is ±{tol:.0f} ps. Only set "
+                "this budget for a memory controller without write levelling; one with it "
+                "absorbs the difference."
+            ),
+            net=group.reference,
+            x=where[0] if where else None,
+            y=where[1] if where else None,
+        )
+
+
+def _describe_tolerance(ctx: RuleContext, group) -> str:
+    """Where a group's budget came from, naming the net group when one set it."""
+    if not ctx.settings:
+        return ""
+    netclass = ctx.netclasses.of(group.reference) if ctx.netclasses else ""
+    return ctx.settings.describe("ddr-skew", group.tolerance_key, "ps",
+                                 net=group.reference, netclass=netclass)
 
 
 def _group_delay(ctx: RuleContext, net: str) -> float | None:

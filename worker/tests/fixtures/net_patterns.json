@@ -1,0 +1,23 @@
+[
+  ["DDR_DQ*", "DDR_DQ0", true],
+  ["DDR_DQ*", "DDR_DQS0_P", true],
+  ["DDR_DQ*", "ddr_dq0", false],
+  ["DDR_DQ?", "DDR_DQ7", true],
+  ["DDR_DQ?", "DDR_DQ10", false],
+  ["DQ[0-3]", "DQ2", true],
+  ["DQ[0-3]", "DQ4", false],
+  ["DQ[!0-3]", "DQ4", true],
+  ["DQ[!0-3]", "DQ2", false],
+  ["DQ[]]", "DQ]", true],
+  ["DQ[^]", "DQ^", true],
+  ["DQ[", "DQ[", true],
+  ["/PCIE_*", "/PCIE_TX0_P", true],
+  ["/PCIE_*", "PCIE_TX0_P", false],
+  ["Net-(U1-Pad3)", "Net-(U1-Pad3)", true],
+  ["V+.3V3", "V+.3V3", true],
+  ["V+.3V3", "VV.3V3", false],
+  ["*", "", true],
+  ["GND", "GND", true],
+  ["GND", "AGND", false],
+  ["a\\b", "a\\b", true]
+]

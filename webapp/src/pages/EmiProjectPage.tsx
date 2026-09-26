@@ -15,6 +15,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router'
 import { versionsOf } from '../lib/compare'
 import { NewVersionModal } from '../components/NewVersionModal'
+import { ReportDialog } from '../components/ReportDialog'
 import type { BoardRenderer } from '../lib/BoardRenderer'
 import { createCursorStore, useCursor, type CursorStore } from '../lib/cursorStore'
 import { BoardCanvas, type CanvasMode } from '../components/BoardCanvas'
@@ -29,7 +30,7 @@ import { AnalysisNotes } from '../components/AnalysisNotes'
 import { ChecksSettings } from '../components/ChecksSettings'
 import { WhatNext } from '../components/WhatNext'
 import { collectNotices, worstLevel } from '../lib/notices'
-import { layerFromParams, type AppLayer } from '../lib/rulesSettings'
+import { layerFromParams, type AppLayer, type Suppression } from '../lib/rulesSettings'
 import { RunProgress } from '../components/RunProgress'
 import { DriversPanel } from '../components/DriversPanel'
 import { ComponentsPanel } from '../components/ComponentsPanel'
@@ -78,6 +79,8 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
   const [tab, setTab] = useState<string | null>('findings')
   // The Findings tab shows the findings, or the settings they were found with.
   const [findingsView, setFindingsView] = useState<'findings' | 'checks'>('findings')
+  // Suppress on a finding hands this to the Checks view, which adds it to its draft.
+  const [pendingSuppression, setPendingSuppression] = useState<Suppression | null>(null)
   const [roi, setRoi] = useState<[number, number, number, number] | null>(null)
   const [ports, setPorts] = useState<PortSpec[]>([])
   const [pickingPad, setPickingPad] = useState(false)
@@ -98,6 +101,7 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [uploadingVersion, setUploadingVersion] = useState(false)
   const [confirmDeleteVersion, setConfirmDeleteVersion] = useState(false)
+  const [exporting, setExporting] = useState(false)
   const rendererRef = useRef<BoardRenderer | null>(null)
   const qc = useQueryClient()
 
@@ -219,6 +223,7 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
   }, [activeRun?.id, activeRun?.progress])
 
   const doc: BoardDoc | null = board.data?.doc ?? null
+  const netNames = useMemo(() => doc?.nets?.map((n) => n.name).filter(Boolean) ?? [], [doc])
   const noticeLevel = useMemo(
     () => worstLevel(collectNotices(rules.data, doc).notices), [rules.data, doc])
 
@@ -525,6 +530,9 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
               <Menu.Item onClick={() => setUploadingVersion(true)}>
                 Upload a new version&#8230;
               </Menu.Item>
+              <Menu.Item onClick={() => setExporting(true)} disabled={!board.data || !ingestDone}>
+                Export report&#8230;
+              </Menu.Item>
               {versions.length > 1 && (
                 <Menu.Item component={Link} to={`${base}/${projectId}/compare`}>
                   Compare versions
@@ -776,15 +784,19 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
                                     data={[{ label: 'Findings', value: 'findings' },
                                            { label: 'Checks', value: 'checks' }]} />
                   {findingsView === 'findings' && rules.data && <WhatNext onTab={setTab} />}
-                  {findingsView === 'findings' ? (
+                  {findingsView === 'findings' && (
                     <RuleFindings
                       rules={(rules.data as RulesDoc | null) ?? null}
                       onFocus={onFocusFinding}
                       onSelectNet={setNet}
                       onSimulate={onSimulateFinding}
                       onShowInKiCad={kicad ? showInKiCad : undefined}
+                      nets={netNames}
+                      onSuppress={(s) => { setPendingSuppression(s); setFindingsView('checks') }}
                     />
-                  ) : (
+                  )}
+                  {/* Hidden rather than unmounted, so unsaved edits survive a look at the findings. */}
+                  <div hidden={findingsView !== 'checks'}>
                     <ChecksSettings
                       // A new analysis brings new values underneath, so the draft starts over.
                       key={ingest?.id}
@@ -793,8 +805,11 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
                       onApply={(layer) => reanalyse.mutate(layer)}
                       applying={reanalysing || reanalyse.isPending}
                       applyBlocked={!ingest?.board_id ? 'The board has not finished processing yet' : undefined}
+                      nets={netNames}
+                      pending={pendingSuppression}
+                      onPendingUsed={() => setPendingSuppression(null)}
                     />
-                  )}
+                  </div>
                 </Stack>
               )}
             </Tabs.Panel>
@@ -1077,6 +1092,26 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
         </Paper>
         )}
       </Group>
+
+      {exporting && doc && board.data && ingest && version && (
+        <ReportDialog
+          api={api}
+          projectId={projectId}
+          projectName={project.data?.name ?? 'Board'}
+          versions={versions}
+          version={version}
+          runs={runs.data ?? []}
+          ingest={ingest}
+          doc={doc}
+          geometry={board.data.geometry}
+          rules={rules.data ?? null}
+          features={features.data}
+          cableAssignments={cableAssignments}
+          onClose={() => setExporting(false)}
+          onStarted={() => setPollMs(1500)}
+          onOpenTab={(t) => { setExporting(false); setPanelOpen(true); setTab(t) }}
+        />
+      )}
 
       <NewVersionModal
         api={api}

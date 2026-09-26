@@ -8,18 +8,19 @@
  * file to commit beside the board, which gives the same analysis without this app.
  */
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Accordion, Alert, Badge, Box, Button, Center, CloseButton, Group, Paper, Select, Stack,
   Switch, Text, TextInput, Tooltip,
 } from '@mantine/core'
 import type { RulesDoc } from '../lib/boardTypes'
 import {
-  BOARD_SETTINGS, RULES, SEVERITIES, SOURCE_LABEL, defaultSnapshot, editBoard, editRule,
+  BOARD_SETTINGS, RULES, SEVERITIES, addSuppression, defaultSnapshot, editBoard, editRule,
   overlay, paramLabel, parseSetting, rulesFileText, sameLayer, type AppLayer, type Severity,
-  type SettingSource, type Sourced,
+  type SettingSource, type Sourced, type Suppression,
 } from '../lib/rulesSettings'
 import { CATEGORY_COLOR, CATEGORY_ORDER } from './ChecksTable'
+import { NetGroupsEditor, SourceBadge, SuppressionsEditor } from './ChecksOverrides'
 
 const BOARD_LABEL: Record<string, { label: string; unit: string; hint?: string }> = {
   max_frequency_hz: { label: 'Top frequency', unit: 'Hz', hint: 'Length checks compare against this.' },
@@ -42,12 +43,28 @@ export interface ChecksSettingsProps {
   applying: boolean
   /** Why applying is not possible right now, if it is not. */
   applyBlocked?: string
+  /** The board's net names, to preview which nets a group or suppression pattern covers. */
+  nets?: string[]
+  /** A suppression made from a finding (Suppress on the Findings list), added to the draft. */
+  pending?: Suppression | null
+  /** Called once the pending suppression is in the draft, so it is not added twice. */
+  onPendingUsed?: () => void
 }
 
-export function ChecksSettings({ rules, saved, onApply, applying, applyBlocked }: ChecksSettingsProps) {
+export function ChecksSettings({
+  rules, saved, onApply, applying, applyBlocked, nets = [], pending, onPendingUsed,
+}: ChecksSettingsProps) {
   const report = rules?.settings
   const base = useMemo(() => report?.base ?? defaultSnapshot(), [report])
   const [draft, setDraft] = useState<AppLayer>(saved)
+  useEffect(() => {
+    if (!pending) return
+    setDraft((d) => addSuppression(d, base, pending))
+    onPendingUsed?.()
+  }, [pending, base, onPendingUsed])
+  // A group or suppression half edited, which Save would otherwise quietly leave out.
+  const [openForms, setOpenForms] = useState<Record<string, boolean>>({})
+  const editingForm = Object.values(openForms).some(Boolean)
   // What is typed, per field, so a half-typed or invalid number stays on screen.
   const [texts, setTexts] = useState<Record<string, string>>({})
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -83,8 +100,6 @@ export function ChecksSettings({ rules, saved, onApply, applying, applyBlocked }
     .concat([['Other', RULES.filter((r) => !CATEGORY_ORDER.includes(r.category))] as const])
     .filter(([, rs]) => rs.length > 0)
 
-  const extras = base.groups.length + base.suppress.length
-
   return (
     <Stack gap="sm">
       <Text size="xs" c="dimmed">
@@ -106,9 +121,10 @@ export function ChecksSettings({ rules, saved, onApply, applying, applyBlocked }
       )}
 
       <Group gap="xs">
-        <Tooltip label={applyBlocked} disabled={!applyBlocked} withArrow>
+        <Tooltip label={applyBlocked ?? 'Finish the group or suppression you are editing'}
+                 disabled={!applyBlocked && !editingForm} withArrow>
           <Button size="xs" onClick={() => onApply(draft)} loading={applying}
-                  disabled={!changed || invalid || !!applyBlocked}>
+                  disabled={!changed || invalid || editingForm || !!applyBlocked}>
             Save and re-analyse
           </Button>
         </Tooltip>
@@ -124,15 +140,6 @@ export function ChecksSettings({ rules, saved, onApply, applying, applyBlocked }
           </Button>
         </Tooltip>
       </Group>
-
-      {extras > 0 && (
-        <Text size="xs" c="dimmed">
-          {base.groups.length > 0 && `${base.groups.length} net group${base.groups.length === 1 ? '' : 's'}`}
-          {base.groups.length > 0 && base.suppress.length > 0 && ' and '}
-          {base.suppress.length > 0 && `${base.suppress.length} suppression${base.suppress.length === 1 ? '' : 's'}`}
-          {' '}from the rules file also apply. Edit them in the file; the export keeps them.
-        </Text>
-      )}
 
       <Paper withBorder p="xs">
         <Text size="xs" fw={600} tt="uppercase" c="dimmed" mb={4}>Board</Text>
@@ -151,6 +158,11 @@ export function ChecksSettings({ rules, saved, onApply, applying, applyBlocked }
           })}
         </Stack>
       </Paper>
+
+      <NetGroupsEditor base={base} draft={draft} saved={saved} nets={nets} onChange={setDraft}
+                       onEditing={(v) => setOpenForms((f) => ({ ...f, groups: v }))} />
+      <SuppressionsEditor base={base} draft={draft} saved={saved} nets={nets} onChange={setDraft}
+                          onEditing={(v) => setOpenForms((f) => ({ ...f, suppress: v }))} />
 
       {groups.map(([cat, rs]) => (
         <Stack key={cat} gap={4}>
@@ -261,13 +273,5 @@ function SourceTag({ source }: { source: SettingSource }) {
         ? <Text size="xs" c="dimmed">default</Text>
         : <SourceBadge source={source} />}
     </Box>
-  )
-}
-
-function SourceBadge({ source }: { source: SettingSource }) {
-  return (
-    <Badge size="xs" variant="light" tt="none" color={source === 'run' ? 'blue' : 'grape'}>
-      {SOURCE_LABEL[source]}
-    </Badge>
   )
 }

@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import {
-  defaultSnapshot, editBoard, editRule, isEmptyLayer, layerFromParams, overlay, paramLabel,
-  parseSetting, rulesFileText, sameLayer, toYaml, type SettingsSnapshot,
+  addSuppression, checkGroup, checkSuppression, defaultSnapshot, editBoard, editRule, globToRegExp, isEmptyLayer,
+  layerFromParams, matchNets, netList, overlay, paramLabel, parseSetting, PER_NET_PARAMS,
+  rulesFileText, sameLayer, setGroups, setSuppressions, toRulesDocument, toYaml,
+  type SettingsSnapshot,
 } from './rulesSettings'
 // Written by this suite's own export, and read by worker/tests/test_rules_export.py.
 import fixture from '../../../worker/tests/fixtures/rules_export.yaml?raw'
+// Also run by worker/tests/test_ingest_settings_notes.py against the worker's matcher.
+import patterns from '../../../worker/tests/fixtures/net_patterns.json'
 
 /** Settings as a rules file left them: one parameter, a group and a suppression. */
 function fromFile(): SettingsSnapshot {
@@ -12,8 +16,8 @@ function fromFile(): SettingsSnapshot {
   s.rules['ddr-skew'].params.byte_lane_ps = { value: 6, source: 'file' }
   s.rules['plane-gap'].severity = 'info'
   s.rules['plane-gap'].severity_source = 'file'
-  s.groups = [{ match: 'DDR_DQ*', params: { byte_lane_ps: 5 } }]
-  s.suppress = [{ rule: 'edge-proximity', net: 'GND', reason: 'guard ring, intentional' }]
+  s.groups = [{ match: 'DDR_DQ*', params: { byte_lane_ps: 5 }, source: 'file' }]
+  s.suppress = [{ rule: 'edge-proximity', net: 'GND', reason: 'guard ring, intentional', source: 'file' }]
   return s
 }
 
@@ -115,11 +119,96 @@ describe('export', () => {
     layer = editRule(layer, base, 'edge-proximity', { severity: 'info' })
     layer = editRule(layer, base, 'via-stub', { param: ['resonance_margin', 6] })
     layer = editBoard(layer, base, 'max_frequency_hz', 1.6e9)
+    layer = setGroups(layer, base, [{ match: 'CLK*', params: { single_ended_ohm: 50 } }])
+    layer = setSuppressions(layer, base, [{ rule: 'plane-gap', net: 'DATA', reason: 'slot is intentional' }])
     expect(rulesFileText(overlay(base, layer))).toBe(fixture)
   })
 
   it('writes almost nothing for a board on defaults', () => {
     expect(rulesFileText(defaultSnapshot()).split('\n').filter((l) => l && !l.startsWith('#')))
       .toEqual(['version: 1'])
+  })
+})
+
+describe('net groups and suppressions', () => {
+  it('lists the rules file first, then the app, each saying where it came from', () => {
+    const base = fromFile()
+    let layer = setGroups({}, base, [{ match: 'CLK*', params: { single_ended_ohm: 50 } }])
+    layer = setSuppressions(layer, base, [{ rule: 'radiator', net: 'DATA', reason: 'test pad' }])
+    const s = overlay(base, layer)
+    expect(s.groups.map((g) => [g.match, g.source])).toEqual([['DDR_DQ*', 'file'], ['CLK*', 'run']])
+    expect(s.suppress.map((x) => [x.rule, x.source])).toEqual([['edge-proximity', 'file'], ['radiator', 'run']])
+    // The export is a rules file: sources are not part of it.
+    const doc = toRulesDocument(s) as { groups: object[]; suppress: object[] }
+    expect(doc.groups).toEqual([
+      { match: 'DDR_DQ*', params: { byte_lane_ps: 5 } }, { match: 'CLK*', params: { single_ended_ohm: 50 } }])
+    expect(doc.suppress[1]).toEqual({ rule: 'radiator', net: 'DATA', reason: 'test pad' })
+  })
+
+  it('is part of the layer, and removing the last one empties it', () => {
+    const base = fromFile()
+    const layer = setSuppressions({}, base, [{ rule: 'radiator', net: 'DATA', reason: 'x' }])
+    expect(isEmptyLayer(layer)).toBe(false)
+    expect(sameLayer(layer, {})).toBe(false)
+    expect(isEmptyLayer(setSuppressions(layer, base, []))).toBe(true)
+    expect(isEmptyLayer(setGroups({}, base, []))).toBe(true)
+  })
+
+  it('adds a suppression from a finding once', () => {
+    const base = fromFile()
+    const s = { rule: 'radiator', net: 'DATA', reason: 'test pad' }
+    const layer = addSuppression({}, base, s)
+    expect(layer.suppress).toEqual([s])
+    expect(addSuppression(layer, base, s)).toBe(layer)
+    // Already in the rules file: nothing to add.
+    const inFile = { rule: 'edge-proximity', net: 'GND', reason: 'guard ring, intentional' }
+    expect(addSuppression({}, base, inFile)).toEqual({})
+  })
+
+  it('is read back from a run, dropping what the worker would not use', () => {
+    expect(layerFromParams({ settings: {
+      groups: [
+        { match: 'DQ*', params: { byte_lane_ps: 4, max_distance_mm: 3 } },
+        { match: 'X*', params: { max_distance_mm: 3 } },
+        { netclass: 'USB', params: { differential_ohm: 90 } },
+        'junk',
+      ],
+      suppress: [{ rule: 'radiator', net: 'DATA', reason: 'ok' }, { rule: 'radiator' }],
+    } })).toEqual({
+      groups: [{ match: 'DQ*', params: { byte_lane_ps: 4 } }],
+      suppress: [{ rule: 'radiator', net: 'DATA', reason: 'ok' }],
+    })
+  })
+
+  it('matches net patterns the way the worker does', () => {
+    for (const [pattern, net, expected] of patterns as [string, string, boolean][]) {
+      expect([pattern, net, globToRegExp(pattern).test(net)]).toEqual([pattern, net, expected])
+    }
+    expect(matchNets('D*', ['CLK', 'DATA', 'DQ0'])).toEqual(['DATA', 'DQ0'])
+    expect(netList(['A', 'B', 'C', 'D', 'E', 'F'])).toBe('A, B, C, D and 2 more')
+  })
+
+  it('only offers the parameters a rule reads per net', () => {
+    expect(PER_NET_PARAMS.map((p) => `${p.rule.id}.${p.key}`).sort()).toEqual([
+      'ddr-skew.address_command_ps', 'ddr-skew.byte_lane_ps', 'ddr-skew.intra_pair_ps',
+      'impedance.differential_ohm', 'impedance.single_ended_ohm',
+    ])
+  })
+
+  it('checks a group as the worker would', () => {
+    expect(checkGroup(' DQ* ', [['byte_lane_ps', '4']])).toEqual({ group: { match: 'DQ*', params: { byte_lane_ps: 4 } } })
+    expect(checkGroup('', [])).toEqual({ errors: {
+      pattern: 'Enter a net name or pattern', params: 'Add at least one setting', values: {} } })
+    expect(checkGroup('DQ*', [['max_distance_mm', '3'], ['byte_lane_ps', '-1']])).toEqual({ errors: {
+      values: { max_distance_mm: 'Not a per-net setting', byte_lane_ps: 'Must be zero or more' } } })
+  })
+
+  it('needs a reason and a check that exists before it will suppress anything', () => {
+    expect(checkSuppression({ rule: 'radiator', net: 'DATA', reason: ' test pad ' }))
+      .toEqual({ suppression: { rule: 'radiator', net: 'DATA', reason: 'test pad' } })
+    expect(checkSuppression({ rule: 'radiatr', net: '', reason: ' ' })).toEqual({ errors: {
+      rule: 'No check has this id', net: 'Enter a net name or pattern',
+      reason: 'Say why, for whoever reads this next' } })
+    expect(checkSuppression({ rule: '*', net: 'GND', reason: 'r' })).toHaveProperty('suppression')
   })
 })

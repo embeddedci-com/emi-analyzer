@@ -182,4 +182,9 @@ RUN python3 -c "$EMI_HEALTHCHECK"
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
     CMD python3 -c "$EMI_HEALTHCHECK" || exit 1
 
+# The release this image is, recorded in every run's summary so a shared report can name the
+# worker that produced it. Last, so changing it rebuilds nothing above.
+ARG EMI_WORKER_VERSION=dev
+ENV EMI_WORKER_VERSION=${EMI_WORKER_VERSION}
+
 ENTRYPOINT ["python3", "-m", "emi_worker"]

@@ -11,6 +11,11 @@ export default defineConfig({
   root: 'app',
   base: '/',
   plugins: [react()],
+  // The app's version, for the report's title page. `make local` and the release workflow set
+  // VERSION; a build without one says "dev".
+  define: {
+    'import.meta.env.VITE_EMI_VERSION': JSON.stringify(process.env.VERSION || 'dev'),
+  },
   build: { outDir: '../dist-app', emptyOutDir: true },
   server: {
     port: 5175,

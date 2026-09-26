@@ -29,6 +29,7 @@ see the limitations page in the app, and [known issues](docs/known-issues.md).
 3. [Step 2 — Install EMI Analyzer](#step-2--install-emi-analyzer)
 4. [Step 3 — First launch](#step-3--first-launch)
 5. [Step 4 — Analyse a board](#step-4--analyse-a-board)
+   - [Sharing results](#sharing-results)
 6. [Using it from KiCad](#using-it-from-kicad)
 7. [Running without the desktop app](#running-without-the-desktop-app)
 8. [Running in the background](#running-in-the-background)
@@ -243,6 +244,26 @@ running in the background.
 7. The header also has **Runs**, which lists what has been analysed and lets you retry anything
    that failed, and the **⋯** menu can rename the board, delete one version, or delete the board
    with every version. Deleting removes the files and results from this computer.
+8. To share results, see [Sharing results](#sharing-results).
+
+### Sharing results
+
+In the **⋯** menu, click **Export report**. Pick the sections (all that are available are on)
+and the format, check the preview, and download.
+
+- **HTML report**: one file with everything inline, for your team or a test lab. It has a title
+  page (board, version, date, app and worker versions, file hash, stackup, the rules file and
+  settings used, which experimental features were on), the board with numbered finding markers,
+  the findings by severity and rule, the analysis notes, and, when they have been run, the cable
+  budgets and ESD results with their charts and a "changes since version N" section. It loads
+  nothing from the network. To get a PDF, open it in a browser and print it, or click **Print or
+  save as PDF** in the dialog.
+- **JSON data**: the same content, for scripts and CI.
+
+A cable or ESD run that has not been done on this version is listed in the dialog with a **Run
+now** button, and named in the report as not included. Every report says, on its first page and
+on each printed page, that it compares versions of your own board and is not a pre-compliance
+test.
 
 ---
 

@@ -19,6 +19,7 @@ import json
 import logging
 
 from ..cables import CableError, get, suggest_all
+from ..cables.attach import EDGE_TOLERANCE_MM
 from ..cables.budget import solver_budget
 from ..cables.nec import available as nec_available
 from ..kicad.normalize import _board_extent
@@ -57,6 +58,24 @@ ASSUMPTIONS = [
 def _grid() -> list[float]:
     step = (GRID_MAX_HZ / GRID_MIN_HZ) ** (1.0 / (GRID_POINTS - 1))
     return [GRID_MIN_HZ * step ** k for k in range(GRID_POINTS)]
+
+
+def build_document(solver: str, standard_id: str, results: list, unassigned: list,
+                   notes: list[str]) -> dict:
+    """The body of ``cables.json``, less the note about unassigned connectors."""
+    return {
+        "format": "emi-cables",
+        "format_version": 1,
+        "solver": solver,
+        "standard_id": standard_id,
+        "assumptions": ASSUMPTIONS,
+        # How close a connector must be to the board edge before a solve attaches its cable.
+        # The Cables tab quotes it, and reads it from here so the two cannot drift.
+        "edge_tolerance_mm": EDGE_TOLERANCE_MM,
+        "cables": results,
+        "unassigned": unassigned,
+        "notes": notes,
+    }
 
 
 def run_cable(ctx: StageContext) -> StageResult:
@@ -168,16 +187,7 @@ def run_cable(ctx: StageContext) -> StageResult:
             ],
         })
 
-    document = {
-        "format": "emi-cables",
-        "format_version": 1,
-        "solver": cfg.cable_solver,
-        "standard_id": standard_id,
-        "assumptions": ASSUMPTIONS,
-        "cables": results,
-        "unassigned": unassigned,
-        "notes": notes,
-    }
+    document = build_document(cfg.cable_solver, standard_id, results, unassigned, notes)
     if unassigned:
         document["notes"].append(
             f"{len(unassigned)} connector{'s' if len(unassigned) != 1 else ''} "

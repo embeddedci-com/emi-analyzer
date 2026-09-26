@@ -26,12 +26,13 @@ rules:
       intra_pair_ps: 2
       byte_lane_ps: 10
       address_command_ps: 25
-      lane_to_lane_ps: 0               # 0 = do not compare; write levelling absorbs it
+      lane_to_lane_ps: 0               # 0 = off; set it only for a controller without write leveling
   impedance:
     params:
       tolerance_pct: 10
 
-# Overrides for a set of nets. A board has several budgets on it at once.
+# Overrides for a set of nets. A board has several budgets on it at once. Only settings a
+# check reads per net can go here (see below); the last matching group wins.
 groups:
   - match: "DDR_DQ*"
     params: { byte_lane_ps: 6 }
@@ -40,8 +41,8 @@ groups:
   - match: "/PCIE_*"
     params: { differential_ohm: 85, intra_pair_ps: 1 }
 
-# Findings already decided about. A reason is required -- one without it is a mystery to
-# whoever finds it next year, and the analyzer warns.
+# Findings already decided about. A reason is required: one without it is a mystery to
+# whoever finds it next year, and the analyzer warns. So does a rule id that names no check.
 suppress:
   - rule: edge-proximity
     net: GND
@@ -59,8 +60,28 @@ Most general first; the last one to set a value wins, and every finding can say 
 
 The app shows every value with its source, and saves its edits with the analysis run they
 were applied by (the ingest run's `params.settings`, in this file's format). Its **Export
-emi.rules.yaml** button writes all of it, including the groups and suppressions from this
-file, as one file that gives the same analysis without the app.
+emi.rules.yaml** button writes all of it, including groups and suppressions from this file and
+from the app, as one file that gives the same analysis without the app.
+
+Net groups and suppressions can be added in the app too, under Checks, or with **Suppress…** on
+a finding. The app lists this file's beside its own, read-only, and shows which of the board's
+nets each pattern matches. Groups and suppressions add up across layers rather than replace
+each other: the app's come after this file's, so a group set in the app wins where both match.
+Suppressed findings are listed, with their reasons, at the end of the Findings list.
+
+## Net patterns
+
+`match` and `net` are glob patterns, case-sensitive: `*` is any run of characters, `?` one,
+`[0-3]` one of a set and `[!0-3]` one not in it. `netclass` matches a KiCad netclass exactly
+instead, and needs the `.kicad_pro`.
+
+A group can set only these, because they are the only settings a check reads net by net. Any
+other setting in a group is ignored with a warning; set it under `rules` instead.
+
+| Check | Setting | Applied to |
+| --- | --- | --- |
+| `ddr-skew` | `intra_pair_ps`, `byte_lane_ps`, `address_command_ps` | a matched group whose reference net matches |
+| `impedance` | `single_ended_ohm`, `differential_ohm` | each net that matches |
 
 ## Notes
 

@@ -126,3 +126,76 @@ def test_custom_pads_are_one_warning_not_one_each():
     assert len(odd) == 1
     assert odd[0].startswith("7 pads with a custom shape (U9.1, U9.2, U9.3, U9.4, U9.5 and 2 more)")
     assert not any("\x00" in w for w in model.warnings)
+
+
+# ---- net groups and suppressions from the app ---------------------------------------------
+
+def test_the_app_layers_groups_and_suppressions_are_applied(tmp_path):
+    """The Checks view saves groups and suppressions as the run layer. They have to change the
+    findings, not only appear in the snapshot, and say which layer they came from."""
+    data = _zip({
+        "p/board.kicad_pcb": TINY,
+        "p/emi.rules.yaml": b"suppress:\n  - {rule: copper-island, net: GND, reason: shield pour}\n",
+    })
+    before = _ingest(tmp_path, data)
+    assert any(f["rule"] == "plane-gap" and f["net"] == "DATA" for f in before["findings"])
+    assert not any(f["rule"] == "impedance" and f["net"] == "CLK" for f in before["findings"])
+
+    rules = _ingest(tmp_path, data, {"settings": {
+        "groups": [{"match": "CL*", "params": {"single_ended_ohm": 500}}],
+        "suppress": [{"rule": "plane-gap", "net": "DATA", "reason": "slot is intentional"}],
+    }})
+    findings = rules["findings"]
+    assert not any(f["rule"] == "plane-gap" and f["net"] == "DATA" for f in findings)
+    assert any(f["rule"] == "impedance" and f["net"] == "CLK" for f in findings), (
+        "the app's net group did not reach the impedance check")
+
+    assert rules["suppressed"] == 2
+    hidden = {(h["rule"], h["net"], h["source"], h["reason"]) for h in rules["suppressed_findings"]}
+    assert ("plane-gap", "DATA", "run", "slot is intentional") in hidden
+    assert ("copper-island", "GND", "file", "shield pour") in hidden
+
+    s = rules["settings"]
+    assert s["applied"]["groups"] == [
+        {"match": "CL*", "params": {"single_ended_ohm": 500.0}, "source": "run"}]
+    assert [x["source"] for x in s["applied"]["suppress"]] == ["file", "run"]
+    # Underneath the app's layer only the file's are left, which the app lists as read-only.
+    assert s["base"]["groups"] == []
+    assert [x["source"] for x in s["base"]["suppress"]] == ["file"]
+
+
+def test_net_patterns_match_as_the_apps_preview_says():
+    """fixtures/net_patterns.json is also run by webapp/src/lib/rulesSettings.test.ts against
+    the app's glob, so the preview of which nets a pattern covers is the worker's answer."""
+    cases = json.loads((FIXTURES / "net_patterns.json").read_text(encoding="utf-8"))
+    for pattern, net, expected in cases:
+        assert settings.NetGroupSetting(match=pattern).matches(net) is expected, (pattern, net)
+        assert settings.Suppression(rule="*", net=pattern).covers("radiator", net) is expected
+
+
+def test_a_group_param_must_be_one_a_rule_reads_per_net():
+    cfg = settings.load(("run", {"groups": [
+        {"match": "DQ*", "params": {"byte_lane_ps": 4, "max_distance_mm": 3, "nonsense": 1}},
+    ]}))
+    assert {k: v.value for k, v in cfg.groups[0].params.items()} == {"byte_lane_ps": 4}
+    assert any("max_distance_mm applies to the whole board" in w for w in cfg.warnings)
+    assert any("unknown parameter 'nonsense'" in w for w in cfg.warnings)
+    listed = {(r["id"], p["key"]) for r in settings.catalogue() for p in r["params"] if p.get("per_net")}
+    assert listed == {(rid, k) for rid, ks in settings.PER_NET_PARAMS.items() for k in ks}
+
+
+def test_a_suppression_for_no_known_rule_is_warned_about():
+    cfg = settings.load(("run", {"suppress": [
+        {"rule": "radiatr", "net": "*", "reason": "typo"},
+        {"rule": "*", "net": "GND", "reason": "any rule"},
+    ]}))
+    assert [w for w in cfg.warnings if "no known rule" in w] == [
+        "App settings: suppression names no known rule ('radiatr')"]
+
+
+def test_a_finding_names_the_net_group_its_budget_came_from():
+    cfg = settings.load(("run", {"groups": [{"match": "DQ*", "params": {"byte_lane_ps": 4}}]}))
+    assert cfg.describe("ddr-skew", "byte_lane_ps", "ps", net="DQ3") == (
+        "4.0 ps, from net group DQ* (app settings)")
+    assert cfg.describe("ddr-skew", "byte_lane_ps", "ps", net="A0") == (
+        "10.0 ps, from built-in default")

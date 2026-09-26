@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import queue
 import random
 import shutil
@@ -32,12 +33,17 @@ from dataclasses import dataclass
 import websockets
 from websockets.sync.client import connect as ws_connect
 
-from . import scratch
+from . import __version__, scratch
 from .client import Client, RunReassigned, RunToken, ServerError
 from .config import Capabilities, Config
 from .stages import STAGES, StageContext, StageError, Stopped
 
 log = logging.getLogger(__name__)
+
+
+def worker_version() -> str:
+    """The release this worker was built as, or the package version outside an image."""
+    return os.environ.get("EMI_WORKER_VERSION", "").strip() or __version__
 
 
 @dataclass
@@ -284,6 +290,9 @@ class Worker:
         elapsed = time.monotonic() - started
         summary = dict(result.summary)
         summary["worker"] = self.cfg.name
+        # Which build produced the result, for a shared report: the image's release version
+        # (EMI_WORKER_VERSION, set when the image is built), or the package's own.
+        summary["worker_version"] = worker_version()
         summary["elapsed_seconds"] = round(elapsed, 2)
 
         try:
