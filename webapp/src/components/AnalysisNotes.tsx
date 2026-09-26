@@ -65,7 +65,7 @@ export function AnalysisNotes({ rules, doc, runId, onOpenChecks }: AnalysisNotes
   }
 
   return (
-    <Paper withBorder p="xs" radius="sm">
+    <Paper withBorder p="xs" radius="sm" w="100%">
       <Stack gap={6}>
         <Group justify="space-between" wrap="nowrap" gap="xs">
           <Text size="xs" fw={600}>About this analysis</Text>

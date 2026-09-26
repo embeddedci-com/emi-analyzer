@@ -8,8 +8,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  ActionIcon, Alert, Badge, Box, Button, Group, Loader, Menu, Modal, Paper, SegmentedControl,
-  Select, Stack, Tabs, Text, TextInput, Title, Tooltip,
+  ActionIcon, Alert, Badge, Box, Button, Collapse, Group, Loader, Menu, Modal, Paper,
+  SegmentedControl, Select, Stack, Tabs, Text, TextInput, Title, Tooltip, UnstyledButton,
 } from '@mantine/core'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router'
@@ -41,7 +41,8 @@ import { SolveSetup, type SolveRequest } from '../components/SolveSetup'
 import { SmallPartSetup } from '../components/SmallPartSolve'
 import { SmallPartResult } from '../components/SmallPartResult'
 import { isSmallPartRun, type HotSpot } from '../lib/smallPart'
-import { HOTSPOT_MARKER_HEX, hexToRgb, type BoardMarker } from '../lib/markers'
+import { HOTSPOT_MARKER_HEX, findingMarkers, hexToRgb, type BoardMarker } from '../lib/markers'
+import { numberFindings } from '../lib/findings'
 import type { BoardDoc, RuleFinding, RulesDoc } from '../lib/boardTypes'
 import type { FieldOverlayData } from '../lib/overlay'
 import { placePortOnAnchor, type PortAnchor, type PortSpec } from '../lib/portPlacement'
@@ -105,6 +106,11 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
   const [uploadingVersion, setUploadingVersion] = useState(false)
   const [confirmDeleteVersion, setConfirmDeleteVersion] = useState(false)
   const [exporting, setExporting] = useState(false)
+  // Findings are marked on the board unless hidden; the one picked on the board or in the list.
+  const [showFindings, setShowFindings] = useState(true)
+  const [selectedFinding, setSelectedFinding] = useState<string | null>(null)
+  // The stackup is one line until asked for: the findings are what a first look is for.
+  const [stackupOpen, setStackupOpen] = useState(false)
   const rendererRef = useRef<BoardRenderer | null>(null)
   const qc = useQueryClient()
 
@@ -440,13 +446,23 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
   }, [doc])
 
   const canvasMode: CanvasMode = drawingRoi ? 'roi' : pickingPad ? 'pick-pad' : 'pan'
+  const findingList = (rules.data as RulesDoc | null | undefined)?.findings
+  const findingNumbers = useMemo(() => numberFindings(findingList ?? []), [findingList])
+  // Every finding with a place, numbered as in the list. Not over a solve's set-up or result:
+  // there the ports and the loudest spots are what the board is showing.
+  const findingsOnBoard = tab !== 'part' && tab !== 'fullwave'
+  const findingMarks = useMemo(
+    () => findingMarkers(findingList ?? [], findingNumbers), [findingList, findingNumbers])
   // The ports being set up, or — when there are none — the ports of the solve on screen. A
   // result is never shown without marking where current was injected: the loudest point of a
   // map is usually at or right beside its port, and unmarked it reads as a hotspot.
   const markers = useMemo(() => {
     const shown = tab === 'part' ? activePart : activeSolve
     const solved = (shown?.params as { ports?: PortSpec[] } | undefined)?.ports ?? []
-    const out: BoardMarker[] = (ports.length ? ports : solved).map((p) => ({ x: p.x_mm, y: p.y_mm, label: p.name }))
+    const out: BoardMarker[] = findingsOnBoard && showFindings ? [...findingMarks] : []
+    if (!findingsOnBoard) {
+      out.push(...(ports.length ? ports : solved).map((p) => ({ x: p.x_mm, y: p.y_mm, label: p.name })))
+    }
     // A small-part result's loudest spots, in the color the result panel numbers them in. Only
     // the result view reports any, so the set-up ports still on screen do not hide them.
     if (tab === 'part') {
@@ -454,11 +470,23 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
       spots.forEach((s, i) => out.push({ x: s.x_mm, y: s.y_mm, label: String(i + 1), color }))
     }
     return out
-  }, [ports, activeSolve, activePart, tab, spots])
+  }, [ports, activeSolve, activePart, tab, spots, findingsOnBoard, showFindings, findingMarks])
 
   const onFocusFinding = (f: RuleFinding) => {
+    setSelectedFinding(f.id)
     if (f.x != null && f.y != null) setFocus({ x: f.x, y: f.y, zoom: 28 })
   }
+
+  // A marker clicked on the board: its finding, opened and scrolled to in the list.
+  const onMarkerClick = useCallback((m: BoardMarker) => {
+    const f = findingList?.find((x) => x.id === m.id)
+    if (!f) return
+    setSelectedFinding(f.id)
+    setNet(f.net || null)
+    setPanelOpen(true)
+    setTab('findings')
+    setFindingsView('findings')
+  }, [findingList])
 
   const onSimulateFinding = (f: RuleFinding) => {
     setEsdNet(f.net ?? null)
@@ -496,7 +524,7 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
     <Stack gap={0} h="calc(100dvh - var(--emi-chrome-height, 60px))">
       <Group justify="space-between" px="md" py="sm" wrap="nowrap">
         <Group gap="sm" wrap="nowrap">
-          <Title order={4}>{project.data?.name ?? 'Board'}</Title>
+          <Title order={4}>{project.data?.name ?? '\u00a0'}</Title>
           {versions.length > 1 && version && (
             <Select
               size="xs"
@@ -529,6 +557,10 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
               Compare
             </Button>
           )}
+          <Button size="compact-xs" variant="light" onClick={() => setExporting(true)}
+                  disabled={!board.data || !ingestDone}>
+            Export report
+          </Button>
           <RunsMenu runs={runs.data ?? []} busy={retry.isPending || stop.isPending}
                     onRetry={(id) => retry.mutate(id)} onStop={(id) => stop.mutate(id)} />
           <Menu position="bottom-end" withinPortal>
@@ -633,15 +665,16 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
           )}
           {!glError && !ingestDone && (
             <Group justify="center" h="100%" p="xl">
-              <Stack gap="sm" maw={420}>
+              <Paper withBorder radius="md" p="md" w={420} maw="100%">
+              <Stack gap="sm">
                 {ingest ? (
                   <>
                     <RunProgress run={ingest} />
                     {!TERMINAL_STATUSES.includes(ingest.status) && workersOnline === 0 && (
                       <Text c="dimmed" size="xs">
                         {local
-                          ? 'Nothing is working on it yet: no worker is connected. The app starts one by itself. Its status is at the top of the window.'
-                          : 'Nothing is working on it yet: no worker is connected. It starts when one does.'}
+                          ? 'Waiting for the worker to start. Its status is at the top of the window.'
+                          : 'Waiting for a worker to connect.'}
                       </Text>
                     )}
                   </>
@@ -651,10 +684,11 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
                   <Text c="red" size="sm">The runs for this board could not be loaded.</Text>
                 ) : (
                   <Text c="dimmed" size="sm">
-                    This board has not been analysed yet.
+                    This board has not been analyzed yet.
                   </Text>
                 )}
               </Stack>
+              </Paper>
             </Group>
           )}
           {!glError && doc && board.data && (
@@ -665,6 +699,7 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
               roi={roi}
               onRoiChange={setRoi}
               markers={markers}
+              onMarkerClick={onMarkerClick}
               onPadPick={onPadPick}
               overlay={overlay}
               overlayOptions={{ gateDb }}
@@ -678,11 +713,18 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
           )}
           {/* Panning the board out of view used to need a page reload to undo. */}
           {!glError && doc && board.data && (
-            <Button size="compact-xs" variant="default"
-                    style={{ position: 'absolute', right: 12, bottom: 12 }}
-                    onClick={() => rendererRef.current?.fit()}>
-              Fit board
-            </Button>
+            <Group gap={6} style={{ position: 'absolute', right: 12, bottom: 12 }}>
+              {findingsOnBoard && findingMarks.length > 0 && (
+                <Button size="compact-xs" variant="default"
+                        onClick={() => setShowFindings((v) => !v)}>
+                  {showFindings ? 'Hide markers' : 'Show markers'}
+                </Button>
+              )}
+              <Button size="compact-xs" variant="default"
+                      onClick={() => rendererRef.current?.fit()}>
+                Fit board
+              </Button>
+            </Group>
           )}
         </Box>
 
@@ -715,20 +757,32 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
               tab it also meant leaving whatever you were reading to hide a layer. */}
           {doc && (
             <Box
-              p="sm"
+              px="sm"
+              py={6}
               style={{
                 flex: 'none',
                 borderBottom: '1px solid var(--mantine-color-default-border)',
               }}
             >
-              <Text size="xs" fw={600} tt="uppercase" c="dimmed" mb={6}>
-                Stackup
-              </Text>
-              <LayerRail
-                doc={doc}
-                visibility={visibility}
-                onToggle={(layer, v) => setVisibility((prev) => ({ ...prev, [layer]: v }))}
-              />
+              <UnstyledButton onClick={() => setStackupOpen((v) => !v)} w="100%"
+                              aria-expanded={stackupOpen}>
+                <Group gap={6} wrap="nowrap">
+                  <Text size="xs" c="dimmed" w={10}>{stackupOpen ? '\u25be' : '\u25b8'}</Text>
+                  <Text size="xs" fw={600} tt="uppercase" c="dimmed">Layers</Text>
+                  <Text size="xs" c="dimmed" style={{ flex: 1 }} truncate>
+                    {stackupSummary(doc, visibility)}
+                  </Text>
+                </Group>
+              </UnstyledButton>
+              <Collapse expanded={stackupOpen}>
+                <Box pt={6}>
+                  <LayerRail
+                    doc={doc}
+                    visibility={visibility}
+                    onToggle={(layer, v) => setVisibility((prev) => ({ ...prev, [layer]: v }))}
+                  />
+                </Box>
+              </Collapse>
             </Box>
           )}
 
@@ -788,17 +842,23 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
                 <Text size="sm" c="dimmed">Findings appear here when the analysis finishes.</Text>
               )}
               {ingestDone && rules.isSuccess && (
-                <Stack gap="sm">
-                  <AnalysisNotes rules={rules.data} doc={doc} runId={ingest?.id}
-                                 onOpenChecks={() => setFindingsView('checks')} />
-                  <SegmentedControl size="xs" fullWidth value={findingsView}
-                                    onChange={(v) => setFindingsView(v as 'findings' | 'checks')}
-                                    data={[{ label: 'Findings', value: 'findings' },
-                                           { label: 'Checks', value: 'checks' }]} />
+                <Stack gap="xs">
+                  {/* The switch and the rules line share a row; notes, when there are any,
+                      wrap onto their own. */}
+                  <Group gap="xs" wrap="wrap" align="center">
+                    <SegmentedControl size="xs" value={findingsView}
+                                      onChange={(v) => setFindingsView(v as 'findings' | 'checks')}
+                                      data={[{ label: 'Findings', value: 'findings' },
+                                             { label: 'Checks', value: 'checks' }]} />
+                    <AnalysisNotes rules={rules.data} doc={doc} runId={ingest?.id}
+                                   onOpenChecks={() => setFindingsView('checks')} />
+                  </Group>
                   {findingsView === 'findings' && rules.data && <WhatNext onTab={setTab} />}
                   {findingsView === 'findings' && (
                     <RuleFindings
                       rules={(rules.data as RulesDoc | null) ?? null}
+                      numbers={findingNumbers}
+                      selectedId={selectedFinding}
                       onFocus={onFocusFinding}
                       onSelectNet={setNet}
                       onSimulate={onSimulateFinding}
@@ -975,6 +1035,8 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
                 key={boardId ?? ''}
                 api={api} projectId={projectId} boardId={ingest?.board_id}
                 runId={lastCableRun?.id} workersOnline={workersOnline}
+                active={tab === 'cables'}
+                anyRun={runs.isSuccess ? boardRuns.some((r) => r.kind === 'cable') : undefined}
                 assignments={cableAssignments} onAssignmentsChange={setCableAssignments}
               />
             </Tabs.Panel>
@@ -1042,7 +1104,7 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
                   <Group justify="space-between" wrap="nowrap" gap="xs">
                     <Text size="xs" c="dimmed">
                       {reanalysing || reanalyse.isPending
-                        ? 'Re-analysing with the latest checks…'
+                        ? 'Analyzing again with the latest checks…'
                         : ingest?.finished_at
                           ? `Analysed ${new Date(ingest.finished_at).toLocaleString()}`
                           : 'Analysed'}
@@ -1290,4 +1352,12 @@ function CursorReadout({ store }: { store: CursorStore }) {
       {cursor.x.toFixed(2)}, {cursor.y.toFixed(2)} mm
     </Text>
   )
+}
+
+/** The stackup in one line: how many copper layers, and how many are hidden. */
+function stackupSummary(doc: BoardDoc, visibility: Record<string, boolean>): string {
+  const hidden = doc.layers.filter((l) => visibility[l.name] === false).length
+  const planes = doc.layers.filter((l) => l.plane_net).length
+  return `${doc.layers.length} copper${planes ? `, ${planes} plane${planes === 1 ? '' : 's'}` : ''}` +
+    (hidden ? ` \u00b7 ${hidden} hidden` : '')
 }

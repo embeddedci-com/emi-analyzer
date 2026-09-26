@@ -207,7 +207,8 @@ chmod +x EMI.Analyzer_*_amd64.AppImage
 2. **Open EMI Analyzer.** A window opens on the analyzer's home page.
 3. **Watch the badge in the top-right corner.** On the first launch it says
    **Downloading worker** while Docker pulls `ghcr.io/embeddedci-com/emi-worker:<version>`, about
-   1.4 GB. That takes a few minutes and happens once per app version.
+   330 MB to download and 1.4 GB on disk. That takes a few minutes and happens once per app
+   version.
 4. When the badge turns green and says **Worker running**, the app is ready.
 
 Click the badge at any time to see the worker's log or restart it.
@@ -219,20 +220,21 @@ running in the background.
 
 ## Step 4 — Analyse a board
 
-1. On the home page, click **Choose a board file** and pick one of:
+1. On the home page, drop a board file on the upload area, or click **Choose a file**, and pick
+   one of:
    - a `.kicad_pcb` file;
    - a zipped KiCad project;
    - a zip of Gerber files **including the drill file and an IPC-D-356 netlist** — Gerbers carry
      no net names on their own.
 
-   No board to hand? Download the small test board
-   [`tiny.kicad_pcb`](https://raw.githubusercontent.com/embeddedci-com/emi-analyzer/main/worker/tests/fixtures/tiny.kicad_pcb).
-2. The board appears within a few seconds, with its layers on the left and the **Findings** tab on
-   the right. Click a finding to zoom to it.
+   No board to hand? Click **Try the sample board**.
+2. The board appears within a few seconds, with each finding marked and numbered on it and the
+   **Findings** tab on the right. Click a marker to open its finding, or a finding to zoom to it.
 3. Look at the other tabs:
    - **ESD** — simulate a discharge into a connector's lines, and compare the voltage at the IC pin
      with the clamp where it is against the clamp moved to the connector.
-   - **Cables** — say which cable plugs into which connector, and see its common-mode budget.
+   - **Cables** — the board's connectors, each with a suggested cable. Click **Get budgets** to
+     see each cable's common-mode budget.
    - **Board** — stackup, nets and layer settings.
 4. Opening the same file again takes you to the existing project instead of creating a new one.
 5. Changed the layout? In the **⋯** menu, click **Upload a new version** and pick the changed file.
@@ -248,7 +250,7 @@ running in the background.
 
 ### Sharing results
 
-In the **⋯** menu, click **Export report**. Pick the sections (all that are available are on)
+Click **Export report** in the board header. Pick the sections (all that are available are on)
 and the format, check the preview, and download.
 
 - **HTML report**: one file with everything inline, for your team or a test lab. It has a title
