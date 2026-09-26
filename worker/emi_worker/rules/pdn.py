@@ -165,25 +165,20 @@ class Network:
         return Network(self.branches + [branch], self.series_l_h)
 
 
-def _refine_max(fn, lo: float, hi: float, iters: int = 60) -> tuple[float, float]:
-    """Golden-section search for a peak in log frequency. The grid is 40 points a decade, a
-    6 % step, and a sharp anti-resonance between two good capacitors is narrower than that:
-    sampling alone reads a 25 dB peak as 15."""
-    g = (math.sqrt(5.0) - 1.0) / 2.0
-    a, b = math.log10(lo), math.log10(hi)
-    c, d = b - g * (b - a), a + g * (b - a)
-    fc, fd = fn(10 ** c), fn(10 ** d)
-    for _ in range(iters):
-        if fc > fd:
-            b, d, fd = d, c, fc
-            c = b - g * (b - a)
-            fc = fn(10 ** c)
-        else:
-            a, c, fc = c, d, fd
-            d = a + g * (b - a)
-            fd = fn(10 ** d)
-    x = (a + b) / 2.0
-    return 10 ** x, fn(10 ** x)
+def _refine_max(net: "Network", lo: float, hi: float) -> tuple[float, float]:
+    """The peak between two grid points, found on two nested dense grids.
+
+    The grid is 40 points a decade, a 6 % step, and a sharp anti-resonance between two good
+    capacitors is narrower than that: sampling alone reads a 25 dB peak as 15. A golden-section
+    search found it too, one frequency at a time, and was 70 % of the view's run time on a
+    busy board; two vectorised passes of 64 points land within 0.003 % of it.
+    """
+    for _ in range(2):
+        fs = np.geomspace(lo, hi, 64)
+        z = net.mag(fs)
+        i = int(np.argmax(z))
+        lo, hi = fs[max(i - 1, 0)], fs[min(i + 1, len(fs) - 1)]
+    return float(fs[i]), float(z[i])
 
 
 def anti_resonances(net: Network, f: np.ndarray) -> list[tuple[float, float]]:
@@ -192,15 +187,8 @@ def anti_resonances(net: Network, f: np.ndarray) -> list[tuple[float, float]]:
     A maximum at either end of the range is not a peak, it is a slope that continues.
     """
     z = net.mag(f)
-    out: list[tuple[float, float]] = []
-
-    def one(x: float) -> float:
-        return float(net.mag(np.array([x]))[0])
-
-    for i in range(1, len(f) - 1):
-        if z[i] > z[i - 1] and z[i] >= z[i + 1]:
-            out.append(_refine_max(one, f[i - 1], f[i + 1]))
-    return out
+    return [_refine_max(net, f[i - 1], f[i + 1])
+            for i in range(1, len(f) - 1) if z[i] > z[i - 1] and z[i] >= z[i + 1]]
 
 
 def closed_form_two_cap_peak(c1: Branch, c2: Branch) -> tuple[float, float]:

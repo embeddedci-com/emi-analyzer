@@ -191,7 +191,7 @@ def test_every_ic_on_every_rail_gets_a_curve():
     ic = rail["ics"][0]
     assert ic["ref"] == "U1"
     assert [c["ref"] for c in ic["caps"]] == ["C1", "C2", "C3"]
-    assert all(c["source"] == "library" for c in ic["caps"])
+    assert all(p["source"] == "library" for p in rail["parts"].values())
     # Target: 3.3 V x 5 % / 0.5 A.
     assert ic["target_ohm"] == pytest.approx(0.33)
     assert ic["noise"] == [{"hz": 16e6, "source": "Y1 16MHz"}]
@@ -237,7 +237,7 @@ def test_an_unreadable_part_is_modelled_and_says_it_was_assumed():
     for p in m.pads:
         if p.ref == "C1":
             p.value, p.footprint = "", "Custom:CAP_WEIRD"
-    c1 = next(c for c in dv.build(ctx_for(m))["rails"][0]["ics"][0]["caps"] if c["ref"] == "C1")
+    c1 = dv.build(ctx_for(m))["rails"][0]["parts"]["C1"]
     assert c1["source"] == "assumed"
     assert c1["assumed"] == ["value", "ESL", "ESR"]
     assert c1["c_f"] == pytest.approx(100e-9)
@@ -271,7 +271,8 @@ def test_a_plane_pair_adds_its_capacitance_and_its_first_resonance():
     assert plane["resonance_hz"] == pytest.approx(1.767e9, rel=0.01)
     assert "first is near 1.77 GHz" in d["note"]
     ic = d["rails"][0]["ics"][0]
-    assert [b["id"] for b in ic["branches"]] == ["C1", "C2", "plane"]
+    assert [c["ref"] for c in ic["caps"]] == ["C1", "C2"]
+    assert ic["plane_branch"]["kind"] == "plane"
     assert ic["series_l_h"] > 0
     # Through the planes the far capacitor is barely worse than the near one: that is what a
     # plane pair is for.

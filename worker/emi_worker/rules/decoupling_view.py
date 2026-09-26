@@ -21,6 +21,7 @@ ranking of the recommendations follows it without another analysis.
 
 from __future__ import annotations
 
+import functools
 import logging
 import math
 import re
@@ -29,7 +30,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from ..kicad.board import BoardModel, Pad, Via
+from ..kicad.board import BoardModel, Pad
 from ..kicad.geometry import ring_area
 from . import pdn
 from .decoupling import CAP_RE, IC_RE, cap_farads
@@ -44,11 +45,10 @@ FORMAT_VERSION = 1
 #: assumed wherever it is shown, and a per-net setting replaces it.
 ASSUMED_RAIL_V = 3.3
 
-#: A capacitor this far from every supply pin of an IC is not modelled as serving it on a board
-#: with no power plane: its trace loop is tens of nanohenries, so it contributes nothing above
-#: a few hundred kilohertz, and listing it would make the table longer, not more accurate.
-SERVE_RADIUS_MM = 25.0
-#: Enough for any real IC; the nearest are kept.
+#: Enough for any real IC; the nearest are kept. Every capacitor on the rail counts, however far:
+#: a first version kept only those within 25 mm, and every rail whose bulk capacitor sat at the
+#: regulator reported a gap at 100 kHz that the bulk capacitor fills. Far away it is behind tens
+#: of nanohenries, which is nothing at 100 kHz and is exactly what the curve shows above it.
 MAX_CAPS_PER_IC = 40
 
 #: When nothing is known about a part: its value is 100 nF and its own inductance is that of
@@ -234,9 +234,10 @@ class _Geo:
     coppers: list[str]
     h: Heights
     ground_layers: list[str]
-    gnd_vias: list[Via]
-    rail_vias: list[Via]
-    ground_th_pads: list[Pad]
+    #: Ground vias and through-hole ground pads as rows of (x, y, drill), and the rail's vias
+    #: as (x, y). Arrays, because a busy board asks thousands of times.
+    gnd_pts: np.ndarray
+    rail_pts: np.ndarray
     plane: dict | None
     max_ground_via_mm: float
 
@@ -257,23 +258,23 @@ class _Geo:
         """(distance to the nearest ground via, vias within reach, via radius)."""
         if p.is_through:
             return 0.0, 1, max(p.drill_mm / 2.0, ASSUMED_VIA_RADIUS_MM)
-        pts = [(v.x, v.y, v.drill_mm) for v in self.gnd_vias] + \
-              [(q.x, q.y, q.drill_mm) for q in self.ground_th_pads]
-        if not pts:
+        if not len(self.gnd_pts):
             return math.inf, 0, ASSUMED_VIA_RADIUS_MM
-        ds = sorted((math.dist((p.x, p.y), (x, y)), d) for x, y, d in pts)
-        near = [d for d in ds if d[0] <= self.max_ground_via_mm]
-        radius = (ds[0][1] / 2.0) if ds[0][1] > 0 else ASSUMED_VIA_RADIUS_MM
-        return ds[0][0], max(1, len(near)), radius
+        ds = np.hypot(self.gnd_pts[:, 0] - p.x, self.gnd_pts[:, 1] - p.y)
+        i = int(np.argmin(ds))
+        near = int(np.count_nonzero(ds <= self.max_ground_via_mm))
+        drill = float(self.gnd_pts[i, 2])
+        radius = drill / 2.0 if drill > 0 else ASSUMED_VIA_RADIUS_MM
+        return float(ds[i]), max(1, near), radius
 
     def rail_via_distance(self, p: Pad) -> float:
         if p.is_through:
             return 0.0
         if self.plane and self.plane["layer"] == _pad_layer(p, self.coppers):
             return 0.0
-        if not self.rail_vias:
+        if not len(self.rail_pts):
             return math.inf
-        return min(math.dist((p.x, p.y), (v.x, v.y)) for v in self.rail_vias)
+        return float(np.min(np.hypot(self.rail_pts[:, 0] - p.x, self.rail_pts[:, 1] - p.y)))
 
 
 def _rail_plane(model: BoardModel, rail: str, planes: dict[str, str], geo_h: Heights,
@@ -403,10 +404,14 @@ def build(ctx: RuleContext) -> dict:
                     if p.net and classify_net(p.net) == "signal":
                         clocks_by_net[p.net].append((hz, f"{ref} {pads[0].value}"))
 
-    gnd_vias = [v for v in model.vias if v.net and classify_net(v.net) == "ground"]
-    gnd_th = [p for p in model.pads if p.net and classify_net(p.net) == "ground" and p.is_through]
+    gnd_pts = np.array(
+        [(v.x, v.y, v.drill_mm) for v in model.vias if v.net and classify_net(v.net) == "ground"]
+        + [(p.x, p.y, p.drill_mm) for p in model.pads
+           if p.net and classify_net(p.net) == "ground" and p.is_through],
+        dtype=float).reshape(-1, 3)
 
     rails: dict[str, list[dict]] = defaultdict(list)
+    rail_parts: dict[str, dict] = defaultdict(dict)
     rail_info: dict[str, dict] = {}
     for ref, pads in sorted(by_ref.items()):
         if not IC_RE.match(ref):
@@ -423,14 +428,16 @@ def build(ctx: RuleContext) -> dict:
                 rail_info[rail] = {
                     "plane": plane, "v": v if v is not None else ASSUMED_RAIL_V,
                     "v_assumed": v is None,
-                    "rail_vias": [x for x in model.vias if x.net == rail],
+                    "rail_pts": np.array([(x.x, x.y) for x in model.vias if x.net == rail],
+                                         dtype=float).reshape(-1, 2),
                 }
             info = rail_info[rail]
-            geo = _Geo(coppers=coppers, h=h, ground_layers=ground_layers, gnd_vias=gnd_vias,
-                       rail_vias=info["rail_vias"], ground_th_pads=gnd_th, plane=info["plane"],
+            geo = _Geo(coppers=coppers, h=h, ground_layers=ground_layers, gnd_pts=gnd_pts,
+                       rail_pts=info["rail_pts"], plane=info["plane"],
                        max_ground_via_mm=via_reach)
             entry = _ic_entry(ctx, f, ref, rail, supply_pins, caps_by_rail.get(rail, []), geo,
-                              info, max_d, board_clock, clocks_by_net, ic_nets)
+                              info, max_d, board_clock, clocks_by_net, ic_nets,
+                              rail_parts[rail])
             rails[rail].append(entry)
 
     out_rails = []
@@ -444,6 +451,7 @@ def build(ctx: RuleContext) -> dict:
                 for k, v in plane.items()
             },
             "status": "gaps" if any(e["status"] == "gaps" for e in ics) else "ok",
+            "parts": rail_parts[rail],
             "ics": ics,
         })
 
@@ -453,19 +461,33 @@ def build(ctx: RuleContext) -> dict:
         note += f" No plane resonances; the first is near {_fmt_hz(min(resonances))}."
     else:
         note += " No power plane pair, so no plane capacitance or resonances."
-    return {
+    return _rounded({
         "format_version": FORMAT_VERSION,
         "f_min_hz": pdn.F_MIN_HZ, "f_max_hz": pdn.F_MAX_HZ,
         "points_per_decade": pdn.POINTS_PER_DECADE,
         "stackup_assumed": h.assumed,
         "note": note,
         "rails": out_rails,
-    }
+    })
+
+
+def _rounded(v):
+    """Four significant figures everywhere. The model is good to tens of percent; seventeen
+    digits of it tripled the size of rules.json on a busy board and said nothing more."""
+    if isinstance(v, float):
+        return float(f"{v:.4g}") if math.isfinite(v) else v
+    if isinstance(v, dict):
+        return {k: _rounded(x) for k, x in v.items()}
+    if isinstance(v, (list, tuple)):
+        return [_rounded(x) for x in v]
+    if isinstance(v, np.floating):
+        return _rounded(float(v))
+    return v
 
 
 def _ic_entry(ctx: RuleContext, f: np.ndarray, ref: str, rail: str, supply_pins: list[Pad],
               caps: list[CapPart], geo: _Geo, info: dict, max_d: float, board_clock: float,
-              clocks_by_net: dict, ic_nets: set[str]) -> dict:
+              clocks_by_net: dict, ic_nets: set[str], parts_seen: dict) -> dict:
     plane = info["plane"]
     ic_layer = _pad_layer(supply_pins[0], geo.coppers)
     cx = sum(p.x for p in supply_pins) / len(supply_pins)
@@ -475,10 +497,7 @@ def _ic_entry(ctx: RuleContext, f: np.ndarray, ref: str, rail: str, supply_pins:
         pin = min(supply_pins, key=lambda p: math.dist((p.x, p.y), (c.supply.x, c.supply.y)))
         return pin, math.dist((pin.x, pin.y), (c.supply.x, c.supply.y))
 
-    ranked = sorted(((nearest_pin(c), c) for c in caps), key=lambda t: t[0][1])
-    if plane is None:
-        ranked = [t for t in ranked if t[0][1] <= SERVE_RADIUS_MM]
-    ranked = ranked[:MAX_CAPS_PER_IC]
+    ranked = sorted(((nearest_pin(c), c) for c in caps), key=lambda t: t[0][1])[:MAX_CAPS_PER_IC]
 
     assumed_notes: set[str] = set()
 
@@ -512,7 +531,7 @@ def _ic_entry(ctx: RuleContext, f: np.ndarray, ref: str, rail: str, supply_pins:
             return (conn + spread) * 1e-9, {
                 "loop_mm": round(loop, 2), "height_mm": round(hh, 3), "ground_vias": n,
                 "ground_via_mm": round(g, 2), "spreading_nh": round(spread, 3),
-                "connection_nh": round(conn, 3), "via_radius_mm": r,
+                "connection_nh": round(conn, 3),
             }
         hh, h_assumed = geo.height_to_ground(layer)
         if h_assumed:
@@ -522,7 +541,6 @@ def _ic_entry(ctx: RuleContext, f: np.ndarray, ref: str, rail: str, supply_pins:
         return conn * 1e-9, {
             "loop_mm": round(loop, 2), "height_mm": round(hh, 3), "ground_vias": n,
             "ground_via_mm": round(g, 2), "spreading_nh": 0.0, "connection_nh": round(conn, 3),
-            "via_radius_mm": r,
         }
 
     branches: list[pdn.Branch] = []
@@ -534,11 +552,15 @@ def _ic_entry(ctx: RuleContext, f: np.ndarray, ref: str, rail: str, supply_pins:
         branches.append(b)
         x, y = ctx.pt(c.supply.x, c.supply.y)
         cap_rows.append({
-            "ref": c.ref, "value": c.value, "package": c.package, "pin": pin.number,
-            "c_f": c.c_f, "esl_h": c.esl_h, "esr_ohm": c.esr_ohm, "mount_l_h": l_mount,
-            "l_h": b.l_h, "distance_mm": round(d, 2), "useful_up_to_hz": b.srf_hz,
-            "source": c.source, "model": c.model_name, "assumed": c.assumed_what,
-            "x": round(x, 4), "y": round(y, 4), **parts,
+            "ref": c.ref, "pin": pin.number, "mount_l_h": l_mount, "l_h": b.l_h,
+            "distance_mm": round(d, 2), "useful_up_to_hz": b.srf_hz, **parts,
+        })
+        # What the part is does not depend on which IC is asking, so it is listed once per
+        # rail: a rail with 28 ICs and 32 capacitors repeated it 900 times.
+        parts_seen.setdefault(c.ref, {
+            "value": c.value, "package": c.package, "c_f": c.c_f, "esl_h": c.esl_h,
+            "esr_ohm": c.esr_ohm, "source": c.source, "model": c.model_name,
+            "assumed": c.assumed_what, "x": round(x, 4), "y": round(y, 4),
         })
 
     series_l = 0.0
@@ -570,7 +592,10 @@ def _ic_entry(ctx: RuleContext, f: np.ndarray, ref: str, rail: str, supply_pins:
         "ref": ref, "pins": sorted({p.number for p in supply_pins}), "x": round(x, 4),
         "y": round(y, 4), "ripple_pct": ripple, "step_current_a": step,
         "target_ohm": target, "band_hz": band, "series_l_h": series_l,
-        "branches": [_branch_dict(b) for b in branches], "caps": cap_rows,
+        # The capacitors' rows carry their own branch (c_f, l_h, esr_ohm); only the plane's is
+        # separate. Listing every branch twice made rules.json half again as large.
+        "plane_branch": next((_branch_dict(b) for b in branches if b.kind == "plane"), None),
+        "caps": cap_rows,
         "assumed": sorted(assumed_notes),
         "noise": _noise(ctx, rail, board_clock, clocks_by_net, ic_nets),
         "recommendations": [],
@@ -649,8 +674,7 @@ def _recommend(e: _Entry, before: np.ndarray, target: float, ranked, branches, m
     best_add = None
     for pkg in ADD_PACKAGES:
         for c_f in ADD_VALUES_F:
-            value = _fmt_f(c_f).replace(" ", "")
-            part = cap_part("Cnew", _fake_pad(value, pkg, "+"), _fake_pad(value, pkg, "-"))
+            part = _candidate(c_f, pkg)
             if part.source != "library":
                 continue
             # At the distance the check asks for, with one ground via and one supply via
@@ -685,6 +709,14 @@ def _recommend(e: _Entry, before: np.ndarray, target: float, ranked, branches, m
     for r in scored:
         r.pop("_rank")
     return scored[:MAX_RECOMMENDATIONS]
+
+
+@functools.lru_cache(maxsize=None)
+def _candidate(c_f: float, pkg: str) -> CapPart:
+    """A part that could be added, resolved once: the library lookup is most of the cost of a
+    recommendation, and the same 42 candidates are asked about for every IC."""
+    value = _fmt_f(c_f).replace(" ", "")
+    return cap_part("Cnew", _fake_pad(value, pkg, "+"), _fake_pad(value, pkg, "-"))
 
 
 def _fake_pad(value: str, pkg: str, side: str) -> Pad:
