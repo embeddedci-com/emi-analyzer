@@ -39,6 +39,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import sp_harness as h  # noqa: E402
 import sp_metrics as metrics  # noqa: E402
+from emi_worker.stages import StageError  # noqa: E402
 
 MARGINS_MM = [float(v) for v in os.environ.get("MARGINS", "2,4.5,7").split(",")]
 PRESETS = os.environ.get("PRESETS", "coarse,normal").split(",")
@@ -120,7 +121,12 @@ def study(label: str, text: str, nets: list[str]) -> dict:
                                         freqs_hz=MAP_HZ)
             key = f"{preset}/{margin:g}"
             name = f"conv-{label.replace(' ', '_')}-{preset}-{margin:g}"
-            got = h.solve(text, params, name)
+            try:
+                got = h.solve(text, params, name)
+            except StageError as exc:
+                runs[key] = {"preset": preset, "margin_mm": margin, "refused": str(exc)}
+                print(f"   {key:>12}: refused: {exc}", flush=True)
+                continue
             s = got.summary
             layer = c.ports[0].layer
             ports = [(p.x, p.y) for p in c.ports]
@@ -146,21 +152,26 @@ def study(label: str, text: str, nets: list[str]) -> dict:
         ref_key = f"{preset}/{MARGINS_MM[-1]:g}"
         for margin in MARGINS_MM[:-1]:
             key = f"{preset}/{margin:g}"
+            if "refused" in runs[ref_key] or "refused" in runs[key]:
+                continue
             d = metrics.compare(runs[ref_key], runs[key])
             d["pass"] = passes(d)
             diffs[f"{key} vs {ref_key}"] = d
             show(f"{key} vs {ref_key}", d)
-    # The mesh: the presets against each other at the largest margin. Reported, and judged by
-    # the same tolerances, but a separate question from the cut.
+    # The mesh: the presets against each other at every margin, the product's own among them.
+    # Reported, and judged by the same tolerances, but a separate question from the cut.
     mesh = {}
     if len(PRESETS) > 1:
-        a = f"{PRESETS[-1]}/{MARGINS_MM[-1]:g}"
-        for preset in PRESETS[:-1]:
-            b = f"{preset}/{MARGINS_MM[-1]:g}"
-            d = metrics.compare(runs[a], runs[b])
-            d["pass"] = passes(d)
-            mesh[f"{b} vs {a}"] = d
-            show(f"{b} vs {a}", d)
+        for margin in MARGINS_MM:
+            a = f"{PRESETS[-1]}/{margin:g}"
+            for preset in PRESETS[:-1]:
+                b = f"{preset}/{margin:g}"
+                if "refused" in runs[a] or "refused" in runs[b]:
+                    continue
+                d = metrics.compare(runs[a], runs[b])
+                d["pass"] = passes(d)
+                mesh[f"{b} vs {a}"] = d
+                show(f"{b} vs {a}", d)
     return metrics.strip({"runs": runs, "cut": diffs, "mesh": mesh})
 
 

@@ -26,7 +26,10 @@ PORT_EXCLUSION_MM = 1.5
 def hotspot(solved, layer: str, freqs: list[float], ports: list[tuple[float, float]]) -> list[dict]:
     """The loudest point of ``layer``'s map at each frequency, away from the ports."""
     dump = f"Hf_{layer.replace('.', '_')}"
-    grids = post.read_fd_dump(os.path.join(str(solved.workdir), f"{dump}.h5"))
+    # At the height the product read it (``model.SolveParams.map_height_mm``), as the manifest
+    # says; a map that spans two grid lines has no single plane of its own.
+    z = next((l["z_mm"] for l in solved.manifest.get("layers", []) if l["layer"] == layer), None)
+    grids = post.read_fd_dump(os.path.join(str(solved.workdir), f"{dump}.h5"), z)
     src = post.source_spectrum(str(solved.workdir), "p1", 50.0, [g.frequency_hz for g in grids])
     v = np.abs(src["v_src"]) / post.OPENEMS_FD_SCALE
     out = []
