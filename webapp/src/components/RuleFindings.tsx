@@ -47,9 +47,11 @@ export interface RuleFindingsProps {
 }
 
 // The same colors as the markers on the board, so a number reads the same in both places.
+// Warnings are yellow, not orange: orange is the copper color, and orange markers on orange
+// traces were the hardest thing on the board to see.
 const SEVERITY_COLOR: Record<string, string> = {
   critical: 'red',
-  warning: 'orange',
+  warning: 'yellow',
   info: 'gray',
 }
 
@@ -125,7 +127,7 @@ export function RuleFindings({
     <Stack gap="sm">
       {/* The counts are the filter: click one to show only those, again to show all. */}
       <Group gap={6}>
-        {([['critical', critical, 'red'], ['warning', warning, 'orange'], ['info', info, 'gray']] as const)
+        {([['critical', critical, 'red'], ['warning', warning, 'yellow'], ['info', info, 'gray']] as const)
           .filter(([sev, n]) => n > 0 || sev !== 'info')
           .map(([sev, n, color]) => (
             <Badge
@@ -133,6 +135,7 @@ export function RuleFindings({
               component="button"
               type="button"
               color={color}
+              autoContrast
               variant={filter === sev || (filter === 'all' && n > 0) ? 'filled' : 'light'}
               aria-pressed={filter === sev}
               title={filter === sev ? 'Show all' : `Show only ${sev}`}

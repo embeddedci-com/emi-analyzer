@@ -53,8 +53,8 @@ describe('finding markers', () => {
     ({ id, rule: 'r', severity, title: '', detail: '', x, y: x })
 
   it('colors by severity: critical red, warning orange, info gray', () => {
-    expect(SEVERITY_MARKER_HEX).toEqual({ critical: '#fa5252', warning: '#fd7e14', info: '#868e96' })
-    expect(severityMarkerColor('warning')).toEqual(hexToRgb('#fd7e14'))
+    expect(SEVERITY_MARKER_HEX).toEqual({ critical: '#fa5252', warning: '#fcc419', info: '#868e96' })
+    expect(severityMarkerColor('warning')).toEqual(hexToRgb('#fcc419'))
   })
 
   it('labels each marker with its number and skips findings with no place', () => {

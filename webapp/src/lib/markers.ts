@@ -51,13 +51,13 @@ export function findingMarkerColor(status: FindingStatus): Rgb {
 }
 
 /**
- * Marker color per finding severity: Mantine's red.6, orange.6 and gray.6, the colors the list
- * numbers its findings in. Orange reads on the copper here because every marker is a filled
- * diamond with a dark outline, not a hairline.
+ * Marker color per finding severity: Mantine's red.6, yellow.5 and gray.6, the colors the list
+ * numbers its findings in. Warnings were orange.6, the copper's own color, and were the hardest
+ * markers on the board to see.
  */
 export const SEVERITY_MARKER_HEX: Record<RuleFinding['severity'], string> = {
   critical: '#fa5252',
-  warning: '#fd7e14',
+  warning: '#fcc419',
   info: '#868e96',
 }
 
