@@ -145,6 +145,14 @@ export interface RuleFinding {
 export interface RulesDoc {
   /** How many findings the project's suppressions hid. Shown, so a gap is explainable. */
   suppressed?: number
+  /** What the suppressions hid, and the reason each gave. */
+  suppressed_findings?: {
+    rule: string
+    net: string
+    title: string
+    reason: string
+    source?: import('./rulesSettings').SettingSource
+  }[]
   /** Settings that could not be applied — a typo in a rules file, or a newer schema. */
   settings_warnings?: string[]
   /**
