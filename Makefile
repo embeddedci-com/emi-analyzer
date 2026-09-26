@@ -53,7 +53,7 @@ LOCAL_WEB := server/cmd/emi-local/web
 
 # The webapp is embedded into the binary, so it is built and copied in first.
 local-webapp:
-	cd webapp && ([ -d node_modules ] || npm ci) && npm run build:app
+	cd webapp && ([ -d node_modules ] || npm ci) && VERSION=$(VERSION) npm run build:app
 	find $(LOCAL_WEB) -mindepth 1 ! -name .gitkeep -exec rm -rf {} +
 	cp -R webapp/dist-app/. $(LOCAL_WEB)/
 
@@ -66,7 +66,7 @@ run-local: local
 	EMI_WORKER_IMAGE=$(WORKER_IMAGE) ./bin/emi-local
 
 worker-image:
-	docker build -t $(WORKER_IMAGE) worker
+	docker build --build-arg EMI_WORKER_VERSION=$(VERSION) -t $(WORKER_IMAGE) worker
 
 # Rewrites worker/requirements.lock: the worker's dependencies installed fresh in the image's
 # own base, then frozen. Run it after changing pyproject.toml, then rebuild and test the image.

@@ -27,7 +27,7 @@ solver or a measurement — and passed. The gap between the two is most of this 
 | Cable emissions, Tier B | ✅ | ❌ fails its real-board gate: 7-9 dB low on average on two boards below resonance; the third gave no result — §3 | off, with full-wave |
 | Compliance estimate | ✅ | ❌ runs end to end on the fixture board; never checked against a lab or a second solver (§3) | off, with full-wave |
 | Conducted emissions scan | ❌ | ❌ | — |
-| Report export | ❌ | ❌ | — |
+| Report export (HTML and JSON, built in the browser) | ✅ | — (nothing to verify: it restates results) | on |
 
 Everything marked **off** is behind the `full-wave` experimental feature, except small-part
 solves, which also have their own, `small-part-solve`. It is refused by the server, not merely
@@ -179,7 +179,7 @@ now one series element, placed only on a solver that models an inductor.
 | Far field divided by the source in openEMS's own convention (the FD factor of 2) | ✅ against openEMS: an E dump integrated along the port's probe is 1.99-2.01 times `post._dft` of the same voltage, fixture board |
 | A real solve, a driver and the board assembled into a margin | ✅ runs on the fixture board (`scripts/e2e_compliance_fixture.py`); the level is not checked against anything |
 | Transfer functions interpolated between grid points | ❌ the 1 dB σ term is a placeholder, not a residual |
-| Disclaimer on reports and exports | ❌ no export exists |
+| Disclaimer on reports and exports | ✅ on the report's first page, on every printed page, and in the JSON |
 | LISN network for conducted emissions | ❌ not started |
 | One real board against a real lab result | ❌ |
 
@@ -187,6 +187,15 @@ now one series element, placed only on a solver that models an inductor.
 
 ## 4. Gaps in what is built
 
+- **The report export leaves some things out.** It has the title page, board image with
+  numbered findings, findings, notes, cable budgets, ESD results and changes since an earlier
+  version. It does not include hotspot or near-field maps, far-field or compliance spectra (an
+  experimental section lists which solves ran and, with full-wave on, the compliance margin and
+  its gaps), the nets table (use the CSV export on the Board tab), or the ESD waveforms past
+  10 ns. The PDF is the browser's print of the HTML; the page footer and page numbers need a
+  browser that supports CSS page margin boxes (Chrome, Edge); others print the disclaimer on
+  the first page only. The app version reads "dev" in a build from source, and the worker
+  version is "not recorded" for boards analyzed before this release.
 - **Mesh grading is enforced as far as geometry allows** (§2). Where two copper edges sit
   closer together than the cell beside them, the step between those two cells stays: closing it
   would mean a cell smaller than the mesh's smallest, which costs timesteps everywhere.
@@ -250,7 +259,6 @@ now one series element, placed only on a solver that models an inductor.
 |---|---|
 | Conducted emissions scan | ngspice LISN, switching-regulator drivers, common-mode term. The largest piece left. |
 | Record a lab test result | Needed before confidence can be called calibrated. |
-| Report export | |
 | Built-in antenna solver | nec2c is the only one. |
 | Cheap cable what-ifs | Re-run only the antenna model when a choke, length or far end changes. |
 | DC-bias / temperature derating | |
