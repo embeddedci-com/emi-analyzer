@@ -1074,3 +1074,131 @@ def test_cables_json_carries_the_edge_limit_the_panel_quotes():
     panel = (webapp / "components" / "CablesPanel.tsx").read_text(encoding="utf-8")
     assert "d.edge_tolerance_mm" in panel, "the Cables tab no longer reads the worker's value"
     assert not re.search(r"EDGE_TOLERANCE_MM\s*=", panel), "the Cables tab has its own copy again"
+
+
+# ---- Tier B: the board as a plate --------------------------------------------------------
+#
+# The thin board wire gave the antenna far too little capacitance on the board's side, which
+# was most of what cable test 4 measured (docs/verification/cables-and-drivers.md §4).
+
+def _plate_wires(deck: Deck) -> list[tuple[float, ...]]:
+    out = []
+    for line in deck.to_text().splitlines():
+        parts = line.split()
+        if parts[:1] == ["GW"] and int(parts[1]) >= 10:
+            out.append(tuple(float(v) for v in parts[3:10]))
+    return out
+
+
+def test_a_plate_is_a_grid_of_the_board_that_the_cable_joins():
+    deck = Deck(length_m=1.0, frequency_hz=100e6, board_span_m=0.06, board_width_m=0.04,
+                board_offset_m=0.0192)
+    wires = _plate_wires(deck)
+    assert wires, "no plate was written"
+    pitch = nec.plate_pitch(0.06, 0.04)
+    ends = {(round(w[i], 6), round(w[i + 1], 6), round(w[i + 2], 6))
+            for w in wires for i in (0, 3)}
+    # The cable starts at (0, 0, h). NEC joins wires only where their ends coincide.
+    assert (0.0, 0.0, round(deck.height_m, 6)) in ends
+    xs = sorted({e[0] for e in ends})
+    ys = sorted({e[1] for e in ends})
+    assert xs[0] == pytest.approx(-0.06) and xs[-1] == pytest.approx(0.0)
+    assert ys[0] == pytest.approx(-0.0192) and ys[-1] == pytest.approx(0.0208)
+    for w in wires:
+        assert math.dist(w[:3], w[3:6]) <= pitch * 1.01
+        # The equal-area rule: each direction's wires have the plate's surface.
+        assert w[6] == pytest.approx(pitch / (2 * math.pi), rel=1e-3)
+
+
+def test_a_plate_pitch_is_fine_and_bounded():
+    assert nec.plate_pitch(0.03, 0.02) == nec.PLATE_MIN_PITCH_M
+    assert nec.plate_pitch(0.4, 0.3) == nec.MAX_SEGMENT_M
+    deck = Deck(length_m=1.0, frequency_hz=1e8, board_span_m=0.1, board_width_m=0.08)
+    assert len(_plate_wires(deck)) <= nec.PLATE_MAX_WIRES * 1.2
+
+
+def test_a_connector_at_a_corner_still_joins_the_plate():
+    for offset in (0.0, 0.05):
+        deck = Deck(length_m=1.0, frequency_hz=1e8, board_span_m=0.08, board_width_m=0.05,
+                    board_offset_m=offset)
+        ends = {(round(w[i], 6), round(w[i + 1], 6)) for w in _plate_wires(deck) for i in (0, 3)}
+        assert (0.0, 0.0) in ends
+
+
+def test_without_a_width_the_board_is_still_one_wire():
+    """Tier A keeps its thin wire: it is what was verified against openEMS."""
+    deck = Deck(length_m=1.0, frequency_hz=1e8, board_span_m=0.1)
+    assert not _plate_wires(deck)
+    assert sum(1 for l in deck.to_text().splitlines() if l.startswith("GW 2 ")) == 1
+
+
+def test_board_arm_reads_span_width_and_offset_along_either_axis():
+    from emi_worker.cables.emission import board_arm
+
+    along_x = board_arm([1.0, 0.0], [100.0, 35.8], (0.0, 0.0, 100.0, 80.0))
+    assert along_x == pytest.approx(
+        {"board_span_m": 0.1, "board_width_m": 0.08, "board_offset_m": 0.0358})
+    along_y = board_arm([0.0, -1.0], [14.5, 0.0], (0.0, 0.0, 60.0, 40.0))
+    assert along_y == pytest.approx(
+        {"board_span_m": 0.04, "board_width_m": 0.06, "board_offset_m": 0.0145})
+
+
+@needs_nec
+def test_a_plate_has_the_capacitance_a_thin_wire_lacks():
+    """Below resonance the antenna is a capacitor, and a board has several times the
+    capacitance of a wire as long as it. Against a 60 x 30 mm plate the thin wire read |Z|
+    5.5 dB high at 100 MHz; the radiation per amp barely moves (0.4 dB)."""
+    kw = dict(length_m=0.3, frequency_hz=100e6, board_span_m=0.06, radius_m=0.00118,
+              ground=False)
+    thin = nec_run(Deck(**kw))
+    plate = nec_run(Deck(**kw, board_width_m=0.03))
+    assert thin.z_in.imag < 0 and plate.z_in.imag < 0
+    assert 20 * math.log10(abs(thin.z_in) / abs(plate.z_in)) > 4.0
+    assert abs(20 * math.log10(plate.e_per_amp() / thin.e_per_amp())) < 1.0
+
+
+@needs_nec
+def test_a_plate_lowers_the_first_resonance():
+    """More board is a longer arm: the thin 60 mm wire resonated at 403 MHz with a 0.3 m
+    cable, the plate at 343 MHz."""
+    freqs = np.geomspace(250e6, 500e6, 15)
+
+    def first(width):
+        x = [nec_run(Deck(length_m=0.3, frequency_hz=f, board_span_m=0.06, radius_m=0.00118,
+                          ground=False, board_width_m=width)).z_in.imag for f in freqs]
+        return next(freqs[i] for i in range(len(x) - 1) if x[i] < 0 <= x[i + 1])
+
+    assert first(0.03) < 0.9 * first(None)
+
+
+@needs_nec
+def test_the_antenna_terms_carry_the_board_they_were_computed_for():
+    from emi_worker.cables.emission import antenna_terms
+
+    doc = antenna_terms("usb2-shielded", 1.0, [50e6, 150e6], board_span_m=0.06,
+                        board_width_m=0.04, board_offset_m=0.02)
+    assert doc["board_width_m"] == 0.04 and doc["board_offset_m"] == 0.02
+    assert len(doc["z_real"]) == 2 and all(e > 0 for e in doc["e_per_amp"])
+
+
+@needs_nec
+def test_a_solve_computes_its_antenna_terms_against_the_board_plate():
+    """The solve reads the board's outline and the connector's place on it."""
+    from types import SimpleNamespace
+
+    from emi_worker.stages.solve import _add_antenna_terms
+
+    board = SimpleNamespace(outline=[[(0.0, 0.0), (100.0, 0.0), (100.0, 80.0), (0.0, 80.0)]],
+                            tracks=[])
+    transform = SimpleNamespace(pt=lambda x, y: (x, y))
+    built = SimpleNamespace(cable_ports=[
+        {"ref": "USB1", "anchor_mm": [100.0, 35.8], "exit_normal": [1.0, 0.0]}])
+    params = SimpleNamespace(cable_ports={"USB1": {"type": "usb2-shielded", "length_m": 1.0}})
+    artifacts = SimpleNamespace(
+        manifest={"cable_ports": ["USB1"], "dense_frequencies_hz": [50e6, 150e6]}, files={})
+    _add_antenna_terms(None, params, built, artifacts, board, transform)
+
+    doc = json.loads(artifacts.files["cable_antenna.json"])["cables"][0]
+    assert doc["board_span_m"] == pytest.approx(0.1)
+    assert doc["board_width_m"] == pytest.approx(0.08)
+    assert doc["board_offset_m"] == pytest.approx(0.0358)
