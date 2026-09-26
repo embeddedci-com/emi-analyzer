@@ -16,6 +16,7 @@ solver or a measurement — and passed. The gap between the two is most of this 
 | Board ingest (KiCad, Gerber + IPC-D-356), viewer | ✅ | ✅ | on |
 | Geometric EMI/EMC rule checks and findings | ✅ | ✅ | on |
 | Run-cost estimator | ✅ | ✅ | on |
+| Decoupling view (lumped supply impedance per rail and IC, Decoupling tab) | ✅ | ⚠️ closed forms and a published connection-inductance table pass; a very short via-in-pad mount reads 49 % high against openEMS ([verification/decoupling.md](verification/decoupling.md)) | on |
 | ESD transient simulation (ngspice) | ✅ | ⚠️ source, line and clamp models unit-checked; no bench comparison | on |
 | Cable budget, Tier A (`cable` run, nec2c) | ✅ | ✅ against openEMS on the product setup: 7 of 9 configurations within 1 dB below resonance, all within 2 dB at the peaks; the wire radius, not the solver, is the larger uncertainty — §3 | on |
 | Limits library and Limits page | ✅ | ⚠️ FCC Part 15 only; there is no CISPR 32 table | on |
@@ -166,6 +167,35 @@ capacitor. It found that the construction used until September 2026 (R, L and C 
 adjacent cells) was an open circuit on openEMS 0.0.35, which the image shipped until then and which skips an
 element with only L; every solve with components on had modelled its capacitors as missing. Capacitors are
 now one series element, placed only on a solver that models an inductor.
+
+### Decoupling view
+
+| Check | Status |
+|---|---|
+| Two-cap anti-resonance against the closed form, within 0.5 dB | ✅ +0.08 dB |
+| Connection inductance against Archambeault et al.'s table, within 25 % | ✅ -17.7 to +24.2 %, within 6.7 % at 20-40 mil |
+| 0402 via-in-pad mount against the openEMS short (0.207 nH) | ⚠️ 0.308 nH, pessimistic for short wide loops |
+| A trace-fed mount (2-10 mm) against openEMS | ⏳ command in the verification doc |
+| A published PDN curve with every value stated | ⏳ checked against closed-form landmarks instead |
+
+What it models and what it does not:
+
+- **Lumped.** Each capacitor is one series R-L-C, the plane pair one more branch, all in parallel
+  behind the IC's own connection. No plane resonances: the first cavity mode is quoted
+  ("no plane resonances; the first is near X") and nothing above it is right.
+- **Not modelled:** the regulator's output impedance (below its loop bandwidth it holds the
+  rail, so a 100 kHz gap on a rail with no bulk capacitor may be covered by it), the IC's package
+  and die capacitance (hence the 100 MHz `board_max_hz`), DC-bias derating of MLCCs (a 10 uF
+  0603 at 3.3 V can be half that), mutual inductance between neighbouring capacitors and vias,
+  and which way a trace actually runs: distance is straight-line from the nearest supply pin.
+- **Assumed unless set:** the current step (0.5 A), the ripple (5 %), a rail voltage the net
+  name does not carry (3.3 V), and anything about a part the library cannot resolve. Each is
+  labelled where it is shown.
+- **ICs and capacitors are recognised by designator** (U/IC, C) and nets by name, like the
+  decoupling check. A capacitor must join the rail to ground directly; one behind a ferrite
+  bead is on a different net and is not counted.
+
+Details: [`verification/decoupling.md`](verification/decoupling.md).
 
 ### Compliance
 

@@ -11,6 +11,13 @@ The KiCad plugin is versioned and released separately; see
 
 ### Added
 
+- A Decoupling tab: per supply rail and IC, a lumped estimate of the supply impedance from the
+  layout (each capacitor as a series R-L-C with its mounting loop, plus the plane pair), against
+  a target from the rail voltage, ripple and current step. It shades where the impedance is
+  above the target, marks anti-resonances and clock harmonics that are not filtered, lists the
+  capacitors, and ranks computed fixes (move a part, add a via, add or remove a part) by how
+  much of the worst gap they close. The target is editable in the tab and in the decoupling
+  check's settings (`ripple_pct`, `step_current_a`, `board_max_hz`, `clock_hz`, `switching_hz`).
 - Report export from the board menu: a self-contained HTML report (prints to PDF) or JSON, with
   the findings on a board image, notes, cable budgets, ESD results and changes since an earlier
   version. Missing runs can be started from the dialog. Runs now record the worker version.
