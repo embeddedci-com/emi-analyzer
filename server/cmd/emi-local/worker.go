@@ -144,7 +144,7 @@ func explainDocker(image, out string, err error) (msg, detail string) {
 		return "The worker image " + image + " does not exist. Check the tag, or install the " +
 			"app version that matches it.", detail
 	case strings.Contains(low, "no space left"):
-		return "There is not enough disk space to download the worker image (about 1 GB is " +
+		return "There is not enough disk space to download the worker image (about 1.4 GB is " +
 			"needed). Free some space and click Restart worker.", detail
 	case strings.Contains(low, "timeout") || strings.Contains(low, "temporary failure") ||
 		strings.Contains(low, "dial tcp") || strings.Contains(low, "no such host"):
@@ -207,7 +207,7 @@ func (s *workerSupervisor) startOnce(ctx context.Context) bool {
 	}
 
 	if _, err := s.dockerOut(ctx, 15*time.Second, "image", "inspect", "--format", "{{.Id}}", s.cfg.image); err != nil {
-		s.set(statePulling, "Downloading the worker image ("+s.cfg.image+"). This happens once per version and is about 1 GB, so it can take a few minutes.")
+		s.set(statePulling, "Downloading the worker image ("+s.cfg.image+"). This happens once per version and is about 1.4 GB, so it can take a few minutes.")
 		if out, err := s.pull(ctx); err != nil {
 			msg, detail := explainDocker(s.cfg.image, out, err)
 			s.setDetailed(stateError, msg, detail)
@@ -324,7 +324,7 @@ func (s *workerSupervisor) pull(ctx context.Context) (string, error) {
 	sc := bufio.NewScanner(stdout)
 	for sc.Scan() {
 		if line := strings.TrimSpace(sc.Text()); line != "" {
-			s.set(statePulling, "Downloading the worker image (about 1 GB, once): "+line)
+			s.set(statePulling, "Downloading the worker image (about 1.4 GB, once): "+line)
 		}
 	}
 	if err := cmd.Wait(); err != nil {
