@@ -13,8 +13,6 @@ import {
 } from '../lib/decoupling'
 import { fmtOhm } from './ComponentImpedancePreview'
 
-const W = 560
-const H = 240
 const PAD = { left: 48, right: 12, top: 14, bottom: 30 }
 
 const C = {
@@ -40,10 +38,19 @@ export interface DecouplingChartProps {
   selected?: string | null
   /** A recommendation's curve, drawn dashed over the total. */
   whatIf?: number[] | null
+  /**
+   * Drawing size in SVG units. The SVG scales to its container, so a narrow side panel
+   * shrinks the text with it: at 560 units wide in a 270 px panel the axis labels were 5 px.
+   * The panel draws it narrow and the enlarged view draws it wide, each with readable text.
+   */
+  width?: number
+  height?: number
+  fontSize?: number
 }
 
 export function DecouplingChart({
   freqs, total, branches, target, bandHz, antiResonances, noise, selected = null, whatIf = null,
+  width: W = 560, height: H = 240, fontSize: fs = 9,
 }: DecouplingChartProps) {
   const [hover, setHover] = useState<number | null>(null)
   const fLo = freqs[0]
@@ -104,7 +111,7 @@ export function DecouplingChart({
         <rect x={bandX} y={PAD.top} width={W - PAD.right - bandX} height={plotBottom - PAD.top}
               fill="currentColor" fillOpacity={0.05} />
         {bandX < W - PAD.right - 40 && (
-          <text x={W - PAD.right - 4} y={PAD.top + 10} textAnchor="end" fontSize={9}
+          <text x={W - PAD.right - 4} y={PAD.top + 10} textAnchor="end" fontSize={fs}
                 fill="currentColor" fillOpacity={0.55}>package range</text>
         )}
         {gaps.map(([lo, hi]) => (
@@ -116,7 +123,7 @@ export function DecouplingChart({
           <g key={z}>
             <line x1={PAD.left} x2={W - PAD.right} y1={y(z)} y2={y(z)}
                   stroke="currentColor" strokeOpacity={0.1} />
-            <text x={PAD.left - 5} y={y(z) + 3} textAnchor="end" fontSize={9}
+            <text x={PAD.left - 5} y={y(z) + 3} textAnchor="end" fontSize={fs}
                   fill="currentColor" fillOpacity={0.55}>{fmtOhm(z)}</text>
           </g>
         ))}
@@ -124,7 +131,7 @@ export function DecouplingChart({
           <g key={f}>
             <line x1={x(f)} x2={x(f)} y1={PAD.top} y2={plotBottom}
                   stroke="currentColor" strokeOpacity={0.1} />
-            <text x={x(f)} y={plotBottom + 12} textAnchor="middle" fontSize={9}
+            <text x={x(f)} y={plotBottom + 12} textAnchor="middle" fontSize={fs}
                   fill="currentColor" fillOpacity={0.55}>{fmtHz(f)}</text>
           </g>
         ))}
@@ -171,7 +178,7 @@ export function DecouplingChart({
                     stroke="var(--mantine-color-body)" strokeWidth={2} />
           </g>
         )}
-        <text x={4} y={10} fontSize={9} fill="currentColor" fillOpacity={0.55}>|Z|</text>
+        <text x={4} y={10} fontSize={fs} fill="currentColor" fillOpacity={0.55}>|Z|</text>
       </svg>
 
       <Group gap="md" wrap="wrap" style={{ fontSize: 11 }}>

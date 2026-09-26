@@ -33,12 +33,13 @@ export function AnalysisNotes({ rules, doc, runId, onOpenChecks }: AnalysisNotes
   const quiet = notices.filter((n) => n.level === 'info')
 
   const source = (
+    // Short enough to share a row with the Findings/Checks switch in a narrow side panel;
+    // "Rules: built-in defaults" wrapped below it at 800 px.
     <Text size="xs" c="dimmed">
-      Rules:{' '}
       <Text span size="xs" fw={500} c="var(--mantine-color-text)">
-        {rulesFile ?? 'built-in defaults'}
+        {rulesFile ?? 'Default rules'}
       </Text>
-      {appSettings && ' + settings from this app'}
+      {appSettings && ' + app settings'}
       {onOpenChecks && (
         <>
           {' · '}

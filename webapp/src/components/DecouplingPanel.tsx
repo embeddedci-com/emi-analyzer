@@ -9,7 +9,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import {
-  Badge, Box, Group, NumberInput, Stack, Table, Text, UnstyledButton,
+  Badge, Box, Button, Group, Modal, NumberInput, Stack, Table, Text, UnstyledButton,
 } from '@mantine/core'
 import {
   branchesOf, curve, fmtFarads, fmtHz, fmtRange, frequencies, gapsOf, noiseMarks,
@@ -150,6 +150,7 @@ function IcDetail({ doc, rail, ic, cap, whatIf, onCap, onWhatIf }: {
   const [volts, setVolts] = useState<number>(rail.v)
   const [ripple, setRipple] = useState<number>(ic.ripple_pct)
   const [step, setStep] = useState<number>(ic.step_current_a)
+  const [enlarged, setEnlarged] = useState(false)
   const target = targetOhm(volts, ripple, step)
 
   const freqs = useMemo(() => frequencies(doc), [doc])
@@ -191,9 +192,18 @@ function IcDetail({ doc, rail, ic, cap, whatIf, onCap, onWhatIf }: {
           : <Text span size="xs" c="green.8" fw={600}>Below it everywhere.</Text>}
       </Text>
 
+      <Group justify="flex-end" mb={-8}>
+        <Button size="compact-xs" variant="subtle" onClick={() => setEnlarged(true)}>Enlarge</Button>
+      </Group>
       <DecouplingChart freqs={freqs} total={total} branches={branches} target={target}
                        bandHz={ic.band_hz} antiResonances={ic.anti_resonances} noise={noise}
-                       selected={cap} whatIf={whatIfCurve} />
+                       selected={cap} whatIf={whatIfCurve} width={380} height={240} fontSize={11} />
+      <Modal opened={enlarged} onClose={() => setEnlarged(false)} size="90%" centered
+             title={`${ic.ref} on ${rail.net}`}>
+        <DecouplingChart freqs={freqs} total={total} branches={branches} target={target}
+                         bandHz={ic.band_hz} antiResonances={ic.anti_resonances} noise={noise}
+                         selected={cap} whatIf={whatIfCurve} width={1000} height={440} fontSize={12} />
+      </Modal>
 
       {ic.noise.length > 0 && (
         <Text size="xs">
