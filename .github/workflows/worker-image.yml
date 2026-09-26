@@ -8,7 +8,7 @@
 # `dev` is what a build that is not a release starts: `make local`, `make desktop` and anyone
 # running from source all stamp the version "dev", and emi-local turns that into this tag. It
 # follows main, so a contributor gets the worker their checkout expects without building a
-# 1 GB image first.
+# 1.4 GB image first.
 #
 # The desktop app starts the image whose tag equals its own version, so every release tag must
 # produce that tag here -- the release workflow waits for nothing, but a release is not usable
@@ -18,7 +18,10 @@
 # is the worst failure this repository has.
 #
 # amd64 and arm64: the arm64 half is what makes a solve on Apple Silicon run natively instead of
-# under emulation. It builds under QEMU, which is slow but needs no special runner.
+# under emulation. It builds under QEMU, which is fine now that nothing is compiled here: openEMS
+# comes prebuilt in the image the worker starts FROM (OPENEMS_IMAGE in worker/Dockerfile),
+# which openems-image.yml builds on native runners. That image is why a release must pin it by
+# digest: a tag could be rebuilt under a release after the fact.
 name: worker image
 
 on:
@@ -35,13 +38,14 @@ env:
 
 jobs:
   # Is there anything to build? A tag always is: see the note at the top. On main, only when
-  # the worker or this file changed -- the build takes an hour under QEMU.
+  # the worker or this file changed. The openEMS image's own directory does not count: a
+  # change there reaches the worker only when worker/Dockerfile's pin moves.
   decide:
     runs-on: ubuntu-24.04
     outputs:
       build: ${{ steps.check.outputs.build }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
       - id: check
@@ -61,7 +65,7 @@ jobs:
             reason="there is no previous commit to compare with"
           elif ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
             reason="the previous commit is not in this checkout"
-          elif ! git diff --quiet "$BEFORE" "$SHA" -- worker .github/workflows/worker-image.yml; then
+          elif ! git diff --quiet "$BEFORE" "$SHA" -- worker ':(exclude)worker/openems-image' .github/workflows/worker-image.yml; then
             reason="the worker changed"
           fi
           if [ -n "$reason" ]; then
@@ -76,24 +80,33 @@ jobs:
     needs: decide
     if: needs.decide.outputs.build == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 120
+    timeout-minutes: 60
     permissions:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
-      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      # A release takes openEMS by digest, never by tag alone. See the note at the top.
+      - name: openEMS image pinned by digest
+        if: github.ref_type == 'tag'
+        run: |
+          grep -Eq '^ARG OPENEMS_IMAGE=[^ ]+@sha256:[0-9a-f]{64}$' worker/Dockerfile || {
+            echo "worker/Dockerfile: OPENEMS_IMAGE has no @sha256 digest; pin the one openems-image.yml printed"
+            exit 1
+          }
 
-      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - id: meta
-        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ${{ env.IMAGE }}
           tags: |
@@ -110,9 +123,9 @@ jobs:
             org.opencontainers.image.description=Board ingest, EMI/EMC rule checks, ngspice ESD transients and openEMS solves for the EMI Analyzer
             # The worker's code is Apache-2.0; the image also carries GPL programs it runs as
             # separate processes. worker/NOTICE, inside the image too, lists them.
-            org.opencontainers.image.licenses=Apache-2.0 AND GPL-3.0-or-later AND GPL-2.0-or-later
+            org.opencontainers.image.licenses=Apache-2.0 AND GPL-3.0-or-later AND LGPL-3.0-or-later AND GPL-2.0-or-later
 
-      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: worker
           platforms: linux/amd64,linux/arm64

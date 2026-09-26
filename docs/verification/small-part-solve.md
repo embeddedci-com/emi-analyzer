@@ -235,7 +235,7 @@ Known limitations that stay after that:
 
 - Neighboring nets are left out of the cut, so coupling into them is not shown.
 - No far field, cable emissions or compliance estimate; those need `full-wave`.
-- No component models in a small part. Capacitors need an openEMS build newer than the shipped
+- No component models in a small part. Capacitors need an openEMS newer than
   0.0.35 ([solver-and-components.md](solver-and-components.md) §3).
 - Coarse mesh: via inductance can read up to about 10 % high.
 - Below 100 MHz a part a few centimeters across is quasi-static; a circuit tool gives the

@@ -133,9 +133,19 @@ class Deck:
     frequency_hz: float
     #: Height of the cable above the ground plane, in metres.
     height_m: float = TABLE_HEIGHT_M
-    #: The board, as the other arm of the antenna. A bounding box edge is enough at these
-    #: frequencies; §6.2's wire grid arrives with Tier B.
+    #: The board, as the other arm of the antenna: its length along the cable's exit.
     board_span_m: float = 0.1
+    #: The board's width across the exit. None models the board as one thin wire
+    #: ``board_span_m`` long (Tier A); a width models it as a plate, a wire grid of the board's
+    #: bounding box (Tier B).
+    #:
+    #: The thin wire has far too little capacitance for a board. Against a plate of the same
+    #: outline it reads the antenna's impedance 5-12 dB high below the first resonance, so
+    #: Tier B's current came out that much low; that was most of what cable test 4 measured
+    #: (docs/verification/cables-and-drivers.md §4).
+    board_width_m: float | None = None
+    #: Where the cable leaves, measured across the board from one edge. None is the middle.
+    board_offset_m: float | None = None
     radius_m: float = 0.0005
     far_end: str = "open"
     #: What the source pushes against.
@@ -183,14 +193,21 @@ class Deck:
             # Tag 1: the cable, running along +x from the board edge at the far end.
             f"GW 1 {segments} 0 0 {self.height_m:.6f} "
             f"{self.length_m:.6f} 0 {self.height_m:.6f} {self.radius_m:.6f}",
-            # Tag 2: the other arm. The board for the product model; a drop to the ground
-            # plane for the transmission-line fixture.
-            (f"GW 2 {board_segments} {-self.board_span_m:.6f} 0 {self.height_m:.6f} "
-             f"0 0 {self.height_m:.6f} {self.radius_m:.6f}")
-            if self.feed == "board" else
-            (f"GW 2 {max(3, segments_for(self.height_m, self.frequency_hz) | 1)} "
-             f"0 0 {self.height_m:.6f} 0 0 0 {self.radius_m:.6f}"),
         ]
+        if self.feed == "board" and self.board_width_m:
+            # Tag 2 and up: the board as a plate, ending at the feed.
+            lines += _plate_cards(self.board_span_m, self.board_width_m,
+                                  self.board_offset_m, self.height_m, first_tag=10)
+        elif self.feed == "board":
+            # Tag 2: the other arm, the board as one wire.
+            lines.append(
+                f"GW 2 {board_segments} {-self.board_span_m:.6f} 0 {self.height_m:.6f} "
+                f"0 0 {self.height_m:.6f} {self.radius_m:.6f}")
+        else:
+            # Tag 2: a drop to the ground plane, for the transmission-line fixture.
+            lines.append(
+                f"GW 2 {max(3, segments_for(self.height_m, self.frequency_hz) | 1)} "
+                f"0 0 {self.height_m:.6f} 0 0 0 {self.radius_m:.6f}")
 
         # The far end, which §6.2 says decides the resonance — and it only does if the model
         # actually connects it. A small series load on the end segment does nothing at all: the
@@ -252,6 +269,60 @@ class Deck:
         lines.append("XQ 0")
         lines.append("EN")
         return "\n".join(lines) + "\n"
+
+
+#: About how many wires a board plate uses. nec2c's cost grows with the cube of the segment
+#: count; 700 is about 0.15 s a frequency. Past about 250 x 250 mm the pitch cap wins and it
+#: grows.
+PLATE_MAX_WIRES = 700
+#: The finest plate pitch. Against a 2.5 mm grid, a 5 mm grid reads |Z| 0.3 dB high and a
+#: 12.5 mm one about 1 dB high, the same at every frequency.
+PLATE_MIN_PITCH_M = 0.0025
+
+
+def plate_pitch(span_m: float, width_m: float) -> float:
+    """The grid pitch for a board plate: as fine as PLATE_MAX_WIRES allows, never above λ/20
+    at 1.2 GHz (MAX_SEGMENT_M), which is well under the λ/10 a wire grid needs."""
+    s = math.sqrt(2.0 * span_m * width_m / PLATE_MAX_WIRES)
+    return min(MAX_SEGMENT_M, max(PLATE_MIN_PITCH_M, s))
+
+
+def _lattice(lo: float, hi: float, pitch: float) -> list[float]:
+    """Evenly spaced points from lo to hi, with 0 among them whenever it lies inside, so the
+    cable can join the grid there. NEC connects wires only where their ends coincide."""
+    if lo < 0.0 < hi:
+        return _lattice(lo, 0.0, pitch)[:-1] + _lattice(0.0, hi, pitch)
+    n = max(1, math.ceil((hi - lo) / pitch - 1e-9))
+    return [lo + (hi - lo) * i / n for i in range(n + 1)]
+
+
+def _plate_cards(span_m: float, width_m: float, offset_m: float | None, z_m: float,
+                 first_tag: int) -> list[str]:
+    """A board as a wire grid (§6.2): its bounding box at the table height, x from -span to
+    the edge the cable leaves from, the cable joining at x = 0, y = 0.
+
+    Standard NEC practice for a conducting surface: a pitch well under λ/10, and the
+    equal-area radius, pitch / 2π, so each direction's wires have the surface of the plate.
+    One segment per wire.
+    """
+    pitch = plate_pitch(span_m, width_m)
+    radius = pitch / (2 * math.pi)
+    offset = width_m / 2.0 if offset_m is None else min(max(offset_m, 0.0), width_m)
+    xs = _lattice(-span_m, 0.0, pitch)
+    ys = _lattice(-offset, width_m - offset, pitch)
+    cards = []
+    tag = first_tag
+    for y in ys:
+        for x0, x1 in zip(xs, xs[1:]):
+            cards.append(f"GW {tag} 1 {x0:.6f} {y:.6f} {z_m:.6f} {x1:.6f} {y:.6f} {z_m:.6f} "
+                         f"{radius:.6f}")
+            tag += 1
+    for x in xs:
+        for y0, y1 in zip(ys, ys[1:]):
+            cards.append(f"GW {tag} 1 {x:.6f} {y0:.6f} {z_m:.6f} {x:.6f} {y1:.6f} {z_m:.6f} "
+                         f"{radius:.6f}")
+            tag += 1
+    return cards
 
 
 #: A number as nec2c writes them: plain decimals in the location columns, exponential in the

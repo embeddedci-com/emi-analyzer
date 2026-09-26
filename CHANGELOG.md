@@ -45,6 +45,11 @@ The KiCad plugin is versioned and released separately; see
   worker image.
 - The worker image pins its base image, openEMS source and Python packages. A pre-release tag
   no longer moves `:latest`.
+- The worker image runs openEMS compiled from a pinned upstream commit instead of Debian's
+  0.0.35, which skips a lumped inductor, so capacitor models in a full-wave solve are no longer
+  left out. openEMS is built once, in its own image (`ghcr.io/embeddedci-com/emi-openems`), and
+  the worker image starts from it, so worker builds compile nothing. The image grows from about
+  270 MB to about 1.4 GB. `--build-arg OPENEMS_SOURCE=apt` still builds on 0.0.35.
 - The README, the limits page and the docs no longer claim a CISPR 32 table (only FCC Part 15
   limits exist) or a second solver for the antenna model.
 

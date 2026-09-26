@@ -87,7 +87,7 @@ services:
     build:
       context: ../worker
       args:
-        OPENEMS_SOURCE: ${OPENEMS_SOURCE:-apt}
+        OPENEMS_SOURCE: ${OPENEMS_SOURCE:-build}
     environment:
       EMBEDDEDCI_URL: http://server:8090
       # Written to deploy/.env by `make key`. Left empty here rather than marked required,

@@ -47,7 +47,7 @@ see the limitations page in the app, and [known issues](docs/known-issues.md).
 |---|---|
 | **Operating system** | macOS 11 or newer (Apple Silicon or Intel), Windows 10 or 11 (64-bit), or 64-bit Linux on x86-64 |
 | **Memory** | 8 GB or more |
-| **Disk** | About 3 GB free: 1 GB for the worker image, the rest for Docker and your results |
+| **Disk** | About 4 GB free: 1.4 GB for the worker image, the rest for Docker and your results |
 | **Docker** | Docker Desktop on macOS and Windows; Docker Engine or Docker Desktop on Linux |
 | **Internet** | Only to download the app and, once per version, the worker image |
 
@@ -207,7 +207,7 @@ chmod +x EMI.Analyzer_*_amd64.AppImage
 2. **Open EMI Analyzer.** A window opens on the analyzer's home page.
 3. **Watch the badge in the top-right corner.** On the first launch it says
    **Downloading worker** while Docker pulls `ghcr.io/embeddedci-com/emi-worker:<version>`, about
-   1 GB. That takes a few minutes and happens once per app version.
+   1.4 GB. That takes a few minutes and happens once per app version.
 4. When the badge turns green and says **Worker running**, the app is ready.
 
 Click the badge at any time to see the worker's log or restart it.

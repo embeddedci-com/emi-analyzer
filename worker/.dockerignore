@@ -7,3 +7,5 @@ build/
 __pycache__/
 tests/
 scripts/
+# The openEMS image has its own build and workflow; the worker only starts FROM it.
+openems-image/

@@ -19,7 +19,7 @@ was made in the worker image with at most three threads.
 |---|---|---|---|
 | 1 | A run that did not settle | nothing derived from it is used | ✅ after three fixes, one of them to how a run ends |
 | 2 | 50 ohm microstrip through the production path | Z0 within 5 % of Hammerstad-Jensen | ✅ -0.9 to +0.2 % on all presets, after three fixes |
-| 3 | Lumped inductor in openEMS 0.0.35 | an L element is modelled | ❌ it is skipped; capacitors were open circuits. Fixed by refusing on 0.0.35 |
+| 3 | Lumped inductor in openEMS 0.0.35 | an L element is modelled | ❌ it is skipped; capacitors were open circuits. Fixed by refusing on 0.0.35, and the image now ships an openEMS that models it |
 | 4 | One 0402 capacitor over a plane | SRF within 5 %, \|Z\| within 1 dB to 3x SRF | ⚠️ 100 pF on a current openEMS: SRF +1.6 % ✅, \|Z\| +1.37 dB at resonance ❌, and only with a -70 dB record |
 | 5 | 100 ns record on a real board | decays to -40 dB; cost measured | dropped (out of scope); found openEMS ending runs inside the pulse |
 | 6 | Cost estimator against the mesher | per-preset floors from real boards | ✅ recalibrated on 4-10 mm regions; the timestep term was also 2.0-2.7x low |
@@ -118,7 +118,7 @@ in `known-issues.md` §2 before this date (steps to converge, energy) are from t
 plate; a z-directed element closes the loop. The same loop with the element replaced by PEC is
 subtracted (1.60 nH of loop), leaving the element.
 
-| Element | openEMS 0.0.35 (the image) | openEMS build (`OPENEMS_SOURCE=build`) |
+| Element | openEMS 0.0.35 (the image until then) | openEMS build (`OPENEMS_SOURCE=build`) |
 |---|---|---|
 | R 20 ohm | 0.00-0.08 dB | 0.00-0.08 dB |
 | C 10 pF | -0.12 to -0.38 dB | -0.13 to -0.39 dB |
@@ -144,8 +144,13 @@ modelled capacitor was R, an open gap and C: an open circuit. Every solve with
 - "R or C not specified" and "capacity is too small for its size" are significant warnings, so
   any skipped element reaches the result.
 
-Components can therefore only be modelled on a worker built with `OPENEMS_SOURCE=build`. The
-released image is 0.0.35; switching it is a release decision, not made here.
+Components can therefore only be modelled on a worker built with `OPENEMS_SOURCE=build`.
+
+**The image was then switched.** openEMS is compiled once per upstream commit into its own image,
+`ghcr.io/embeddedci-com/emi-openems` (`worker/openems-image`, pinned at f73bf97, the commit
+measured here), on a native runner per architecture, and the worker image starts from it by
+default. Both images fail their build unless the probe above answers yes. `OPENEMS_SOURCE=apt`
+still gives 0.0.35, which answers no and places no capacitor.
 
 ---
 
@@ -265,12 +270,11 @@ asserted by Python, Go and TypeScript.
 
 In order of what would have to change first:
 
-1. **Components.** The released image's openEMS 0.0.35 cannot model an inductor, so it places no
-   capacitor. On a current openEMS build a 100 pF 0402 passes on SRF and misses |Z| by 0.4 dB at
-   resonance, but only when the run goes to -70 dB; at the solve's -40 dB it ripples +-6 dB, and a
-   1 nF part (pre-fix mesh) passed a DC current and never settled. Moving the image to the build
-   is a release decision, and the build has not been through the rest of this page (its nf2ff
-   output is untested).
+1. **Components.** The image now ships a current openEMS that models an inductor (§3). On it a
+   100 pF 0402 passes on SRF and misses |Z| by 0.4 dB at resonance, but only when the run goes to
+   -70 dB; at the solve's -40 dB it ripples +-6 dB, and a 1 nF part (pre-fix mesh) passed a DC
+   current and never settled. The new solver has not been through the rest of this page (its
+   nf2ff output is untested).
 2. **A real coupon against an independent reference.** The microstrip is the only full-wave
    result checked against theory, and it is a line on a plane. A coupon cut from a real net
    (vias, a split plane, a connector) has not been compared with a second solver or a
