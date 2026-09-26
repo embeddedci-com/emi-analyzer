@@ -334,6 +334,10 @@ def discover(ctx: RuleContext, choice: str | None = None, edge_mm: float = 5.0) 
                 if v_in and v_out and 0 < v_out < v_in:
                     reg.duty_from_rails = round(v_out / v_in, 3)
             if any(r.ref == ref for r in d.regulators):
+                note = (f"{ref} has more than one switch node; it is modelled as one source, at the "
+                        f"first, with the settings given for it")
+                if note not in d.notes:
+                    d.notes.append(note)
                 continue
             d.regulators.append(reg)
     # A controller and its external switch are both on the node; one source is the regulator.
