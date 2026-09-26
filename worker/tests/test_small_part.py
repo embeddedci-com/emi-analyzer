@@ -197,6 +197,32 @@ def test_the_port_is_not_a_hotspot_and_a_map_of_residue_has_none():
     assert hotspots.spots(x, y, db, [], -60) == []
 
 
+def test_a_probe_average_of_a_flat_map_is_the_map_edges_included():
+    x = np.array([0.0, 0.15, 0.2, 0.5, 1.1, 1.3, 2.0])
+    y = np.array([0.0, 0.3, 0.35, 1.0])
+    u, v, avg = hotspots.probe_average(x, y, np.full((len(y), len(x)), 3.0))
+    assert u[0] == 0 and u[-1] == pytest.approx(2.0) and v[-1] == pytest.approx(1.0)
+    assert np.allclose(avg, 3.0)
+
+
+def test_a_probe_average_settles_with_the_mesh_where_the_peak_point_does_not():
+    """Board B: the loudest grid point beside a pad edge read 3.3 dB apart on two meshes, and the
+    disc average within 0.9 dB. Here the edge field of a strip, ~1/sqrt(distance), which a mesh
+    resolves only down to about half its cell: the peak point follows the cell, the average
+    does not."""
+    peaks, averaged = [], []
+    for step, offset in ((0.15, 0.01), (0.075, 0.028)):
+        x = np.concatenate([np.arange(0.0, 2.0, step) + offset, [2.2]])
+        y = np.arange(0.0, 1.01, step)
+        X, _ = np.meshgrid(x, y)
+        m = 1.0 / np.sqrt(np.maximum(np.abs(X - 1.0), step / 2))
+        peaks.append(20 * np.log10(m.max()))
+        _, _, avg = hotspots.probe_average(x, y, m)
+        averaged.append(20 * np.log10(avg.max()))
+    assert abs(peaks[0] - peaks[1]) > 2.5
+    assert abs(averaged[0] - averaged[1]) < 1
+
+
 def _coupon_board(with_via: bool):
     from tests.test_coupon import BOARD
 

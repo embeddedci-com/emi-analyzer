@@ -264,8 +264,14 @@ def unusable_reason(result) -> str | None:
 def add_hotspots(artifacts, workdir: str, dump_names: dict[str, str],
                  dump_heights: dict[str, float], params: SolveParams, nearby) -> None:
     """List each map's separate spots within a few dB of its loudest (``openems.hotspots``),
-    with the net and part nearest each, in the manifest. A failure leaves the list out."""
+    with the net and part nearest each, in the manifest. A failure leaves the list out.
+
+    Spots are found and their levels read on the map averaged over a probe-sized disc
+    (``hotspots.probe_average``), on the manifest's dB scale: a spot reads a little below the
+    raw map drawn under it."""
     import os
+
+    import numpy as np
 
     from ..openems import post
 
@@ -284,13 +290,17 @@ def add_hotspots(artifacts, workdir: str, dump_names: dict[str, str],
         except (OSError, ValueError):
             continue
         for g in grids:
-            found = hotspots_mod.spots(g.x_mm, g.y_mm, g.to_db(reference=ref), ports, floor)
+            xs, ys, avg = hotspots_mod.probe_average(g.x_mm, g.y_mm, g.magnitude)
+            db = np.maximum(20.0 * np.log10(np.maximum(avg, 1e-30) / ref), floor)
+            found = hotspots_mod.spots(xs, ys, db, ports, floor)
             for s in found:
                 s["net"] = nearby.net(s["x_mm"], s["y_mm"], layer)
                 s["part"] = nearby.part(s["x_mm"], s["y_mm"])
             if found:
                 out.append({"layer": layer, "frequency_hz": g.frequency_hz, "spots": found})
-    artifacts.manifest["hotspots"] = {"within_db": hotspots_mod.WITHIN_DB, "maps": out}
+    artifacts.manifest["hotspots"] = {"within_db": hotspots_mod.WITHIN_DB,
+                                      "probe_radius_mm": hotspots_mod.PROBE_RADIUS_MM,
+                                      "maps": out}
     artifacts.files["manifest.json"] = json.dumps(artifacts.manifest, indent=2).encode()
 
 

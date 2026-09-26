@@ -6,7 +6,9 @@ whether cutting the part out changed the level. These read the dumps and the por
 * the hotspot: the loudest point of the signal layer's map, **away from the ports** (the port
   is where current is injected and is always loud; a hotspot that is the port says nothing),
   as a location and as a level in dB per volt of the solve's own source, which is the same
-  pulse in every run of the same band;
+  pulse in every run of the same band. Both are read on the map averaged over a probe-sized
+  disc (``hotspots.probe_average``), the level the product lists: the single loudest grid
+  point beside a pad edge did not settle with the mesh (board B, 3.3 dB between presets);
 * the port: |Z_in| and S21 on the run's own grid, from ``network.json``.
 """
 
@@ -17,14 +19,16 @@ import os
 
 import numpy as np
 
+from emi_worker.openems import hotspots as hotspots_mod
 from emi_worker.openems import post
 
-#: Around each port, mm: points this close are the injection, not a hotspot.
-PORT_EXCLUSION_MM = 1.5
+#: Around each port, mm: points this close are the injection, not a hotspot. The product's.
+PORT_EXCLUSION_MM = hotspots_mod.PORT_EXCLUSION_MM
 
 
 def hotspot(solved, layer: str, freqs: list[float], ports: list[tuple[float, float]]) -> list[dict]:
-    """The loudest point of ``layer``'s map at each frequency, away from the ports."""
+    """The loudest point of ``layer``'s probe-averaged map at each frequency, away from the
+    ports."""
     dump = f"Hf_{layer.replace('.', '_')}"
     # At the height the product read it (``model.SolveParams.map_height_mm``), as the manifest
     # says; a map that spans two grid lines has no single plane of its own.
@@ -36,23 +40,26 @@ def hotspot(solved, layer: str, freqs: list[float], ports: list[tuple[float, flo
     for g, vk in zip(grids, v):
         if freqs and not any(abs(g.frequency_hz - f) < 1 for f in freqs):
             continue
-        X, Y = np.meshgrid(g.x_mm, g.y_mm)
-        mask = np.ones_like(g.magnitude, dtype=bool)
+        xs, ys, avg = hotspots_mod.probe_average(g.x_mm, g.y_mm, g.magnitude)
+        X, Y = np.meshgrid(xs, ys)
+        mask = np.ones_like(avg, dtype=bool)
         for px, py in ports:
             mask &= np.hypot(X - px, Y - py) > PORT_EXCLUSION_MM
-        mag = np.where(mask, g.magnitude, 0.0)
+        mag = np.where(mask, avg, 0.0)
         k = int(np.argmax(mag))
         iy, ix = np.unravel_index(k, mag.shape)
-        # The local cell, to judge a moved peak against: the larger of the two cells at it.
-        cx = float(np.diff(g.x_mm)[min(ix, len(g.x_mm) - 2)])
-        cy = float(np.diff(g.y_mm)[min(iy, len(g.y_mm) - 2)])
+        x, y = float(xs[ix]), float(ys[iy])
+        # The mesh's local cell, to judge a moved peak against: the larger of the two cells at
+        # it (the averaged map's own grid is finer than any preset).
+        jx = min(max(int(np.searchsorted(g.x_mm, x)) - 1, 0), len(g.x_mm) - 2)
+        jy = min(max(int(np.searchsorted(g.y_mm, y)) - 1, 0), len(g.y_mm) - 2)
         out.append({
             "frequency_hz": g.frequency_hz,
-            "x_mm": float(g.x_mm[ix]), "y_mm": float(g.y_mm[iy]),
-            "cell_mm": max(cx, cy),
+            "x_mm": x, "y_mm": y,
+            "cell_mm": max(float(np.diff(g.x_mm)[jx]), float(np.diff(g.y_mm)[jy])),
             "db_per_volt": float(20 * math.log10(max(mag[iy, ix], 1e-30) / max(vk, 1e-30))),
             # Kept for comparing two runs, never written out (see ``strip``).
-            "_map": (g.x_mm, g.y_mm, mag / max(vk, 1e-30)),
+            "_map": (xs, ys, mag / max(vk, 1e-30)),
         })
     return out
 

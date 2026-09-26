@@ -357,7 +357,8 @@ export function HotspotResults({
       </div>
 
       {smallPart && state !== 'unusable' && (
-        <LoudestSpots spots={spots} withinDb={manifest.hotspots?.within_db ?? 3} onFocus={onFocusSpot} />
+        <LoudestSpots spots={spots} withinDb={manifest.hotspots?.within_db ?? 3}
+                      probeRadiusMm={manifest.hotspots?.probe_radius_mm} onFocus={onFocusSpot} />
       )}
 
       {/* A small part never models components, so "none were modelled" would only confuse. */}

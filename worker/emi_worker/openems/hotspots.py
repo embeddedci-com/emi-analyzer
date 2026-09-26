@@ -10,6 +10,13 @@ A spot is a connected area of the map within ``WITHIN_DB`` of the peak: a matche
 nearly flat along its length and would otherwise be a row of "spots" a cell apart. Points
 beside a port are left out, as the convergence study leaves them out: the port is where current
 is injected and is always loud, so a hotspot there says nothing about the layout.
+
+**A spot's level is the map averaged over a probe-sized disc** (``probe_average``), not the
+single loudest grid point. The single point did not settle with the mesh: on a real clock net
+(board B, a 0.1 mm trace on 76 um of dielectric) the loudest point sat beside a pad edge, where
+the field is sharpest, and coarse and normal read it 3.3 dB apart, with fine between them.
+Averaged over ``PROBE_RADIUS_MM`` the three meshes agree within 0.9 dB, and that is also closer
+to what a near-field probe held over the board reads. The map itself is still drawn raw.
 """
 
 from __future__ import annotations
@@ -44,14 +51,74 @@ QUIET_DB = -40.0
 #: A part is named when one of its pads is this close to the spot, mm.
 PART_WITHIN_MM = 2.0
 
+#: The radius a spot's level is averaged over, mm (a disc 0.5 mm across). About the tip of the
+#: smallest near-field probes; wide enough that every preset averages several grid points (the
+#: coarse cell is 0.15 mm), and well inside ``MERGE_MM`` and ``PORT_EXCLUSION_MM``, so two
+#: spots are not smeared into one and a port is not smeared onto a spot. Board B's presets read
+#: within 0.9 dB at this radius and within 1.1 dB at 0.5 mm; the single point was 3.3 dB.
+PROBE_RADIUS_MM = 0.25
+
+#: The uniform grid the map is resampled onto before averaging, mm: a fifth of the radius, so
+#: the disc's edge is the same on every preset rather than wherever each mesh has a line.
+PROBE_STEP_MM = PROBE_RADIUS_MM / 5
+
+#: A map is resampled onto at most this many points; a larger one gets a coarser step.
+_MAX_PROBE_POINTS = 4_000_000
+
+
+def probe_average(x_mm: np.ndarray, y_mm: np.ndarray, magnitude: np.ndarray,
+                  radius_mm: float = PROBE_RADIUS_MM
+                  ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """The map as a probe of ``radius_mm`` would read it: the RMS of the field over a disc
+    around every point.
+
+    ``magnitude`` is (ny, nx) on the grid lines ``x_mm`` and ``y_mm``, which are uneven. It is
+    resampled bilinearly onto a uniform grid first, so a disc covers the same area whatever the
+    mesh, then averaged in power (``|H|^2``) and returned on that uniform grid. At the map's
+    edge the disc covers only what is inside it.
+    """
+    x = np.asarray(x_mm, dtype=np.float64)
+    y = np.asarray(y_mm, dtype=np.float64)
+    m = np.asarray(magnitude, dtype=np.float64)
+    if len(x) < 2 or len(y) < 2:
+        return x, y, m
+    step = radius_mm / 5
+    span = (x[-1] - x[0]) * (y[-1] - y[0])
+    if span / step ** 2 > _MAX_PROBE_POINTS:
+        step = math.sqrt(span / _MAX_PROBE_POINTS)
+    u = np.arange(x[0], x[-1] + step / 2, step)
+    v = np.arange(y[0], y[-1] + step / 2, step)
+    ix = np.clip(np.searchsorted(x, u, side="right") - 1, 0, len(x) - 2)
+    iy = np.clip(np.searchsorted(y, v, side="right") - 1, 0, len(y) - 2)
+    tx = np.clip((u - x[ix]) / (x[ix + 1] - x[ix]), 0.0, 1.0)
+    ty = np.clip((v - y[iy]) / (y[iy + 1] - y[iy]), 0.0, 1.0)[:, None]
+    top = m[np.ix_(iy, ix)] * (1 - tx) + m[np.ix_(iy, ix + 1)] * tx
+    bottom = m[np.ix_(iy + 1, ix)] * (1 - tx) + m[np.ix_(iy + 1, ix + 1)] * tx
+    power = ((1 - ty) * top + ty * bottom) ** 2
+    k = int(radius_mm / step)
+    ky, kx = np.mgrid[-k:k + 1, -k:k + 1]
+    disc = (np.hypot(kx, ky) * step <= radius_mm + 1e-9).astype(np.float64)
+    total = _convolve(power, disc)
+    weight = _convolve(np.ones_like(power), disc)
+    return u, v, np.sqrt(np.maximum(total, 0.0) / np.maximum(weight, 1e-12))
+
+
+def _convolve(a: np.ndarray, kernel: np.ndarray) -> np.ndarray:
+    """``a`` convolved with a small symmetric ``kernel``, same size, zero outside. By FFT."""
+    ky, kx = kernel.shape
+    shape = (a.shape[0] + ky - 1, a.shape[1] + kx - 1)
+    out = np.fft.irfft2(np.fft.rfft2(a, shape) * np.fft.rfft2(kernel, shape), shape)
+    return out[ky // 2:ky // 2 + a.shape[0], kx // 2:kx // 2 + a.shape[1]]
+
 
 def spots(x_mm: np.ndarray, y_mm: np.ndarray, db: np.ndarray, ports: list[tuple[float, float]],
           floor_db: float) -> list[dict]:
     """Separate spots within ``WITHIN_DB`` of the map's loudest point away from the ports.
 
     ``db`` is (ny, nx) on the grid lines ``x_mm`` and ``y_mm``, in the manifest's dB (0 is the
-    run's loudest point). Loudest
-    first; each is ``{x_mm, y_mm, db, below_peak_db}``.
+    run's loudest point). The product passes the probe-averaged map (``probe_average``), so the
+    grouping and the levels are both the probe's. Loudest first; each is
+    ``{x_mm, y_mm, db, below_peak_db}``.
     """
     X, Y = np.meshgrid(x_mm, y_mm)
     allowed = np.ones(db.shape, dtype=bool)

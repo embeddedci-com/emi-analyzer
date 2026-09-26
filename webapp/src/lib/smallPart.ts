@@ -287,7 +287,8 @@ export function hasVias(doc: BoardDoc, nets: string[]): boolean {
 export interface HotSpot {
   x_mm: number
   y_mm: number
-  /** On the map's own scale: dB below the loudest point of the run. */
+  /** On the map's own scale: dB below the loudest point of the run, averaged over a probe-sized
+   *  disc (`HotSpotList.probe_radius_mm`), so a little below the raw map drawn under it. */
   db: number
   below_peak_db: number
   net?: string | null
@@ -296,6 +297,9 @@ export interface HotSpot {
 
 export interface HotSpotList {
   within_db: number
+  /** The radius each spot's level is averaged over, mm. Absent in results that predate it,
+   *  whose levels are the single loudest grid point. */
+  probe_radius_mm?: number
   maps: { layer: string; frequency_hz: number; spots: HotSpot[] }[]
 }
 
