@@ -450,54 +450,72 @@ export class BoardRenderer {
   }
 
   /**
-   * Region rectangle and port crosshairs, drawn last so they are never hidden.
+   * Region rectangle and markers, drawn last so they are never hidden.
    *
-   * Marker size is computed in board units from the current zoom, so a port stays the same
-   * size on screen rather than shrinking to nothing when the user zooms out to place it.
+   * Marker size is computed in board units from the current zoom, so a marker stays the same
+   * size on screen rather than shrinking to nothing when the user zooms out to place it. It is
+   * sized in CSS pixels: it was "8 device pixels" of hairline cross, which on a 2x screen is a
+   * 4 px speck, and a colored marker could not be told apart from the copper under it. Each
+   * marker is now a filled diamond in its color with a dark outline and a cross through it.
    */
   private drawAnnotations(): void {
     const gl = this.gl
-    const verts: number[] = []
+    const lines: number[] = []
+    const tris: number[] = []
+    type Draw = { mode: number; first: number; count: number; color: Rgb; alpha: number }
+    const lineDraws: Omit<Draw, 'mode'>[] = []
+    const triDraws: Omit<Draw, 'mode'>[] = []
 
     if (this.roi) {
       const [x0, y0, x1, y1] = this.roi
-      verts.push(x0, y0, x1, y0, x1, y0, x1, y1, x1, y1, x0, y1, x0, y1, x0, y0)
+      lines.push(x0, y0, x1, y0, x1, y0, x1, y1, x1, y1, x0, y1, x0, y1, x0, y0)
+      lineDraws.push({ first: 0, count: lines.length / 2, color: DEFAULT_MARKER_COLOR, alpha: 0.9 })
     }
 
-    // One draw per color: the ROI in white, then each marker color in turn.
-    const draws: { first: number; count: number; color: Rgb }[] = []
-    if (verts.length) draws.push({ first: 0, count: verts.length / 2, color: DEFAULT_MARKER_COLOR })
-
-    const r = 8 / this.view.scale // 8 device pixels, in mm
+    const dpr = Math.min(window.devicePixelRatio || 1, 2)
+    const r = (9 * dpr) / this.view.scale // 9 CSS pixels, in mm
+    const d = r * 0.7
     for (const batch of markerBatches(this.markers)) {
-      const first = verts.length / 2
+      const tFirst = tris.length / 2
+      const oFirst = lines.length / 2
       for (const m of batch.markers) {
-        verts.push(m.x - r, m.y, m.x + r, m.y, m.x, m.y - r, m.x, m.y + r)
-        // A small diamond, so a port reads as a placed object rather than a stray crosshair.
-        const d = r * 0.6
-        verts.push(
+        // Filled diamond: two triangles.
+        tris.push(m.x - d, m.y, m.x, m.y + d, m.x + d, m.y, m.x - d, m.y, m.x + d, m.y, m.x, m.y - d)
+        // Outline and a cross through it, so the exact point is still readable.
+        lines.push(
           m.x - d, m.y, m.x, m.y + d, m.x, m.y + d, m.x + d, m.y,
           m.x + d, m.y, m.x, m.y - d, m.x, m.y - d, m.x - d, m.y,
+          m.x - r, m.y, m.x + r, m.y, m.x, m.y - r, m.x, m.y + r,
         )
       }
-      draws.push({ first, count: verts.length / 2 - first, color: batch.color })
+      triDraws.push({ first: tFirst, count: tris.length / 2 - tFirst, color: batch.color, alpha: 0.95 })
+      lineDraws.push({ first: oFirst, count: lines.length / 2 - oFirst, color: [0.08, 0.08, 0.1], alpha: 0.9 })
     }
 
-    if (verts.length === 0) return
+    if (lines.length === 0 && tris.length === 0) return
 
     gl.useProgram(this.program)
     gl.uniform2f(this.uTranslate, this.view.tx, this.view.ty)
     gl.uniform1f(this.uScale, this.view.scale)
     gl.uniform2f(this.uViewport, gl.drawingBufferWidth, gl.drawingBufferHeight)
-
     gl.bindVertexArray(this.annotationVao)
     gl.bindBuffer(gl.ARRAY_BUFFER, this.annotationVbo)
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(verts), gl.DYNAMIC_DRAW)
 
-    gl.uniform1f(this.uAlpha, 0.9)
-    for (const { first, count, color } of draws) {
+    // Fills first, then outlines on top, from one buffer: triangles, then lines after them.
+    const all = new Float32Array(tris.length + lines.length)
+    all.set(tris, 0)
+    all.set(lines, tris.length)
+    gl.bufferData(gl.ARRAY_BUFFER, all, gl.DYNAMIC_DRAW)
+    const lineBase = tris.length / 2
+    const draws: Draw[] = [
+      ...triDraws.map((x) => ({ ...x, mode: gl.TRIANGLES })),
+      ...lineDraws.map((x) => ({ ...x, first: x.first + lineBase, mode: gl.LINES })),
+    ]
+    for (const { mode, first, count, color, alpha } of draws) {
+      if (count === 0) continue
+      gl.uniform1f(this.uAlpha, alpha)
       gl.uniform4f(this.uColor, color[0], color[1], color[2], 1.0)
-      gl.drawArrays(gl.LINES, first, count)
+      gl.drawArrays(mode, first, count)
     }
     gl.bindVertexArray(null)
   }
