@@ -19,7 +19,16 @@ path", not "what does it couple into its neighbours".
 with the most pins is excited, on the reasoning that a many-pin part is the driver and a
 two-pin part is a series element or a load. With both ends terminated the structure empties
 through its ports in a few round trips, which is what keeps the record short (see
-``stages/small_part.py``). A net with one pad gets one port and an open far end.
+``stages/small_part.py``).
+
+**A net with one pad gets a 50 ohm load at its far end** (``open_end``), a passive port on the
+end of the track that reaches furthest from the pad. Left open, the end reflects everything and
+the net rings for as long as its return path lets it: the sample board's clock net, open at one
+end over a split plane, ran its 10 minute budget to the timestep cap at -48 dB and published
+nothing. 50 ohm rather than the line's own impedance because it is what every other port is:
+the network then reads S21 to it in the same 50 ohm system, and the line's impedance would need
+a solve of its own first. A mismatch of a few times still empties the net in a few round trips.
+The result says the end was loaded, since the board as drawn leaves it open.
 
 The worker is handed the coupon's region and ports explicitly, like any solve; ``plan`` is how
 the browser's choice is reproduced by scripts and tests, and ``extract`` is what the worker
@@ -59,6 +68,18 @@ PORT_HALF_WIDTH_MM = 0.2
 #: coplanar ground), mm; further away it is left out. Two millimetres is several dielectric
 #: heights on a multilayer board, which is where a return current leaves the plane for a via.
 GROUND_NEAR_MM = 2.0
+
+#: The load an open far end is given, ohm. See the module docstring.
+OPEN_END_LOAD_OHM = 50.0
+
+#: A far end closer than this to the pad is not loaded, mm: the net is the pad, or nearly.
+OPEN_END_MIN_MM = 1.0
+
+#: What a loaded far end is called where a port names its pad.
+OPEN_END_LABEL = "far end, 50 ohm load"
+
+#: A port this close to a point is on it, mm. Ports sit on pad centres, to float precision.
+_ON_MM = 0.3
 
 
 class CouponError(ValueError):
@@ -184,10 +205,14 @@ def plan(
             ports.append(_port_on(board, transform, pad, len(ports), roi, resistance))
             port_pads.append(f"{pad.ref}.{pad.number}" if pad.ref else "")
         if len(ends) == 1:
-            notes.append(
-                f"{net} has one pad, so its far end is left open rather than terminated. An "
-                f"open end rings, and the run lasts longer than a terminated one"
-            )
+            load = load_port(board, transform, net, ends[0], len(ports))
+            if load is None:
+                notes.append(f"{net} has one pad and no track leading away from it, so it has "
+                             f"one port")
+            else:
+                ports.append(load)
+                port_pads.append(OPEN_END_LABEL)
+                notes.append(open_end_note(net))
     if not ports:
         raise CouponError(f"{', '.join(wanted)} has no pads to put a port on")
     ports = [replace(p, excited=(i == 0)) for i, p in enumerate(ports)]
@@ -231,6 +256,63 @@ def _ends(board: BoardModel, net: str) -> list[Pad]:
     pins = _pin_counts(board)
     key = lambda p: (-pins.get(p.ref, 0), p.ref, p.number)  # noqa: E731
     return sorted([a, b], key=key)
+
+
+def open_end(board: BoardModel, transform, net: str, pad: Pad
+             ) -> tuple[float, float, str] | None:
+    """Where a one-pad net ends: the track end furthest from its pad, in board space, and its
+    layer. None when no track reaches ``OPEN_END_MIN_MM`` from the pad."""
+    px, py = transform.pt(pad.x, pad.y)
+    best: tuple[float, float, float, str] | None = None
+    for t in board.tracks:
+        if t.net != net or not t.pts:
+            continue
+        for x, y in (t.pts[0], t.pts[-1]):
+            bx, by = transform.pt(x, y)
+            d = math.hypot(bx - px, by - py)
+            if best is None or d > best[0]:
+                best = (d, bx, by, t.layer)
+    if best is None or best[0] < OPEN_END_MIN_MM:
+        return None
+    return best[1], best[2], best[3]
+
+
+def load_port(board: BoardModel, transform, net: str, pad: Pad, index: int) -> Port | None:
+    """The passive 50 ohm port a one-pad net's far end gets (module docstring), or None."""
+    end = open_end(board, transform, net, pad)
+    if end is None:
+        return None
+    x, y, layer = end
+    return Port(
+        name=f"p{index + 1}", x=x, y=y, layer=layer, half_width_mm=PORT_HALF_WIDTH_MM,
+        resistance=OPEN_END_LOAD_OHM, excited=False,
+        reference_layer=reference_under(board, transform, x, y, layer) or "",
+    )
+
+
+def open_end_note(net: str) -> str:
+    return (f"{net} has one pad, so its far end, open on the board, was given a "
+            f"{OPEN_END_LOAD_OHM:.0f} ohm load to let the run settle. An open end reflects "
+            f"more than this shows")
+
+
+def loads_for_open_ends(board: BoardModel, transform, nets: list[str], ports: list[Port]
+                        ) -> list[tuple[str, Port]]:
+    """The loads a coupon's one-pad nets still need: those whose pad has a port and whose far
+    end has none. The browser places a port on each end it knows; a one-pad net's far end is
+    a track end, which only the worker has (the browser has triangles)."""
+    def on(x: float, y: float) -> bool:
+        return any(math.hypot(q.x - x, q.y - y) <= _ON_MM for q in ports)
+
+    out: list[tuple[str, Port]] = []
+    for net in nets:
+        pads = [p for p in board.pads if p.net == net and p.pad_type != "np_thru_hole"]
+        if len(pads) != 1 or not on(*transform.pt(pads[0].x, pads[0].y)):
+            continue
+        port = load_port(board, transform, net, pads[0], len(ports) + len(out))
+        if port is not None and not on(port.x, port.y):
+            out.append((net, port))
+    return out
 
 
 def _port_on(board: BoardModel, transform, pad: Pad, index: int, roi, resistance: float) -> Port:

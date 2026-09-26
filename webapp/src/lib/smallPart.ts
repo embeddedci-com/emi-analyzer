@@ -26,6 +26,8 @@ export const MAX_CELLS = 3_000_000
 export const MAX_CELL_STEPS = 1.5e11
 export const MIN_RECORD_S = 10e-9
 export const END_CRITERIA_DB = -50
+/** What the worker loads a one-pad net's far end with, ohm (`coupon.OPEN_END_LOAD_OHM`). */
+export const OPEN_END_LOAD_OHM = 50
 
 /**
  * Cells per mm² of region by preset, and how much each copper layer past two adds, fitted to
@@ -185,7 +187,9 @@ export function planCoupon(
         origin: 'net', net, padRef: pad.ref ? `${pad.ref}.${pad.number}` : undefined,
       })
     }
-    if (ends.length === 1) notes.push(`${net} has one pad, so its far end is open.`)
+    // The worker loads it (coupon.py, `open_end`): left open, the sample board's clock net rang
+    // its whole budget away. Only the worker has the track ends to put the load on.
+    if (ends.length === 1) notes.push(`${net} has one pad, so its far end gets a ${OPEN_END_LOAD_OHM} Ω load.`)
   }
   if (ports.length === 0) return none(`${nets.join(', ')} has no pads to put a port on.`)
   return { nets, roi, ports, margin_mm: margin, notes, error: null }

@@ -159,13 +159,15 @@ def coupon_nets(p: dict) -> list[str]:
 
 
 def cut(board, transform, p: dict, params: SolveParams):
-    """The board reduced to the coupon's copper, and what was said about it. Unchanged if the
-    run named no nets (a drawn region)."""
+    """The board reduced to the coupon's copper, what was said about it, and the ports it added
+    (``{name, net, pad}`` each, for the network). Unchanged if the run named no nets (a drawn
+    region)."""
     # A port the browser placed does not know what is under it: the browser has no pour
     # outlines. The worker does, so a port with no reference names the nearest layer with a
     # pour under it here, for a region as well as a coupon. Without one it falls back to the
     # nearest copper layer, as every solve always has, and the result says so.
     notes: list[str] = []
+    added: list[dict] = []
     for port in params.ports:
         if port.reference_layer:
             continue
@@ -182,11 +184,17 @@ def cut(board, transform, p: dict, params: SolveParams):
     if not nets:
         if _coarse(params) and _vias_in(board, transform, params.roi):
             notes.append(COARSE_VIA_NOTE)
-        return board, notes
+        return board, notes, added
     missing = [n for n in nets if n not in set(board.nets) | {t.net for t in board.tracks}
                | {q.net for q in board.pads}]
     if missing:
         raise StageError(f"{', '.join(missing)} is not a net on this board")
+    # A one-pad net's far end gets a 50 ohm load, or it rings past any budget (coupon.py). The
+    # browser cannot place it, so it is added here, and named for the network.
+    for net, port in coupon_mod.loads_for_open_ends(board, transform, nets, params.ports):
+        params.ports.append(port)
+        added.append({"name": port.name, "net": net, "pad": coupon_mod.OPEN_END_LABEL})
+        notes.append(coupon_mod.open_end_note(net))
     reduced, cut_notes = coupon_mod.extract(board, transform, nets, params.roi)
     cell = min(params.dx_um, params.dy_um) / 1000.0
     tight = coupon_mod.tight_gaps(reduced, nets, cell)
@@ -199,7 +207,7 @@ def cut(board, transform, p: dict, params: SolveParams):
         )
     if _coarse(params) and any(v.net in nets for v in reduced.vias):
         cut_notes.append(COARSE_VIA_NOTE)
-    return reduced, notes + cut_notes
+    return reduced, notes + cut_notes, added
 
 
 def _coarse(params: SolveParams) -> bool:

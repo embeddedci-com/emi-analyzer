@@ -81,6 +81,7 @@ def test_constants_match_the_browser():
     assert c["min_record_s"] == small_part.MIN_RECORD_S
     assert c["end_criteria_db"] == pytest.approx(10 * np.log10(small_part.END_CRITERIA))
     assert c["band_hz"] == list(small_part.BAND_HZ)
+    assert c["open_end_load_ohm"] == coupon.OPEN_END_LOAD_OHM
 
 
 # ---- the port network -----------------------------------------------------------------------
@@ -255,5 +256,5 @@ def test_a_coarse_part_with_vias_says_its_inductance_can_read_high(dx, with_via,
     c = coupon.plan(b, t, ["CLK"])
     params = SolveParams(roi=c.roi, frequencies_hz=[1e8, 1e9], ports=c.ports,
                          dx_um=dx, dy_um=dx, dz_um=dx * 2 / 3)
-    _, notes = small_part.cut(b, t, {"mode": "small_part", "coupon": {"nets": ["CLK"]}}, params)
+    _, notes, _ = small_part.cut(b, t, {"mode": "small_part", "coupon": {"nets": ["CLK"]}}, params)
     assert (small_part.COARSE_VIA_NOTE in notes) is noted
