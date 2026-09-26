@@ -33,20 +33,59 @@ const STATUS_COLOR: Record<string, string> = {
   timed_out: 'red',
 }
 
+/** What the worker's stage names mean to someone watching. */
+const STAGE_LABEL: Record<string, string> = {
+  fetch: 'Loading the file',
+  parse: 'Reading the board',
+  topology: 'Tracing nets',
+  rules: 'Running checks',
+  upload: 'Saving results',
+  done: 'Done',
+  mesh: 'Building the mesh',
+  solve: 'Solving',
+  post: 'Reading the results',
+  cables: 'Finding connectors',
+  models: 'Checking models',
+  simulate: 'Simulating',
+  compliance: 'Estimating emissions',
+}
+
+/** Stages whose message says something the label does not: which line, which cable. */
+const TELLING = new Set(['solve', 'simulate', 'cables', 'models'])
+
+const STATUS_LABEL: Record<string, string> = {
+  new: 'queued',
+  retry_pending: 'queued',
+  in_progress: 'running',
+  timed_out: 'timed out',
+}
+
+/** The label for a run's stage, or null when there is nothing to say. */
+export function stageLabel(run: Pick<Run, 'status' | 'progress'>): string | null {
+  const stage = run.progress?.stage
+  if (stage) return STAGE_LABEL[stage] ?? stage.charAt(0).toUpperCase() + stage.slice(1)
+  if (run.status === 'new' || run.status === 'retry_pending') return 'Waiting for the worker'
+  return null
+}
+
 export function RunProgress({ run, energyHistory = [], height = 90 }: RunProgressProps) {
   const p = run.progress
   const pct = p?.pct ?? (run.status === 'done' ? 100 : 0)
+  const label = stageLabel(run)
+  const message = p?.message && p.stage && TELLING.has(p.stage)
+    ? p.message.charAt(0).toUpperCase() + p.message.slice(1)
+    : null
 
   return (
     <Stack gap="xs">
       <Group justify="space-between" gap="xs">
         <Group gap="xs">
           <Badge color={STATUS_COLOR[run.status] ?? 'gray'} variant="light">
-            {run.status.replace('_', ' ')}
+            {STATUS_LABEL[run.status] ?? run.status.replace('_', ' ')}
           </Badge>
-          {p?.stage && (
+          {label && (
             <Text size="sm" fw={500}>
-              {p.stage}
+              {label}
             </Text>
           )}
         </Group>
@@ -72,9 +111,9 @@ export function RunProgress({ run, energyHistory = [], height = 90 }: RunProgres
         size="sm"
       />
 
-      {p?.message && (
+      {message && (
         <Text size="xs" c="dimmed">
-          {p.message}
+          {message}
         </Text>
       )}
 

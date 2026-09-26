@@ -12,7 +12,7 @@ import { BoardRenderer, type ViewState } from '../lib/BoardRenderer'
 import { FrameScheduler, keyAction, watchContextLoss, wheelZoomFactor } from '../lib/canvasInput'
 import type { FieldOverlayData, OverlayOptions } from '../lib/overlay'
 import type { BoardDoc } from '../lib/boardTypes'
-import type { BoardMarker } from '../lib/markers'
+import { markerAt, type BoardMarker } from '../lib/markers'
 import { anchorNear, type PortAnchor } from '../lib/portPlacement'
 
 /**
@@ -34,8 +34,10 @@ export interface BoardCanvasProps {
   /** Region of interest in board mm: [minX, minY, maxX, maxY]. */
   roi?: [number, number, number, number] | null
   onRoiChange?: (roi: [number, number, number, number]) => void
-  /** Positions to mark. Each may carry its own color; white otherwise. */
+  /** Positions to mark. Each may carry its own color; white otherwise. A label is drawn beside it. */
   markers?: BoardMarker[]
+  /** A click on a marker (in pan mode). Without it, markers are not clickable. */
+  onMarkerClick?: (marker: BoardMarker) => void
   /** Called with the nearest pad or via, or null when the click found nothing. */
   onPadPick?: (anchor: PortAnchor | null) => void
   /** Field-magnitude map to draw over the copper. */
@@ -60,6 +62,7 @@ export function BoardCanvas({
   roi = null,
   onRoiChange,
   markers,
+  onMarkerClick,
   onPadPick,
   overlay = null,
   overlayOptions,
@@ -87,8 +90,26 @@ export function BoardCanvas({
   const roiDragRef = useRef<{ id: number; x0: number; y0: number } | null>(null)
   // Props the pointer handlers read. Kept in a ref so the handlers never need to be
   // recreated, which would otherwise re-register listeners on every render.
-  const propsRef = useRef({ mode, onRoiChange, onPadPick, doc })
-  propsRef.current = { mode, onRoiChange, onPadPick, doc }
+  const propsRef = useRef({ mode, onRoiChange, onPadPick, doc, markers, onMarkerClick })
+  propsRef.current = { mode, onRoiChange, onPadPick, doc, markers, onMarkerClick }
+  // Marker labels are HTML over the canvas, moved after every frame: WebGL has no text, and
+  // a React re-render per pan step would be the 60 Hz setState this component avoids.
+  const labelsRef = useRef<HTMLDivElement | null>(null)
+  const placeLabels = useCallback(() => {
+    const layer = labelsRef.current
+    const renderer = rendererRef.current
+    if (!layer || !renderer) return
+    const labelled = (propsRef.current.markers ?? []).filter((m) => m.label)
+    const ratio = Math.min(window.devicePixelRatio || 1, 2)
+    const nodes = layer.children
+    for (let i = 0; i < nodes.length; i++) {
+      const m = labelled[i]
+      const el = nodes[i] as HTMLElement
+      if (!m) continue
+      const p = renderer.toCanvas(m.x, m.y)
+      el.style.transform = `translate(${Math.round(p.x / ratio + 7)}px, ${Math.round(p.y / ratio - 17)}px)`
+    }
+  }, [])
 
   const markDirty = useCallback(() => {
     dirtyRef.current = true
@@ -134,6 +155,7 @@ export function BoardCanvas({
       if (!renderer) return
       renderer.resize()
       renderer.render()
+      placeLabels()
       dirtyRef.current = false
     })
     schedulerRef.current = scheduler
@@ -283,6 +305,18 @@ export function BoardCanvas({
     return renderer.toBoard((e.clientX - rect.left) * dpr(), (e.clientY - rect.top) * dpr())
   }
 
+  // The marker under the pointer, if any, measured in CSS pixels.
+  const hitMarker = (e: React.PointerEvent<HTMLCanvasElement>, list: BoardMarker[] | undefined) => {
+    const renderer = rendererRef.current
+    if (!renderer || !list?.length) return null
+    const rect = e.currentTarget.getBoundingClientRect()
+    const ratio = dpr()
+    return markerAt(list, (x, y) => {
+      const p = renderer.toCanvas(x, y)
+      return { x: p.x / ratio, y: p.y / ratio }
+    }, e.clientX - rect.left, e.clientY - rect.top)
+  }
+
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     e.currentTarget.setPointerCapture(e.pointerId)
 
@@ -303,6 +337,12 @@ export function BoardCanvas({
     const drag = dragRef.current
     const panned = !!drag && drag.id === e.pointerId &&
       Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) > CLICK_SLOP_PX
+
+    const { markers: shown, onMarkerClick: onMarker } = propsRef.current
+    if (mode === 'pan' && onMarker && !panned && drag?.id === e.pointerId) {
+      const hit = hitMarker(e, shown)
+      if (hit) onMarker(hit)
+    }
 
     if (mode === 'pick-pad' && currentDoc && onPadPick && !panned) {
       const renderer = rendererRef.current
@@ -350,7 +390,14 @@ export function BoardCanvas({
     }
 
     const drag = dragRef.current
-    if (!drag || drag.id !== e.pointerId) return
+    if (!drag || drag.id !== e.pointerId) {
+      // A marker that does something on a click looks like it does.
+      if (propsRef.current.mode === 'pan' && propsRef.current.onMarkerClick) {
+        const over = hitMarker(e, propsRef.current.markers) !== null
+        e.currentTarget.style.cursor = over ? 'pointer' : 'grab'
+      }
+      return
+    }
     renderer.panBy((e.clientX - drag.x) * dpr(), (e.clientY - drag.y) * dpr())
     drag.x = e.clientX
     drag.y = e.clientY
@@ -420,6 +467,27 @@ export function BoardCanvas({
         onPointerLeave={() => onCursorMove?.(null)}
         onKeyDown={handleKeyDown}
       />
+      <div
+        ref={labelsRef}
+        aria-hidden
+        style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none' }}
+      >
+        {(markers ?? []).filter((m) => m.label).map((m, i) => (
+          <span
+            key={`${m.id ?? ''}-${i}`}
+            style={{
+              position: 'absolute', left: 0, top: 0, padding: '0 4px', borderRadius: 3,
+              font: '600 11px/16px sans-serif', color: '#fff', whiteSpace: 'nowrap',
+              background: 'rgba(14, 18, 17, 0.8)',
+              borderLeft: `2px solid rgb(${(m.color ?? [1, 1, 1]).map((c) => Math.round(c * 255)).join(',')})`,
+              // Off screen until the first frame places it, so it never flashes at the corner.
+              transform: 'translate(-100px, -100px)',
+            }}
+          >
+            {m.label}
+          </span>
+        ))}
+      </div>
       {contextLost && (
         <div
           role="status"

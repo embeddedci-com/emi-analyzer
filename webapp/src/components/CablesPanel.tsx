@@ -51,12 +51,21 @@ interface Props {
    */
   assignments: Record<string, Assignment>
   onAssignmentsChange: (next: Record<string, Assignment>) => void
+  /** The tab is on screen. The first time it is, the board's connectors are listed. */
+  active?: boolean
+  /**
+   * Whether this board has had a cable run of any status; undefined while that is not known.
+   * The connectors are listed by themselves only on a board that has none, so opening the tab
+   * never starts a second run beside one already queued.
+   */
+  anyRun?: boolean
 }
 
 export type Assignment = { type: string; length_m?: number }
 
 export function CablesPanel({
   api, projectId, boardId, runId, harmonics = [], workersOnline, assignments, onAssignmentsChange,
+  active = false, anyRun,
 }: Props) {
   const [startedRunId, setStartedRunId] = useState<string | undefined>(runId)
 
@@ -114,8 +123,33 @@ export function CablesPanel({
     },
   })
 
-  // Connectors come from a previous run's report; before the first run there is nothing to
-  // list, because finding them means parsing the board and that happens on the worker.
+  // Connectors come from a run's report, because finding them means parsing the board and that
+  // happens on the worker. So the first time the tab opens on a board with no cable run, a run
+  // with no cables assigned lists them: a few seconds, no solve.
+  const listed = useRef(false)
+  useEffect(() => {
+    if (!active || listed.current || anyRun !== false || startedRunId || !boardId) return
+    listed.current = true
+    start.mutate()
+  }, [active, anyRun, startedRunId, boardId, start])
+
+  // The suggested cable is chosen for every connector nobody has decided about, so the next
+  // press gets budgets. Once per result: clearing a suggestion afterwards sticks.
+  const prefilled = useRef<string | null>(null)
+  useEffect(() => {
+    const d = doc.data as CablesDoc | undefined
+    if (!d || prefilled.current === startedRunId) return
+    prefilled.current = startedRunId ?? null
+    const next = { ...assignments }
+    let changed = false
+    for (const u of d.unassigned) {
+      if (u.suggested && !next[u.ref]) {
+        next[u.ref] = { type: u.suggested }
+        changed = true
+      }
+    }
+    if (changed) onAssignmentsChange(next)
+  }, [doc.data, startedRunId, assignments, onAssignmentsChange])
   const connectors = useMemo(() => {
     const d = doc.data as CablesDoc | undefined
     if (!d) return []
@@ -136,8 +170,13 @@ export function CablesPanel({
   const modelled = (d?.cables ?? []).filter((c) => c.cable_id)
   // Connectors the *result* says are unassigned, minus any that have been assigned since.
   const stillUnassigned = (d?.unassigned ?? []).filter((u) => !assignments[u.ref])
-  const changedSinceRun =
-    !!d && ranWith.current !== null && ranWith.current !== JSON.stringify(assignments)
+  // Compared with what the result was run with, not with what this page started: after a
+  // reload the result on screen is still the one its params describe.
+  const resultRanWith = JSON.stringify(
+    (run.data?.params as { connectors?: Record<string, Assignment> } | undefined)?.connectors ?? {})
+  const changedSinceRun = !!d && (ranWith.current ?? resultRanWith) !== JSON.stringify(assignments)
+  // A result with no cable modelled is only the connector list: nothing to call out of date.
+  const needsBudgets = changedSinceRun && Object.values(assignments).some((a) => a.type !== 'none')
 
   return (
     <Stack gap="sm">
@@ -145,16 +184,16 @@ export function CablesPanel({
         <Stack gap={0}>
           <Title order={5}>Cables</Title>
           <Text size="xs" c="dimmed">
-            Below about 300 MHz a cable usually radiates more than the board. This runs in
-            seconds and needs no solve.
+            Below 300 MHz a cable usually radiates more than the board.
           </Text>
           <Experimental why={EXPERIMENTAL.cableBudget} label="budget, not a prediction" mb={0} />
         </Stack>
         <Tooltip label="The board is still being processed" disabled={!!boardId} withArrow>
-          <Button size="xs" variant="light" loading={start.isPending}
+          <Button size="xs" variant={needsBudgets ? 'filled' : 'light'}
+                  loading={start.isPending || (!!startedRunId && !d && !failed && !run.isError)}
                   disabled={!boardId}
                   onClick={() => start.mutate()}>
-            {startedRunId ? 'Run again' : 'Find connectors'}
+            {!startedRunId ? 'Find connectors' : needsBudgets ? 'Get budgets' : 'Run again'}
           </Button>
         </Tooltip>
       </Group>
@@ -173,8 +212,8 @@ export function CablesPanel({
       {startedRunId && !d && !failed && !doc.isError && !run.isError && (
         <Text size="sm" c="dimmed">
           {workersOnline === 0
-            ? 'Waiting for a worker to pick this up. None is connected yet.'
-            : 'Running. A cable run takes a few seconds.'}
+            ? 'Waiting for a worker to connect.'
+            : 'Finding connectors\u2026'}
         </Text>
       )}
       {failed && (
@@ -191,19 +230,17 @@ export function CablesPanel({
           </Stack>
         </Alert>
       )}
-      {changedSinceRun && (
-        <Alert color="blue" variant="light" title="Assignments have changed">
-          <Text size="xs">
-            The result below is from the previous set of cables. Press{' '}
-            <Text span fw={600}>Run again</Text> to bring it up to date.
-          </Text>
-        </Alert>
+      {needsBudgets && (
+        <Text size="xs" c="dimmed">
+          {modelled.length > 0
+            ? 'Cables changed. Press Get budgets to update the result.'
+            : 'Suggested cables are picked. Press Get budgets, or change them first.'}
+        </Text>
       )}
 
       {!startedRunId && (
         <Text size="sm" c="dimmed">
-          Press <Text span fw={600}>Find connectors</Text> to list this board&apos;s connectors,
-          then pick the cable each one carries. A connector left unassigned is not modelled.
+          Press <Text span fw={600}>Find connectors</Text> to list the connectors on this board.
         </Text>
       )}
 
@@ -246,7 +283,7 @@ export function CablesPanel({
                     <Badge size="xs" variant="light" color="gray">never cabled</Badge>
                   )}
                   {cable && (
-                    <Badge size="xs" variant="light" color="teal">modelled</Badge>
+                    <Badge size="xs" variant="light" color="teal">cable set</Badge>
                   )}
                   {!chosen && c.suggested && (
                     <Tooltip label={`Suggested from ${c.footprint}`} withArrow>
@@ -302,14 +339,12 @@ export function CablesPanel({
       )}
 
       {stillUnassigned.length > 0 && (
-        <Alert color="yellow" variant="light" title="Not every connector is decided">
+        <Alert color="yellow" variant="light" p="xs">
           <Text size="xs">
             {stillUnassigned.map((u) => u.ref).join(', ')}{' '}
-            {stillUnassigned.length === 1 ? 'has' : 'have'} no cable assigned, so{' '}
-            {stillUnassigned.length === 1 ? 'it is' : 'they are'} not modelled at all, which is
-            not the same as carrying nothing. Assign a cable, or mark it{' '}
-            <Text span fw={600}>never cabled</Text> if it is a debug header that never leaves
-            the bench.
+            {stillUnassigned.length === 1 ? 'has' : 'have'} no cable, so{' '}
+            {stillUnassigned.length === 1 ? 'it is' : 'they are'} not modelled. Pick a cable, or{' '}
+            <Text span fw={600}>never cabled</Text> for a header that stays inside.
           </Text>
         </Alert>
       )}
@@ -354,7 +389,7 @@ export function CablesPanel({
         </Card>
       ))}
 
-      {d && (
+      {d && modelled.length > 0 && (
         <Card withBorder padding="sm">
           <Stack gap={4}>
             <Text size="xs" fw={600} tt="uppercase" c="dimmed">What this assumes</Text>

@@ -4,6 +4,7 @@
  * so new and fixed findings can be told apart on the board and not only by the toggle.
  */
 
+import type { RuleFinding } from './boardTypes'
 import type { FindingStatus } from './compare'
 
 /** RGB in 0..1, as the renderer's color uniform takes it. */
@@ -15,6 +16,8 @@ export interface BoardMarker {
   label?: string
   /** Defaults to {@link DEFAULT_MARKER_COLOR}. */
   color?: Rgb
+  /** What the marker stands for, handed back when it is clicked: a finding's id. */
+  id?: string
 }
 
 export const DEFAULT_MARKER_COLOR: Rgb = [1, 1, 1]
@@ -45,6 +48,62 @@ export const HOTSPOT_MARKER_HEX = '#be4bdb'
 
 export function findingMarkerColor(status: FindingStatus): Rgb {
   return hexToRgb(FINDING_MARKER_HEX[status])
+}
+
+/**
+ * Marker color per finding severity: Mantine's red.6, orange.6 and gray.6, the colors the list
+ * numbers its findings in. Orange reads on the copper here because every marker is a filled
+ * diamond with a dark outline, not a hairline.
+ */
+export const SEVERITY_MARKER_HEX: Record<RuleFinding['severity'], string> = {
+  critical: '#fa5252',
+  warning: '#fd7e14',
+  info: '#868e96',
+}
+
+export function severityMarkerColor(severity: RuleFinding['severity']): Rgb {
+  return hexToRgb(SEVERITY_MARKER_HEX[severity] ?? SEVERITY_MARKER_HEX.info)
+}
+
+/**
+ * One marker per finding that has a place on the board, labelled with its number in the list
+ * and colored by severity. A finding with no position (a board-wide count) has no marker.
+ */
+export function findingMarkers(findings: RuleFinding[], numbers: Map<string, number>): BoardMarker[] {
+  const out: BoardMarker[] = []
+  for (const f of findings) {
+    if (f.x == null || f.y == null) continue
+    const n = numbers.get(f.id)
+    out.push({ x: f.x, y: f.y, id: f.id, label: n ? String(n) : undefined, color: severityMarkerColor(f.severity) })
+  }
+  // The worst drawn last, so where markers overlap the critical one is on top.
+  const rank = { critical: 2, warning: 1, info: 0 } as const
+  const sev = new Map(findings.map((f) => [f.id, rank[f.severity] ?? 0]))
+  return out.sort((a, b) => (sev.get(a.id!) ?? 0) - (sev.get(b.id!) ?? 0))
+}
+
+/**
+ * The marker under a point, in CSS pixels on the canvas, or null. `toScreen` maps board mm to
+ * the same pixels. Nearest wins, so of two overlapping markers the click picks the closer one.
+ */
+export function markerAt(
+  markers: BoardMarker[],
+  toScreen: (x: number, y: number) => { x: number; y: number },
+  px: number,
+  py: number,
+  radiusPx = 11,
+): BoardMarker | null {
+  let best: BoardMarker | null = null
+  let bestD = radiusPx
+  for (const m of markers) {
+    const s = toScreen(m.x, m.y)
+    const d = Math.hypot(s.x - px, s.y - py)
+    if (d <= bestD) {
+      best = m
+      bestD = d
+    }
+  }
+  return best
 }
 
 /**
