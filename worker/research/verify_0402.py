@@ -27,6 +27,9 @@ self-resonance 1 / (2 pi sqrt((ESL + L_mount) C)) is compared with where Im(Z_in
 Pass criteria (docs/known-issues.md): SRF within 5 %, and |Z_part| within 1 dB of the analytic
 series R-L-C from a third of the SRF to three times it.
 
+``TAIL_EXTEND=1`` continues a record that ends in a clean 50 ohm discharge with the fitted
+exponential, for a part whose tail would otherwise take hours (1 nF: 50 ns).
+
 ``END_CRITERIA`` (default the solve's 1e-4, -40 dB) sets where the runs end. The capacitor's
 loop rings down slowly, and at -40 dB its transform still ripples by several dB; 1e-7 gives the
 clean record the comparison needs.
@@ -58,6 +61,9 @@ from emi_worker.openems import csx, post, run  # noqa: E402
 from emi_worker.openems.model import (  # noqa: E402
     Port, SolveParams, build_model, excitation_seconds,
 )
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from verify_lumped_rlc import tail_time_constant  # noqa: E402
 
 OUT = Path(os.environ.get("OUT", "/spike/spike_out")) / f"cap_0402_{os.environ.get('VALUE', '100p')}"
 THREADS = int(os.environ.get("THREADS", "3"))
@@ -126,6 +132,10 @@ def params() -> SolveParams:
         dx_um=dx, dy_um=dy, dz_um=dz, air_mm=3.0,
         model_components=True, solver_series_rlc=True,
         end_criteria=float(os.environ.get("END_CRITERIA", "1e-4")),
+        # 0 is the solve's own cap, three periods of the lowest frequency. The part's charge
+        # drains through the port far slower than that (tail_time_constant), so a tight end
+        # criterion needs a higher one.
+        max_timesteps=int(os.environ.get("MAX_TIMESTEPS", "0")),
     )
 
 
@@ -160,7 +170,41 @@ def solve(name: str, doc, built) -> tuple[np.ndarray, run.RunResult]:
     u = post.read_probe(str(work / "p1_ut"))
     i = post.read_probe(str(work / "p1_it"))
     f = np.asarray(FREQS)
+    tails[name] = tail_time_constant(u, i)
+    if TAIL_EXTEND and tails[name].get("tau_s") and abs(tails[name]["v_over_i"] + 50) < 0.5:
+        u, i = extend_tail(u, i, tails[name])
+        tails[name]["extended_to_s"] = float(u.time_s[-1])
     return post._dft(u, f) / post._dft(i, f), res
+
+
+#: Continue a record that ends in a clean 50 ohm discharge with that exponential, instead of
+#: running until it has decayed. A 1 nF part drains with 50 ns, so a record to -70 dB is about
+#: 400 ns, most of it a tail whose shape is known once it is measured.
+TAIL_EXTEND = os.environ.get("TAIL_EXTEND", "") not in ("", "0")
+
+
+def extend_tail(u, i, tail: dict, taus: float = 15.0):
+    """The records with the fitted discharge appended for ``taus`` time constants.
+
+    It starts from the last 1 ns average, so ringing at the end does not set its level, and
+    the current is the voltage over the V/I the fit measured.
+    """
+    tau, ratio = tail["tau_s"], tail["v_over_i"]
+    out = []
+    for trace, scale in ((u, 1.0), (i, 1.0 / ratio)):
+        t, v = np.asarray(trace.time_s), np.asarray(trace.values)
+        dt = float(np.mean(np.diff(t)))
+        n = max(1, int(round(1e-9 / dt)))
+        level = float(np.mean(np.asarray(u.values)[-n:]))
+        extra_t = t[-1] + dt * np.arange(1, int(taus * tau / dt) + 1)
+        extra_v = scale * level * np.exp(-(extra_t - t[-1]) / tau)
+        out.append(post.ProbeTrace(time_s=np.concatenate([t, extra_t]),
+                                   values=np.concatenate([v, extra_v])))
+    return out[0], out[1]
+
+
+#: What ``tail_time_constant`` measured on each run, for the report.
+tails: dict[str, dict] = {}
 
 
 def crossing(f: np.ndarray, x: np.ndarray) -> float | None:
@@ -213,6 +257,13 @@ def main() -> int:
     print(f"mounted SRF: analytic {fmt(srf_mounted_expected)}, measured {fmt(srf_mounted)}")
     worst = float(np.max(np.abs(err_db[band]))) if band.any() else float("nan")
     print(f"worst |Z| error from SRF/3 to 3 x SRF: {worst:.2f} dB")
+    tau_rc = (50.0 + ESR_OHM) * C_F
+    for name, tail in tails.items():
+        tau = tail.get("tau_s")
+        print(f"{name} tail: " + (
+            f"tau {tau * 1e9:.2f} ns (50 ohm x C: {tau_rc * 1e9:.2f} ns), "
+            f"V/I {tail['v_over_i']:.1f} ohm, last sample {tail['v_end']:.2e} V "
+            f"of a {tail['v_peak']:.2e} V peak" if tau else tail.get("note", "no decay")))
 
     report = {
         "preset": PRESET, "cells": built.mesh.cells,
@@ -227,6 +278,7 @@ def main() -> int:
         "timesteps": [res_short.final_timestep, res_cap.final_timestep],
         "converged": [res_short.converged, res_cap.converged],
         "elapsed_s": [res_short.elapsed_s, res_cap.elapsed_s],
+        "tails": tails,
     }
     (OUT / "report.json").write_text(
         json.dumps(report, indent=2) + "\n")

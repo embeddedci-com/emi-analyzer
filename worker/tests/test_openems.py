@@ -755,12 +755,13 @@ def _cap_model(series: bool):
 
 
 def test_no_capacitor_is_placed_on_a_solver_without_an_inductor():
-    """openEMS 0.0.35 skips an L-only element, so the old three-cell model was an open gap."""
+    """openEMS 0.0.35 skips an L-only element, so the old three-cell model was an open gap;
+    an unpatched current openEMS loses the capacitor to rounding. Either way: bare copper."""
     built = _cap_model(series=False)
     assert built.modelled_parts == []
     assert not [p for p in built.doc.properties if isinstance(p, csx.LumpedElement)
                 and p.name.startswith("cap_")]
-    assert any("bare copper" in n and "inductor" in n for n in built.notes)
+    assert any("bare copper" in n and "series R-L-C" in n for n in built.notes)
 
 
 def test_a_capacitor_is_one_series_element_across_the_gap():

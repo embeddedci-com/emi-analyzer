@@ -275,12 +275,15 @@ def series_rlc_element(
 ) -> "LumpedElement":
     """A capacitor model: ESR, ESL and C in series, as one element across the pad gap.
 
-    Needs an openEMS with the lumped-RLC extension (``LEtype``), which is what
-    ``run.solver_has_series_rlc`` checks. openEMS 0.0.35 has none: it models a lumped R or C
-    and skips anything else. Checked with research/verify_lumped_rlc.py on both builds: on
-    0.0.35 a 10 nH element was skipped with "R or C not specified" and measured as an open
-    gap (-j9921 ohm at 100 MHz); on the build a series 1 ohm, 10 nH, 10 pF element came out
-    within 0.25 dB of the circuit away from its resonance.
+    Needs an openEMS with the lumped-RLC extension (``LEtype``) and its state in double
+    precision, which is what ``run.solver_has_series_rlc`` checks. openEMS 0.0.35 has no
+    extension: it models a lumped R or C and skips anything else. Checked with
+    research/verify_lumped_rlc.py: on 0.0.35 a 10 nH element was skipped with "R or C not
+    specified" and measured as an open gap (-j9921 ohm at 100 MHz); on a current build a
+    series 1 ohm, 10 nH, 10 pF element came out within 0.25 dB of the circuit away from its
+    resonance. Upstream keeps the element's state in float, and at a board's timestep a
+    100 pF part drained through 50 ohm with 13.3 ns instead of 5; the released image patches
+    that (worker/openems-image/lumped-rlc-double.patch).
     """
     p1, p2 = box
     return LumpedElement(

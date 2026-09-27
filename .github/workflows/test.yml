@@ -89,7 +89,7 @@ jobs:
       - run: |
           docker run --rm --user root --entrypoint sh -v "$PWD:/repo:ro" emi-worker-test -c '
             pip install -q "pytest==9.1.1" &&
-            mkdir /tmp/repo && cp -r /repo/worker /repo/server /repo/webapp /repo/docs /tmp/repo/ &&
+            mkdir /tmp/repo && cp -r /repo/worker /repo/server /repo/webapp /repo/docs /repo/NOTICE /tmp/repo/ &&
             cd /tmp/repo/worker && python -m pytest -q -p no:cacheprovider'
 
   # The KiCad plugin is plain Python and its tests stand in for KiCad and for the app, so

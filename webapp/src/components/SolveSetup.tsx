@@ -300,7 +300,7 @@ export function SolveSetup({
             label="Model decoupling capacitors"
             checked={modelComponents}
             onChange={(e) => setModelComponents(e.currentTarget.checked)}
-            description="Places a series R-L-C across each capacitor the library recognises, instead of leaving it as bare copper. Costs well under 1 % more cells and does not change the timestep. With it off the solve is exactly what it was before component models existed."
+            description="Places a series R-L-C across each capacitor the library recognizes, instead of leaving it as bare copper. Costs well under 1 % more cells and does not change the timestep. Experimental: this solve ends too early for it, and a 100 pF part reads up to 5 dB off. With it off the solve is exactly what it was before component models existed."
           />
           {ports.some((p) => p.excited) && (
             <Text size="xs" c="dimmed">

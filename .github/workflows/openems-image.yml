@@ -2,7 +2,8 @@
 # it as the base the worker image starts FROM.
 #
 #   any push that changes the Dockerfile   :sha-<commit>   (and -amd64, -arm64 halves)
-#   the same on main                       also :<first 12 characters of OPENEMS_REF>
+#   the same on main                       also :<first 12 characters of OPENEMS_REF>, then
+#                                          -<first 8 of the SHA-256 of its *.patch files>
 #   run manually                           the same, from whatever ref is chosen
 #
 # It runs only when the openEMS commit or its Dockerfile changes, because the compile is tens
@@ -98,20 +99,27 @@ jobs:
           set -euo pipefail
           openems_ref=$(sed -n 's/^ARG OPENEMS_REF=\([0-9a-f]\{40\}\)$/\1/p' worker/openems-image/Dockerfile)
           test -n "$openems_ref" || { echo "no OPENEMS_REF in worker/openems-image/Dockerfile"; exit 1; }
+          # A patched build is not the upstream commit, so its tag says which patches.
+          # test_openems_image computes the same name.
+          base_tag=${openems_ref:0:12}
+          patches=$(find worker/openems-image -maxdepth 1 -name '*.patch' | LC_ALL=C sort)
+          if [ -n "$patches" ]; then
+            base_tag="$base_tag-$(cat $patches | sha256sum | cut -c1-8)"
+          fi
           tags=(-t "$IMAGE:sha-$SHA")
           if [ "$REF" = "refs/heads/main" ]; then
-            tags+=(-t "$IMAGE:${openems_ref:0:12}")
+            tags+=(-t "$IMAGE:$base_tag")
           fi
           docker buildx imagetools create "${tags[@]}" \
             "$IMAGE:sha-$SHA-amd64" "$IMAGE:sha-$SHA-arm64"
           digest=$(docker buildx imagetools inspect "$IMAGE:sha-$SHA" --format '{{json .Manifest}}' | jq -r .digest)
           docker buildx imagetools inspect "$IMAGE@$digest"
           {
-            echo "### openEMS ${openems_ref:0:12}"
+            echo "### openEMS $base_tag"
             echo
             echo "Pin it in worker/Dockerfile:"
             echo
             echo '```'
-            echo "ARG OPENEMS_IMAGE=$IMAGE:${openems_ref:0:12}@$digest"
+            echo "ARG OPENEMS_IMAGE=$IMAGE:$base_tag@$digest"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"

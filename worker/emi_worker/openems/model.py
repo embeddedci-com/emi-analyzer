@@ -266,12 +266,13 @@ def _plan_components(model: BoardModel, transform, params: "SolveParams", notes:
     if not params.model_components:
         return PlacementPlan()
     if not params.solver_series_rlc:
-        # The solver would skip the inductor and leave every capacitor an open gap, which is a
-        # model that looks like decoupling and is not. Bare copper is visibly incomplete.
+        # The solver would skip the inductor and leave every capacitor an open gap, or keep it
+        # and lose the capacitor to rounding: a model that looks like decoupling and is not.
+        # Bare copper is visibly incomplete.
         notes.append(
-            "capacitors were left as bare copper: this worker's openEMS cannot model an "
-            "inductor, so a capacitor's series R-L-C would be an open circuit. A worker built "
-            "with a current openEMS can model them"
+            "capacitors were left as bare copper: this worker's openEMS cannot model a series "
+            "R-L-C correctly, so a capacitor model would be wrong. The released worker image "
+            "can model them"
         )
         return PlacementPlan()
 

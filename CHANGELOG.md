@@ -94,6 +94,14 @@ The KiCad plugin is versioned and released separately; see
 
 ### Fixed
 
+- Modelled capacitors (full-wave, experimental): upstream openEMS keeps its series lumped
+  element's state in float and lost the capacitor to rounding at a board's timestep, so a
+  100 pF 0402 resonated 17 % low. The worker image's openEMS is now patched for it
+  (`worker/openems-image/lumped-rlc-double.patch`; NOTICE says so), and a worker whose openEMS
+  fails a check of that element places no capacitor. A 100 pF and a 1 nF 0402 now match their
+  series R-L-C within 0.01 % on resonance, with a -70 dB record; the solve's own -40 dB is still
+  too short for them, so the option stays experimental
+  ([docs/verification/solver-and-components.md](docs/verification/solver-and-components.md) §4).
 - Ground and power nets are recognized by whole words: `+3.3V` and `+24V` were signals, and
   `+10V` and `VBUS_20V` were grounds, which produced false return-via findings.
 - The divergence check refused every long solve; mesh grading is now enforced.

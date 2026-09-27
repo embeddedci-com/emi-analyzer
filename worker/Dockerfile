@@ -30,11 +30,11 @@
 # source is.
 ARG OPENEMS_SOURCE=build
 
-# The tag names the openEMS commit; test_openems_image checks it matches
-# openems-image/Dockerfile. Append the digest the openEMS workflow prints (tag@sha256:...):
-# with it, a rebuild of the openEMS image changes no worker until this line is moved, and the
-# worker workflow refuses to build a release without one.
-ARG OPENEMS_IMAGE=ghcr.io/embeddedci-com/emi-openems:f73bf97906a3@sha256:3feba99bc1eefab04451db84da9caa976771d8e1bd780f9f11dc6d9329e54eab
+# The tag names the openEMS commit and a hash of the patches applied to it;
+# test_openems_image checks it matches openems-image/. Append the digest the openEMS workflow
+# prints (tag@sha256:...): with it, a rebuild of the openEMS image changes no worker until
+# this line is moved, and the worker workflow refuses to build a release without one.
+ARG OPENEMS_IMAGE=ghcr.io/embeddedci-com/emi-openems:f73bf97906a3-d8d7b18d@sha256:fac305f2757af377a86f437e84eb68f65a2cffa09cdc8a37973be837bbe5052c
 
 # Pinned by digest so a rebuild of an old tag gets the Debian it was tested on. The tag stays
 # in the reference for readers; Dependabot bumps the digest. openems-image/Dockerfile uses the

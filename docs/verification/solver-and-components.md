@@ -19,8 +19,8 @@ was made in the worker image with at most three threads.
 |---|---|---|---|
 | 1 | A run that did not settle | nothing derived from it is used | ✅ after three fixes, one of them to how a run ends |
 | 2 | 50 ohm microstrip through the production path | Z0 within 5 % of Hammerstad-Jensen | ✅ -0.9 to +0.2 % on all presets, after three fixes |
-| 3 | Lumped inductor in openEMS 0.0.35 | an L element is modelled | ❌ it is skipped; capacitors were open circuits. Fixed by refusing on 0.0.35, and the image now ships an openEMS that models it |
-| 4 | One 0402 capacitor over a plane | SRF within 5 %, \|Z\| within 1 dB to 3x SRF | ⚠️ 100 pF on a current openEMS: SRF +1.6 % ✅, \|Z\| +1.37 dB at resonance ❌, and only with a -70 dB record |
+| 3 | Lumped inductor in openEMS 0.0.35 | an L element is modelled | ❌ it is skipped; capacitors were open circuits. Fixed by refusing on 0.0.35, and the image now ships an openEMS that models it (patched, §4) |
+| 4 | One 0402 capacitor over a plane | SRF within 5 %, \|Z\| within 1 dB to 3x SRF | ⚠️ upstream openEMS lost the capacitor to float rounding (SRF -17 %); patched: 100 pF SRF +0.01 %, \|Z\| 0.23 dB ✅, 1 nF SRF 0.0 %, \|Z\| 0.02 dB ✅, only with a -70 dB record the solve does not ask for |
 | 5 | 100 ns record on a real board | decays to -40 dB; cost measured | dropped (out of scope); found openEMS ending runs inside the pulse |
 | 6 | Cost estimator against the mesher | per-preset floors from real boards | ✅ recalibrated on 4-10 mm regions; the timestep term was also 2.0-2.7x low |
 
@@ -150,7 +150,9 @@ Components can therefore only be modelled on a worker built with `OPENEMS_SOURCE
 `ghcr.io/embeddedci-com/emi-openems` (`worker/openems-image`, pinned at f73bf97, the commit
 measured here), on a native runner per architecture, and the worker image starts from it by
 default. Both images fail their build unless the probe above answers yes. `OPENEMS_SOURCE=apt`
-still gives 0.0.35, which answers no and places no capacitor.
+still gives 0.0.35, which answers no and places no capacitor. That openEMS turned out to lose
+the series element's capacitor to float rounding at a board's timestep; the image now patches
+it, and the probe checks for it (§4).
 
 ---
 
@@ -196,10 +198,142 @@ What the other runs showed:
   current through an element that should block it. Its transform put the SRF at 67 MHz against
   196 MHz. Not rerun after the fix, since a run to settle it is hours.
 
-**Result.** On a current openEMS, a 100 pF 0402 resonates where the library says, within 1.6 %,
-and its impedance is within 1 dB of the series R-L-C except at resonance, where it is within
-1.4 dB, **provided the run goes to -70 dB**. It is not verified at the solve's -40 dB, not on
-the shipped solver, and not at 1 nF or above.
+**Result then.** A 100 pF 0402 resonated within 1.6 % and missed |Z| by 0.37 dB at resonance,
+with a -70 dB record. The rerun below shows that this was the rounding of one mesh, not a
+working element.
+
+### Rerun on the shipped image: the series element loses C to rounding
+
+September 26-27, the worker image built from `worker/` (prebuilt openEMS f73bf97, openEMS core
+65f8771; its build probe answered "series R-L-C: True"), three threads.
+
+- **Lumped R-L-C (§3), unchanged.** R 20 ohm 0.00-0.08 dB, C 10 pF -0.13 to -0.39 dB, L 10 nH
+  0.09-0.73 dB, series 1 ohm + 10 nH + 10 pF 0.07-0.52 dB (2.55 dB at 500 MHz, where \|Z\| is
+  1 ohm). The series 10 nH alone is still refused: its energy grows 4.4e3x after the source.
+  No model uses a series element without C.
+- **100 pF 0402 at -70 dB failed.** 94,116 cells, L_mount 0.243 nH. The part run hit the solve's
+  own cap (173,409 steps, 12.9 ns) at -55.5 dB; its transform put the part SRF at 622.9 MHz
+  against 750.3 (-17 %) and \|Z\| up to 7.96 dB off.
+- **Its tail did not scale with C.** After the pulse the port voltage decays as one exponential
+  with V/I = -50.0 ohm, charge draining through the port, with 7.35 ns at 100 pF and at 200 pF
+  alike. A plain C element across the same gap gave 4.92 ns, as 50 ohm x 100 pF should. The
+  series element's tail moved with its geometry instead: 4.68 ns with `Caps="0"`, no decay when
+  narrowed in y.
+
+**Cause: float precision in openEMS's series ADE.** The extension
+(`operator_ext_lumpedRLC.cpp`, `engine_ext_lumpedRLC.cpp`) advances each edge's current with
+
+    J[n] = ib0 (V[n] - V[n-2]) - (b1 ib0) J[n-1] - (b2 ib0) J[n-2]
+
+and at z = 1 its characteristic polynomial is 1 + b1 ib0 + b2 ib0 = 4 dT^2 / D, about
+(w0 dT)^2: the whole capacitor term. The coefficients and state are `FDTD_FLOAT`, float, so
+b1 ib0 (about -2) and b2 ib0 (about 1) each carry about 1e-7 of rounding. The 0402 mesh's
+timestep is 74 fs, and a 100 pF, 0.45 nH part there has (w0 dT)^2 = 1.2e-7: the capacitor is
+at the rounding. What is left depends on how each value rounds, which is why the tail moved
+with the per-edge split (the element spreads R, L and C over its edges) and not with C, and
+why the earlier mesh happened to land within 1.6 %.
+
+Shown three ways:
+
+- **A replay of the update in numpy** (one edge, a 50 ohm source, 100 pF, 0.45 nH, 0.3 ohm):
+  in float64 the discharge is 5.02 ns at 100 pF and 10.05 ns at 200 pF at every timestep; in
+  float32 it is right at 1 ps and 300 fs, 3.68 and 13.88 ns at 100 fs, and grows without bound
+  at 50 fs. The ADE state in float64 with the field voltage still float32 is right at every
+  timestep.
+- **The loop of §3, one cell far from it shortened to 35 um** (`verify_lumped_rlc.py --caps`,
+  `FINE_UM=35`), which takes the timestep from 481 to 84 fs and changes nothing else. Tail
+  against 50 ohm x C:
+
+  | Element | dt 481 fs | dt 84 fs | dt 84 fs, patched |
+  |---|---|---|---|
+  | Series R-L-C, 100 pF | 5.14 ns ✅ | **13.30 ns** ❌ | 4.99 ns ✅ |
+  | Series R-L-C, 200 pF | 9.84 ns ✅ | **12.82 ns** ❌ | |
+  | Core C cell + series R-L element, 100 pF | 4.99 ns ✅ | **3.62 ns** ❌ | |
+  | Core C cell + series R-L element, 200 pF | 9.48 ns ✅ | **5.41 ns** ❌ | |
+  | Core C cell, 100 pF (no ADE) | 4.98 ns ✅ | 4.97 ns ✅ | |
+
+  Splitting the part into openEMS's core C and a series R-L element does not escape it: the R-L
+  form has the same cancellation in its z = 1 root. A thin strip for the inductance was not
+  tried: 0.45 nH does not fit in a 0.36 mm gap over a 0.2 mm dielectric.
+- **The 0402 on a patched build.** Keeping the extension's arrays in double
+  (`worker/openems-image/lumped-rlc-double.patch`, four files, `FDTD_FLOAT` to `double`) fixes
+  it, below.
+
+**Fix.** The openEMS base image applies that patch (§3's image, tag `f73bf97906a3-d8d7b18d`: the
+commit and a hash of the patches). Placement is unchanged, one series element across the gap.
+`run.solver_has_series_rlc` now asks twice: the one-cell inductor as before, then a 0.4 s run
+that drains a 2 nF series R-L-C through 50 ohm with (w0 dT)^2 = 3.6e-9 and checks the decay
+within 5 % of the circuit's 89.0 ns. The patched build measures 88.9 ns; the unpatched one does
+not decay, so a worker on it places no capacitor.
+
+**100 pF 0402 on the patched build**, -70 dB (`END_CRITERIA=1e-7`, `MAX_TIMESTEPS=600000`):
+94,116 cells, 83,317 + 252,672 steps, both ended on the criterion (-71.2 and -72.0 dB).
+
+| | Analytic | Measured | Error | Criterion |
+|---|---|---|---|---|
+| Mounting inductance (the short) | | 0.243-0.244 nH | | |
+| Part SRF | 750.3 MHz | 750.4 MHz | **+0.01 %** | 5 % ✅ |
+| Mounted SRF | 604.6 MHz | 606.0 MHz | **+0.2 %** | 5 % ✅ |
+| \|Z_part\|, 234 MHz-2.6 GHz | | | **-0.23 to +0.15 dB** | 1 dB ✅ |
+| Tail | 5.03 ns | 5.02 ns | | |
+
+ESR reads 0.25-0.35 ohm against 0.30 across the band.
+
+**1 nF 0402 on the patched build** (library: ESL 0.45 nH, ESR 0.25 ohm): the record was
+capped at 1,100,000 steps (82 ns, -61.8 dB, about 40 minutes on six threads) and continued
+analytically (`TAIL_EXTEND=1`): after the pulse it is one exponential with V/I = -50.0 ohm and
+50.25 ns, exactly 50 ohm x C, so the rest of it is known. Checked on the 100 pF record first:
+cut to 12 ns and continued, it gives the full run's SRF within 0.01 % and a worst \|Z\| error
+of 0.25 dB against 0.23. The short ran to
+-71.9 dB.
+
+| | Analytic | Measured | Error | Criterion |
+|---|---|---|---|---|
+| Part SRF | 237.3 MHz | 237.3 MHz | **0.0 %** | 5 % ✅ |
+| Mounted SRF | 191.2 MHz | 191.3 MHz | **+0.05 %** | 5 % ✅ |
+| \|Z_part\|, 74-830 MHz | | | **within 0.02 dB** | 1 dB ✅ |
+| Tail | 50.25 ns | 50.25 ns | | |
+
+The DC current the pre-fix 1 nF run held (-90 nA at 50 ns) is gone. Run to -70 dB without the
+continuation, this part needs about 400 ns, 5.4 M steps, several hours.
+
+**At the solve's own -40 dB it is still wrong.** The same 100 pF part with the solve's defaults
+(-40 dB, its own cap) ended at 54,723 steps, about 4 ns, before the discharge had started:
+part SRF -1.9 %, mounted SRF +7.9 %, \|Z\| off by 4.7 dB. The record a modelled capacitor needs
+is set by 50 ohm x C through the port, 4.6x the steps at 100 pF, and grows with C. The solve
+does not ask for it, so component models stay opt-in and experimental.
+
+**Verdict.** With the patched openEMS a modelled 0402 is the library's series R-L-C: 100 pF
+within 0.01 % on SRF and 0.23 dB on \|Z\|, 1 nF within 0.05 % and 0.02 dB. Only with a record to -70 dB, which
+the solve does not yet request.
+
+**Next.**
+
+1. Give a solve with modelled capacitors a -70 dB end criterion and a cap from 50 ohm x the
+   largest C, or continue the port's discharge analytically as `verify_0402.py` does with
+   `TAIL_EXTEND=1`, and price it in the estimate.
+2. Publish the patched base image and pin its digest in `worker/Dockerfile`.
+3. Report the bug upstream (below).
+
+### For upstream: series lumped R-L-C loses its capacitor in float
+
+openEMS 65f8771, `FDTD/extensions/operator_ext_lumpedRLC.*`, `engine_ext_lumpedRLC.*`.
+
+A series lumped element (`LEtype=1`) with R, L and C behaves as the right circuit on a coarse
+mesh and as a wrong one on a fine mesh. The ADE's J update has the characteristic polynomial
+z^2 + (b1 ib0) z + (b2 ib0), and 1 + b1 ib0 + b2 ib0 = 4 dT^2 / D, about (w0 dT)^2, is the
+entire capacitive term. The coefficients and the J and V histories are `FDTD_FLOAT` (float),
+so when (w0 dT)^2 approaches 1e-7 the capacitor is lost to rounding. Example: 100 pF, 0.45 nH,
+0.3 ohm across a gap, driven by a 50 ohm lumped port; the port voltage should decay with
+50 ohm x C after the pulse. At dT = 481 fs it decays with 5.14 ns (200 pF: 9.84 ns); after one
+35 um cell is added elsewhere (dT = 84 fs) it decays with 13.3 ns (200 pF: 12.8 ns). The
+series R-L form (no C) has the same cancellation at its z = 1 root. Keeping the extension's
+coefficient and state arrays in double (`v_RLC_*`, `v_Vdn`, `v_Jn`, `v_Il`) fixes it: 4.99 ns
+at 84 fs, and a 0402 model resonates within 0.01 % of 1/(2 pi sqrt(LC)). The field arrays stay
+float. Patch: `worker/openems-image/lumped-rlc-double.patch`. A separate observation, not
+looked into: a 1 mm-cell loop with a series 3.6 nH + 1 nF element and a 20 GHz f_max went to
+NaN on both builds. The operator lowers an edge's capacitance when the element's impedance at
+f_max is large (`LUMPED_RLC_Z_FACT`), which would raise the local wave speed; that may be why.
 
 ---
 
@@ -270,10 +404,11 @@ asserted by Python, Go and TypeScript.
 
 In order of what would have to change first:
 
-1. **Components.** The image now ships a current openEMS that models an inductor (§3). On it a
-   100 pF 0402 passes on SRF and misses |Z| by 0.4 dB at resonance, but only when the run goes to
-   -70 dB; at the solve's -40 dB it ripples +-6 dB, and a 1 nF part (pre-fix mesh) passed a DC
-   current and never settled. The new solver has not been through the rest of this page (its
+1. **Components.** Upstream openEMS loses the series element's capacitor to float rounding at
+   a board's timestep; with the image's patch a 100 pF 0402 is within 0.01 % on SRF and
+   0.23 dB on |Z| (§4). Only with a -70 dB record: at the solve's -40 dB it is 4.7 dB off, and
+   the solve does not yet ask for a longer record when it places a capacitor. The patched base
+   image is not published yet. The new solver has not been through the rest of this page (its
    nf2ff output is untested).
 2. **A real coupon against an independent reference.** The microstrip is the only full-wave
    result checked against theory, and it is a line on a plane. A coupon cut from a real net

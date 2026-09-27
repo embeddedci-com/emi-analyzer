@@ -8,6 +8,7 @@ another openEMS commit.
 
 from __future__ import annotations
 
+import hashlib
 import re
 from pathlib import Path
 
@@ -38,15 +39,44 @@ def test_same_debian_for_every_openems_source():
     assert _debian_from(_read(BASE_DIR / "Dockerfile")) == _debian_from(_read(WORKER / "Dockerfile"))
 
 
-def test_worker_pins_the_base_image_of_the_same_openems_commit():
+def _patches() -> list[Path]:
+    """The patches the base image applies, in the order its tag hashes them."""
+    return sorted(BASE_DIR.glob("*.patch"), key=lambda p: p.name.encode())
+
+
+def _base_tag() -> str:
+    """The tag the openEMS workflow gives the base image: the commit, then the patches."""
     ref = re.search(r"^ARG OPENEMS_REF=([0-9a-f]{40})$", _read(BASE_DIR / "Dockerfile"), re.M)
     assert ref, "openems-image/Dockerfile must pin OPENEMS_REF to a full commit"
+    tag = ref.group(1)[:12]
+    if _patches():
+        digest = hashlib.sha256(b"".join(p.read_bytes() for p in _patches())).hexdigest()
+        tag += "-" + digest[:8]
+    return tag
+
+
+def test_worker_pins_the_base_image_of_the_same_openems_commit():
     image = re.search(r"^ARG OPENEMS_IMAGE=(\S+)$", _read(WORKER / "Dockerfile"), re.M)
     assert image, "worker/Dockerfile has no OPENEMS_IMAGE"
-    m = re.fullmatch(r"ghcr\.io/embeddedci-com/emi-openems:([0-9a-f]{12})(@sha256:[0-9a-f]{64})?",
-                     image.group(1))
+    m = re.fullmatch(
+        r"ghcr\.io/embeddedci-com/emi-openems:([0-9a-f]{12}(?:-[0-9a-f]{8})?)"
+        r"(@sha256:[0-9a-f]{64})?", image.group(1))
     assert m, f"unexpected OPENEMS_IMAGE {image.group(1)!r}"
-    assert m.group(1) == ref.group(1)[:12]
+    assert m.group(1) == _base_tag(), (
+        "worker/Dockerfile's OPENEMS_IMAGE names another openEMS commit or patch set")
+
+
+def test_every_patch_is_applied_and_named():
+    """A patch in the folder changes the tag, so it must also change the build, and NOTICE
+    must say the program is modified and by what (GPL-3.0 section 5a)."""
+    dockerfile = _read(BASE_DIR / "Dockerfile")
+    notice = _read(WORKER / "NOTICE")
+    for patch in _patches():
+        assert f"COPY {patch.name} " in dockerfile and f"/tmp/{patch.name}" in dockerfile
+        assert f"worker/openems-image/{patch.name}" in notice
+    if _patches():
+        assert "openEMS is modified" in notice
+        assert "modified by the patch" in _read(WORKER.parent / "NOTICE")
 
 
 def test_notice_names_the_compiled_commit():
