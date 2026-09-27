@@ -90,6 +90,17 @@ END_CRITERIA = float(os.environ.get("END_CRITERIA", "1e-12"))
 #: Length of every record, in ns. 40 ns is four times the excitation; the 80 % check says
 #: whether it was enough.
 MAX_NS = float(os.environ.get("MAX_NS", "40"))
+#: How far the energy must have fallen by the end of the record, in dB. 30 unless a run's
+#: solver log shows it falling steadily: board C's Tier B at 100 ns ended 24 dB down, still
+#: falling ~1.5 dB per report, on a 496 MHz mode above its first resonance. It is the 80 %
+#: check that says whether such a tail moves the result; the worker's divergence check
+#: catches a run that climbs.
+MIN_DECAY_DB = float(os.environ.get("MIN_DECAY_DB", "30"))
+#: Roll the last TAPER_NS of every record off to zero before it is transformed, as the port
+#: network does (``network.tapered``). 0 is off. Board C rings on a 496 MHz mode through the
+#: whole record, 60-75 dB above its low band, and cutting that ring off where it stands spreads
+#: it over every frequency: its record check read 15 dB. Pure post-processing: runs are reused.
+TAPER_NS = float(os.environ.get("TAPER_NS", "0"))
 #: A third run per case: the cable attached and the gap left open. Its gap voltage is V_oc
 #: with the cable present, which splits what is left of the error into "V_oc moved when the
 #: cable was attached" and "Z_ant is wrong". nec2c puts the first at 0-6 dB, depending on where
@@ -282,6 +293,24 @@ def _pad_with_air() -> None:
     nf2ff_mod.add_dumps = lambda *a, **k: None
 
 
+#: Lay a narrow trace's thirds rule out at half its width, as the product now does
+#: (``model.THIRDS_RULE``). Off here: at this study's 2000 um preset every trace is "narrow",
+#: and pinning each one's lines put 50 um cells into a grid that had 500 um ones, a timestep
+#: several times shorter and 5x the record on board A. B and C share the grid, so the rule
+#: moves both sides together; off is the grid the 40 ns runs used.
+PIN_NARROW = os.environ.get("PIN_NARROW", "0") == "1"
+
+
+def _unpin_narrow_traces() -> None:
+    """The thirds rule at the preset's cell, merged like any other line; see PIN_NARROW."""
+    if PIN_NARROW:
+        return
+    from emi_worker.openems import model as model_mod
+
+    model_mod._rule_cell = lambda width_mm, cell_mm: cell_mm
+    model_mod.narrow_trace_lines = lambda ruled, cell_mm: ()
+
+
 def _record_steps(doc) -> int:
     """Timesteps for MAX_NS of record, from the Courant limit of the finished grid."""
     d = [float(np.diff(np.asarray(v)).min()) * 1e-3
@@ -329,12 +358,15 @@ def solve(tag: str, built, freqs: np.ndarray) -> dict:
     if done.exists() and (wd / "model.xml").exists() and (wd / "model.xml").read_text() == xml:
         info = json.loads(done.read_text())
         print(f"    {tag}: reusing {info['steps']:,} steps", flush=True)
+        _check_decay(tag, info["energy_db"])
         return {"wd": wd, "steps": info["steps"]}
     (wd / "model.xml").write_text(xml)
     t0 = time.time()
     r = run.run_openems(str(wd / "model.xml"), str(wd), threads=THREADS,
                         excitation_s=excitation_seconds(built.doc.excitation.fc))
     tail = _probe_decay_db(wd)
+    # The solver's own log: its energy reports are the only record of how the energy moved.
+    (wd / "openems.log").write_text(r.log_text)
     print(f"    {tag}: {r.final_timestep:,} steps, {time.time()-t0:.0f}s, "
           f"energy {r.final_energy_db:.1f} dB, loudest probe ends {tail:.0f} dB down",
           flush=True)
@@ -343,19 +375,34 @@ def solve(tag: str, built, freqs: np.ndarray) -> dict:
     done.write_text(json.dumps({"steps": r.final_timestep, "seconds": time.time() - t0,
                                 "energy_db": r.final_energy_db, "warnings": r.warnings,
                                 "probe_tail_db": tail}))
-    # Judged on the energy. A probe alone is not evidence: the 1 MOhm gap holds the charge the
-    # pulse's DC content leaves on it and bleeds it off over ~100 ns, so its voltage can end
-    # 10 dB below peak in a run whose energy is 60 dB down. A cable still ringing is a short
-    # record, which the 80 % check prices.
-    if r.final_energy_db > -30.0:
-        raise SystemExit(f"{tag}: the energy is only {-r.final_energy_db:.0f} dB down at the "
-                         f"end of the record: this run is not decaying")
+    _check_decay(tag, r.final_energy_db)
     return {"wd": wd, "steps": r.final_timestep, "probe_tail_db": tail}
+
+
+def _check_decay(tag: str, energy_db: float) -> None:
+    """Refuse a run whose energy has not fallen MIN_DECAY_DB by the end of its record.
+
+    Judged on the energy. A probe alone is not evidence: the 1 MOhm gap holds the charge the
+    pulse's DC content leaves on it and bleeds it off over ~100 ns, so its voltage can end
+    10 dB below peak in a run whose energy is 60 dB down. A cable still ringing is a short
+    record, which the 80 % check prices. A reused run is judged again, with the threshold in
+    force now.
+    """
+    if energy_db > -MIN_DECAY_DB:
+        raise SystemExit(f"{tag}: the energy is only {-energy_db:.0f} dB down at the "
+                         f"end of the record: this run is not decaying")
 
 
 def _head(trace, fraction: float = 0.8):
     n = int(fraction * len(trace.time_s))
     return post.ProbeTrace(trace.time_s[:n], trace.values[:n])
+
+
+def _tx(trace):
+    """``trace`` as it is transformed: its last TAPER_NS rolled off, when that is set."""
+    from emi_worker.openems.network import tapered
+
+    return tapered(trace, TAPER_NS * 1e-9) if TAPER_NS > 0 else trace
 
 
 def antenna(length_m: float, freqs: np.ndarray, gap_mm: float, board_span_m: float,
@@ -428,6 +475,7 @@ def first_resonance_hz(z: np.ndarray, freqs: np.ndarray) -> float:
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     _pad_with_air()
+    _unpin_narrow_traces()
     print(f"cable test 4 — {DX_UM:.0f}/{DZ_UM:.0f} um preset, "
           f"{F_MIN/1e6:.0f}-{F_MAX/1e6:.0f} MHz, {len(FREQS)} points\n")
 
@@ -489,6 +537,7 @@ def main() -> None:
             i_tr = post.read_probe(str(rb["wd"] / "drv_it"))
 
             def pred_from(gap, u, i):
+                gap, u, i = _tx(gap), _tx(u), _tx(i)
                 hh = post.cable_transfer(gap, u, i, FREQS.tolist())
                 vs = post._dft(u, FREQS) + post._dft(i, FREQS) * 50.0
                 return (np.asarray(hh["h_real"]) + 1j * np.asarray(hh["h_imag"])) * vs
@@ -501,7 +550,7 @@ def main() -> None:
                                        width_m, offset_m)
             pred = pred_from(gap_tr, u_tr, i_tr) / z_ant
             c_tr = post.read_probe(str(rc["wd"] / "cable_it"))
-            meas = post._dft(c_tr, FREQS)
+            meas = post._dft(_tx(c_tr), FREQS)
             err = 20.0 * np.log10(np.abs(pred) / np.abs(meas))
             # What the first runs composed with: the board as a thin wire.
             z_thin, _ = antenna(length_m, FREQS, b.cable_ports[0]["gap_mm"], arm_m)
@@ -519,9 +568,10 @@ def main() -> None:
                 voc_db = 20.0 * np.log10(np.abs(voc_cable) / np.abs(pred * z_ant))
             # The same on 80 % of each record: how far the result still depends on its tail.
             pred_s = pred_from(_head(gap_tr), _head(u_tr), _head(i_tr)) / z_ant
-            meas_s = post._dft(_head(c_tr), FREQS)
-            record_db = float(max(np.max(np.abs(20 * np.log10(np.abs(pred_s) / np.abs(pred)))),
-                                  np.max(np.abs(20 * np.log10(np.abs(meas_s) / np.abs(meas))))))
+            meas_s = post._dft(_tx(_head(c_tr)), FREQS)
+            record = np.maximum(np.abs(20 * np.log10(np.abs(pred_s) / np.abs(pred))),
+                                np.abs(20 * np.log10(np.abs(meas_s) / np.abs(meas))))
+            record_db = float(record.max())
 
             f_res = first_resonance_hz(z_ant, FREQS)
             below = FREQS < f_res
@@ -545,7 +595,8 @@ def main() -> None:
                 print(f"    V_oc with the cable over V_oc without, below resonance: "
                       f"{voc_db[sel].min():+.2f} to {voc_db[sel].max():+.2f} dB")
             print(f"    whole band:      median {np.median(np.abs(err)):.2f} dB, "
-                  f"worst {np.abs(err).max():.2f} dB; record check {record_db:.3f} dB\n",
+                  f"worst {np.abs(err).max():.2f} dB; record check {record_db:.3f} dB "
+                  f"({record[sel].max():.3f} dB below resonance)\n",
                   flush=True)
 
             out["cases"].append({
@@ -561,6 +612,9 @@ def main() -> None:
                 "steps_b": rb["steps"],
                 "steps_c": rc["steps"],
                 "record_db": record_db,
+                "record_db_below_resonance": float(record[sel].max()),
+                "record_db_per_frequency": record.tolist(),
+                "taper_ns": TAPER_NS,
                 "below_resonance_worst_db": float(lo.max()),
                 "below_resonance_median_db": float(np.median(lo)),
             })

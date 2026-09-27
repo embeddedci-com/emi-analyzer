@@ -13,8 +13,8 @@ are called board A, B and C below.
 | Tier A: the integrator that reads openEMS's current | reproduces nec2c's own field from nec2c's current | 0.15 dB worst | ✅ |
 | Bond | moves the first resonance where a line over the plane resonates, both ways | within 3.3 % (1 m), 6.7 % (2 m) | ✅ (old claim was wrong) |
 | Choke | R + jX from a datasheet curve | built and tested; no library cable has one | ✅ model, not validated against a measured choke |
-| Tier B against a fully coupled solve, three real boards | ±6 dB below the first resonance | board A: mean -8.9 dB, worst 17 dB; board C: mean -7.5 dB, worst 21 dB; board B: no result. Measured with the board as a thin wire; not re-run since | ❌ |
-| Why Tier B read low (nec2c only) | account for the error | the board arm: a plate of the outline reads Z_ant 5-12 dB lower, about 7 of 8.9 dB (A) and 5.6 of 7.5 dB (C); the rest is V_oc changing when the cable is attached, 0-5 dB by where the source is. Tier B now uses the plate | ✅ found, ⏳ openEMS re-run |
+| Tier B against a fully coupled solve, three real boards | ±6 dB below the first resonance | plate model, 100 ns: board A mean -7.6 dB, worst -20 dB from 30 MHz; from 80 MHz mean -4.1, worst -7.1, and with the measured V_oc offset mean -0.4, worst 2.8. Board C: no result (a 496 MHz board mode does not settle). Board B: not run | ❌ as stated; board A ✅ from 80 MHz with the V_oc offset |
+| Why Tier B read low (nec2c only) | account for the error | the board arm: a plate of the outline reads Z_ant 5-12 dB lower, about 7 of 8.9 dB (A) and 5.6 of 7.5 dB (C); the rest is V_oc changing when the cable is attached, 0-5 dB by where the source is. Tier B now uses the plate; openEMS confirms the plate is worth 7 dB on board A and measures V_oc +3.7 dB | ✅ found; V_oc offset not modelled |
 | Cables tab chart | same composition as the estimate | one function, shared fixtures | ✅ |
 | Uploaded waveform joins its envelope | within 1 dB | 0.22 dB worst | ✅ |
 | Assumed driver shown as assumed, including σ | end to end | worker result, σ, 80 % range, panel, pickers | ✅ |
@@ -188,7 +188,7 @@ a 0.3 m cable; 30-600 MHz, 31 points; the
   and judges stability from the energy instead (a gap probe alone can end 10 dB below its peak
   in a run whose energy is 60 dB down). The worker's check now waits for the excitation to end.
 
-**Results.**
+**Results of the 40 ns runs (thin-wire board).**
 
 | Board | Below the first resonance | Whole band | Record check | Verdict |
 |---|---|---|---|---|
@@ -278,26 +278,80 @@ Around the peaks it moves 2-8 dB, because a plate lowers the resonances. That is
 but Tier A is verified against openEMS as it stands (§1), so a plate there needs its own re-check
 against openEMS before it replaces the verified deck.
 
-**Verdict.** Still not met, and not re-measured: the gate needs the openEMS runs again. Expected
-from nec2c: board A and C within about ±3 dB on average below resonance, with the V_oc effect
-as the known residual. A board whose noisy parts sit far from the connector can still read up
-to about 7 dB low, which is outside the gate; if the re-run shows that, a V_oc correction for the
-stub is the next step, not a different antenna. Tier B stays experimental until then.
+**Verdict then.** Not met, and not re-measured: the gate needed the openEMS runs again.
+Expected from nec2c: board A and C within about ±3 dB on average below resonance, with the V_oc
+effect as the known residual.
 
-**The re-run, ready to go.** Three openEMS runs per board (B, C, and C with the gap open) at
-100 ns, about 2.5 times the 40 ns runs above; board B took 43 minutes a run at 40 ns. Keep `out/`: a finished run is reused
-when its model has not changed, so changing only the nec2c side later costs nothing.
+### The re-run (September 2026, openEMS, plate model)
 
-```sh
-docker run --rm --cpus 3 -m 6g -v "$PWD/worker:/spike" -v "$BOARDS:/boards:ro" \
-    -v "$PWD/out:/spike/spike_out" -e SETUPS=<A>:<ref>:usb2-shielded,<C>:<ref>:usb2-shielded \
-    -e LENGTHS=0.3 -e DX_UM=2000 -e DZ_UM=300 -e AIR_MM=80 -e MAX_NS=100 -e VOC_CABLE=1 \
-    -w /spike -e PYTHONPATH=/spike --entrypoint python3 emi-worker:main \
-    research/spike_m3_cable_test4.py
-```
+Board A and board C at 0.3 m, 100 ns records, `VOC_CABLE=1`, the 2000/300 µm preset, 80 mm of
+air. Board B and the 1 m runs were not done (below). Two things had to change first, each
+found by running it:
 
-Then board B (`<B>:<ref>:ethernet-ftp`) and `LENGTHS=1` the same way.
+- **The study's grid had grown 5 to 140 times.** Since the re-run was prepared, the mesher lays
+  a narrow trace's thirds rule out at half the trace's width and never merges those lines. At a
+  2000 µm preset every trace is narrow: board A went from 1.1 M to 5.4 M cells with 50 µm
+  cells (5x the steps), board C to 43 M, board B to 301 M cells and 5.5 M steps. The study
+  now turns that off (`PIN_NARROW=0`, the default), which is the grid the 40 ns runs used.
+  Tier B and Tier C share the grid, so it moves both sides together.
+- **Board C's energy check refused a run that was decaying.** Its record ended 24 dB down, and
+  the solver log (now kept as `openems.log`) shows it falling about 1.5 dB per report, with no
+  climb. `MIN_DECAY_DB` sets the threshold (30 by default); board C ran with 20. A reused run
+  is now judged again; it used to skip the check.
 
+| Board | Runs | Record check | Below the first resonance, Tier B against Tier C | Gate |
+|---|---|---|---|---|
+| A (resonance 329 MHz, 24 points) | 20, 15 and 21 min at 4 threads | 0.49 dB | 30 MHz up: mean -7.6 dB, worst -20.1 dB, 12 of 24 within 6 dB. 80 MHz up: mean -4.1, worst -7.1, 12 of 14 | ❌ as stated |
+| A, with the measured V_oc correction | | | 30 MHz up: mean -3.9, worst -16.3, 17 of 24. 45 MHz up: mean -1.9, worst -8.0, 17 of 19. **80 MHz up: mean -0.4, worst 2.8 dB, 14 of 14** | ✅ from 80 MHz |
+| A, 250 mm of air (B and C only) | 34 min a run | 2.0 dB | 30 MHz up: mean -7.8, worst -16.1. 80 MHz up: mean -4.0, worst -7.3 | same as 80 mm |
+| C (resonance 301 MHz) | 27-29 min a run | **15.4 dB** | no result: see below | ❌ not measurable |
+| B | not run | | | |
+
+The thin wire, from the same runs, reads -14.5 dB on average on board A (0 of 24 within
+6 dB): the plate is worth 7 dB, as nec2c said.
+
+**V_oc with the cable attached is a flat +3.7 dB on board A** (+3.0 to +5.1 below resonance),
+at every frequency. Board A's source is 7.5 mm behind the connector, which nec2c's rebuild
+called "near" and put at 0 dB. So the size of the offset is measured on one board, not
+predicted: the nec2c model gets the direction and the growth with distance, not the level.
+
+**Below 80 MHz the study is less settled, but Tier B still reads low.** Between 80 mm and
+250 mm of air, Tier C moved by up to 4 dB there and Tier B by up to 2.4 dB, against under 1 dB
+above 80 MHz, and the record check rose from 0.5 to 2 dB. The absorbing boundary is not the
+cause: 250 mm of air gave the same error. Tier B's current also rises far faster there (about
+55 dB per decade from 30 to 99 MHz, against Tier C's 22), which is the error itself, not an
+explanation. The error below 80 MHz (-8 to -20 dB) is larger than any of that spread, so it
+cannot be put down to the reference: Tier B reads low there, by an amount this study cannot
+pin down.
+
+**Board C cannot be settled in a record we can afford.** All three of its runs ring on a
+496 MHz board mode (Q about 110; same dielectric loss as board A, so the strip's structure) that
+ends only 24-26 dB down at 100 ns and sits 60-75 dB above the band below the resonance. Cutting
+it off leaks it into every frequency: the record check reads 15 dB, and a 20 ns tail taper
+(`TAPER_NS`) moved the low band by 20-40 dB. The raw numbers (mean -2.5 dB, worst 16 dB) mean
+nothing. Settling it would take about 700 ns, 7 times the record. Board B (6 layers, 423 k steps
+a run at 100 ns, about 85 minutes each) was stopped: its 40 ns run had not decayed either, and a
+6-layer board has more of the same plane modes.
+
+**Verdict.** The gate as written (±6 dB from 30 MHz to the resonance) is **not met** on board
+A, and boards B and C give no answer. From 80 MHz to the resonance the plate model is within
+7.1 dB on board A, 4 dB low on average, and with the cable's effect on V_oc added within 2.8 dB,
+0.4 dB low. Below 80 MHz Tier B reads 8-20 dB low and the study cannot say by exactly how much.
+Open: that low end, the V_oc offset (measured once, not modelled), and a reference that settles
+on boards with plane modes.
+
+**The V_oc offset is left out of the model.** It is 3-5 dB on board A and always in the
+direction of too little current, but there is no physical model to set it from: the nec2c
+rebuild predicts 0 dB for a source this close to the connector, and openEMS measured 3.7 dB.
+Adding a flat 3.7 dB would fit one board. It is a known offset: Tier B reads low by about
+that much when the noise source is near the connector, and more when it is further away.
+
+**Recommendation.** Cable emissions stays experimental and behind `full-wave`. Its tooltip
+should say the model reads about 4 dB low (up to 7) from 80 MHz to the first resonance with the
+source near the connector, more for sources across the board, and 8-20 dB low below 80 MHz.
+Moving it out from behind `full-wave` would need a reference that settles on a board with plane
+modes (a longer record on board C, or a lossier stackup in both tiers), an answer for the low
+end, and a V_oc model checked on a second source position.
 
 ## 5. The Cables tab chart
 
@@ -362,11 +416,11 @@ docker run --rm --cpus 3 -m 6g -v "$PWD/worker:/spike" -v "$PWD/out:/out" -e OUT
     -w /spike -e PYTHONPATH=/spike --entrypoint python3 emi-worker:phase1 \
     research/verify_cable_tier_a.py
 
-# Tier B, your own boards (the re-run in §4 is this with MAX_NS=100)
+# Tier B, your own boards (the re-run in §4; board C also needed MIN_DECAY_DB=20)
 docker run --rm --cpus 3 -m 6g -v "$PWD/worker:/spike" -v "$BOARDS:/boards:ro" \
     -v "$PWD/out:/spike/spike_out" -e SETUPS=<folder:ref:cable,...> -e LENGTHS=0.3 \
-    -e DX_UM=2000 -e DZ_UM=300 -e AIR_MM=80 -e MAX_NS=100 -w /spike -e PYTHONPATH=/spike \
-    --entrypoint python3 emi-worker:main research/spike_m3_cable_test4.py
+    -e DX_UM=2000 -e DZ_UM=300 -e AIR_MM=80 -e MAX_NS=100 -e VOC_CABLE=1 -w /spike \
+    -e PYTHONPATH=/spike --entrypoint python3 emi-worker:main research/spike_m3_cable_test4.py
 
 # Why Tier B read low: thin wire against plate, and test 4 rebuilt in nec2c (about a minute)
 docker run --rm --cpus 2 -v "$PWD/worker:/spike" -w /spike -e PYTHONPATH=/spike \
