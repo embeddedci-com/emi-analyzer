@@ -183,7 +183,6 @@ ${row('App version', m.appVersion)}
 ${row('Worker version', m.worker ? `${m.workerVersion} (${m.worker})` : m.workerVersion)}
 ${row('Experimental features', [
     m.features.fullWave ? 'full-wave on' : 'full-wave off',
-    m.features.smallPartSolve ? 'small-part solve on' : 'small-part solve off',
     m.features.conducted ? 'conducted scan on' : 'conducted scan off',
   ].join(', '))}
 </tbody></table>
@@ -465,6 +464,14 @@ ${c.findings.byRule.map((r) => `<h4>${esc(r.ruleTitle)}</h4><ul>${r.changes.map(
 ${parts.join('\n')}</section>`
 }
 
+function partsSection(d: ReportData): string {
+  const p = d.parts!
+  return `<section class="page" id="parts"><h2>Small-part solves</h2>
+<p class="muted">Their current maps, port impedance and S-parameters are in the app; they are not reproduced here.</p>
+<ul>${p.solves.map((s) => `<li>Small-part solve${s.finishedAt ? `, ${esc(fmtDate(s.finishedAt))}` : ''}</li>`).join('')}</ul>
+</section>`
+}
+
 function experimentalSection(d: ReportData): string {
   const e = d.experimental!
   const c = e.compliance
@@ -498,6 +505,7 @@ const RENDER: Record<Exclude<SectionId, 'board'>, (d: ReportData) => string> = {
   decoupling: decouplingSection,
   cables: cablesSection,
   esd: esdSection,
+  parts: partsSection,
   conducted: conductedSection,
   changes: changesSection,
   experimental: experimentalSection,

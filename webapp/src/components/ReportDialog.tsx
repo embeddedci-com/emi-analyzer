@@ -230,13 +230,19 @@ export function ReportDialog(props: ReportDialogProps) {
         if (!sinceIngest) return [{ ...s, status: 'unavailable', note: 'That version has no finished analysis' }]
         if (before.isError) return [{ ...s, status: 'failed', note: (before.error as Error).message }]
         return [{ ...s, status: wantChanges && before.isLoading ? 'loading' : 'ready' }]
-      case 'experimental':
-        // Never offered unless an experimental feature is on.
-        if (!fullWave && !smallPart) return []
+      case 'parts':
+        // Listed only when a small-part solve has run; there is nothing to run from here.
+        if (!solves.some((r) => isSmallPartRun(r.params))) return []
+        return [{ ...s, status: 'ready' }]
+      case 'experimental': {
+        // Never offered unless full-wave, the one experimental feature with solves, is on.
+        if (!fullWave) return []
         if (complianceDone && compliance.isLoading) return [{ ...s, status: 'loading' }]
-        return [complianceDone || solves.length
+        const fullWaveSolves = solves.filter((r) => !isSmallPartRun(r.params))
+        return [complianceDone || fullWaveSolves.length
           ? { ...s, status: 'ready' }
           : { ...s, status: 'unavailable', note: 'No experimental run on this version' }]
+      }
       default:
         return [{ ...s, status: 'ready' }]
     }

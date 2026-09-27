@@ -123,6 +123,17 @@ describe('assembleReport', () => {
     expect(d.boardImage).toBeNull()
   })
 
+  it('lists small-part solves in their own section, not as experimental', () => {
+    const part = { ...run('solve'), params: { mode: 'small_part' } }
+    const d = assembleReport(input({ experimental: { solves: [part] } }))
+    expect(d.sections).toContain('parts')
+    expect(d.sections).not.toContain('experimental')
+    const html = renderReportHtml(d, board)
+    expect(html).toContain('<h2>Small-part solves</h2>')
+    expect(html).not.toContain('<strong>Experimental.</strong>')
+    expect(html).not.toContain('small-part solve on')
+  })
+
   it('never includes experimental results while their feature is off', () => {
     const solve = run('solve')
     const off = assembleReport(input({ experimental: { solves: [solve] } }))

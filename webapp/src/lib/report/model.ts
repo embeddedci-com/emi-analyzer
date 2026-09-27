@@ -28,7 +28,8 @@ export const REPORT_FORMAT = 'emi-report'
 export const REPORT_FORMAT_VERSION = 1
 
 export type SectionId =
-  | 'board' | 'findings' | 'notes' | 'decoupling' | 'cables' | 'esd' | 'conducted' | 'changes' | 'experimental'
+  | 'board' | 'findings' | 'notes' | 'decoupling' | 'cables' | 'esd' | 'parts' | 'conducted' | 'changes'
+  | 'experimental'
 
 export const SECTIONS: { id: SectionId; label: string }[] = [
   { id: 'board', label: 'Board image with finding markers' },
@@ -37,6 +38,7 @@ export const SECTIONS: { id: SectionId; label: string }[] = [
   { id: 'decoupling', label: 'Decoupling' },
   { id: 'cables', label: 'Cable budgets' },
   { id: 'esd', label: 'ESD simulation' },
+  { id: 'parts', label: 'Small-part solves' },
   { id: 'conducted', label: 'Conducted emissions (experimental)' },
   { id: 'changes', label: 'Changes since an earlier version' },
   { id: 'experimental', label: 'Experimental results' },
@@ -334,6 +336,8 @@ export interface ReportData {
   esd: EsdSection | null
   conducted: ConductedSection | null
   changes: ChangesSection | null
+  /** Small-part solves: supported, so listed apart from the experimental full-wave ones. */
+  parts: { solves: { id: string; finishedAt?: string }[] } | null
   experimental: ExperimentalSection | null
 }
 
@@ -691,6 +695,8 @@ function changesSection(input: NonNullable<ReportInput['compare']>, after: Repor
   }
 }
 
+const isSmallPart = (r: Run) => (r.params as { mode?: string } | undefined)?.mode === 'small_part'
+
 function experimentalSection(input: NonNullable<ReportInput['experimental']>): ExperimentalSection {
   const c = input.compliance
   return {
@@ -718,9 +724,10 @@ function experimentalSection(input: NonNullable<ReportInput['experimental']>): E
           why: EXPERIMENTAL.complianceEstimate,
         }
       : null,
-    solves: (input.solves ?? []).map((r) => ({
+    // Small-part solves are a supported feature now and get their own section.
+    solves: (input.solves ?? []).filter((r) => !isSmallPart(r)).map((r) => ({
       id: r.id,
-      kind: (r.params as { mode?: string } | undefined)?.mode === 'small_part' ? 'Small-part solve' : 'Full-wave solve',
+      kind: 'Full-wave solve',
       ...(r.finished_at ? { finishedAt: r.finished_at } : {}),
     })),
   }
@@ -732,7 +739,8 @@ export function assembleReport(input: ReportInput): ReportData {
   const summary = (input.ingest.summary ?? {}) as Record<string, unknown>
   const notices = collectNotices(input.rules, input.board)
   const { groups, markers } = groupFindings(input.rules?.findings ?? [])
-  const experimentalOn = input.features.full_wave || input.features.small_part_solve === true
+  const experimentalOn = input.features.full_wave
+  const partSolves = (input.experimental?.solves ?? []).filter(isSmallPart)
 
   const sections = SECTIONS.map((s) => s.id).filter((id) => {
     if (!want.has(id)) return false
@@ -741,11 +749,12 @@ export function assembleReport(input: ReportInput): ReportData {
     if (id === 'decoupling') return !!input.rules?.decoupling
     // An experimental scan: never in a report while its feature is off.
     if (id === 'conducted') return input.features.conducted === true && !!input.conducted
+    if (id === 'parts') return partSolves.length > 0
     if (id === 'changes') return !!input.compare
     // Experimental results never appear unless their feature is on.
     if (id === 'experimental') {
       const e = input.experimental
-      return experimentalOn && !!e && (!!e.compliance || (e.solves?.length ?? 0) > 0)
+      return experimentalOn && !!e && (!!e.compliance || (e.solves ?? []).some((r) => !isSmallPart(r)))
     }
     if (id === 'findings' || id === 'notes') return !!input.rules || id === 'notes'
     return true
@@ -813,6 +822,9 @@ export function assembleReport(input: ReportInput): ReportData {
     esd: has('esd') && input.esd ? esdSection(input.esd.doc) : null,
     conducted: has('conducted') && input.conducted ? conductedSection(input.conducted.doc) : null,
     changes: has('changes') && input.compare ? changesSection(input.compare, input) : null,
+    parts: has('parts')
+      ? { solves: partSolves.map((r) => ({ id: r.id, ...(r.finished_at ? { finishedAt: r.finished_at } : {}) })) }
+      : null,
     experimental: has('experimental') && input.experimental ? experimentalSection(input.experimental) : null,
   }
 }
