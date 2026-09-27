@@ -19,7 +19,6 @@ import {
   BANDS, estimateSmallPart, hasVias, pairOf, planCoupon, PRESETS, smallPartParams,
   thinDielectricUm, type Roi,
 } from '../lib/smallPart'
-import { EXPERIMENTAL, Experimental } from './Experimental'
 
 export interface SmallPartSetupProps {
   doc: BoardDoc
@@ -116,13 +115,11 @@ export function SmallPartSetup({
 
   return (
     <Stack gap="md">
-      <Group gap={6}>
-        <Text size="sm" fw={600}>Solve a small part</Text>
-        <Experimental why={EXPERIMENTAL.smallPart} />
-      </Group>
+      <Text size="sm" fw={600}>Solve a small part</Text>
       <Text size="xs" c="dimmed">
         Cuts one net out with the planes under it and solves it in minutes. You get where its
-        current flows and what its ends see.
+        current flows and what its ends see. No far field, no compliance estimate, and no
+        coupling into the nets left out.
       </Text>
 
       <SegmentedControl

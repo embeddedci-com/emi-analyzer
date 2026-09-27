@@ -354,7 +354,8 @@ export function EmiAnalyzerPage({ api, deployment = 'hosted', host }: EmiAnalyze
                     <Text size="sm" fw={500} span>Small-part solve (minutes).</Text>{' '}
                     {features.isSuccess && !features.data.small_part_solve && <OffBadge />}{' '}
                     <Text size="sm" c="dimmed" span>
-                      One net and the planes under it, solved in openEMS.
+                      One net and the planes under it, solved in openEMS: current map and port
+                      impedance. No far field.
                     </Text>
                   </List.Item>
                   <List.Item>

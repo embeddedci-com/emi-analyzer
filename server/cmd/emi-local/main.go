@@ -81,7 +81,7 @@ func main() {
 		workerURL   = flag.String("worker-url", envOr("EMI_LOCAL_WORKER_URL", ""), "URL the worker container dials to reach this server (default: detected from the Docker engine)")
 		concurrent  = flag.Int("worker-concurrency", 1, "runs the worker takes at once; a solve is memory-bound, so more is rarely faster")
 		webDir      = flag.String("webapp", envOr("EMI_LOCAL_WEBAPP", ""), "serve the webapp from this directory instead of the embedded copy (development)")
-		experiment  = flag.String("experimental", envOr("EMI_EXPERIMENTAL", ""), `comma-separated experimental features to enable: "small-part-solve" (openEMS solves of one net or a small region, with near-field maps and port impedance, under a size budget) and "full-wave" (all openEMS solves, with their far field and cable emissions, and compliance estimates; unverified on real boards; includes small-part-solve; the standalone cable budget is always on) and "conducted" (a differential-mode conducted-emissions scan of the power input with ngspice; its regulator sources are assumed until described)`)
+		experiment  = flag.String("experimental", envOr("EMI_EXPERIMENTAL", ""), `comma-separated experimental features to enable: "full-wave" (all openEMS solves, with their far field and cable emissions, and compliance estimates; unverified on real boards; small-part solves and the standalone cable budget are always on) and "conducted" (a differential-mode conducted-emissions scan of the power input with ngspice; its regulator sources are assumed until described)`)
 		shell       = flag.String("shell", "", `the program holding a window on this server: "desktop" for the app, empty when there is none`)
 		endpoint    = flag.String("endpoint-file", envOr("EMI_LOCAL_ENDPOINT_FILE", defaultEndpointFile()), "file left behind so other programs on this computer (the KiCad plugin) can find this app; empty to write none")
 		issueKey    = flag.Bool("issue-key", false, "print a key for a worker you run yourself (with -worker=none), and exit")
@@ -188,7 +188,7 @@ func run(logger *slog.Logger, o options) error {
 	}
 	if features.FullWave {
 		logger.Warn("experimental full-wave solving is enabled: it runs, but nothing it produces has been verified on a real board")
-	} else if features.SmallPartSolve {
+	} else if features.SmallPartSolve && !emi.SmallPartSolveByDefault {
 		logger.Warn("experimental small-part solving is enabled: see docs/verification/small-part-solve.md for what it was checked against")
 	}
 	if features.Conducted {

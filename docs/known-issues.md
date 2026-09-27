@@ -21,7 +21,7 @@ solver or a measurement — and passed. The gap between the two is most of this 
 | Cable budget, Tier A (`cable` run, nec2c) | ✅ | ✅ against openEMS on the product setup: 7 of 9 configurations within 1 dB below resonance, all within 2 dB at the peaks; the wire radius, not the solver, is the larger uncertainty — §3 | on |
 | Limits library and Limits page | ✅ | ⚠️ FCC Part 15 only; there is no CISPR 32 table | on |
 | **Full-wave solve (openEMS)** | ✅ | ⚠️ **a 50 ohm microstrip within 1 % of theory on every preset; solves end to end on the fixture board; long records on whole boards are out of scope — §2** | **off** (`full-wave`) |
-| Small-part solve (one net cut out over its planes, `small-part-solve`) | ✅ | ⚠️ microstrip, stripline and via within their closed forms (coarse via 0.1 % over, and a coarse part with vias says so); a synthetic coupon and two of three real coupons converge; the third's presets disagree by 3.3 dB on the hotspot level, and the sample board's nets do not settle ([verification/small-part-solve.md](verification/small-part-solve.md)) | **off** (`small-part-solve`, or with full-wave) |
+| Small-part solve (one net cut out over its planes, Part solve tab) | ✅ | ✅ microstrip, stripline and via within their closed forms; a synthetic coupon and three real coupons converge over the cut and the mesh; the sample board solves in minutes from the app. No far field, no compliance estimate, no coupling into neighboring nets, no component models; nothing against a measurement ([verification/small-part-solve.md](verification/small-part-solve.md)) | on |
 | Drivers (re-weighting a solve) | ✅ | ⚠️ every check in §3 passes; nothing against a measured source | off, with full-wave |
 | Components (MLCC models in a solve) | ✅ | ⚠️ the image now ships openEMS built from source, which models an inductor (0.0.35 did not, so no capacitor was placed); a 100 pF 0402 resonates within 1.6 % but only with a -70 dB record (§3) | off, with full-wave |
 | Board far field (NF2FF) | ✅ | ⚠️ matches nec2c on dipoles over the ground plane as the product runs it, 30 MHz up (§3); no board checked against a measurement | off, with full-wave |
@@ -30,9 +30,8 @@ solver or a measurement — and passed. The gap between the two is most of this 
 | Conducted emissions scan (`conducted` run, ngspice), differential mode | ✅ | ⚠️ the LISN within the CISPR 16-1-2 tolerance, a buck's and a boost's ripple and first harmonic, two phased bucks and an LC filter within 1 dB of closed forms; no board against a measurement; regulators found on all 4 private boards, each marked with how; regulator settings are assumed until entered ([verification/conducted-emissions.md](verification/conducted-emissions.md)) | **off** (`conducted`) |
 | Report export (HTML and JSON, built in the browser) | ✅ | — (nothing to verify: it restates results) | on |
 
-Everything marked **off** is behind the `full-wave` experimental feature, except small-part
-solves, which also have their own, `small-part-solve`, and the conducted scan, which has only
-its own, `conducted`. It is refused by the server, not merely
+Everything marked **off** is behind the `full-wave` experimental feature, except the conducted
+scan, which has its own, `conducted`. It is refused by the server, not merely
 hidden. It is off because none of it has been verified on a real board, not
 because it is known to be broken — see §2. To try it:
 
@@ -131,14 +130,14 @@ Numbers, method and what is still open: [`verification/cables-and-drivers.md`](v
 
 | Check | Status |
 |---|---|
-| 50 ohm microstrip Z0 and delay within 5 % of Hammerstad-Jensen | ✅ Z0 within 0.45 %, delay within 0.71 % on three presets; the low delay is the port's reference plane, and by difference of two lengths it is within 0.4 % |
+| 50 ohm microstrip Z0 and delay within 5 % of Hammerstad-Jensen | ✅ Z0 within 0.45 %, delay within 0.69 % on three presets; the low delay is the port's reference plane, and by difference of two lengths it is within 0.4 % |
 | Matched microstrip S21 within 0.5 dB to 1 GHz | ✅ 0.06 dB |
-| 50 ohm stripline within 5 % of Cohn | ✅ Z0 within 1.0 %, delay +1.0 to +1.2 % |
-| Via inductance within 10 % of two posts between planes | ⚠️ normal worst +7.7 %; coarse +10.1 % at one point, so a coarse part with vias says it can read up to about 10 % high |
+| 50 ohm stripline within 5 % of Cohn | ✅ Z0 within 3.1 % (coarse), 0.44 % (normal), delay +1.1 to +1.2 % |
+| Via inductance within 10 % of two posts between planes | ✅ normal worst +7.2 %; coarse +9.0 %, and a coarse part with vias says it can read up to about 10 % high |
 | Convergence over 3 coupon margins and 2 presets, synthetic board | ✅ |
-| Real-board coupons converge and agree across presets | ❌ boards C and D pass; board B agrees on the cut, the hotspot's place and the port, but its presets differ by 3.3 dB on the hotspot level (limit 1 dB) |
+| Real-board coupons converge and agree across presets | ✅ boards B, C and D: hotspot levels within 0.86 dB, \|Z\| median within 0.9 %, S21 within 0.08 dB |
 | Slow tests in the image (`EMI_SLOW_TESTS=1`) | ✅ |
-| A solve from the Part solve tab | ⚠️ a terminated net ✅; the sample board's open-ended nets run to their cap and give no numbers |
+| The sample board from the Part solve tab | ✅ numbers in 167-240 s, within 1.4x of the estimate |
 
 Details and the full list: [`verification/small-part-solve.md`](verification/small-part-solve.md).
 

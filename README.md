@@ -9,6 +9,7 @@ see what to fix, marked on the board, in seconds.
 | **Decoupling** | Per supply rail and IC: the impedance of its capacitors against a target, where it falls short, and which change closes the gap. |
 | **ESD** | An IEC 61000-4-2 contact discharge into each line that leaves the board, simulated in ngspice, with the clamp where it is and moved to the connector. |
 | **Cables** | How much common-mode current each connector's cable can carry before it passes the FCC limit, from an antenna model in nec2c. |
+| **Part solve** | One net (or a pair) cut out over its planes and solved in openEMS in minutes: where its current flows and what its ends see. No far field, no compliance estimate, no coupling into neighboring nets, and no component models (those need `full-wave` and the openEMS the worker image ships). See [verification](docs/verification/small-part-solve.md). |
 | **Versions** | Upload a changed layout as a new version and see which findings were fixed and which are new. |
 | **Settings** | Turn checks on or off and set thresholds per board in the app, or in an `emi.rules.yaml` next to the board. |
 | **Reports** | One HTML file (or PDF) with the board, findings and results, to share. |
@@ -18,7 +19,7 @@ Your boards and results stay on your computer. Nothing is uploaded anywhere.
 Results are for comparing versions of your own board. They are not a pre-compliance test. See
 [known issues](docs/known-issues.md).
 
-Full-wave simulation (openEMS), conducted emissions and small-part solves are built but off. See
+Full-wave simulation of a whole region (openEMS) and conducted emissions are built but off. See
 [experimental features](#experimental-features).
 
 ---
@@ -428,7 +429,6 @@ run them, not just that the buttons are hidden.
 |---|---|---|
 | `full-wave` | openEMS full-wave simulation of a board region, hotspot maps, the far field, cable emissions and the compliance estimate — the Solve, Drivers, Components, Results and Compliance tabs | It runs, and a test board solves end to end. What has not been done is verifying any of it on a real board, or at the record length a radiated result needs. Treat anything it produces as unchecked. See [known issues](docs/known-issues.md). |
 | `conducted` | A conducted-emissions scan of the power input with ngspice, on the Conducted tab: two LISNs, the input filter as laid out and each buck regulator as a current source, against FCC 15.107. Differential mode only | The LISN, a buck's input ripple and an LC filter match closed forms, but no board has been compared with a measurement, and regulator settings are assumed until you enter them. See [verification](docs/verification/conducted-emissions.md). |
-| `small-part-solve` | openEMS solves of one net (or a small drawn region) cut out over its planes, in minutes: its hotspot map, port impedance and S-parameters, on the Part solve tab. No far field. `full-wave` includes it | Test lines and vias match theory, and a synthetic part and two of three real parts converge. On the third, the two mesh presets differ by 3.3 dB on the hotspot level, and the sample board's nets, open at one end, do not settle. See [verification](docs/verification/small-part-solve.md). |
 
 To try one anyway, set `EMI_EXPERIMENTAL` to its name where the app is started (a
 comma-separated list for more than one). For `full-wave`:

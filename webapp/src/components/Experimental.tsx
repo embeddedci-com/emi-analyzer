@@ -45,13 +45,6 @@ export function Experimental({ why, label = 'experimental', size = 'xs', mb }: E
  * limitations page, which has to list them without going out of date.
  */
 export const EXPERIMENTAL = {
-  smallPart:
-    'Checked on test lines, vias, a synthetic part and three real parts; on one of those the '
-    + 'mesh presets differ by 3 dB on the hotspot level (docs/verification/small-part-solve.md). '
-    + 'On the coarse mesh, via inductance can read up to about 10% high. The map shows where '
-    + 'current flows, relative to the loudest point. The port numbers are what the two ends see '
-    + 'with 50 Ω on each. Neighboring nets are left out, so coupling into them is not shown.',
-
   hotspotMap:
     'Full-wave solving is experimental, and no hotspot map has yet been compared with a '
     + 'near-field scan of the same board. Use the maps to compare layers, frequencies and '
@@ -101,7 +94,6 @@ export const EXPERIMENTAL = {
 
 /** What each reason is about, as the limitations page titles it. Typed so none is left out. */
 export const EXPERIMENTAL_TITLES: Record<keyof typeof EXPERIMENTAL, string> = {
-  smallPart: 'Small-part solve',
   hotspotMap: 'Hotspot maps and levels',
   cableBudget: 'Cable budget',
   complianceEstimate: 'Compliance estimate',

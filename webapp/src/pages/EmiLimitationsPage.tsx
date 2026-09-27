@@ -43,19 +43,19 @@ const LIMITATIONS: Limitation[] = [
       'of timesteps). Until that is done, full-wave solving and everything built on it ' +
       '(hotspot maps, the far field, cable emissions and the compliance estimate) is switched ' +
       'off unless a server enables it with EMI_EXPERIMENTAL=full-wave. The geometric checks, ' +
-      'the ESD simulation and the cable budget do not use it.',
+      'the ESD simulation, the cable budget and small-part solves do not need it.',
   },
   {
-    what: 'Small-part solves are experimental and off by default',
+    what: 'Small-part solves cover one net over its planes',
     kind: 'method',
     why:
-      'A small-part solve cuts one net out with its planes and solves it in minutes, with no ' +
-      'far field. Test lines and vias match theory, and the size of the cut does not change ' +
-      'the answer on the parts checked. On one of three real boards the mesh presets differ ' +
-      'by 3 dB on the hotspot level, and nothing has been compared with a measurement. It is ' +
-      'off unless a server ' +
-      'enables it with EMI_EXPERIMENTAL=small-part-solve. Neighboring nets are left out of ' +
-      'the cut, so it does not show coupling into them.',
+      'A small-part solve cuts one net (or a pair) out with the planes under it and solves it ' +
+      'in minutes. Lines and vias match theory, and on three real boards the answer does not ' +
+      'change with the size of the cut or the mesh. It gives no far field and no compliance ' +
+      'estimate, and it leaves neighboring nets out, so coupling into them is not shown. A net ' +
+      'with one pad gets a 50 Ω load at its far end. Component models are left out. On the ' +
+      'coarse mesh, via inductance can read up to about 10% high. Nothing has been compared ' +
+      'with a measurement.',
   },
   {
     what: 'Only comparisons between board versions are reliable',

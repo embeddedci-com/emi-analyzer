@@ -34,10 +34,11 @@ type Features struct {
 	// worker enforces. Its outputs are the near-field map and the port impedance and
 	// S-parameters. It is the part of full-wave solving meant to be checked against closed
 	// forms, for convergence and on real-board coupons, which is why it has its own switch.
-	// FullWave implies it. docs/verification/small-part-solve.md has what was checked and what
-	// is still to do.
+	// FullWave implies it. docs/verification/small-part-solve.md has what was checked.
 	//
-	// Off by default until that list is done; see SmallPartSolveByDefault.
+	// On by default since those checks passed; see SmallPartSolveByDefault. The zero value still
+	// has it off, so a host that builds Features itself rather than through ParseExperimental
+	// has to set it.
 	SmallPartSolve bool `json:"small_part_solve"`
 
 	// Conducted enables the "conducted" run kind: a differential-mode conducted-emissions scan
@@ -49,9 +50,11 @@ type Features struct {
 	Conducted bool `json:"conducted"`
 }
 
-// SmallPartSolveByDefault turns small-part solving on without EMI_EXPERIMENTAL. Flipping it is
-// the whole change needed to ship it; it is false while the verification is unfinished.
-const SmallPartSolveByDefault = false
+// SmallPartSolveByDefault turns small-part solving on without EMI_EXPERIMENTAL. It is true since
+// the September 2026 checks passed (docs/verification/small-part-solve.md): lines and vias
+// against closed forms, three real coupons converging over the cut and the mesh, and the sample
+// board solving in minutes from the app.
+const SmallPartSolveByDefault = true
 
 // FeatureFullWave is the EMI_EXPERIMENTAL name for Features.FullWave.
 const FeatureFullWave = "full-wave"
