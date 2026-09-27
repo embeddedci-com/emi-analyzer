@@ -79,17 +79,19 @@ def built_in() -> tuple[Candidate, ...]:
     return tuple(vendor + generic + families)
 
 
-def _matches(c: Component, part: PartMatch) -> bool:
+def _matches(c: Component, part: PartMatch, built_in: bool = False) -> bool:
     """Does this component describe this part?
 
     Compared on farads rather than on the value string: "100n", "100nF" and "0.1uF" are the
     same capacitor, and a string comparison would model one and miss the other two.
     """
     m = c.match or {}
-    if c.part_numbers():
-        # A component that names its part number is that part, and answers only when the
-        # board names it too. A 100 nF 0402 on a board is not evidence that it is this
-        # 100 nF 0402: two of JLCPCB's Basic parts alone share that value and package.
+    if built_in and c.part_numbers():
+        # A named part in the built-in library answers only when the board names it too. A
+        # 100 nF 0402 on a board is not evidence that it is this 100 nF 0402: two of
+        # JLCPCB's Basic parts alone share that value and package. A user's own component
+        # keeps matching on value and package with an MPN typed in, as it always has: they
+        # chose it for their parts.
         return False
     if c.model_type == "mlcc_family":
         # A family answers for any value in a package it knows. It carries no match rules of
@@ -143,7 +145,7 @@ def resolve_part(part: PartMatch, candidates: list[Candidate] | None = None) -> 
         return None
     for cand in ordered:
         c = cand.component
-        if c.kind != "capacitor" or not _matches(c, part):
+        if c.kind != "capacitor" or not _matches(c, part, cand.tier == TIER_BUILTIN):
             continue
         rlc = c.resolve_for(part.farads, part.package.imperial)
         if rlc is None:

@@ -55,6 +55,13 @@ export interface DecPart {
   esr_ohm: number
   source: 'library' | 'assumed'
   model: string
+  /** "datasheet (Samsung CL05B104KO5NNNC)" or "generic 0402 X7R". Absent on older results. */
+  basis?: string
+  /** "part number", "value and package" or "package". */
+  matched_by?: string
+  /** The board field that named the part, as "LCSC C1525". */
+  matched_on?: string
+  notes?: string[]
   assumed: string[]
   x: number
   y: number
@@ -108,6 +115,18 @@ export interface DecouplingDoc {
   stackup_assumed: boolean
   note: string
   rails: DecRail[]
+}
+
+/**
+ * What the Model column says about a capacitor: where its numbers came from, short, with the
+ * detail (how it matched, any disagreement with the board) in the tooltip.
+ */
+export function partModelLabel(p: DecPart | undefined): { text: string; title: string } {
+  if (!p) return { text: '', title: '' }
+  if (p.source === 'assumed') return { text: 'assumed', title: `Assumed: ${p.assumed.join(', ')}` }
+  const title = [p.model, p.matched_on ? `Matched on ${p.matched_on}` : '', ...(p.notes ?? [])]
+    .filter(Boolean).join('. ')
+  return { text: p.basis || 'library', title }
 }
 
 /** The worker's grid: log-spaced, the same points, so a gap edge here is a gap edge there. */

@@ -215,6 +215,8 @@ export interface DecouplingIcSection {
     loopNh: number
     usefulToHz: number
     model: 'library' | 'assumed'
+    /** "datasheet (Samsung CL05B104KO5NNNC)" or "generic 0402"; empty when not known. */
+    basis: string
     assumed: string[]
   }[]
   /** What the layout could not tell, such as the height to ground. */
@@ -568,6 +570,7 @@ function decouplingSection(doc: DecouplingDoc): DecouplingSection {
               loopNh: c.mount_l_h * 1e9,
               usefulToHz: c.useful_up_to_hz,
               model: p?.source === 'library' ? 'library' : 'assumed',
+              basis: p?.source === 'library' ? p.basis ?? '' : '',
               assumed: p?.assumed ?? [],
             }
           }),

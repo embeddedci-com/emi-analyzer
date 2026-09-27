@@ -105,6 +105,21 @@ def test_no_named_part_answers_for_value_and_package_alone():
     assert got.generic
 
 
+def test_a_users_component_with_an_mpn_still_matches_on_value_and_package():
+    """Only the built-in library is held to part numbers. Someone who typed an MPN into their
+    own 100 nF 0402 component chose it for their 100 nF 0402 parts."""
+    mine = Candidate(parse_component({
+        "format": "emi-component", "version": 1, "id": "mine-100n", "kind": "capacitor",
+        "name": "my 100 nF", "provenance": "vendor",
+        "match": {"value": "100n", "package": "0402", "mpn": "XYZ-100N"},
+        "model": {"type": "series_rlc", "c_f": 1e-7, "esl_h": 3e-10, "esr_ohm": 0.02},
+        "sources": [{"doc": "part datasheet", "what": "ESL and ESR"}],
+    }), TIER_MINE)
+    got = resolve_part(match_part("C1", "100nF", C0402), [mine])
+    assert got.component_id == "mine-100n"
+    assert got.matched_by == "value and package"
+
+
 def test_a_users_component_with_the_same_part_number_wins():
     mine = Candidate(parse_component({
         "format": "emi-component", "version": 1, "id": "mine-c1525", "kind": "capacitor",

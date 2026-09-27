@@ -49,6 +49,8 @@
         "generic": false,
         "model_type": "series_rlc",
         "describe_provenance": "from the part datasheet (part datasheet rev C (ESL and ESR))",
+        "manufacturer": "",
+        "dc_bias": [],
         "self_resonance_hz": 20546814.80204999,
         "complete": true,
         "impedance": [
@@ -123,6 +125,8 @@
         "generic": true,
         "model_type": "series_rlc",
         "describe_provenance": "generic \u2014 typical for this package and value, not a specific part",
+        "manufacturer": "",
+        "dc_bias": [],
         "self_resonance_hz": null,
         "complete": false
       }
@@ -180,6 +184,8 @@
         "generic": true,
         "model_type": "mlcc_family",
         "describe_provenance": "generic \u2014 typical for this package and value, not a specific part",
+        "manufacturer": "",
+        "dc_bias": [],
         "family": {
           "esl_by_package": {
             "0402": 4.5e-10,
@@ -216,6 +222,131 @@
             }
           ]
         }
+      }
+    },
+    {
+      "name": "vendor-named-part",
+      "document": {
+        "format": "emi-component",
+        "version": 1,
+        "id": "samsung-cl05b104ko5nnnc",
+        "kind": "capacitor",
+        "name": "Samsung CL05B104KO5NNNC",
+        "provenance": "vendor",
+        "match": {
+          "value": "100n",
+          "package": "0402",
+          "mpn": "CL05B104KO5NNNC",
+          "mpn_aliases": [
+            "CL05B104KO5NNN"
+          ],
+          "lcsc": "C1525"
+        },
+        "model": {
+          "type": "series_rlc",
+          "c_f": 7.67e-08,
+          "esl_h": 3.08e-10,
+          "esr_ohm": 0.0234
+        },
+        "esl_includes_mount": false,
+        "valid_hz": [
+          100000.0,
+          3000000000.0
+        ],
+        "sources": [
+          {
+            "doc": "vendor SPICE model",
+            "rev": "5.0",
+            "url": "https://example.com/m",
+            "what": "C, ESL and ESR"
+          },
+          {
+            "doc": "vendor SPICE model at bias",
+            "rev": "5.0",
+            "what": "DC bias"
+          }
+        ],
+        "manufacturer": "Samsung",
+        "dc_bias": [
+          {
+            "v": 5.0,
+            "c_f": 7.16e-08
+          },
+          {
+            "v": 3.3,
+            "c_f": 7.45e-08
+          }
+        ],
+        "reference": {
+          "notch_hz": 32800000.0,
+          "z_ohm": [
+            [
+              16400000.0,
+              0.08
+            ],
+            [
+              32800000.0,
+              0.0234
+            ]
+          ]
+        }
+      },
+      "expected": {
+        "id": "samsung-cl05b104ko5nnnc",
+        "provenance": "vendor",
+        "generic": false,
+        "model_type": "series_rlc",
+        "describe_provenance": "from the part datasheet (vendor SPICE model rev 5.0 (C, ESL and ESR))",
+        "manufacturer": "Samsung",
+        "dc_bias": [
+          [
+            3.3,
+            7.45e-08
+          ],
+          [
+            5.0,
+            7.16e-08
+          ]
+        ],
+        "self_resonance_hz": 32745158.084087744,
+        "complete": true,
+        "impedance": [
+          {
+            "frequency_hz": 100000.0,
+            "real": 0.0234,
+            "imag": -20.75012500356338
+          },
+          {
+            "frequency_hz": 1000000.0,
+            "real": 0.0234,
+            "imag": -2.073096631492472
+          },
+          {
+            "frequency_hz": 10000000.0,
+            "real": 0.0234,
+            "imag": -0.18815097451059526
+          },
+          {
+            "frequency_hz": 20000000.0,
+            "real": 0.0234,
+            "imag": -0.06504717113612793
+          },
+          {
+            "frequency_hz": 65000000.0,
+            "real": 0.0234,
+            "imag": 0.0938658028871648
+          },
+          {
+            "frequency_hz": 100000000.0,
+            "real": 0.0234,
+            "imag": 0.1727717889354604
+          },
+          {
+            "frequency_hz": 1000000000.0,
+            "real": 0.0234,
+            "imag": 1.9331460427587457
+          }
+        ]
       }
     }
   ],
@@ -562,6 +693,200 @@
       },
       "must_mention": "increasing",
       "python_message": "valid_hz must be increasing"
+    },
+    {
+      "name": "numeric-lcsc",
+      "document": {
+        "format": "emi-component",
+        "version": 1,
+        "id": "mlcc-100n-0402-x7r",
+        "kind": "capacitor",
+        "name": "MLCC 100 nF 0402 X7R",
+        "provenance": "vendor",
+        "match": {
+          "value": "100n",
+          "package": "0402",
+          "lcsc": 1525
+        },
+        "model": {
+          "type": "series_rlc",
+          "c_f": 1e-07,
+          "esl_h": 6e-10,
+          "esr_ohm": 0.02
+        },
+        "esl_includes_mount": false,
+        "valid_hz": [
+          100000.0,
+          3000000000.0
+        ],
+        "sources": [
+          {
+            "doc": "part datasheet",
+            "rev": "C",
+            "what": "ESL and ESR"
+          }
+        ]
+      },
+      "must_mention": "match.lcsc",
+      "python_message": "match.lcsc must be a part number or null"
+    },
+    {
+      "name": "alias-not-a-list",
+      "document": {
+        "format": "emi-component",
+        "version": 1,
+        "id": "mlcc-100n-0402-x7r",
+        "kind": "capacitor",
+        "name": "MLCC 100 nF 0402 X7R",
+        "provenance": "vendor",
+        "match": {
+          "mpn": "X",
+          "mpn_aliases": "Y"
+        },
+        "model": {
+          "type": "series_rlc",
+          "c_f": 1e-07,
+          "esl_h": 6e-10,
+          "esr_ohm": 0.02
+        },
+        "esl_includes_mount": false,
+        "valid_hz": [
+          100000.0,
+          3000000000.0
+        ],
+        "sources": [
+          {
+            "doc": "part datasheet",
+            "rev": "C",
+            "what": "ESL and ESR"
+          }
+        ]
+      },
+      "must_mention": "mpn_aliases",
+      "python_message": "match.mpn_aliases must be a list of part numbers"
+    },
+    {
+      "name": "uncited-dc-bias",
+      "document": {
+        "format": "emi-component",
+        "version": 1,
+        "id": "mlcc-100n-0402-x7r",
+        "kind": "capacitor",
+        "name": "MLCC 100 nF 0402 X7R",
+        "provenance": "vendor",
+        "match": {
+          "value": "100n",
+          "package": "0402",
+          "mpn": null
+        },
+        "model": {
+          "type": "series_rlc",
+          "c_f": 1e-07,
+          "esl_h": 6e-10,
+          "esr_ohm": 0.02
+        },
+        "esl_includes_mount": false,
+        "valid_hz": [
+          100000.0,
+          3000000000.0
+        ],
+        "sources": [
+          {
+            "doc": "part datasheet",
+            "rev": "C",
+            "what": "ESL and ESR"
+          }
+        ],
+        "dc_bias": [
+          {
+            "v": 3.3,
+            "c_f": 9e-08
+          }
+        ]
+      },
+      "must_mention": "DC bias",
+      "python_message": "mlcc-100n-0402-x7r gives capacitance under DC bias but says nothing about where it came from"
+    },
+    {
+      "name": "negative-dc-bias",
+      "document": {
+        "format": "emi-component",
+        "version": 1,
+        "id": "mlcc-100n-0402-x7r",
+        "kind": "capacitor",
+        "name": "MLCC 100 nF 0402 X7R",
+        "provenance": "vendor",
+        "match": {
+          "value": "100n",
+          "package": "0402",
+          "mpn": null
+        },
+        "model": {
+          "type": "series_rlc",
+          "c_f": 1e-07,
+          "esl_h": 6e-10,
+          "esr_ohm": 0.02
+        },
+        "esl_includes_mount": false,
+        "valid_hz": [
+          100000.0,
+          3000000000.0
+        ],
+        "sources": [
+          {
+            "doc": "part datasheet",
+            "rev": "C",
+            "what": "ESL and ESR"
+          }
+        ],
+        "dc_bias": [
+          {
+            "v": -1,
+            "c_f": 9e-08
+          }
+        ]
+      },
+      "must_mention": "dc_bias",
+      "python_message": "each dc_bias point needs a positive v (volts) and c_f (farads)"
+    },
+    {
+      "name": "reference-without-points",
+      "document": {
+        "format": "emi-component",
+        "version": 1,
+        "id": "mlcc-100n-0402-x7r",
+        "kind": "capacitor",
+        "name": "MLCC 100 nF 0402 X7R",
+        "provenance": "vendor",
+        "match": {
+          "value": "100n",
+          "package": "0402",
+          "mpn": null
+        },
+        "model": {
+          "type": "series_rlc",
+          "c_f": 1e-07,
+          "esl_h": 6e-10,
+          "esr_ohm": 0.02
+        },
+        "esl_includes_mount": false,
+        "valid_hz": [
+          100000.0,
+          3000000000.0
+        ],
+        "sources": [
+          {
+            "doc": "part datasheet",
+            "rev": "C",
+            "what": "ESL and ESR"
+          }
+        ],
+        "reference": {
+          "notch_hz": 30000000.0
+        }
+      },
+      "must_mention": "reference",
+      "python_message": "reference must give a positive notch_hz and z_ohm as [hertz, ohms] pairs"
     }
   ]
 }
