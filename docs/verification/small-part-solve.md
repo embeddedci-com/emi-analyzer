@@ -260,8 +260,6 @@ the estimate. `SmallPartSolveByDefault` is `true`.
 
 1. Compare a part's map and port with a measurement: a near-field probe scan and a VNA on one
    of the real boards.
-2. The report still lists small-part solves under its experimental section
-   (`webapp/src/lib/report/model.ts`); give them a section of their own.
-3. The estimate still reads up to 1.8x high on short nets with few edges (the sample board's
+2. The estimate still reads up to 1.8x high on short nets with few edges (the sample board's
    /NRST), where the worker's jog merge and thirds rule remove lines the browser keeps.
-4. Optional: the stripline delay by difference, to confirm the +1.2 % is the ends.
+3. Optional: the stripline delay by difference, to confirm the +1.2 % is the ends.
