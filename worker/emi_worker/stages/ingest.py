@@ -28,7 +28,7 @@ from ..kicad import netclass, parse, parse_board
 from ..kicad.board import ZONES_UNFILLED_NOTE
 from ..kicad.normalize import board_extent, normalize, to_json
 from ..rules import run_rules, settings
-from ..rules import matching, netreport
+from ..rules import decoupling_view, matching, netreport
 from ..rules.model import RuleContext
 from . import StageContext, StageError, StageResult
 
@@ -372,7 +372,7 @@ def run_ingest(ctx: StageContext) -> StageResult:
     )
 
     ctx.progress("rules", 72, "running EMI checks")
-    rules = run_rules(RuleContext(
+    rules_ctx = RuleContext(
         model=model,
         transform=board_extent(model),
         max_frequency_hz=max_freq,
@@ -382,8 +382,19 @@ def run_ingest(ctx: StageContext) -> StageResult:
         netclasses=classes,
         pairs=pairs,
         groups=groups,
-    ))
+    )
+    rules = run_rules(rules_ctx)
     rules_doc = rules.as_dict()
+    # The decoupling view (rules/decoupling_view.py): per rail and IC, the impedance the
+    # capacitors present. A view, not a check, so a failure in it costs the view and never
+    # the findings.
+    if cfg.enabled("decoupling"):
+        try:
+            rules_doc["decoupling"] = decoupling_view.build(rules_ctx)
+        except Exception:  # noqa: BLE001 -- see above
+            log.exception("decoupling view failed")
+            rules_doc.setdefault("notes", []).append(
+                "The decoupling view could not be built for this board.")
 
     # Suppressed findings are removed here rather than never generated, so the count of what
     # was hidden can be reported -- a silent filter is how a suppression file rots.

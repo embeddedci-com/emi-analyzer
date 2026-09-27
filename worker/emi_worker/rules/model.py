@@ -75,9 +75,15 @@ class Finding:
     x: float | None = None
     y: float | None = None
     bbox: tuple[float, float, float, float] | None = None
+    #: What to do, in one short line, when it differs from the rule's usual fix. One rule can
+    #: find different problems: decoupling reports a missing capacitor, a distant one and one
+    #: with no ground via, and "move it closer" was shown for all three.
+    action: str = ""
 
     def as_dict(self, index: int) -> dict:
         d = asdict(self)
+        if not d["action"]:
+            d.pop("action")
         d["id"] = f"{self.rule}-{index}"
         if self.bbox is not None:
             d["bbox"] = [round(v, 4) for v in self.bbox]

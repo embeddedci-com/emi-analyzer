@@ -6,6 +6,22 @@ import (
 	"testing"
 )
 
+// The first-run download says how big it is, that it happens once, and how far it is.
+func TestPullMessage(t *testing.T) {
+	first := pullMessage(0, 0)
+	for _, want := range []string{"MB", "once per version"} {
+		if !strings.Contains(first, want) {
+			t.Errorf("pullMessage(0, 0) = %q, want it to mention %q", first, want)
+		}
+	}
+	if strings.Contains(first, "parts") {
+		t.Errorf("pullMessage(0, 0) = %q counts parts before docker has listed any", first)
+	}
+	if got := pullMessage(3, 17); !strings.HasSuffix(got, "3 of 17 parts done.") {
+		t.Errorf("pullMessage(3, 17) = %q", got)
+	}
+}
+
 // What a user is told when Docker fails. The raw text is a registry error with a URL-encoded
 // token request in it, and it used to go on screen unedited.
 func TestExplainDocker(t *testing.T) {

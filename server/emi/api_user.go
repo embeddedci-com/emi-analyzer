@@ -629,7 +629,7 @@ func (s *Service) handleCreateRun(w http.ResponseWriter, r *http.Request) {
 	}
 	if !body.Kind.Valid() {
 		writeErr(w, http.StatusBadRequest,
-			`kind must be "ingest", "solve", "transient", "cable" or "compliance"`)
+			`kind must be "ingest", "solve", "transient", "cable", "compliance" or "conducted"`)
 		return
 	}
 	// A small-part solve that asks for what the mode leaves out is malformed whoever is
@@ -646,6 +646,19 @@ func (s *Service) handleCreateRun(w http.ResponseWriter, r *http.Request) {
 	}
 	if body.Kind == RunKindTransient {
 		params, err := validateTransientParams(r.Context(), body.Params, p.OrganizationID, s.deps.Blob.Stat)
+		if err != nil {
+			writeErr(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		normalised, err := json.Marshal(params)
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, "failed to encode params")
+			return
+		}
+		body.Params = normalised
+	}
+	if body.Kind == RunKindConducted {
+		params, err := validateConductedParams(body.Params)
 		if err != nil {
 			writeErr(w, http.StatusBadRequest, err.Error())
 			return

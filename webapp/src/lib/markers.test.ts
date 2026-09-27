@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  DEFAULT_MARKER_COLOR, FINDING_MARKER_HEX, findingMarkerColor, hexToRgb, markerBatches,
+  DEFAULT_MARKER_COLOR, FINDING_MARKER_HEX, SEVERITY_MARKER_HEX, findingMarkerColor, findingMarkers,
+  hexToRgb, markerAt, markerBatches, severityMarkerColor,
 } from './markers'
 
 describe('hexToRgb', () => {
@@ -44,5 +45,31 @@ describe('finding marker colors', () => {
     for (const s of ['new', 'fixed', 'unchanged'] as const) {
       expect(findingMarkerColor(s)).not.toEqual(DEFAULT_MARKER_COLOR)
     }
+  })
+})
+
+describe('finding markers', () => {
+  const finding = (id: string, severity: 'critical' | 'warning' | 'info', x: number | null = 1) =>
+    ({ id, rule: 'r', severity, title: '', detail: '', x, y: x })
+
+  it('colors by severity: critical red, warning orange, info gray', () => {
+    expect(SEVERITY_MARKER_HEX).toEqual({ critical: '#fa5252', warning: '#fcc419', info: '#868e96' })
+    expect(severityMarkerColor('warning')).toEqual(hexToRgb('#fcc419'))
+  })
+
+  it('labels each marker with its number and skips findings with no place', () => {
+    const numbers = new Map([['a', 2], ['b', 1], ['c', 3]])
+    const m = findingMarkers(
+      [finding('a', 'warning'), finding('b', 'critical'), finding('c', 'info', null)], numbers)
+    expect(m.map((x) => [x.id, x.label])).toEqual([['a', '2'], ['b', '1']])
+    // Critical last, so it is drawn on top.
+    expect(m[m.length - 1].color).toEqual(severityMarkerColor('critical'))
+  })
+
+  it('finds the nearest marker under a click', () => {
+    const toScreen = (x: number, y: number) => ({ x: x * 10, y: y * 10 })
+    const ms = [{ x: 1, y: 1, id: 'a' }, { x: 2, y: 1, id: 'b' }]
+    expect(markerAt(ms, toScreen, 18, 10)?.id).toBe('b')
+    expect(markerAt(ms, toScreen, 50, 50)).toBeNull()
   })
 })

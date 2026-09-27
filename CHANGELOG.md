@@ -11,9 +11,33 @@ The KiCad plugin is versioned and released separately; see
 
 ### Added
 
+- A Decoupling tab: per supply rail and IC, a lumped estimate of the supply impedance from the
+  layout (each capacitor as a series R-L-C with its mounting loop, plus the plane pair), against
+  a target from the rail voltage, ripple and current step. It shades where the impedance is
+  above the target, marks anti-resonances and clock harmonics that are not filtered, lists the
+  capacitors, and ranks computed fixes (move a part, add a via, add or remove a part) by how
+  much of the worst gap they close. The target is editable in the tab and in the decoupling
+  check's settings (`ripple_pct`, `step_current_a`, `board_max_hz`, `clock_hz`, `switching_hz`).
+- An experimental conducted-emissions scan (`EMI_EXPERIMENTAL=conducted`), on a Conducted tab:
+  the board's power input through two CISPR 16-1-2 LISNs, the input filter as laid out and each
+  buck regulator as a trapezoidal current source, simulated with ngspice against the FCC
+  15.107 limits. Regulator settings not entered are assumed and marked so. It shows the worst
+  margin, which capacitor carries the ripple, what adding a capacitor or an LC filter would
+  change, and what each input capacitor is worth. Differential mode only; see
+  [docs/verification/conducted-emissions.md](docs/verification/conducted-emissions.md).
+- The conducted scan finds more regulators: boosts (modelled by their inductor ripple, not as
+  pulses), inverting stages, controllers with external FETs (drawing through the high-side
+  drain), buck modules by part number, and each output of a PMIC as its own source with its own
+  frequency and phase. The rail also follows a charger or LDO a regulator draws from, and a
+  supply connector away from the board edge can be the power input. Each regulator says how it
+  was found and with what confidence, and can be confirmed, given another type or removed in
+  the tab.
+
 - Report export from the board menu: a self-contained HTML report (prints to PDF) or JSON, with
-  the findings on a board image, notes, cable budgets, ESD results and changes since an earlier
-  version. Missing runs can be started from the dialog. Runs now record the worker version.
+  the findings on a board image, notes, decoupling, cable budgets, ESD results, the conducted
+  scan (when that feature is on, labeled experimental) and changes since an earlier version.
+  Decoupling lists each IC; one with gaps gets its |Z| chart, target, top fixes and capacitor
+  table. Missing runs can be started from the dialog. Runs now record the worker version.
 - A KiCad plugin: a front end that hands the board open in the PCB Editor to the desktop app
   and shows the app's pages beside pcbnew.
 - The desktop app can keep running in the tray with its window closed, so the plugin can reach

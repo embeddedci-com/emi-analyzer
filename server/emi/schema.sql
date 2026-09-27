@@ -80,7 +80,7 @@ CREATE TABLE IF NOT EXISTS emi.emi_runs (
 
     CONSTRAINT emi_runs_kind_check
         CHECK (kind = ANY (ARRAY['ingest'::text, 'solve'::text, 'transient'::text,
-                                 'cable'::text, 'compliance'::text])),
+                                 'cable'::text, 'compliance'::text, 'conducted'::text])),
     CONSTRAINT emi_runs_status_check
         CHECK (status = ANY (ARRAY['new'::text, 'retry_pending'::text, 'in_progress'::text,
                                    'stopping'::text, 'done'::text, 'failed'::text,
@@ -104,12 +104,12 @@ BEGIN
         SELECT 1 FROM pg_constraint
         WHERE conname = 'emi_runs_kind_check'
           AND conrelid = 'emi.emi_runs'::regclass
-          AND pg_get_constraintdef(oid) LIKE '%compliance%'
+          AND pg_get_constraintdef(oid) LIKE '%conducted%'
     ) THEN
         ALTER TABLE emi.emi_runs DROP CONSTRAINT IF EXISTS emi_runs_kind_check;
         ALTER TABLE emi.emi_runs ADD CONSTRAINT emi_runs_kind_check
             CHECK (kind = ANY (ARRAY['ingest'::text, 'solve'::text, 'transient'::text,
-                                     'cable'::text, 'compliance'::text]));
+                                     'cable'::text, 'compliance'::text, 'conducted'::text]));
     END IF;
 END
 $$;

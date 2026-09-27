@@ -33,11 +33,14 @@ const (
 	// cable transfer functions and the rule findings -- so a user changing a cable length or swapping
 	// a driver gets the answer back without queueing behind a solver worker.
 	RunKindCompliance RunKind = "compliance"
+	// RunKindConducted is the experimental conducted-emissions scan (docs/known-issues.md): a
+	// few ngspice AC analyses of the power input, seconds on any worker with the simulator.
+	RunKindConducted RunKind = "conducted"
 )
 
 func (k RunKind) Valid() bool {
 	switch k {
-	case RunKindIngest, RunKindSolve, RunKindTransient, RunKindCable, RunKindCompliance:
+	case RunKindIngest, RunKindSolve, RunKindTransient, RunKindCable, RunKindCompliance, RunKindConducted:
 		return true
 	}
 	return false
@@ -128,7 +131,7 @@ func (c Capabilities) Accepts(kind RunKind, cells int64) bool {
 	// Ingest and transient runs are cheap by construction and are not sized.
 	// Cells only bound a solve. Ingest, transient and cable runs are seconds of work on any
 	// worker, so a cell ceiling would refuse them for no reason.
-	if kind == RunKindIngest || kind == RunKindTransient || kind == RunKindCable {
+	if kind == RunKindIngest || kind == RunKindTransient || kind == RunKindCable || kind == RunKindConducted {
 		return true
 	}
 	if c.MaxCells > 0 && cells > c.MaxCells {

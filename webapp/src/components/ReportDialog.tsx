@@ -19,6 +19,7 @@ import type { BoardDoc, RulesDoc } from '../lib/boardTypes'
 import { latestDone, type Version } from '../lib/compare'
 import { TERMINAL_STATUSES, type EmiApi, type Features, type Run } from '../lib/emiApi'
 import { isSmallPartRun } from '../lib/smallPart'
+import type { ConductedParams } from '../lib/conductedTypes'
 import type { TransientParams } from '../lib/transientTypes'
 import { renderBoardImage } from '../lib/report/boardImage'
 import { renderReportHtml } from '../lib/report/html'
@@ -39,6 +40,9 @@ interface SectionState {
   note?: string
 }
 
+/** The board page tabs a missing section can be set up on. */
+export type ReportTab = 'decoupling' | 'cables' | 'esd' | 'conducted'
+
 export interface ReportDialogProps {
   api: EmiApi
   projectId: string
@@ -57,7 +61,7 @@ export interface ReportDialogProps {
   /** A run was started from here; the page polls again. */
   onStarted: () => void
   /** Open a tab of the board page, to set a run up there instead. */
-  onOpenTab: (tab: 'cables' | 'esd') => void
+  onOpenTab: (tab: ReportTab) => void
 }
 
 function download(filename: string, content: string, type: string) {
@@ -86,6 +90,7 @@ export function ReportDialog(props: ReportDialogProps) {
   const boardId = version.board.id
   const fullWave = features?.full_wave === true
   const smallPart = features?.small_part_solve === true || fullWave
+  const conductedOn = features?.conducted === true
 
   // ---- the runs behind each section ----
 
@@ -93,6 +98,8 @@ export function ReportDialog(props: ReportDialogProps) {
   const cableDone = latestDone(runs, boardId, 'cable')
   const esdRun = newestOf(runs, boardId, 'transient')
   const esdDone = latestDone(runs, boardId, 'transient')
+  const conductedRun = conductedOn ? newestOf(runs, boardId, 'conducted') : null
+  const conductedDone = conductedOn ? latestDone(runs, boardId, 'conducted') : null
   const complianceDone = fullWave ? latestDone(runs, boardId, 'compliance') : null
   const solves = useMemo(
     () => runs.filter((r) => r.board_id === boardId && r.kind === 'solve' && r.status === 'done'
@@ -110,6 +117,12 @@ export function ReportDialog(props: ReportDialogProps) {
     queryKey: ['emi', 'transient', esdDone?.id],
     queryFn: () => api.fetchTransient(esdDone!.id),
     enabled: !!esdDone,
+    staleTime: Infinity,
+  })
+  const conducted = useQuery({
+    queryKey: ['emi', 'conducted', conductedDone?.id],
+    queryFn: () => api.fetchConducted(conductedDone!.id),
+    enabled: !!conductedDone,
     staleTime: Infinity,
   })
   const compliance = useQuery({
@@ -168,6 +181,19 @@ export function ReportDialog(props: ReportDialogProps) {
     },
   })
 
+  const runConducted = useMutation({
+    // The settings the last scan was given, as the Conducted tab would start from.
+    mutationFn: () => {
+      const last = (conductedRun?.params ?? null) as ConductedParams | null
+      return api.createConductedRun(projectId, boardId, last ?? { class: 'B' })
+    },
+    onSuccess: () => {
+      onStarted()
+      qc.invalidateQueries({ queryKey: ['emi', 'runs', projectId] })
+    },
+  })
+  const runners = { cables: runCables, esd: runEsd, conducted: runConducted } as const
+
   // ---- what each section can be ----
 
   const runState = (newest: Run | null, done: Run | null, loading: boolean, error: boolean): Pick<SectionState, 'status' | 'note'> => {
@@ -189,6 +215,16 @@ export function ReportDialog(props: ReportDialogProps) {
         return [{ ...s, ...runState(cableRun, cableDone, cables.isLoading, cables.isError) }]
       case 'esd':
         return [{ ...s, ...runState(esdRun, esdDone, esd.isLoading, esd.isError) }]
+      case 'decoupling':
+        if (!rules) return [{ ...s, status: 'unavailable', note: 'No findings were loaded' }]
+        // Part of the analysis: a board analyzed before the Decoupling tab has none.
+        return [rules.decoupling
+          ? { ...s, status: 'ready' }
+          : { ...s, status: 'missing', note: 'Not in this analysis. Analyze the board again' }]
+      case 'conducted':
+        // Never offered unless the experimental scan is on.
+        if (!conductedOn) return []
+        return [{ ...s, ...runState(conductedRun, conductedDone, conducted.isLoading, conducted.isError) }]
       case 'changes':
         if (earlier.length === 0) return [{ ...s, status: 'unavailable', note: 'This is the first version' }]
         if (!sinceIngest) return [{ ...s, status: 'unavailable', note: 'That version has no finished analysis' }]
@@ -257,11 +293,12 @@ export function ReportDialog(props: ReportDialogProps) {
       boardImage: image,
       cables: cableDone && cables.data ? { run: cableDone, doc: cables.data } : null,
       esd: esdDone && esd.data ? { run: esdDone, doc: esd.data } : null,
+      conducted: conductedDone && conducted.data ? { run: conductedDone, doc: conducted.data } : null,
       compare: since && before.data ? { versionNumber: since.number, ...before.data } : null,
       experimental: { compliance: complianceDone && compliance.data ? { run: complianceDone, doc: compliance.data } : null, solves },
     })
   }, [loading, image, projectName, version, versions.length, ingest, doc, rules, features, selectedKey,
-      cableDone, cables.data, esdDone, esd.data, since, before.data, complianceDone, compliance.data, solves])
+      cableDone, cables.data, esdDone, esd.data, conductedDone, conducted.data, since, before.data, complianceDone, compliance.data, solves])
 
   const omittedKey = JSON.stringify(omitted)
   const html = useMemo(
@@ -311,26 +348,31 @@ export function ReportDialog(props: ReportDialogProps) {
                   <Group gap={6} ml={28} mt={2} wrap="nowrap">
                     {s.status === 'running' && <Loader size={10} />}
                     <Text size="xs" c={s.status === 'failed' ? 'red' : 'dimmed'}>{s.note}</Text>
-                    {(s.id === 'cables' || s.id === 'esd') && (s.status === 'missing' || s.status === 'failed') && (
+                    {(s.id === 'cables' || s.id === 'esd' || s.id === 'conducted') && (s.status === 'missing' || s.status === 'failed') && (
                       <>
                         <Button size="compact-xs" variant="light"
-                                loading={s.id === 'cables' ? runCables.isPending : runEsd.isPending}
-                                onClick={() => (s.id === 'cables' ? runCables : runEsd).mutate()}>
+                                loading={runners[s.id].isPending}
+                                onClick={() => runners[s.id as keyof typeof runners].mutate()}>
                           Run now
                         </Button>
-                        <Anchor size="xs" component="button" type="button" onClick={() => onOpenTab(s.id as 'cables' | 'esd')}>
+                        <Anchor size="xs" component="button" type="button" onClick={() => onOpenTab(s.id as ReportTab)}>
                           Set up
                         </Anchor>
                       </>
+                    )}
+                    {s.id === 'decoupling' && s.status === 'missing' && (
+                      <Anchor size="xs" component="button" type="button" onClick={() => onOpenTab('decoupling')}>
+                        Open
+                      </Anchor>
                     )}
                   </Group>
                 )}
               </Box>
             ))}
           </Stack>
-          {(runCables.error || runEsd.error) && (
+          {(runCables.error || runEsd.error || runConducted.error) && (
             <Alert color="red" variant="light">
-              <Text size="xs">{((runCables.error ?? runEsd.error) as Error).message}</Text>
+              <Text size="xs">{((runCables.error ?? runEsd.error ?? runConducted.error) as Error).message}</Text>
             </Alert>
           )}
           {omitted.length > 0 && (

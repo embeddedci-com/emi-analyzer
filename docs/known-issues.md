@@ -16,6 +16,7 @@ solver or a measurement — and passed. The gap between the two is most of this 
 | Board ingest (KiCad, Gerber + IPC-D-356), viewer | ✅ | ✅ | on |
 | Geometric EMI/EMC rule checks and findings | ✅ | ✅ | on |
 | Run-cost estimator | ✅ | ✅ | on |
+| Decoupling view (lumped supply impedance per rail and IC, Decoupling tab) | ✅ | ⚠️ closed forms and a published connection-inductance table pass; a very short via-in-pad mount reads 49 % high against openEMS ([verification/decoupling.md](verification/decoupling.md)) | on |
 | ESD transient simulation (ngspice) | ✅ | ⚠️ source, line and clamp models unit-checked; no bench comparison | on |
 | Cable budget, Tier A (`cable` run, nec2c) | ✅ | ✅ against openEMS on the product setup: 7 of 9 configurations within 1 dB below resonance, all within 2 dB at the peaks; the wire radius, not the solver, is the larger uncertainty — §3 | on |
 | Limits library and Limits page | ✅ | ⚠️ FCC Part 15 only; there is no CISPR 32 table | on |
@@ -26,11 +27,12 @@ solver or a measurement — and passed. The gap between the two is most of this 
 | Board far field (NF2FF) | ✅ | ⚠️ matches nec2c on dipoles over the ground plane as the product runs it, 30 MHz up (§3); no board checked against a measurement | off, with full-wave |
 | Cable emissions, Tier B | ✅ | ❌ failed its real-board gate, 7-9 dB low on average on two boards below resonance. Cause found in nec2c (the board modelled as a wire, not a plate) and fixed; a residual of 0-5 dB low remains by where the source is. Needs the openEMS re-run — §3 | off, with full-wave |
 | Compliance estimate | ✅ | ❌ runs end to end on the fixture board; never checked against a lab or a second solver (§3) | off, with full-wave |
-| Conducted emissions scan | ❌ | ❌ | — |
+| Conducted emissions scan (`conducted` run, ngspice), differential mode | ✅ | ⚠️ the LISN within the CISPR 16-1-2 tolerance, a buck's and a boost's ripple and first harmonic, two phased bucks and an LC filter within 1 dB of closed forms; no board against a measurement; regulators found on all 4 private boards, each marked with how; regulator settings are assumed until entered ([verification/conducted-emissions.md](verification/conducted-emissions.md)) | **off** (`conducted`) |
 | Report export (HTML and JSON, built in the browser) | ✅ | — (nothing to verify: it restates results) | on |
 
 Everything marked **off** is behind the `full-wave` experimental feature, except small-part
-solves, which also have their own, `small-part-solve`. It is refused by the server, not merely
+solves, which also have their own, `small-part-solve`, and the conducted scan, which has only
+its own, `conducted`. It is refused by the server, not merely
 hidden. It is off because none of it has been verified on a real board, not
 because it is known to be broken — see §2. To try it:
 
@@ -140,6 +142,41 @@ Numbers, method and what is still open: [`verification/cables-and-drivers.md`](v
 
 Details and the full list: [`verification/small-part-solve.md`](verification/small-part-solve.md).
 
+### Conducted emissions
+
+Experimental (`conducted`). What is modelled: two CISPR 16-1-2 50 Ω/50 µH LISNs on the board's
+power input; the input rail as laid out, through ferrites, inductors, fuses, series diodes,
+low-value resistors, eFuses and a charger or LDO a regulator draws from, with each capacitor's
+library ESR and ESL, its via and the trace inductance between them; each switching regulator on
+the rail as a current source at its input: a buck, an inverting stage or a four-switch
+buck-boost (in buck mode) as a trapezoid, a boost as its inductor current (a triangle,
+V_in·D/(f·L) peak to peak). Regulators are found by switch node, by inductor orientation, by an
+external high-side FET's drain on the rail, and by part number (modules with the inductor
+inside); each PMIC output is its own source. Each says how it was found and with what
+confidence, and the user can confirm it, change its type or remove it. The frequency, current,
+duty, edge, inductance and phase are what the user enters or assumed defaults marked as assumed.
+Differential mode only, against the FCC 15.107 quasi-peak and average limits; every harmonic is
+a steady tone, so the average limit decides.
+
+Not modelled: common-mode current (through the switch node's and the board's capacitance to the
+test bench's reference plane, which depends on the setup); spread spectrum, burst and
+pulse-skipping modes; flyback, SEPIC and charge-pump input currents; a buck-boost in boost mode;
+discontinuous conduction; a power input on a connector with a U reference or an unnamed net;
+inductor and ferrite self-resonance; DC-bias derating; the external power supply's own filter.
+
+| Check | Status |
+|---|---|
+| LISN impedance within CISPR 16-1-2's ±20 % | ✅ within 10.4 %, phase within 6.6° |
+| A buck's input ripple against I·D(1-D)/(f·C) | ✅ -0.10 dB |
+| Its first harmonic at the LISN against the closed form and a transient FFT | ✅ both within 0.01 dB |
+| An LC filter's attenuation against its closed form | ✅ within 0.012 dB, 150 kHz-30 MHz |
+| A boost's input ripple against ΔI/(8·f·C), its first harmonic against the closed form and a transient FFT | ✅ -0.34 dB; within 0.01 dB |
+| Two bucks on one clock: in phase, 90° and 180° apart, against \|1 + e^(-jnφ)\| | ✅ within 0.02 dB; cancelled lines over 250 dB down |
+| Real boards: the input, filter and regulators found | ⚠️ 4 private boards: a regulator on each (a boost; seven PMIC bucks; a boost, an inverting stage and a buck module; an external-FET buck-boost controller); a second input on one is not recognised |
+| One board against a LISN measurement | ❌ |
+
+Details: [`verification/conducted-emissions.md`](verification/conducted-emissions.md).
+
 ### Drivers
 
 | Check | Status |
@@ -167,6 +204,35 @@ adjacent cells) was an open circuit on openEMS 0.0.35, which the image shipped u
 element with only L; every solve with components on had modelled its capacitors as missing. Capacitors are
 now one series element, placed only on a solver that models an inductor.
 
+### Decoupling view
+
+| Check | Status |
+|---|---|
+| Two-cap anti-resonance against the closed form, within 0.5 dB | ✅ +0.08 dB |
+| Connection inductance against Archambeault et al.'s table, within 25 % | ✅ -17.7 to +24.2 %, within 6.7 % at 20-40 mil |
+| 0402 via-in-pad mount against the openEMS short (0.207 nH) | ⚠️ 0.308 nH, pessimistic for short wide loops |
+| A trace-fed mount (2-10 mm) against openEMS | ⏳ command in the verification doc |
+| A published PDN curve with every value stated | ⏳ checked against closed-form landmarks instead |
+
+What it models and what it does not:
+
+- **Lumped.** Each capacitor is one series R-L-C, the plane pair one more branch, all in parallel
+  behind the IC's own connection. No plane resonances: the first cavity mode is quoted
+  ("no plane resonances; the first is near X") and nothing above it is right.
+- **Not modeled:** the regulator's output impedance (below its loop bandwidth it holds the
+  rail, so a 100 kHz gap on a rail with no bulk capacitor may be covered by it), the IC's package
+  and die capacitance (hence the 100 MHz `board_max_hz`), DC-bias derating of MLCCs (a 10 uF
+  0603 at 3.3 V can be half that), mutual inductance between neighboring capacitors and vias,
+  and which way a trace actually runs: distance is straight-line from the nearest supply pin.
+- **Assumed unless set:** the current step (0.5 A), the ripple (5 %), a rail voltage the net
+  name does not carry (3.3 V), and anything about a part the library cannot resolve. Each is
+  labeled where it is shown.
+- **ICs and capacitors are recognized by designator** (U/IC, C) and nets by name, like the
+  decoupling check. A capacitor must join the rail to ground directly; one behind a ferrite
+  bead is on a different net and is not counted.
+
+Details: [`verification/decoupling.md`](verification/decoupling.md).
+
 ### Compliance
 
 | Check | Status |
@@ -184,7 +250,7 @@ now one series element, placed only on a solver that models an inductor.
 | A real solve, a driver and the board assembled into a margin | ✅ runs on the fixture board (`scripts/e2e_compliance_fixture.py`); the level is not checked against anything |
 | Transfer functions interpolated between grid points | ❌ the 1 dB σ term is a placeholder, not a residual |
 | Disclaimer on reports and exports | ✅ on the report's first page, on every printed page, and in the JSON |
-| LISN network for conducted emissions | ❌ not started |
+| LISN network for conducted emissions | ✅ in the `conducted` scan, not in the compliance estimate (§3, Conducted emissions) |
 | One real board against a real lab result | ❌ |
 
 ---
@@ -192,11 +258,13 @@ now one series element, placed only on a solver that models an inductor.
 ## 4. Gaps in what is built
 
 - **The report export leaves some things out.** It has the title page, board image with
-  numbered findings, findings, notes, cable budgets, ESD results and changes since an earlier
-  version. It does not include hotspot or near-field maps, far-field or compliance spectra (an
-  experimental section lists which solves ran and, with full-wave on, the compliance margin and
-  its gaps), the nets table (use the CSV export on the Board tab), or the ESD waveforms past
-  10 ns. The PDF is the browser's print of the HTML; the page footer and page numbers need a
+  numbered findings, findings, notes, decoupling, cable budgets, ESD results, the conducted scan
+  (with `conducted` on) and changes since an earlier version. It does not include hotspot or
+  near-field maps, far-field or compliance spectra (an experimental section lists which solves
+  ran and, with full-wave on, the compliance margin and its gaps), the nets table (use the CSV
+  export on the Board tab), or the ESD waveforms past 10 ns. Decoupling uses the target the
+  analysis ran with, not one edited in the tab, and lists the top three fixes per IC; the
+  conducted section shows the as-laid-out spectrum, not the what-if curves. The PDF is the browser's print of the HTML; the page footer and page numbers need a
   browser that supports CSS page margin boxes (Chrome, Edge); others print the disclaimer on
   the first page only. The app version reads "dev" in a build from source, and the worker
   version is "not recorded" for boards analyzed before this release.
@@ -263,7 +331,7 @@ now one series element, placed only on a solver that models an inductor.
 
 | Item | Notes |
 |---|---|
-| Conducted emissions scan | ngspice LISN, switching-regulator drivers, common-mode term. The largest piece left. |
+| Conducted emissions, common mode | The differential-mode scan is experimental (§3); the common-mode term needs the setup's capacitance to the reference plane. |
 | Record a lab test result | Needed before confidence can be called calibrated. |
 | Built-in antenna solver | nec2c is the only one. |
 | Cheap cable what-ifs | Re-run only the antenna model when a choke, length or far end changes. |

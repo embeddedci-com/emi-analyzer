@@ -137,6 +137,30 @@
       {
         "key": "max_ground_via_mm",
         "default": 1.0
+      },
+      {
+        "key": "ripple_pct",
+        "default": 5.0,
+        "per_net": true
+      },
+      {
+        "key": "step_current_a",
+        "default": 0.5,
+        "per_net": true
+      },
+      {
+        "key": "board_max_hz",
+        "default": 100000000.0,
+        "per_net": true
+      },
+      {
+        "key": "clock_hz",
+        "default": 0.0
+      },
+      {
+        "key": "switching_hz",
+        "default": 0.0,
+        "per_net": true
       }
     ]
   },

@@ -16,10 +16,23 @@ Start with the [README](../README.md), which covers installing and using the app
 | | |
 |---|---|
 | [implementation.md](implementation.md) | The model as built: runs, meshing, drivers, components, cables, compliance. |
-| [limits-and-decisions.md](limits-and-decisions.md) | The limits library (FCC Part 15, CISPR 32), where each number came from, and the decisions behind the model. |
+| [limits-and-decisions.md](limits-and-decisions.md) | The limits library (FCC Part 15; CISPR 32 is not included yet), where each number came from, and the decisions behind the model. |
 | [esd-transient-simulation.md](esd-transient-simulation.md) | Design and as-built notes for the ESD discharge simulation. |
 | [length-matching-and-impedance.md](length-matching-and-impedance.md) | Design note for length matching, impedance and rule settings. |
 | [csx-xml-notes.md](csx-xml-notes.md) | openEMS CSX XML schema notes, verified against the solver. |
+
+## Verification
+
+What each feature was checked against, the numbers, and what is left.
+
+| | |
+|---|---|
+| [verification/decoupling.md](verification/decoupling.md) | The decoupling view: closed forms and a published mounting-inductance table. |
+| [verification/cables-and-drivers.md](verification/cables-and-drivers.md) | Cable budgets against openEMS; cable emissions (experimental); drivers. |
+| [verification/conducted-emissions.md](verification/conducted-emissions.md) | Conducted emissions (experimental): LISN, ripple and filter closed forms. |
+| [verification/small-part-solve.md](verification/small-part-solve.md) | Small-part solves (experimental): lines, vias, convergence on real parts. |
+| [verification/solver-and-components.md](verification/solver-and-components.md) | The openEMS model: microstrip, lumped elements, capacitor models, cost estimate. |
+| [verification/far-field.md](verification/far-field.md) | The far field (experimental): dipoles over ground against nec2c. |
 
 Building from source, running the tests and cutting a release are in
 [CONTRIBUTING.md](../CONTRIBUTING.md).

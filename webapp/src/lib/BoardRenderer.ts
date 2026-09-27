@@ -347,6 +347,12 @@ export class BoardRenderer {
     }
   }
 
+  /** Board-space mm to canvas pixel coordinates: the inverse of {@link toBoard}. */
+  toCanvas(x: number, y: number): { x: number; y: number } {
+    const { tx, ty, scale } = this.view
+    return { x: (x + tx) * scale, y: this.gl.drawingBufferHeight - (y + ty) * scale }
+  }
+
   /** Zoom about a fixed canvas point, so the board does not slide under the cursor. */
   zoomAt(px: number, py: number, factor: number, min = 0.5, max = 400): void {
     const before = this.toBoard(px, py)

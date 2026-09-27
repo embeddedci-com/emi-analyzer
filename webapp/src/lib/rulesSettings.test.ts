@@ -191,6 +191,8 @@ describe('net groups and suppressions', () => {
   it('only offers the parameters a rule reads per net', () => {
     expect(PER_NET_PARAMS.map((p) => `${p.rule.id}.${p.key}`).sort()).toEqual([
       'ddr-skew.address_command_ps', 'ddr-skew.byte_lane_ps', 'ddr-skew.intra_pair_ps',
+      'decoupling.board_max_hz', 'decoupling.ripple_pct', 'decoupling.step_current_a',
+      'decoupling.switching_hz',
       'impedance.differential_ohm', 'impedance.single_ended_ohm',
     ])
   })

@@ -101,7 +101,7 @@ func TestExperimentalRunKindsAreRefusedByDefault(t *testing.T) {
 		t.Errorf("minting a token for a solve: got %d, want 403", w.Code)
 	}
 
-	if w := serve(mux, "GET", "/api/emi/features", ""); strings.TrimSpace(w.Body.String()) != `{"full_wave":false,"small_part_solve":false}` {
+	if w := serve(mux, "GET", "/api/emi/features", ""); strings.TrimSpace(w.Body.String()) != `{"full_wave":false,"small_part_solve":false,"conducted":false}` {
 		t.Errorf("features = %s", w.Body.String())
 	}
 }
@@ -196,7 +196,7 @@ func TestSmallPartSolveIsItsOwnFeature(t *testing.T) {
 	if w := serve(mux, "POST", "/api/emi-agent/runs/solve/token", ""); w.Code != http.StatusForbidden {
 		t.Errorf("minting a token for a plain solve: got %d, want 403", w.Code)
 	}
-	if w := serve(mux, "GET", "/api/emi/features", ""); strings.TrimSpace(w.Body.String()) != `{"full_wave":false,"small_part_solve":true}` {
+	if w := serve(mux, "GET", "/api/emi/features", ""); strings.TrimSpace(w.Body.String()) != `{"full_wave":false,"small_part_solve":true,"conducted":false}` {
 		t.Errorf("features = %s", w.Body.String())
 	}
 }

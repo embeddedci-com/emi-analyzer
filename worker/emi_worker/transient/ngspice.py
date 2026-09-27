@@ -103,8 +103,8 @@ def _summarise(log: str) -> str:
     return "; ".join(seen[:5])
 
 
-def run(netlist: str, timeout_s: float = TIMEOUT_S, expect_end_s: float | None = None) -> Waveforms:
-    """Simulate. Raises SimulationError with ngspice's own words when it fails."""
+def _execute(netlist: str, timeout_s: float) -> tuple[str, str]:
+    """Run ngspice on a vetted deck in the box. Returns (raw file text, console log)."""
     check_deck(netlist)
     binary = shutil.which(BINARY)
     if not binary:
@@ -137,8 +137,12 @@ def run(netlist: str, timeout_s: float = TIMEOUT_S, expect_end_s: float | None =
                 _summarise(log) or f"ngspice produced no results (exit status {proc.returncode})", log
             )
         with open(raw_path, encoding="ascii", errors="replace") as f:
-            text = f.read()
+            return f.read(), log
 
+
+def run(netlist: str, timeout_s: float = TIMEOUT_S, expect_end_s: float | None = None) -> Waveforms:
+    """Simulate. Raises SimulationError with ngspice's own words when it fails."""
+    text, log = _execute(netlist, timeout_s)
     result = parse_raw(text)
     if expect_end_s is not None and (len(result.time) == 0 or result.time[-1] < 0.95 * expect_end_s):
         reached = result.time[-1] * 1e9 if len(result.time) else 0.0
@@ -147,6 +151,26 @@ def run(netlist: str, timeout_s: float = TIMEOUT_S, expect_end_s: float | None =
             + (f": {_summarise(log)}" if _summarise(log) else ""), log,
         )
     return result
+
+
+@dataclass
+class Spectra:
+    """An AC analysis: complex node voltages and branch currents against frequency."""
+
+    frequency: np.ndarray
+    vectors: dict[str, np.ndarray]
+
+    def __getitem__(self, name: str) -> np.ndarray:
+        return self.vectors[name.lower()]
+
+    def has(self, name: str) -> bool:
+        return name.lower() in self.vectors
+
+
+def run_ac(netlist: str, timeout_s: float = TIMEOUT_S) -> Spectra:
+    """A small-signal AC analysis, through the same box and deck check as a transient."""
+    text, _ = _execute(netlist, timeout_s)
+    return parse_raw_ac(text)
 
 
 def _vector_name(name: str) -> str:
@@ -185,3 +209,39 @@ def parse_raw(text: str) -> Waveforms:
     values = np.array(tokens[: points * per_point], dtype=float).reshape(points, per_point)[:, 1:]
     vectors = {name: values[:, i] for i, name in enumerate(names)}
     return Waveforms(time=vectors.pop("time"), vectors=vectors)
+
+
+def parse_raw_ac(text: str) -> Spectra:
+    """Read a single-plot ASCII raw file of complex results (an .ac analysis).
+
+    Each value is written ``re,im``; the frequency axis is complex too, with a zero imaginary part.
+    """
+    head, sep, body = text.partition("\nValues:\n")
+    if not sep:
+        raise SimulationError("ngspice wrote a results file with no values in it")
+    if not re.search(r"^Flags:.*complex", head, re.M):
+        raise SimulationError("expected an AC analysis, got real results")
+    names: list[str] = []
+    in_vars = False
+    for line in head.splitlines():
+        if line.startswith("Variables:"):
+            in_vars = True
+            continue
+        if in_vars:
+            fields = line.split()
+            if len(fields) >= 2:
+                names.append(_vector_name(fields[1]))
+    if not names or names[0] != "frequency":
+        raise SimulationError("the results file has no frequency axis")
+    body = body.split("\nTitle:", 1)[0]
+    tokens = body.split()
+    per_point = len(names) + 1
+    points = len(tokens) // per_point
+    rows = [tokens[i * per_point + 1:(i + 1) * per_point] for i in range(points)]
+    values = np.empty((points, len(names)), dtype=complex)
+    for i, row in enumerate(rows):
+        for j, tok in enumerate(row):
+            re_s, _, im_s = tok.partition(",")
+            values[i, j] = complex(float(re_s), float(im_s or 0.0))
+    vectors = {name: values[:, i] for i, name in enumerate(names)}
+    return Spectra(frequency=vectors.pop("frequency").real, vectors=vectors)

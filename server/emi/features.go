@@ -39,6 +39,14 @@ type Features struct {
 	//
 	// Off by default until that list is done; see SmallPartSolveByDefault.
 	SmallPartSolve bool `json:"small_part_solve"`
+
+	// Conducted enables the "conducted" run kind: a differential-mode conducted-emissions scan
+	// of the power input with ngspice (a LISN, the input filter from the layout, the switching
+	// regulators as trapezoidal current sources). It needs no solver and runs in seconds, but
+	// its sources are assumed until the user describes them, its common-mode term is not
+	// modelled, and it has not been compared with a measured board. Independent of FullWave.
+	// docs/verification/conducted-emissions.md has what was checked.
+	Conducted bool `json:"conducted"`
 }
 
 // SmallPartSolveByDefault turns small-part solving on without EMI_EXPERIMENTAL. Flipping it is
@@ -51,8 +59,11 @@ const FeatureFullWave = "full-wave"
 // FeatureSmallPartSolve is the EMI_EXPERIMENTAL name for Features.SmallPartSolve.
 const FeatureSmallPartSolve = "small-part-solve"
 
+// FeatureConducted is the EMI_EXPERIMENTAL name for Features.Conducted.
+const FeatureConducted = "conducted"
+
 // KnownFeatures lists every EMI_EXPERIMENTAL name, for a host's error message.
-var KnownFeatures = []string{FeatureFullWave, FeatureSmallPartSolve}
+var KnownFeatures = []string{FeatureFullWave, FeatureSmallPartSolve, FeatureConducted}
 
 // SmallPartMode is the solve params' "mode" for a small-part solve.
 const SmallPartMode = "small_part"
@@ -69,6 +80,8 @@ func ParseExperimental(list string) (Features, []string) {
 			f.FullWave = true
 		case FeatureSmallPartSolve:
 			f.SmallPartSolve = true
+		case FeatureConducted:
+			f.Conducted = true
 		default:
 			unknown = append(unknown, name)
 		}
@@ -125,6 +138,8 @@ func (f Features) allows(k RunKind, params json.RawMessage) bool {
 	switch k {
 	case RunKindCompliance:
 		return f.FullWave
+	case RunKindConducted:
+		return f.Conducted
 	case RunKindSolve:
 		if f.FullWave {
 			return true
@@ -137,6 +152,10 @@ func (f Features) allows(k RunKind, params json.RawMessage) bool {
 
 // refusal is what a user is told when they ask for a gated run.
 func (f Features) refusal(k RunKind, params json.RawMessage) string {
+	if k == RunKindConducted {
+		return `conducted-emissions scans are experimental and turned off on this server. They ` +
+			`can be enabled with EMI_EXPERIMENTAL=` + FeatureConducted + `.`
+	}
 	if k == RunKindSolve && f.SmallPartSolve {
 		if why := smallPartProblem(params); why != "" {
 			return why
