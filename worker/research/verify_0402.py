@@ -27,6 +27,9 @@ self-resonance 1 / (2 pi sqrt((ESL + L_mount) C)) is compared with where Im(Z_in
 Pass criteria (docs/known-issues.md): SRF within 5 %, and |Z_part| within 1 dB of the analytic
 series R-L-C from a third of the SRF to three times it.
 
+``TAIL_EXTEND=1`` continues a record that ends in a clean 50 ohm discharge with the fitted
+exponential, for a part whose tail would otherwise take hours (1 nF: 50 ns).
+
 ``END_CRITERIA`` (default the solve's 1e-4, -40 dB) sets where the runs end. The capacitor's
 loop rings down slowly, and at -40 dB its transform still ripples by several dB; 1e-7 gives the
 clean record the comparison needs.
@@ -168,7 +171,36 @@ def solve(name: str, doc, built) -> tuple[np.ndarray, run.RunResult]:
     i = post.read_probe(str(work / "p1_it"))
     f = np.asarray(FREQS)
     tails[name] = tail_time_constant(u, i)
+    if TAIL_EXTEND and tails[name].get("tau_s") and abs(tails[name]["v_over_i"] + 50) < 0.5:
+        u, i = extend_tail(u, i, tails[name])
+        tails[name]["extended_to_s"] = float(u.time_s[-1])
     return post._dft(u, f) / post._dft(i, f), res
+
+
+#: Continue a record that ends in a clean 50 ohm discharge with that exponential, instead of
+#: running until it has decayed. A 1 nF part drains with 50 ns, so a record to -70 dB is about
+#: 400 ns, most of it a tail whose shape is known once it is measured.
+TAIL_EXTEND = os.environ.get("TAIL_EXTEND", "") not in ("", "0")
+
+
+def extend_tail(u, i, tail: dict, taus: float = 15.0):
+    """The records with the fitted discharge appended for ``taus`` time constants.
+
+    It starts from the last 1 ns average, so ringing at the end does not set its level, and
+    the current is the voltage over the V/I the fit measured.
+    """
+    tau, ratio = tail["tau_s"], tail["v_over_i"]
+    out = []
+    for trace, scale in ((u, 1.0), (i, 1.0 / ratio)):
+        t, v = np.asarray(trace.time_s), np.asarray(trace.values)
+        dt = float(np.mean(np.diff(t)))
+        n = max(1, int(round(1e-9 / dt)))
+        level = float(np.mean(np.asarray(u.values)[-n:]))
+        extra_t = t[-1] + dt * np.arange(1, int(taus * tau / dt) + 1)
+        extra_v = scale * level * np.exp(-(extra_t - t[-1]) / tau)
+        out.append(post.ProbeTrace(time_s=np.concatenate([t, extra_t]),
+                                   values=np.concatenate([v, extra_v])))
+    return out[0], out[1]
 
 
 #: What ``tail_time_constant`` measured on each run, for the report.
