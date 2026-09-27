@@ -46,15 +46,30 @@ class MeshError(ValueError):
     """The mesh cannot be built as requested."""
 
 
-def merge_close(lines: np.ndarray, min_spacing: float) -> np.ndarray:
-    """Sort, deduplicate, and merge lines closer together than ``min_spacing``."""
+def merge_close(lines: np.ndarray, min_spacing: float,
+                keep: frozenset[float] = frozenset()) -> np.ndarray:
+    """Sort, deduplicate, and merge lines closer together than ``min_spacing``.
+
+    A line in ``keep`` (rounded to the micrometre's thousandth, as ``model`` writes them) is
+    never the one dropped: an ordinary line that close to it goes instead, on either side.
+    """
     if len(lines) == 0:
         return lines
     lines = np.sort(np.asarray(lines, dtype=np.float64))
     kept = [float(lines[0])]
+    pinned = [round(kept[0], 6) in keep]
     for v in lines[1:]:
-        if v - kept[-1] >= min_spacing:
-            kept.append(float(v))
+        v = float(v)
+        mine = round(v, 6) in keep
+        if v - kept[-1] < 1e-9:  # the same line twice
+            pinned[-1] = pinned[-1] or mine
+            continue
+        if v - kept[-1] >= min_spacing or (mine and pinned[-1]):
+            kept.append(v)
+            pinned.append(mine)
+        elif mine:
+            kept[-1] = v
+            pinned[-1] = True
     return np.asarray(kept, dtype=np.float64)
 
 
@@ -306,11 +321,13 @@ def build_axis(
     pml: bool = True,
     merge_fraction: float = MERGE_FRACTION,
     pml_max_res: bool = False,
+    keep: tuple[float, ...] = (),
 ) -> np.ndarray:
     """Build one axis of the grid.
 
     ``required`` lines survive; everything else is filler chosen to satisfy the resolution
-    and grading bounds. Required lines closer than ``merge_fraction * min_res`` are one line.
+    and grading bounds. Required lines closer than ``merge_fraction * min_res`` are one line,
+    except that a line in ``keep`` is never merged away (``merge_close``).
     ``pml_max_res`` holds the absorbing layer's cells to ``max_res`` as well.
     """
     if min_res <= 0 or max_res <= 0:
@@ -318,7 +335,9 @@ def build_axis(
     if max_res < min_res:
         max_res = min_res
 
-    lines = merge_close(np.asarray(required, dtype=np.float64), min_res * merge_fraction)
+    pinned = frozenset(round(float(v), 6) for v in keep)
+    lines = merge_close(np.asarray(required, dtype=np.float64), min_res * merge_fraction,
+                        pinned)
     if len(lines) < 2:
         raise MeshError("an axis needs at least two distinct required lines")
 
@@ -326,7 +345,7 @@ def build_axis(
     # region hands over smoothly to a sparse one. The gap fill also enforces the wavelength
     # bound, since no generated cell exceeds max_res.
     lines = merge_close(np.asarray(_fill_all(lines, max_res, ratio)),
-                        min_res * merge_fraction)
+                        min_res * merge_fraction, pinned)
 
     # A gap whose own neighbours were coarse can still exceed max_res after one pass, so
     # subdivide anything left over before smoothing the seams.
@@ -342,7 +361,7 @@ def build_axis(
                               ratio, min_res)
     # Same tolerance rule as the smoothing pass: a flat fraction of min_res would undo the
     # grading it just did wherever copper forced cells below min_res.
-    return merge_close(lines, _merge_tolerance(lines, min_res))
+    return merge_close(lines, _merge_tolerance(lines, min_res), pinned)
 
 
 @dataclass
@@ -374,6 +393,10 @@ class MeshSpec:
     #: cell" warning never fires for cells nobody reads; a region solve keeps the growth its
     #: verification was run with.
     pml_within_max_cell: bool = False
+    #: In-plane lines no merge may remove: a narrow trace's thirds-rule lines
+    #: (``model.narrow_trace_lines``).
+    keep_x: tuple[float, ...] = ()
+    keep_y: tuple[float, ...] = ()
 
 
 @dataclass
@@ -461,13 +484,17 @@ def build_mesh(
     def inside(values: list[float], lo: float, hi: float) -> list[float]:
         return [v for v in values if lo <= v <= hi]
 
-    x_req = [min_x, max_x] + inside(copper_x, min_x, max_x)
-    y_req = [min_y, max_y] + inside(copper_y, min_y, max_y)
+    # The lines no merge may remove are lines too, whether or not the copper list has them:
+    # two a few micrometres apart are kept as one, at their middle (model.narrow_trace_lines).
+    x_req = [min_x, max_x] + inside(copper_x + list(spec.keep_x), min_x, max_x)
+    y_req = [min_y, max_y] + inside(copper_y + list(spec.keep_y), min_y, max_y)
 
     x = build_axis(x_req, spec.dx_um / 1000.0, max_res, spec.ratio,
-                   merge_fraction=spec.merge_fraction, pml_max_res=spec.pml_within_max_cell)
+                   merge_fraction=spec.merge_fraction, pml_max_res=spec.pml_within_max_cell,
+                   keep=spec.keep_x)
     y = build_axis(y_req, spec.dy_um / 1000.0, max_res, spec.ratio,
-                   merge_fraction=spec.merge_fraction, pml_max_res=spec.pml_within_max_cell)
+                   merge_fraction=spec.merge_fraction, pml_max_res=spec.pml_within_max_cell,
+                   keep=spec.keep_y)
 
     # Vertical: every copper layer, plus air boxes. The dielectric between layers needs
     # several cells through it, which is what dz_um is really specifying.

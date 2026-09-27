@@ -112,6 +112,10 @@ class SolveParams:
     #: Say so when the band's ends sit near the edge of the excitation (``excitation_band``).
     #: A small-part solve turns it off: see stages/small_part.py.
     band_edge_note: bool = True
+    #: Hold the excitation's half-width to this fraction of its centre (0: the band's own, up
+    #: to the centre). Less of the pulse then falls below the band. A small-part solve sets it:
+    #: see stages/small_part.py.
+    excitation_fc_over_f0: float = 0.0
 
     def resolved_f_max(self) -> float:
         if self.f_max > 0:
@@ -360,7 +364,29 @@ def _plan_cable_ports(model: BoardModel, transform, params: "SolveParams",
 #: lone trace is set by its width and its neighbours, not by the preset: a 50 ohm microstrip
 #: meshed that way came out at 40 ohm on every preset (research/verify_microstrip.py).
 #: False keeps a line on every edge, as before.
+#:
+#: **A trace narrower than two cells gets the rule at half its width instead of the cell**
+#: (``_rule_cell``), and those lines are never merged away. At the preset's cell the rule puts
+#: both inner lines within one cell of each other, and whatever else lands nearby (a diagonal's
+#: lines, a pad corner) decides what survives the merge. On a real coupon (board B, a 0.1 mm
+#: clock on 76 um of FR-4) the normal preset drew the trace's metal 45 um wide and coarse drew it
+#: 86 um wide, and the field over it read 3.3 dB apart; averaged over a probe-sized disc, still
+#: 2.1 dB. At half the trace's width the rule is self-consistent (its two inner lines are
+#: four thirds of that cell apart), and every preset coarser than it draws the same lines: the
+#: same coupon then read 0.7 dB apart at the single point. It costs the timestep: a 0.1 mm
+#: trace sets a 50 um cell, where coarse had 70 um.
 THIRDS_RULE = True
+
+
+def _rule_cell(width_mm: float, cell_mm: float) -> float:
+    """The cell the thirds rule is laid out at for a trace this wide: the preset's, or half the
+    trace's width when that is smaller. See ``THIRDS_RULE``."""
+    return min(cell_mm, width_mm / 2.0) if width_mm > 0 else cell_mm
+
+
+def _rule_lines(edge: float, inward: float, cell_mm: float) -> tuple[float, float]:
+    """The thirds rule's two lines for one edge: a third of a cell inside, two thirds outside."""
+    return (round(edge + inward * cell_mm / 3.0, 6), round(edge - inward * 2.0 * cell_mm / 3.0, 6))
 
 
 def _copper_features(
@@ -450,10 +476,10 @@ def _copper_features(
             return any(abs(v - edges[k]) < 1e-6 for k in (i - 1, i) if 0 <= k < len(edges))
 
         kept = {v for v in lines if not on_edge(v)}
-        for edge, inward in ruled.items():
-            for v in (edge + inward * cell_mm / 3.0, edge - inward * 2.0 * cell_mm / 3.0):
+        for edge, (inward, width) in ruled.items():
+            for v in _rule_lines(edge, inward, _rule_cell(width, cell_mm)):
                 if lo <= v <= hi:
-                    kept.add(round(v, 6))
+                    kept.add(v)
         return sorted(kept)
 
     return apply(xs, ruled_x, lo_x, hi_x), apply(ys, ruled_y, lo_y, hi_y)
@@ -468,11 +494,18 @@ def _ruled_edges(model: BoardModel, transform, cell_mm: float
                  ) -> tuple[dict[float, float], dict[float, float]]:
     """The long trace edges that get the thirds rule, per axis.
 
-    ``{edge: +1.0 or -1.0}``, the sign being the side the copper is on. Only segments that run
-    along an axis for longer than their own width: a short stub's "long" edge is its end.
+    ``{edge: (+1.0 or -1.0, width)}``, the sign being the side the copper is on and the width
+    the trace's. Only segments that run along an axis for longer than their own width: a short
+    stub's "long" edge is its end. Of two traces on one edge, the narrower sets its rule.
     """
-    ruled_x: dict[float, float] = {}
-    ruled_y: dict[float, float] = {}
+    ruled_x: dict[float, tuple[float, float]] = {}
+    ruled_y: dict[float, tuple[float, float]] = {}
+
+    def put(ruled: dict, edge: float, inward: float, width: float) -> None:
+        edge = round(edge, 6)
+        if edge not in ruled or width < ruled[edge][1]:
+            ruled[edge] = (inward, width)
+
     if not (THIRDS_RULE and cell_mm > 0):
         return ruled_x, ruled_y
     for track in model.tracks:
@@ -480,12 +513,37 @@ def _ruled_edges(model: BoardModel, transform, cell_mm: float
         pts = [transform.pt(px, py) for px, py in track.pts]
         for (ax, ay), (bx, by) in zip(pts, pts[1:]):
             if abs(ay - by) < 1e-6 and abs(ax - bx) > track.width_mm:
-                ruled_y[round(ay - half, 6)] = 1.0
-                ruled_y[round(ay + half, 6)] = -1.0
+                put(ruled_y, ay - half, 1.0, track.width_mm)
+                put(ruled_y, ay + half, -1.0, track.width_mm)
             elif abs(ax - bx) < 1e-6 and abs(ay - by) > track.width_mm:
-                ruled_x[round(ax - half, 6)] = 1.0
-                ruled_x[round(ax + half, 6)] = -1.0
+                put(ruled_x, ax - half, 1.0, track.width_mm)
+                put(ruled_x, ax + half, -1.0, track.width_mm)
     return ruled_x, ruled_y
+
+
+def narrow_trace_lines(ruled: dict[float, tuple[float, float]], cell_mm: float
+                       ) -> tuple[float, ...]:
+    """The thirds-rule lines of traces narrower than two cells, which no merge may remove.
+
+    Two of them closer than half their rule's cell are one line, at their middle. A routed
+    trace often jogs by a few micrometres (board C's pair has segments 20 um and 10 um off each
+    other), each jog is an edge of its own, and kept apart their lines set cells of 10 um: the
+    coarse mesh of that pair came out at 1.4 M cells and a timestep five times shorter, over
+    budget. Half a cell moves no line by more than a quarter of one.
+    """
+    lines: list[tuple[float, float]] = []
+    for edge, (inward, width) in ruled.items():
+        c = _rule_cell(width, cell_mm)
+        if 0 < width <= 2.0 * cell_mm:
+            lines.extend((v, c) for v in _rule_lines(edge, inward, c))
+    out: list[tuple[float, float]] = []
+    for v, c in sorted(lines):
+        if out and v - out[-1][0] < min(c, out[-1][1]) / 2.0:
+            pv, pc = out[-1]
+            out[-1] = ((pv + v) / 2.0, min(pc, c))
+        else:
+            out.append((v, c))
+    return tuple(round(v, 6) for v, _ in out)
 
 
 def _stack(model: BoardModel) -> tuple[dict[str, float], list[tuple[object, float, float]]]:
@@ -580,7 +638,7 @@ def build_model(model: BoardModel, transform, params: SolveParams) -> BuiltModel
     # Not on a trace edge the thirds rule has taken the line off, though: a port as wide as
     # its trace would put the edge line back along the whole trace. The port still spans the
     # rule's inner lines, which the cell check below confirms.
-    def clear_of(v: float, ruled: dict[float, float]) -> bool:
+    def clear_of(v: float, ruled: dict[float, tuple[float, float]]) -> bool:
         return all(abs(v - e) >= edge_cell / 3.0 for e in ruled)
 
     for port in params.ports:
@@ -648,6 +706,8 @@ def build_model(model: BoardModel, transform, params: SolveParams) -> BuiltModel
         max_epsilon_r=max_er,
         **({"merge_fraction": params.merge_fraction} if params.merge_fraction > 0 else {}),
         pml_within_max_cell=params.pml_within_max_cell,
+        keep_x=narrow_trace_lines(ruled_x, edge_cell),
+        keep_y=narrow_trace_lines(ruled_y, edge_cell),
     )
 
     # §16.2's box needs air on every side. Without far field the mesh stops at the region in
@@ -666,7 +726,8 @@ def build_model(model: BoardModel, transform, params: SolveParams) -> BuiltModel
             f_max=f_max, dx_um=params.dx_um, dy_um=params.dy_um, dz_um=params.dz_um,
             air_above_mm=max(params.air_mm, pad), air_below_mm=max(params.air_mm, pad),
             max_epsilon_r=max_er, merge_fraction=spec.merge_fraction,
-            pml_within_max_cell=spec.pml_within_max_cell,
+            pml_within_max_cell=spec.pml_within_max_cell, keep_x=spec.keep_x,
+            keep_y=spec.keep_y,
         )
     mesh = build_mesh(spec, copper_x, copper_y, list(layer_z.values()))
     if ff_clearance is not None:
@@ -687,6 +748,8 @@ def build_model(model: BoardModel, transform, params: SolveParams) -> BuiltModel
     # ---- document ----
     f_min = min(params.frequencies_hz)
     f0, fc, band_note = excitation_band(f_min, f_max)
+    if params.excitation_fc_over_f0 > 0:
+        fc = min(fc, f0 * params.excitation_fc_over_f0)
     if band_note and params.band_edge_note:
         notes.append(band_note)
 

@@ -201,7 +201,8 @@ func TestSmallPartSolveIsItsOwnFeature(t *testing.T) {
 	}
 }
 
-func TestSmallPartSolveIsOffByDefault(t *testing.T) {
+// A host that leaves it off (the zero value) still refuses it at the server.
+func TestSmallPartSolveIsRefusedWhenOff(t *testing.T) {
 	mux, store := newFeatureService(t, Features{})
 	w := serve(mux, "POST", "/api/emi/projects/p1/runs", smallPartBody)
 	if w.Code != http.StatusForbidden || !strings.Contains(w.Body.String(), FeatureSmallPartSolve) {

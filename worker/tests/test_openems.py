@@ -776,3 +776,66 @@ def test_a_capacitor_is_one_series_element_across_the_gap():
     box = el.primitives[0]
     # It spans the gap between the pads' facing edges, 15 - 0.2 to 15 + 0.2 mm.
     assert (box.p1[0], box.p2[0]) == (pytest.approx(14.8), pytest.approx(15.2))
+
+
+def test_a_trace_narrower_than_two_cells_gets_the_same_lines_on_every_preset():
+    """Board B's 0.1 mm clock was drawn 86 um wide on coarse and 45 um on normal, and the field
+    over it read 3.3 dB apart. The rule is now laid out at half the trace's width, on every
+    preset coarser than that, and no merge removes its lines."""
+    board = _microstrip_board(w=0.1)
+    want = sorted([10.0 - 0.05 + 0.05 / 3, 10.0 - 0.05 - 2 * 0.05 / 3,
+                   10.0 + 0.05 - 0.05 / 3, 10.0 + 0.05 + 2 * 0.05 / 3])
+    for dx in (150, 75, 50):
+        y = _microstrip_model(board, dx=dx).mesh.y
+        for v in want:
+            assert np.min(np.abs(y - v)) < 1e-6, f"dx {dx}: no line at {v}"
+        for edge in (9.95, 10.05):
+            assert np.min(np.abs(y - edge)) > 0.05 / 4, f"dx {dx}: a line sits on the edge"
+
+
+def test_a_kept_line_is_never_the_one_merged_away():
+    got = meshmod.merge_close(np.array([0.0, 1.0, 1.02, 1.05, 2.0]), 0.1,
+                              frozenset({1.02, 1.05}))
+    assert got.tolist() == [0.0, 1.02, 1.05, 2.0]
+    assert meshmod.merge_close(np.array([0.0, 1.0, 1.02]), 0.1).tolist() == [0.0, 1.0]
+
+
+def test_the_excitation_half_width_can_be_held_below_its_centre():
+    """A small part holds it to 0.71 of the centre, so less of the pulse falls below the band:
+    at fc = f0 the sample board's clock rang at 30 MHz past its budget."""
+    board = _microstrip_board()
+
+    def fc(ratio: float) -> float:
+        params = SolveParams(
+            roi=(2.0, 4.0, 28.0, 16.0), frequencies_hz=[100e6, 2e9],
+            ports=[Port("p1", 5.0, 10.0, "F.Cu", half_width_mm=0.19)],
+            dx_um=150, dy_um=150, dz_um=100, air_mm=3.0, excitation_fc_over_f0=ratio)
+        return build_model(board, _board_extent(board), params).doc.excitation.fc
+
+    assert fc(0.0) == pytest.approx(1.05e9)
+    assert fc(0.71) == pytest.approx(0.71 * 1.05e9)
+
+
+def test_a_trace_that_jogs_by_micrometres_does_not_set_a_micrometre_cell():
+    """Board C's pair has segments 20 um off each other. Each is ruled on its own, and kept
+    apart their lines made 10 um cells: the coarse mesh went over budget."""
+    text = """(kicad_pcb
+  (version 20241229)
+  (general (thickness 0.27))
+  (layers (0 "F.Cu" signal) (2 "B.Cu" signal) (25 "Edge.Cuts" user))
+  (setup (stackup
+    (layer "F.Cu" (type "copper") (thickness 0.035))
+    (layer "dielectric 1" (type "core") (thickness 0.2) (material "FR4") (epsilon_r 4.4))
+    (layer "B.Cu" (type "copper") (thickness 0.035))))
+  (net 0 "") (net 1 "GND") (net 2 "SIG")
+  (gr_rect (start 0 0) (end 30 20) (layer "Edge.Cuts") (width 0.1))
+  (segment (start 5 10) (end 15 10) (width 0.2) (layer "F.Cu") (net 2))
+  (segment (start 15 10) (end 15.02 10.02) (width 0.2) (layer "F.Cu") (net 2))
+  (segment (start 15.02 10.02) (end 25 10.02) (width 0.2) (layer "F.Cu") (net 2))
+  (zone (net 1) (net_name "GND") (layer "B.Cu") (hatch edge 0.5) (min_thickness 0.25)
+    (polygon (pts (xy 0 0) (xy 30 0) (xy 30 20) (xy 0 20)))
+    (filled_polygon (layer "B.Cu") (pts (xy 0 0) (xy 30 0) (xy 30 20) (xy 0 20))))
+)"""
+    y = _microstrip_model(parse_board(parse(text)), dx=150).mesh.y
+    near = y[(y > 9.6) & (y < 10.4)]
+    assert np.diff(near).min() >= 0.05 - 1e-6, near

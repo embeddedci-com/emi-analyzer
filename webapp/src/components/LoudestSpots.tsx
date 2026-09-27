@@ -5,6 +5,10 @@
  * the two mesh presets put the peak at opposite ends of the net, 2.7 dB apart, and both ends
  * needed fixing. The worker lists every separate spot within a few dB of the loudest
  * (`worker/emi_worker/openems/hotspots.py`), and they are shown together here.
+ *
+ * A spot's level is the map averaged over a probe-sized disc, not its single loudest grid
+ * point: that is what a probe reads, and a single point beside a copper edge moves with how the
+ * mesh draws the edge.
  */
 
 import { Badge, Group, Table, Text, UnstyledButton } from '@mantine/core'
@@ -14,10 +18,12 @@ import type { HotSpot } from '../lib/smallPart'
 export interface LoudestSpotsProps {
   spots: HotSpot[]
   withinDb: number
+  /** The radius each level is averaged over, mm; absent for a result that predates it. */
+  probeRadiusMm?: number
   onFocus?: (x: number, y: number) => void
 }
 
-export function LoudestSpots({ spots, withinDb, onFocus }: LoudestSpotsProps) {
+export function LoudestSpots({ spots, withinDb, probeRadiusMm, onFocus }: LoudestSpotsProps) {
   if (spots.length === 0) return null
   return (
     <div>
@@ -61,7 +67,9 @@ export function LoudestSpots({ spots, withinDb, onFocus }: LoudestSpotsProps) {
         </Table.Tbody>
       </Table>
       <Text size="10px" c="dimmed" mt={4}>
-        Away from the ports, which are always loud. Marked in the same color on the board; click one to zoom there.
+        Away from the ports, which are always loud.
+        {probeRadiusMm ? ` Levels averaged over ${probeRadiusMm} mm, about a small probe tip.` : ''}
+        {' '}Marked in the same color on the board; click one to zoom there.
       </Text>
     </div>
   )

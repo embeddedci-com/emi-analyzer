@@ -9,6 +9,7 @@
     "max_cell_steps": 1.5e11,
     "min_record_s": 1e-8,
     "end_criteria_db": -50,
-    "band_hz": [100000000.0, 2000000000.0]
+    "band_hz": [100000000.0, 2000000000.0],
+    "open_end_load_ohm": 50.0
   }
 }

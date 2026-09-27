@@ -44,6 +44,7 @@ def test_the_band_sets_the_maps_the_end_criterion_and_the_merge():
     assert not p.far_field
     assert p.pml_within_max_cell and p.map_height_mm == small_part.MAP_HEIGHT_MM
     assert not p.band_edge_note  # every output is a ratio to the source
+    assert p.excitation_fc_over_f0 == small_part.EXCITATION_FC_OVER_F0
 
 
 @pytest.mark.parametrize("band", [[10e6, 1e9], [1e9, 1.5e9], [100e6, 10e9], "x"])
@@ -81,6 +82,7 @@ def test_constants_match_the_browser():
     assert c["min_record_s"] == small_part.MIN_RECORD_S
     assert c["end_criteria_db"] == pytest.approx(10 * np.log10(small_part.END_CRITERIA))
     assert c["band_hz"] == list(small_part.BAND_HZ)
+    assert c["open_end_load_ohm"] == coupon.OPEN_END_LOAD_OHM
 
 
 # ---- the port network -----------------------------------------------------------------------
@@ -197,6 +199,49 @@ def test_the_port_is_not_a_hotspot_and_a_map_of_residue_has_none():
     assert hotspots.spots(x, y, db, [], -60) == []
 
 
+def test_a_probe_average_of_a_flat_map_is_the_map_edges_included():
+    x = np.array([0.0, 0.15, 0.2, 0.5, 1.1, 1.3, 2.0])
+    y = np.array([0.0, 0.3, 0.35, 1.0])
+    u, v, avg = hotspots.probe_average(x, y, np.full((len(y), len(x)), 3.0))
+    assert u[0] == 0 and u[-1] == pytest.approx(2.0) and v[-1] == pytest.approx(1.0)
+    assert np.allclose(avg, 3.0)
+
+
+def test_a_probe_average_settles_with_the_mesh_where_the_peak_point_does_not():
+    """Board B: the loudest grid point beside a pad edge read 3.3 dB apart on two meshes, and the
+    disc average within 0.9 dB. Here the edge field of a strip, ~1/sqrt(distance), which a mesh
+    resolves only down to about half its cell: the peak point follows the cell, the average
+    does not."""
+    peaks, averaged = [], []
+    for step, offset in ((0.15, 0.01), (0.075, 0.028)):
+        x = np.concatenate([np.arange(0.0, 2.0, step) + offset, [2.2]])
+        y = np.arange(0.0, 1.01, step)
+        X, _ = np.meshgrid(x, y)
+        m = 1.0 / np.sqrt(np.maximum(np.abs(X - 1.0), step / 2))
+        peaks.append(20 * np.log10(m.max()))
+        _, _, avg = hotspots.probe_average(x, y, m)
+        averaged.append(20 * np.log10(avg.max()))
+    assert abs(peaks[0] - peaks[1]) > 2.5
+    assert abs(averaged[0] - averaged[1]) < 1
+
+
+def test_a_coarse_part_over_a_one_cell_dielectric_says_its_impedance_can_read_low():
+    # Check 1b: a 0.1 mm microstrip on 76 um read Z0 9 % low on coarse, 1.5 % low on normal.
+    b, t = _coupon_board(False)
+    assert small_part.thin_dielectric_um(b, ["CLK"], 100) == 0  # 0.2 mm prepreg: two cells
+    under = next(s for s in b.stackup if s.name == "dielectric 1")
+    under.thickness_mm = 0.0764
+    c = coupon.plan(b, t, ["CLK"])
+    params = SolveParams(roi=c.roi, frequencies_hz=[1e8, 1e9], ports=c.ports,
+                         dx_um=150, dy_um=150, dz_um=100)
+    _, notes, _ = small_part.cut(b, t, {"mode": "small_part", "coupon": {"nets": ["CLK"]}}, params)
+    assert small_part.COARSE_THIN_NOTE.format(um=76.4) in notes
+    params.dx_um = params.dy_um = 75
+    params.dz_um = 50
+    _, notes, _ = small_part.cut(b, t, {"mode": "small_part", "coupon": {"nets": ["CLK"]}}, params)
+    assert not any("one cell thick" in n for n in notes)
+
+
 def _coupon_board(with_via: bool):
     from tests.test_coupon import BOARD
 
@@ -229,5 +274,5 @@ def test_a_coarse_part_with_vias_says_its_inductance_can_read_high(dx, with_via,
     c = coupon.plan(b, t, ["CLK"])
     params = SolveParams(roi=c.roi, frequencies_hz=[1e8, 1e9], ports=c.ports,
                          dx_um=dx, dy_um=dx, dz_um=dx * 2 / 3)
-    _, notes = small_part.cut(b, t, {"mode": "small_part", "coupon": {"nets": ["CLK"]}}, params)
+    _, notes, _ = small_part.cut(b, t, {"mode": "small_part", "coupon": {"nets": ["CLK"]}}, params)
     assert (small_part.COARSE_VIA_NOTE in notes) is noted

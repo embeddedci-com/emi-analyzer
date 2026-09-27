@@ -251,3 +251,39 @@ def test_a_diagonal_trace_has_grid_lines_all_along_it(cell_um):
     for lines, lo, hi in ((built.mesh.x, x0, x1), (built.mesh.y, min(y0, y1), max(y0, y1))):
         inside = lines[(lines >= lo) & (lines <= hi)]
         assert np.diff(inside).max() <= step
+
+
+def test_a_one_pad_net_gets_a_50_ohm_load_at_its_far_end():
+    """The sample board's nets each have one pad. Left open, CLK rang its whole budget away and
+    published nothing; its far end, the end of the arc, now gets a passive 50 ohm port."""
+    from pathlib import Path
+
+    from emi_worker.stages import small_part
+
+    b = parse_board(parse((Path(__file__).parent / "fixtures" / "tiny.kicad_pcb").read_text()))
+    t = board_extent(b)
+    c = coupon.plan(b, t, ["CLK"])
+    assert c.port_pads == ["U1.1", coupon.OPEN_END_LABEL]
+    load = c.ports[1]
+    assert (load.x, load.y) == pytest.approx(t.pt(45, 25))
+    assert (load.excited, load.resistance, load.layer) == (False, 50.0, "F.Cu")
+    assert any("50 ohm load" in n for n in c.notes)
+
+    # The browser places only the pad's port; the worker adds the load, once.
+    params = SolveParams(roi=c.roi, frequencies_hz=[1e8], ports=[c.ports[0]])
+    _, notes, added = small_part.cut(b, t, {"mode": "small_part", "coupon": {"nets": ["CLK"]}},
+                                     params)
+    assert [p.name for p in params.ports] == ["p1", "p2"]
+    assert params.ports[1].x == pytest.approx(load.x) and not params.ports[1].excited
+    assert added == [{"name": "p2", "net": "CLK", "pad": coupon.OPEN_END_LABEL}]
+    assert any("50 ohm load" in n for n in notes)
+    params = SolveParams(roi=c.roi, frequencies_hz=[1e8], ports=list(c.ports))
+    _, _, added = small_part.cut(b, t, {"mode": "small_part", "coupon": {"nets": ["CLK"]}},
+                                 params)
+    assert added == [] and len(params.ports) == 2
+
+
+def test_a_net_with_two_pads_gets_no_load(board):
+    b, t = board
+    ports = coupon.plan(b, t, ["CLK"]).ports[:1]
+    assert coupon.loads_for_open_ends(b, t, ["CLK"], ports) == []

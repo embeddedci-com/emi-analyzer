@@ -285,7 +285,9 @@ export function HotspotResults({
 
   return (
     <Stack gap="md">
-      <Experimental why={smallPart ? EXPERIMENTAL.smallPart : EXPERIMENTAL.hotspotMap} mb={0} />
+      {/* A small part is checked (docs/verification/small-part-solve.md); its limits are
+          stated on its result and on the limitations page. */}
+      {!smallPart && <Experimental why={EXPERIMENTAL.hotspotMap} mb={0} />}
       {state === 'unusable' && (
         <Alert color="red" variant="light" title="This run stopped before its fields settled">
           {typeof manifest.run?.unusable_reason === 'string'
@@ -357,7 +359,8 @@ export function HotspotResults({
       </div>
 
       {smallPart && state !== 'unusable' && (
-        <LoudestSpots spots={spots} withinDb={manifest.hotspots?.within_db ?? 3} onFocus={onFocusSpot} />
+        <LoudestSpots spots={spots} withinDb={manifest.hotspots?.within_db ?? 3}
+                      probeRadiusMm={manifest.hotspots?.probe_radius_mm} onFocus={onFocusSpot} />
       )}
 
       {/* A small part never models components, so "none were modelled" would only confuse. */}

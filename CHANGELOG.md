@@ -11,6 +11,13 @@ The KiCad plugin is versioned and released separately; see
 
 ### Added
 
+- Small-part solves are on by default, on the Part solve tab: one net (or a pair) cut out over
+  its planes and solved in openEMS in minutes, with its current map, loudest spots, port
+  impedance and S-parameters. Lines and vias match their closed forms and three real boards
+  converge over the cut and the mesh
+  ([docs/verification/small-part-solve.md](docs/verification/small-part-solve.md)). No far
+  field, no compliance estimate, no coupling into neighboring nets and no component models.
+
 - A Decoupling tab: per supply rail and IC, a lumped estimate of the supply impedance from the
   layout (each capacitor as a series R-L-C with its mounting loop, plus the plane pair), against
   a target from the rail voltage, ripple and current step. It shades where the impedance is
@@ -55,7 +62,7 @@ The KiCad plugin is versioned and released separately; see
   worker skipped or assumed (unfilled zones, an unreadable rules file, a missing stackup).
 - "Try the sample board" on the home page, and a one-time hint on what to do after the
   findings.
-- Small-part solves (still experimental and off) list every spot within 3 dB of each map's
+- Small-part solves list every spot within 3 dB of each map's
   loudest point away from the ports, with the nearest net and part, and mark them on the board.
   When there are several, the result says to treat them together. A part that runs on the
   coarse mesh with vias says its via inductance can read up to about 10% high.
@@ -90,6 +97,11 @@ The KiCad plugin is versioned and released separately; see
 - Small-part solves read each map 0.1 mm above the copper on every preset, hold the absorbing
   layer to the band's cell size, start on the coarse mesh when normal is over budget, and say
   when other copper sits within one cell of the net.
+- Small-part solves: a hotspot's level is averaged over a 0.25 mm disc, about a probe tip; a run
+  stops only once its energy has stayed under the criterion for a nanosecond and is not
+  climbing; a net with one pad gets a 50 ohm load at its far end; less of the pulse falls below
+  the band; and the cost estimate counts the mesh, diagonal traces included, instead of pricing
+  the area.
 
 ### Security
 

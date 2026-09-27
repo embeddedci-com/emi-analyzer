@@ -14,6 +14,7 @@
 
 import type { BoardDoc, BoardPad, GeometryIndex } from './boardTypes'
 import { isReferenceNet, padLayer, type PortSpec } from './portPlacement'
+import { countSmallPartMesh } from './smallPartMesh'
 
 export const SMALL_PART_MODE = 'small_part'
 
@@ -26,6 +27,8 @@ export const MAX_CELLS = 3_000_000
 export const MAX_CELL_STEPS = 1.5e11
 export const MIN_RECORD_S = 10e-9
 export const END_CRITERIA_DB = -50
+/** What the worker loads a one-pad net's far end with, ohm (`coupon.OPEN_END_LOAD_OHM`). */
+export const OPEN_END_LOAD_OHM = 50
 
 /**
  * Cells per mm² of region by preset, and how much each copper layer past two adds, fitted to
@@ -185,7 +188,9 @@ export function planCoupon(
         origin: 'net', net, padRef: pad.ref ? `${pad.ref}.${pad.number}` : undefined,
       })
     }
-    if (ends.length === 1) notes.push(`${net} has one pad, so its far end is open.`)
+    // The worker loads it (coupon.py, `open_end`): left open, the sample board's clock net rang
+    // its whole budget away. Only the worker has the track ends to put the load on.
+    if (ends.length === 1) notes.push(`${net} has one pad, so its far end gets a ${OPEN_END_LOAD_OHM} Ω load.`)
   }
   if (ports.length === 0) return none(`${nets.join(', ')} has no pads to put a port on.`)
   return { nets, roi, ports, margin_mm: margin, notes, error: null }
@@ -207,24 +212,41 @@ export interface SmallPartEstimate {
   refused: string | null
 }
 
+/** The copper a part is meshed around, for the counted estimate (`smallPartMesh.ts`). */
+export interface PartCopper {
+  geometry: ArrayBuffer | null
+  /** The coupon's nets, or null for a drawn region (everything in it). */
+  nets: string[] | null
+  ports: PortSpec[]
+}
+
 /**
- * What a part will cost. Cells come from a fit to meshed coupons (per preset, per mm² of
- * region, and per copper layer past two), and the timestep from the smallest cell the mesher
- * will make for a small part.
+ * What a part will cost. With its copper, the mesh is counted the way the worker lays it out
+ * (`countSmallPartMesh`); without, cells come from a fit to meshed coupons per mm² of region,
+ * which was 0.45x to 4.4x the real mesh. The timestep is set by the smallest cell either way.
  */
 export function estimateSmallPart(
   roi: Roi, preset: (typeof PRESETS)[number], band: (typeof BANDS)[number], doc: BoardDoc,
+  copper?: PartCopper,
 ): SmallPartEstimate {
-  const fit = CELL_FIT[preset.value]
-  const area = Math.max(0, roi[2] - roi[0]) * Math.max(0, roi[3] - roi[1])
-  const layers = doc.layers.length || 2
-  const cells = Math.ceil(fit.per_mm2 * area * (1 + fit.per_layer * (layers - 2)))
   // The smallest cell: half of dx in plane (copper lines closer than that merge, and a routed
   // board always has some that close), or the thinnest slice of a dielectric at dz.
   const slices = doc.stackup
     .filter((s) => s.role === 'dielectric' && s.thickness_mm > 0)
     .map((s) => (s.thickness_mm * 1000) / Math.ceil((s.thickness_mm * 1000) / preset.dz))
-  const dMin = Math.min(preset.dx / 2, preset.dz, ...slices) * 1e-6
+  let dMin = Math.min(preset.dx / 2, preset.dz, ...slices) * 1e-6
+  let cells: number
+  if (copper && copper.geometry && doc.geometry) {
+    const m = countSmallPartMesh(doc, copper.geometry, doc.geometry, copper.nets, roi, copper.ports,
+      preset, band.hi)
+    cells = m.cells
+    dMin = Math.min(dMin, m.min_cell_mm * 1e-3)
+  } else {
+    const fit = CELL_FIT[preset.value]
+    const area = Math.max(0, roi[2] - roi[0]) * Math.max(0, roi[3] - roi[1])
+    const layers = doc.layers.length || 2
+    cells = Math.ceil(fit.per_mm2 * area * (1 + fit.per_layer * (layers - 2)))
+  }
   const dt = dMin / (299_792_458 * Math.sqrt(3))
   const needed = Math.ceil(3 / band.lo / dt)
   const affordable = Math.floor(MAX_CELL_STEPS / Math.max(cells, 1))
@@ -283,11 +305,34 @@ export function hasVias(doc: BoardDoc, nets: string[]): boolean {
   return doc.vias.some((v) => want.has(v.net))
 }
 
+/**
+ * The thinnest dielectric beside a layer these nets are on, µm, when it is no thicker than
+ * `dzUm` (one cell through); else 0. On the coarse mesh a 0.1 mm microstrip on 76 µm read its
+ * impedance 9 % low (docs/verification/small-part-solve.md, check 1b). The worker says it
+ * again in the result (`COARSE_THIN_NOTE`).
+ */
+export function thinDielectricUm(doc: BoardDoc, nets: string[], dzUm: number): number {
+  const stack = doc.stackup.filter((s) => s.thickness_mm > 0 || s.role === 'copper')
+  const want = new Set(nets)
+  const used = new Set(doc.nets.filter((n) => want.has(n.name)).flatMap((n) => n.layers))
+  let thin = 0
+  stack.forEach((s, k) => {
+    if (s.role !== 'copper' || !used.has(s.name)) return
+    for (const j of [k - 1, k + 1]) {
+      const d = stack[j]
+      const um = d && d.role === 'dielectric' ? d.thickness_mm * 1000 : 0
+      if (um > 0 && um <= dzUm && (thin === 0 || um < thin)) thin = um
+    }
+  })
+  return thin
+}
+
 /** One of a map's loudest spots, as the worker lists them (`openems/hotspots.py`). */
 export interface HotSpot {
   x_mm: number
   y_mm: number
-  /** On the map's own scale: dB below the loudest point of the run. */
+  /** On the map's own scale: dB below the loudest point of the run, averaged over a probe-sized
+   *  disc (`HotSpotList.probe_radius_mm`), so a little below the raw map drawn under it. */
   db: number
   below_peak_db: number
   net?: string | null
@@ -296,6 +341,9 @@ export interface HotSpot {
 
 export interface HotSpotList {
   within_db: number
+  /** The radius each spot's level is averaged over, mm. Absent in results that predate it,
+   *  whose levels are the single loudest grid point. */
+  probe_radius_mm?: number
   maps: { layer: string; frequency_hz: number; spots: HotSpot[] }[]
 }
 

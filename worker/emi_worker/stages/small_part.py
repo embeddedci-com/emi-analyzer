@@ -55,6 +55,19 @@ MAX_HZ = 6e9
 #: The energy decay a run stops at: -50 dB of its peak.
 END_CRITERIA = 1e-5
 
+#: The excitation's half-width as a fraction of its centre, at most. The default band spans
+#: 20:1, where ``model.excitation_band`` sets the half-width to the centre and so puts the
+#: pulse's 20 dB point at DC. Everything below the band is then driven nearly as hard as the
+#: band's lower edge, and a part with a slow mode down there rings in it long after the band
+#: has settled: the sample board's clock net, over a split plane, swung at about 30 MHz and was
+#: still at -43 dB after 15.7 ns, its whole budget, while its ports had been quiet since 7 ns.
+#: At 0.71 the pulse is 38 dB down at 30 MHz instead of 19, and the same net settled at 6.1 ns.
+#: What it costs: the band's own edges are driven 33 dB below the centre instead of 16, and the
+#: pulse is 1.4 times longer. Every output here is a ratio (a port's V/I, a map per volt of the
+#: source), so a weaker edge moves nothing while the run settles; the line checks were re-run
+#: with it (docs/verification/small-part-solve.md).
+EXCITATION_FC_OVER_F0 = 0.71
+
 #: Copper lines closer than this fraction of dx are one grid line (mesh.MERGE_FRACTION is a
 #: quarter). The timestep is set by the smallest cell anywhere, and on a routed board a quarter of
 #: dx is always reached: a pad corner beside a trace edge, an arc's vertices. A half moves no edge
@@ -75,6 +88,13 @@ MAP_HEIGHT_MM = 0.1
 COARSE_VIA_UM = 150.0
 
 COARSE_VIA_NOTE = "coarse mesh: via inductance can read up to about 10% high"
+
+#: A dielectric no thicker than the preset's dz is one cell through. On the coarse preset a
+#: 0.1 mm microstrip on 76 um of FR-4 (board B's clock) read Z0 9 % low against
+#: Hammerstad-Jensen, where normal, with two cells, read 1.5 % low (docs/verification/
+#: small-part-solve.md, check 1b). So a coarse part over one says so, like a via.
+COARSE_THIN_NOTE = ("coarse mesh: the {um:.0f} um dielectric under this net is one cell thick, so "
+                    "its impedance can read about 10% low")
 
 #: The largest mesh a small-part solve will build, in cells (216 MB at 72 bytes a cell).
 MAX_CELLS = 3_000_000
@@ -140,6 +160,7 @@ def apply(p: dict, params: SolveParams) -> SolveParams:
     # of the same record, and the maps are per volt of the source. At 2 GHz the microstrip
     # check read Z0 within 0.5 % and S21 within 0.1 dB on every preset.
     params.band_edge_note = False
+    params.excitation_fc_over_f0 = EXCITATION_FC_OVER_F0
     # The cap is derived from the band (three periods of its lowest frequency); a hand-set cap
     # would make the budget below meaningless.
     params.max_timesteps = 0
@@ -159,13 +180,15 @@ def coupon_nets(p: dict) -> list[str]:
 
 
 def cut(board, transform, p: dict, params: SolveParams):
-    """The board reduced to the coupon's copper, and what was said about it. Unchanged if the
-    run named no nets (a drawn region)."""
+    """The board reduced to the coupon's copper, what was said about it, and the ports it added
+    (``{name, net, pad}`` each, for the network). Unchanged if the run named no nets (a drawn
+    region)."""
     # A port the browser placed does not know what is under it: the browser has no pour
     # outlines. The worker does, so a port with no reference names the nearest layer with a
     # pour under it here, for a region as well as a coupon. Without one it falls back to the
     # nearest copper layer, as every solve always has, and the result says so.
     notes: list[str] = []
+    added: list[dict] = []
     for port in params.ports:
         if port.reference_layer:
             continue
@@ -182,11 +205,17 @@ def cut(board, transform, p: dict, params: SolveParams):
     if not nets:
         if _coarse(params) and _vias_in(board, transform, params.roi):
             notes.append(COARSE_VIA_NOTE)
-        return board, notes
+        return board, notes, added
     missing = [n for n in nets if n not in set(board.nets) | {t.net for t in board.tracks}
                | {q.net for q in board.pads}]
     if missing:
         raise StageError(f"{', '.join(missing)} is not a net on this board")
+    # A one-pad net's far end gets a 50 ohm load, or it rings past any budget (coupon.py). The
+    # browser cannot place it, so it is added here, and named for the network.
+    for net, port in coupon_mod.loads_for_open_ends(board, transform, nets, params.ports):
+        params.ports.append(port)
+        added.append({"name": port.name, "net": net, "pad": coupon_mod.OPEN_END_LABEL})
+        notes.append(coupon_mod.open_end_note(net))
     reduced, cut_notes = coupon_mod.extract(board, transform, nets, params.roi)
     cell = min(params.dx_um, params.dy_um) / 1000.0
     tight = coupon_mod.tight_gaps(reduced, nets, cell)
@@ -199,7 +228,31 @@ def cut(board, transform, p: dict, params: SolveParams):
         )
     if _coarse(params) and any(v.net in nets for v in reduced.vias):
         cut_notes.append(COARSE_VIA_NOTE)
-    return reduced, notes + cut_notes
+    thin = thin_dielectric_um(reduced, nets, params.dz_um)
+    if _coarse(params) and thin:
+        cut_notes.append(COARSE_THIN_NOTE.format(um=thin))
+    return reduced, notes + cut_notes, added
+
+
+def thin_dielectric_um(board, nets: list[str], dz_um: float) -> float:
+    """The thinnest dielectric beside a copper layer the nets are on, um, when it is no thicker
+    than ``dz_um`` (one cell through); else 0. See ``COARSE_THIN_NOTE``."""
+    stack = [s for s in board.stackup if s.thickness_mm > 0 or s.is_copper]
+    copper = [s.name for s in stack if s.is_copper]
+    want = set(nets)
+    used: set[str] = set()
+    for t in board.tracks:
+        if t.net in want:
+            used.add(t.layer)
+    for q in list(board.pads) + list(board.vias):
+        if q.net in want:
+            for layer in q.layers or []:
+                used.update(copper if layer == "*.Cu" else [layer])
+    thin = [s.thickness_mm * 1000.0
+            for k, c in enumerate(stack) if c.is_copper and c.name in used
+            for j in (k - 1, k + 1) if 0 <= j < len(stack)
+            for s in [stack[j]] if s.is_dielectric and 0 < s.thickness_mm * 1000.0 <= dz_um]
+    return min(thin) if thin else 0.0
 
 
 def _coarse(params: SolveParams) -> bool:
@@ -264,8 +317,14 @@ def unusable_reason(result) -> str | None:
 def add_hotspots(artifacts, workdir: str, dump_names: dict[str, str],
                  dump_heights: dict[str, float], params: SolveParams, nearby) -> None:
     """List each map's separate spots within a few dB of its loudest (``openems.hotspots``),
-    with the net and part nearest each, in the manifest. A failure leaves the list out."""
+    with the net and part nearest each, in the manifest. A failure leaves the list out.
+
+    Spots are found and their levels read on the map averaged over a probe-sized disc
+    (``hotspots.probe_average``), on the manifest's dB scale: a spot reads a little below the
+    raw map drawn under it."""
     import os
+
+    import numpy as np
 
     from ..openems import post
 
@@ -284,13 +343,17 @@ def add_hotspots(artifacts, workdir: str, dump_names: dict[str, str],
         except (OSError, ValueError):
             continue
         for g in grids:
-            found = hotspots_mod.spots(g.x_mm, g.y_mm, g.to_db(reference=ref), ports, floor)
+            xs, ys, avg = hotspots_mod.probe_average(g.x_mm, g.y_mm, g.magnitude)
+            db = np.maximum(20.0 * np.log10(np.maximum(avg, 1e-30) / ref), floor)
+            found = hotspots_mod.spots(xs, ys, db, ports, floor)
             for s in found:
                 s["net"] = nearby.net(s["x_mm"], s["y_mm"], layer)
                 s["part"] = nearby.part(s["x_mm"], s["y_mm"])
             if found:
                 out.append({"layer": layer, "frequency_hz": g.frequency_hz, "spots": found})
-    artifacts.manifest["hotspots"] = {"within_db": hotspots_mod.WITHIN_DB, "maps": out}
+    artifacts.manifest["hotspots"] = {"within_db": hotspots_mod.WITHIN_DB,
+                                      "probe_radius_mm": hotspots_mod.PROBE_RADIUS_MM,
+                                      "maps": out}
     artifacts.files["manifest.json"] = json.dumps(artifacts.manifest, indent=2).encode()
 
 

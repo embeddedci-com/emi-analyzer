@@ -8,8 +8,8 @@ import type { BoardDoc } from './boardTypes'
 import fixtures from '../../../server/emi/testdata/small_part_fixtures.json'
 import {
   BANDS, estimateSmallPart, END_CRITERIA_DB, marginFor, MAX_CELL_STEPS, MAX_CELLS, MAX_SIDE_MM,
-  MARGIN_HEIGHTS, MIN_MARGIN_MM, MIN_RECORD_S, netEnds, pairOf, planCoupon, PORT_HALF_WIDTH_MM,
-  PRESETS, smallPartParams, hasVias, spotsFor,
+  MARGIN_HEIGHTS, MIN_MARGIN_MM, MIN_RECORD_S, netEnds, OPEN_END_LOAD_OHM, pairOf, planCoupon, PORT_HALF_WIDTH_MM,
+  PRESETS, smallPartParams, hasVias, spotsFor, thinDielectricUm,
 } from './smallPart'
 
 function doc(over: Partial<BoardDoc> = {}): BoardDoc {
@@ -60,6 +60,7 @@ describe('constants', () => {
     expect(MIN_RECORD_S).toBe(c.min_record_s)
     expect(END_CRITERIA_DB).toBe(c.end_criteria_db)
     expect([BANDS[0].lo, BANDS[0].hi]).toEqual(c.band_hz)
+    expect(OPEN_END_LOAD_OHM).toBe(c.open_end_load_ohm)
   })
 })
 
@@ -82,6 +83,13 @@ describe('the coupon', () => {
     expect(planCoupon(doc(), null, null, ['GND']).error).toMatch(/ground/)
     const far = doc({ pads: [...doc().pads, { ref: 'J9', number: '1', net: 'CLK', x: 90, y: 20, type: 'smd', drill_mm: 0, layers: ['F.Cu'] }] })
     expect(planCoupon(far, null, null, ['CLK']).error).toMatch(/stop at 60 mm/)
+  })
+
+  it('says a one-pad net gets a load at its far end, which the worker places', () => {
+    const one = doc({ pads: [...doc().pads, { ref: 'J1', number: '1', net: 'USB_D+', x: 40, y: 10, type: 'smd', drill_mm: 0, layers: ['F.Cu'] }] })
+    const plan = planCoupon(one, null, null, ['USB_D+'])
+    expect(plan.ports.map((p) => p.padRef)).toEqual(['J1.1'])
+    expect(plan.notes).toEqual(['USB_D+ has one pad, so its far end gets a 50 Ω load.'])
   })
 
   it('finds a pair by its name', () => {
@@ -110,6 +118,14 @@ describe('the estimate', () => {
     expect(p.frequencies_hz).toEqual([300e6])
     expect(p.coupon).toEqual({ nets: ['CLK'] })
     expect(p.ports[0]).toMatchObject({ pad: 'U1.1', excited: true, net: 'CLK' })
+  })
+
+  it('knows when a net sits on a one-cell dielectric, for the coarse-mesh note', () => {
+    expect(thinDielectricUm(doc(), ['CLK'], 100)).toBe(0)
+    const thin = doc()
+    thin.stackup[1] = { ...thin.stackup[1], thickness_mm: 0.0764 }
+    expect(thinDielectricUm(thin, ['CLK'], 100)).toBeCloseTo(76.4)
+    expect(thinDielectricUm(thin, ['CLK'], 50)).toBe(0)
   })
 
   it('knows when a part has vias, for the coarse-mesh note', () => {
