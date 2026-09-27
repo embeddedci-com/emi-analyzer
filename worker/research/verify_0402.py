@@ -59,6 +59,9 @@ from emi_worker.openems.model import (  # noqa: E402
     Port, SolveParams, build_model, excitation_seconds,
 )
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from verify_lumped_rlc import tail_time_constant  # noqa: E402
+
 OUT = Path(os.environ.get("OUT", "/spike/spike_out")) / f"cap_0402_{os.environ.get('VALUE', '100p')}"
 THREADS = int(os.environ.get("THREADS", "3"))
 PRESET = {"coarse": (150, 150, 100), "normal": (75, 75, 50),
@@ -170,28 +173,6 @@ def solve(name: str, doc, built) -> tuple[np.ndarray, run.RunResult]:
 
 #: What ``tail_time_constant`` measured on each run, for the report.
 tails: dict[str, dict] = {}
-
-
-def tail_time_constant(u, i) -> dict:
-    """The decay of the port voltage over the second half of the record, fitted as one
-    exponential, and the ratio of voltage to current there.
-
-    A charged capacitor drains through the port's 50 ohm, so its tail is exp(-t / tau) with
-    tau = (50 + ESR) C and V/I = -50 (the port resistor's own law). Anything else in the tail,
-    ringing or a level that does not fall, shows as a poor fit or a tau far from that.
-    """
-    t, v = np.asarray(u.time_s), np.asarray(u.values)
-    cur = np.asarray(i.values)
-    half = t >= t[-1] / 2
-    tt, vv = t[half], v[half]
-    if len(tt) < 4 or np.any(vv == 0) or np.any(np.sign(vv) != np.sign(vv[0])):
-        return {"tau_s": None, "note": "the tail changes sign: ringing, not a single decay"}
-    slope, _ = np.polyfit(tt, np.log(np.abs(vv)), 1)
-    n = min(len(v), len(cur))
-    ratio = float(np.median(v[:n][half[:n]] / cur[:n][half[:n]]))
-    return {"tau_s": float(-1 / slope) if slope < 0 else None,
-            "v_end": float(v[-1]), "v_over_i": ratio,
-            "v_peak": float(np.max(np.abs(v)))}
 
 
 def crossing(f: np.ndarray, x: np.ndarray) -> float | None:
