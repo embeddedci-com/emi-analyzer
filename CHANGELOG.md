@@ -102,6 +102,11 @@ The KiCad plugin is versioned and released separately; see
   series R-L-C within 0.01 % on resonance, with a -70 dB record; the solve's own -40 dB is still
   too short for them, so the option stays experimental
   ([docs/verification/solver-and-components.md](docs/verification/solver-and-components.md) §4).
+- Small-part port impedance and S-parameters no longer depend on exactly when the run stopped.
+  The ports ring faintly when it stops, and cutting that off moved a via's 100 MHz inductance
+  by tens of percent, so the same solve read +1.8 % on one machine and +10.5 % on another. The
+  last nanosecond of the record is now tapered before it is transformed
+  ([docs/verification/small-part-solve.md](docs/verification/small-part-solve.md) check 4).
 - Ground and power nets are recognized by whole words: `+3.3V` and `+24V` were signals, and
   `+10V` and `VBUS_20V` were grounds, which produced false return-via findings.
 - The divergence check refused every long solve; mesh grading is now enforced.

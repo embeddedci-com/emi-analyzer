@@ -108,7 +108,7 @@ named here by letter only.
 | 1b | A narrow microstrip, 0.1 mm on 76 um (board B's) | within 5 % | normal -1.8 % and fine +2.0 % ✅; coarse -10.3 %, so a coarse part on one cell of dielectric says so |
 | 2 | Same microstrip, matched S21 | within 0.5 dB to 1 GHz | ✅ 0.06 dB on all three presets |
 | 3 | 50 ohm stripline, Z0 and delay | within 5 % of Cohn | ✅ Z0 within 3.1 % (coarse), 0.44 % (normal, fine); delay +1.1 to +1.2 % |
-| 4 | Via inductance, parallel-plate | within 10 % of two posts at normal | ✅ normal worst +7.2 %; coarse worst +9.0 % |
+| 4 | Via inductance, parallel-plate | within 10 % of two posts at normal | ✅ normal worst +4.6 %; coarse worst +9.1 % |
 | 5 | Synthetic coupon, 3 margins and 2 presets | hotspot, level 1 dB, \|Z\| 5 %, S21 0.5 dB | ✅ |
 | 6 | Real coupons B, C and D, 3 margins and 2 presets | the same | ✅ all three |
 | 7 | Slow tests (`EMI_SLOW_TESTS=1`) | pass in the image | ✅ 1127 passed, 10 skipped |
@@ -167,9 +167,9 @@ the drill.
 
 | Via drill, spacing | Closed form | Coarse | Normal |
 |---|---|---|---|
-| 0.3 mm, 1.0 mm | 0.925 nH | +7.3 to +9.0 % | +2.2 to +7.2 % |
-| 0.3 mm, 2.0 mm | 1.362 nH | +0.2 to +8.0 % | -2.7 to +5.6 % |
-| 0.8 mm, 2.0 mm | 1.052 nH | -3.1 to +2.5 % | -3.4 to +0.9 % |
+| 0.3 mm, 1.0 mm | 0.925 nH | +5.9 to +9.1 % | +1.9 to +4.5 % |
+| 0.3 mm, 2.0 mm | 1.362 nH | +4.3 to +7.8 % | +1.6 to +4.6 % |
+| 0.8 mm, 2.0 mm | 1.052 nH | -1.0 to +1.0 % | -1.0 to +1.0 % |
 
 The criterion is at normal; coarse may exceed it with the note shown. Coarse now stays within
 10 % too, but only just, and it read +10.1 % at one point in the second pass. So a part that runs
@@ -180,6 +180,17 @@ starts a part on normal whenever normal fits the budget.
 The first normal run of the 0.8 mm via read +27 % at 100 MHz: it stopped in a trough of its
 energy (above). With the end criterion fixed, the three normal runs were made again; the numbers
 above are those.
+
+The slow test's normal 0.3 mm via at 2.0 mm then failed on the amd64 CI runner, +10.5 % at 100
+MHz, where arm64 read +1.8 %. The run stops with the port still ringing faintly, and where it
+stops is set by openEMS's progress reports, which are paced by wall clock. Cutting the ring
+off at any report after 11 ns read the 100 MHz inductance anywhere from -28 % to +22 %, on
+either architecture. Both converge to the same value, +1.6 % on amd64 and +1.7 % on arm64,
+when run on to -74 dB (arm64) and -83 dB (amd64). The port's record now has its last
+nanosecond tapered before it is transformed (`openems/network.py`, `TAIL_TAPER_S`); the via
+check reads the port the same way. Tapered, any of those stops reads -2 % to +5 %, and the
+slow test reads +1.5 to +4.4 % on amd64 (emulated) and +1.6 to +4.6 % on arm64. The table
+above was read that way, on arm64.
 
 ### 5-6. Convergence (`sp_convergence.py`)
 
