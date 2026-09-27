@@ -10,8 +10,11 @@ do. Every number here is asserted by `worker/tests/test_decoupling_view.py` or
 
 Per supply rail and per IC on it (parts named U or IC, nets that classify as power):
 
-- **Each capacitor is a series R-L-C.** C, ESR and ESL come from the component library
-  (`components/library/mlcc.json`, generic figures, labeled so). A part the library cannot
+- **Each capacitor is a series R-L-C.** C, ESR and ESL come from the component library: a
+  named part when the footprint's MPN or LCSC field names one (59 JLCPCB Basic MLCCs, fitted
+  to the manufacturer's model, shown as "datasheet (...)"), otherwise generic figures
+  (`components/library/mlcc.json`, shown as "generic 0402"). See
+  [component-library.md](../component-library.md). A part the library cannot
   resolve gets its value from its Value field (100 nF when that does not parse), an ESL of
   0.5 nH and the family's ESR for its value, and is shown as assumed.
 - **The layout adds a connection loop** in series with the part. The loop runs from the IC's
