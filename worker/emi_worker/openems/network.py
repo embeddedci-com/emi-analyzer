@@ -22,6 +22,7 @@ import os
 import numpy as np
 
 from . import post
+from .run import END_HOLD_S
 
 FORMAT_VERSION = 1
 
@@ -38,6 +39,37 @@ PASSIVE_TOLERANCE = 0.05
 #: The noise floor for a transmission, dB. Below this an S-parameter is the residue of the
 #: transform, not coupling, and is reported as "below the floor" rather than as a number.
 FLOOR_DB = -80.0
+
+
+#: How much of the record's end is tapered to zero before it is transformed, s: the span the
+#: runner held below the end criterion before it stopped (``run.END_HOLD_S``). A run stops
+#: with its ports still ringing faintly, and cutting that ring off where it stands adds a step
+#: to the transform whose size depends on the phase it was cut at. At a via's lowest band
+#: frequency the port voltage is a small |Z| times the current, so the step is large beside
+#: it: a via between planes (check 4) read its 100 MHz inductance anywhere from -28 % to +22 %
+#: against the closed form, depending on which progress report after 11 ns the run stopped on.
+#: Reports are paced by wall clock, so the same solve stops elsewhere on another machine: +1.8 %
+#: on arm64, +10.5 % on the amd64 CI runner. Tapered over the held span it read -2 % to +5 %
+#: at any of those stops, on both. Everything tapered is already below the end criterion.
+TAIL_TAPER_S = END_HOLD_S
+
+
+def tapered(trace: post.ProbeTrace, taper_s: float = TAIL_TAPER_S) -> post.ProbeTrace:
+    """``trace`` with its last ``taper_s`` rolled off to zero by a half cosine."""
+    t = trace.time_s
+    if t.size < 2 or taper_s <= 0:
+        return trace
+    x = (t - (t[-1] - taper_s)) / taper_s
+    w = np.where(x > 0, 0.5 * (1.0 + np.cos(np.pi * np.clip(x, 0.0, 1.0))), 1.0)
+    return post.ProbeTrace(time_s=t, values=trace.values * w)
+
+
+def port_spectra(workdir: str, name: str, frequencies_hz) -> tuple[np.ndarray, np.ndarray]:
+    """A port's voltage and current at ``frequencies_hz``, from its tapered record."""
+    f = np.asarray(frequencies_hz, dtype=np.float64)
+    u = post.read_probe(os.path.join(workdir, f"{name}_ut"))
+    i = post.read_probe(os.path.join(workdir, f"{name}_it"))
+    return post._dft(tapered(u), f), post._dft(tapered(i), f)
 
 
 def log_grid(f_lo: float, f_hi: float, points: int = POINTS) -> list[float]:
@@ -71,12 +103,7 @@ def network(
     z0 = float(src.get("resistance", 50.0))
     f = np.asarray(frequencies_hz, dtype=np.float64)
 
-    def spectra(name: str):
-        u = post.read_probe(os.path.join(workdir, f"{name}_ut"))
-        i = post.read_probe(os.path.join(workdir, f"{name}_it"))
-        return post._dft(u, f), post._dft(i, f)
-
-    v1, i1 = spectra(src["name"])
+    v1, i1 = port_spectra(workdir, src["name"], f)
     a1 = (v1 + z0 * i1) / 2.0
     b1 = (v1 - z0 * i1) / 2.0
     with np.errstate(divide="ignore", invalid="ignore"):
@@ -94,7 +121,7 @@ def network(
     for p in ports:
         if p is src:
             continue
-        vk, ik = spectra(p["name"])
+        vk, ik = port_spectra(workdir, p["name"], f)
         zk = float(p.get("resistance", 50.0))
         bk = (vk - zk * ik) / 2.0
         with np.errstate(divide="ignore", invalid="ignore"):
