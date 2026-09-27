@@ -46,6 +46,16 @@ VALID = [
                "esl_h_by_package": {"0402": 4.5e-10, "0603": 6.5e-10},
                "esr_ohm_by_c": [[1.0e-9, 0.25], [1.0e-7, 0.055], [1.0e-5, 0.013]]},
         sources=[{"doc": "typical for the package and value class", "what": "ESL and ESR"}])),
+    ("vendor-named-part", base(
+        id="samsung-cl05b104ko5nnnc", name="Samsung CL05B104KO5NNNC", manufacturer="Samsung",
+        match={"value": "100n", "package": "0402", "mpn": "CL05B104KO5NNNC",
+               "mpn_aliases": ["CL05B104KO5NNN"], "lcsc": "C1525"},
+        model={"type": "series_rlc", "c_f": 7.67e-8, "esl_h": 3.08e-10, "esr_ohm": 0.0234},
+        dc_bias=[{"v": 5.0, "c_f": 7.16e-8}, {"v": 3.3, "c_f": 7.45e-8}],
+        reference={"notch_hz": 3.28e7, "z_ohm": [[1.64e7, 0.08], [3.28e7, 0.0234]]},
+        sources=[{"doc": "vendor SPICE model", "rev": "5.0", "url": "https://example.com/m",
+                  "what": "C, ESL and ESR"},
+                 {"doc": "vendor SPICE model at bias", "rev": "5.0", "what": "DC bias"}])),
 ]
 
 INVALID = [
@@ -63,6 +73,12 @@ INVALID = [
      "does not resolve yet"),
     ("unknown-model-type", base(model={"type": "vibes"}), "unknown model type"),
     ("backwards-valid-hz", base(valid_hz=[3e9, 1e5]), "increasing"),
+    ("numeric-lcsc", base(match={"value": "100n", "package": "0402", "lcsc": 1525}),
+     "match.lcsc"),
+    ("alias-not-a-list", base(match={"mpn": "X", "mpn_aliases": "Y"}), "mpn_aliases"),
+    ("uncited-dc-bias", base(dc_bias=[{"v": 3.3, "c_f": 9e-8}]), "DC bias"),
+    ("negative-dc-bias", base(dc_bias=[{"v": -1, "c_f": 9e-8}]), "dc_bias"),
+    ("reference-without-points", base(reference={"notch_hz": 3e7}), "reference"),
 ]
 
 #: Frequencies the impedance is sampled at, spanning both sides of a 100 nF 0402's SRF.
@@ -79,6 +95,8 @@ def main() -> int:
                 "id": c.id, "provenance": c.provenance, "generic": c.is_generic,
                 "model_type": c.model_type,
                 "describe_provenance": c.describe_provenance(),
+                "manufacturer": c.manufacturer,
+                "dc_bias": [list(p) for p in c.dc_bias],
             },
         }
         if c.model_type == "series_rlc":

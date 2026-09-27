@@ -31,6 +31,8 @@ interface ValidCase {
     generic: boolean
     model_type: string
     describe_provenance: string
+    manufacturer: string
+    dc_bias: [number, number][]
     self_resonance_hz?: number | null
     complete?: boolean
     impedance?: { frequency_hz: number; real: number; imag: number }[]
@@ -53,6 +55,8 @@ describe('shared fixtures', () => {
     expect(isGeneric(got)).toBe(c.expected.generic)
     expect(got.modelType).toBe(c.expected.model_type)
     expect(describeProvenance(got)).toBe(c.expected.describe_provenance)
+    expect(got.manufacturer).toBe(c.expected.manufacturer)
+    expect(got.dcBias).toEqual(c.expected.dc_bias)
 
     if (c.expected.model_type === 'series_rlc') {
       const rlc = seriesRLC(got)

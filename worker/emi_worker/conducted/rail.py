@@ -250,11 +250,11 @@ def _series_element(ref: str, pad, kind: str) -> tuple[Series, str | None]:
 
 
 def _shunt(ref: str, pad, gnd_pad, mount_h: float) -> tuple[Shunt, str | None]:
-    part = match_part(ref, pad.value, pad.footprint)
+    part = match_part(ref, pad.value, pad.footprint, getattr(pad, "part_numbers", None))
     got = resolve_part(part)
     if got is not None and got.placeable:
         rlc = got.rlc
-        model = "library, generic for the package" if got.generic else f"library: {got.component_name}"
+        model = "library, generic for the package" if got.generic else f"library: {got.basis}"
         return Shunt(node="", ref=ref, value=pad.value, c_f=rlc.c_f, esr_ohm=rlc.esr_ohm,
                      esl_h=rlc.esl_h, mount_h=mount_h, model=model), None
     farads = cap_farads(pad.value)

@@ -21,6 +21,10 @@
      "esr_ohm": 0.06,
      "source": "library",
      "model": "100 nF 0402 (generic)",
+     "basis": "generic 0402",
+     "matched_by": "value and package",
+     "matched_on": "",
+     "notes": [],
      "assumed": [],
      "x": 11.5,
      "y": 30.0
@@ -33,6 +37,10 @@
      "esr_ohm": 0.12,
      "source": "library",
      "model": "10 nF 0402 (generic)",
+     "basis": "generic 0402",
+     "matched_by": "value and package",
+     "matched_on": "",
+     "notes": [],
      "assumed": [],
      "x": 18,
      "y": 30.0
@@ -45,6 +53,10 @@
      "esr_ohm": 0.015,
      "source": "library",
      "model": "10 µF 0805 (generic)",
+     "basis": "generic 0805",
+     "matched_by": "value and package",
+     "matched_on": "",
+     "notes": [],
      "assumed": [],
      "x": 25,
      "y": 20.0

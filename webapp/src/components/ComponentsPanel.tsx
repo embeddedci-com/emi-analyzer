@@ -161,6 +161,11 @@ export function ComponentsPanel({ api, signedIn, deployment = 'hosted', frequenc
             Models for parts that would otherwise be bare copper. A component spans every
             board, not just this one.
           </Text>
+          <Text size="xs" c="dimmed">
+            Built in: JLCPCB Basic MLCCs from Samsung and Murata, matched by the MPN or LCSC
+            field on the footprint and shown as "datasheet". Other capacitors get a generic
+            model for their package.
+          </Text>
         </Stack>
         {!adding && (
           <Button size="xs" variant="light" onClick={() => setAdding(true)}>

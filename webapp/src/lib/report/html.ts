@@ -359,7 +359,7 @@ ${ic.recommendations.length ? `<h4>What would help</h4><ol>${ic.recommendations.
     ].filter(Boolean).join(', '))}</span></li>`).join('')}</ol>` : ''}
 ${ic.caps.length ? `<table><thead><tr><th>Part</th><th>Value</th><th class="num">To pin</th><th class="num">Loop</th><th class="num">Useful to</th><th>Model</th></tr></thead><tbody>${
     ic.caps.map((c) => `<tr><td>${esc(c.ref)}</td><td>${esc(c.cF > 0 ? fmtFarads(c.cF) : c.value)}${c.package ? ` ${esc(c.package)}` : ''}</td><td class="num">${esc(fmt(c.distanceMm, 1, 'mm'))}</td><td class="num">${esc(fmt(c.loopNh, 1, 'nH'))}</td><td class="num">${esc(decFmtHz(c.usefulToHz))}</td><td>${
-      c.model === 'assumed' ? `<span class="assumed">assumed${c.assumed.length ? `: ${esc(c.assumed.join(', '))}` : ''}</span>` : 'library'}</td></tr>`).join('')
+      c.model === 'assumed' ? `<span class="assumed">assumed${c.assumed.length ? `: ${esc(c.assumed.join(', '))}` : ''}</span>` : esc(c.basis || 'library')}</td></tr>`).join('')
   }</tbody></table>` : '<p class="note-off">No capacitor is on this supply.</p>'}
 ${ic.assumed.length ? `<p class="muted">Assumed from the layout: ${esc(ic.assumed.join(', '))}.</p>` : ''}
 </div>`

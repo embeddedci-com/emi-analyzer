@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   applyChange, branchesOf, curve, fmtRange, frequencies, gapsOf, networkMag, noiseMarks,
+  partModelLabel,
   rankRecommendations, targetOhm, worstOf, type DecBranch, type DecouplingDoc,
 } from './decoupling'
 import fixture from './decouplingFixture.json'
@@ -109,5 +110,29 @@ describe('target and labels', () => {
   it('writes ranges plainly', () => {
     expect(fmtRange([30e6, 60e6])).toBe('30 to 60 MHz')
     expect(fmtRange([500e3, 2e6])).toBe('500 kHz to 2 MHz')
+  })
+})
+
+describe('the model column', () => {
+  it('says where a library part came from, from the worker', () => {
+    expect(partModelLabel(rail.parts.C1).text).toBe('generic 0402')
+  })
+
+  it('names a datasheet part and puts how it matched in the tooltip', () => {
+    const got = partModelLabel({
+      ...rail.parts.C1, basis: 'datasheet (Samsung CL05B104KO5NNNC)',
+      matched_by: 'part number', matched_on: 'LCSC C1525', model: 'Samsung CL05B104KO5NNNC',
+    })
+    expect(got.text).toBe('datasheet (Samsung CL05B104KO5NNNC)')
+    expect(got.title).toContain('Matched on LCSC C1525')
+  })
+
+  it('falls back to "library" for a result from before the label existed', () => {
+    expect(partModelLabel({ ...rail.parts.C1, basis: undefined }).text).toBe('library')
+  })
+
+  it('says what was assumed', () => {
+    const got = partModelLabel({ ...rail.parts.C1, source: 'assumed', assumed: ['ESL', 'ESR'] })
+    expect(got).toEqual({ text: 'assumed', title: 'Assumed: ESL, ESR' })
   })
 })

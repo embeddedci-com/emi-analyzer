@@ -11,6 +11,14 @@ The KiCad plugin is versioned and released separately; see
 
 ### Added
 
+- Named capacitors: the 59 MLCCs on JLCPCB's Basic Parts list that have a manufacturer model
+  (58 Samsung, 1 Murata), each fitted to that model and cited. A capacitor whose footprint
+  carries an MPN or LCSC field (`MPN`, `LCSC`, `JLCPCB Part #` and similar) now gets that
+  part, even on a custom footprint; others keep the generic model. The decoupling table, the
+  modelled-parts list and the report say "datasheet (Samsung CL05B104KO5NNNC)" or
+  "generic 0402 X7R". FH and Yageo parts are not included: their makers publish no model
+  ([docs/component-library.md](docs/component-library.md)).
+
 - Small-part solves are on by default, on the Part solve tab: one net (or a pair) cut out over
   its planes and solved in openEMS in minutes, with its current map, loudest spots, port
   impedance and S-parameters. Lines and vias match their closed forms and three real boards

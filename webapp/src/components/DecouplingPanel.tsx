@@ -13,7 +13,7 @@ import {
 } from '@mantine/core'
 import {
   branchesOf, curve, fmtFarads, fmtHz, fmtRange, frequencies, gapsOf, noiseMarks,
-  applyChange, rankRecommendations, targetOhm,
+  applyChange, partModelLabel, rankRecommendations, targetOhm,
   type DecIC, type DecouplingDoc, type DecRail,
 } from '../lib/decoupling'
 import { DecouplingChart } from './DecouplingChart'
@@ -257,6 +257,7 @@ function IcDetail({ doc, rail, ic, cap, whatIf, onCap, onWhatIf }: {
           <Table.Tbody>
             {ic.caps.map((c) => {
               const p = rail.parts[c.ref]
+              const label = partModelLabel(p)
               return (
                 <Table.Tr key={c.ref} onClick={() => onCap(cap === c.ref ? null : c.ref)}
                           style={{ cursor: 'pointer' }}
@@ -270,8 +271,8 @@ function IcDetail({ doc, rail, ic, cap, whatIf, onCap, onWhatIf }: {
                   </Table.Td>
                   <Table.Td ta="right">{fmtHz(c.useful_up_to_hz)}</Table.Td>
                   <Table.Td c={p?.source === 'assumed' ? 'orange.8' : undefined}
-                            title={p?.source === 'assumed' ? `Assumed: ${p.assumed.join(', ')}` : p?.model}>
-                    {p?.source === 'assumed' ? 'assumed' : 'library'}
+                            title={label.title}>
+                    {label.text}
                   </Table.Td>
                 </Table.Tr>
               )

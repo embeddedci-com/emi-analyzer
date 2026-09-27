@@ -44,6 +44,8 @@ export interface Source {
   doc: string
   rev?: string
   what?: string
+  /** Where the document can be fetched again. */
+  url?: string
 }
 
 export interface SeriesRLC {
@@ -70,6 +72,12 @@ export interface Component {
   validHz: [number, number] | null
   eslIncludesMount: boolean
   provenance: Provenance
+  /** Who makes the part, for a named one. */
+  manufacturer: string
+  /** [volts, farads]: the manufacturer's capacitance under DC bias. Recorded, not applied. */
+  dcBias: [number, number][]
+  /** |Z| of the model the numbers were fitted to: notch and [hertz, ohms] points. */
+  reference: { notchHz: number; zOhm: [number, number][] } | null
 }
 
 export function describeSource(s: Source): string {
@@ -237,19 +245,66 @@ export function parseComponent(doc: unknown): Component {
     .filter((s): s is Record<string, unknown> => typeof s === 'object' && s !== null)
     .map((s) => ({
       doc: String(s.doc ?? ''), rev: String(s.rev ?? ''), what: String(s.what ?? ''),
+      url: String(s.url ?? ''),
     }))
+
+  const match = d.match ?? {}
+  if (typeof match !== 'object' || Array.isArray(match)) {
+    throw new ComponentError('match must be an object')
+  }
+  const m = match as Record<string, unknown>
+  for (const key of ['mpn', 'lcsc'] as const) {
+    const v = m[key]
+    if (v !== null && v !== undefined && (typeof v !== 'string' || v.trim() === '')) {
+      throw new ComponentError(`match.${key} must be a part number or null`)
+    }
+  }
+  const aliases = m.mpn_aliases
+  if (aliases !== null && aliases !== undefined &&
+      (!Array.isArray(aliases) || !aliases.every((a) => typeof a === 'string' && a.trim() !== ''))) {
+    throw new ComponentError('match.mpn_aliases must be a list of part numbers')
+  }
+
+  const manufacturer = d.manufacturer ?? ''
+  if (typeof manufacturer !== 'string') throw new ComponentError('manufacturer must be a name')
+
+  const positive = (v: unknown): v is number => num(v) && v > 0
+  const dcBias: [number, number][] = []
+  for (const point of (d.dc_bias ?? []) as unknown[]) {
+    const p = point as Record<string, unknown> | null
+    if (typeof p !== 'object' || p === null || !positive(p.v) || !positive(p.c_f)) {
+      throw new ComponentError('each dc_bias point needs a positive v (volts) and c_f (farads)')
+    }
+    dcBias.push([p.v, p.c_f])
+  }
+  dcBias.sort((a, b) => a[0] - b[0])
+
+  let reference: Component['reference'] = null
+  if (d.reference !== undefined && d.reference !== null) {
+    const r = d.reference as Record<string, unknown>
+    const pts = typeof r === 'object' ? r.z_ohm : undefined
+    if (typeof r !== 'object' || !positive(r.notch_hz) || !Array.isArray(pts) ||
+        !pts.every((pt) => Array.isArray(pt) && pt.length === 2 && pt.every(positive))) {
+      throw new ComponentError(
+        'reference must give a positive notch_hz and z_ohm as [hertz, ohms] pairs')
+    }
+    reference = { notchHz: r.notch_hz, zOhm: pts.map((pt) => [pt[0], pt[1]] as [number, number]) }
+  }
 
   const c: Component = {
     id: (d.id as string).trim(),
     kind: d.kind as Kind,
     name: (d.name as string).trim(),
-    match: (d.match ?? {}) as Record<string, unknown>,
+    match: m,
     modelType,
     model: model as Record<string, unknown>,
     sources,
     validHz,
     eslIncludesMount: Boolean(d.esl_includes_mount),
     provenance: provenance as Provenance,
+    manufacturer: manufacturer.trim(),
+    dcBias,
+    reference,
   }
 
   if (modelType === 'series_rlc') {
@@ -273,6 +328,11 @@ export function parseComponent(doc: unknown): Component {
         `${c.id} gives per-package ESL values but says nothing about where they came from`,
       )
     }
+  }
+  if (dcBias.length > 0 && cites(c, 'DC bias') === null) {
+    throw new ComponentError(
+      `${c.id} gives capacitance under DC bias but says nothing about where it came from`,
+    )
   }
   if (provenance === 'vendor' && sources.length === 0) {
     throw new ComponentError(`${c.id} claims to come from a vendor datasheet but cites none`)

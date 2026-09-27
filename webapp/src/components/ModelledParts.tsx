@@ -70,7 +70,10 @@ export function ModelledParts({ parts }: { parts?: ModelledPart[] }) {
                 <Table.Td ff="monospace">{fmtHz(p.self_resonance_hz)}</Table.Td>
                 <Table.Td>
                   <Group gap={6} wrap="nowrap">
-                    <Text size="xs" truncate>{p.component}</Text>
+                    <Text size="xs" truncate
+                          title={p.matched_on ? `Matched on ${p.matched_on}` : undefined}>
+                      {p.basis || p.component}
+                    </Text>
                     {p.generic ? (
                       <Tooltip
                         label="Typical for this package and value — not a measurement of this part"

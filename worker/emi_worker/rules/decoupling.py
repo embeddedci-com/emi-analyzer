@@ -89,6 +89,7 @@ def _resolve_cap(pad) -> "object | None":
         getattr(pad, "ref", "") or "",
         getattr(pad, "value", "") or "",
         getattr(pad, "footprint", "") or "",
+        getattr(pad, "part_numbers", None),
     ))
 
 
@@ -179,7 +180,8 @@ def check_decoupling(ctx: RuleContext) -> Iterator[Finding]:
                     provenance = (
                         "a generic figure for the package, not a specific part"
                         if model.generic
-                        else (model.source.describe() if model.source else "from its model")
+                        else (model.basis or (model.source.describe() if model.source
+                                              else "from its model"))
                     )
                     srf_note = (
                         f" On its own this part self-resonates at {_fmt_mhz(srf / 1e6)} "

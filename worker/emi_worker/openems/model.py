@@ -289,7 +289,8 @@ def _plan_components(model: BoardModel, transform, params: "SolveParams", notes:
         if not CAP_RE.match(ref) or len(pads) != 2:
             continue
         got = resolve_part(
-            match_part(ref, pads[0].value or "", pads[0].footprint or ""),
+            match_part(ref, pads[0].value or "", pads[0].footprint or "",
+                       getattr(pads[0], "part_numbers", None)),
             params.component_candidates or None,
         )
         if got is None:

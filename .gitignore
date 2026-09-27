@@ -25,6 +25,8 @@ worker/tests/fixtures/*.kicad_pcb
 !worker/tests/fixtures/buck.kicad_pcb
 # Hand-written: a 12 V input feeding a two-buck PMIC, a boost and a buck module.
 !worker/tests/fixtures/regulators.kicad_pcb
+# Hand-written: capacitors carrying MPN and LCSC fields, for matching by part number.
+!worker/tests/fixtures/part_numbers.kicad_pcb
 
 # The gerber fixture is generated from tiny.kicad_pcb and IS committed, so the test suite
 # runs without KiCad installed. Regenerate with worker/scripts/make_gerber_fixture.py.

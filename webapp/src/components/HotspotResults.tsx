@@ -29,6 +29,11 @@ export interface ModelledPart {
   component_id: string
   component: string
   generic: boolean
+  /** "datasheet (Samsung CL05B104KO5NNNC)" or "generic 0402". Absent on older results. */
+  basis?: string
+  /** "part number", "value and package" or "package". */
+  matched_by?: string
+  matched_on?: string
   source: string | null
   c_f: number
   esl_h: number | null
