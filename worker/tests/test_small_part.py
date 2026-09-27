@@ -15,7 +15,7 @@ import pytest
 
 from emi_worker.kicad import parse, parse_board
 from emi_worker.kicad.normalize import board_extent
-from emi_worker.openems import coupon, hotspots, network
+from emi_worker.openems import coupon, hotspots, network, post
 from emi_worker.openems.model import Port, SolveParams
 from emi_worker.stages import StageError, small_part
 
@@ -137,6 +137,30 @@ def test_a_negative_resistance_is_dropped_as_truncated(tmp_path):
                           network.log_grid(100e6, 1e9, 10))
     assert len(doc["truncated_hz"]) == 10
     assert doc["z_in_real"] == [None] * 10 and not any(doc["usable"])
+
+
+def test_a_ringing_tail_does_not_move_a_small_impedance_with_where_the_run_stopped():
+    # A 1.4 nH port driven by a pulse, with a 1.5 GHz ring leaving through its 50 ohm source
+    # (V = -50 I), decaying to about -50 dB by the time the run could stop. Cut raw, 100 MHz
+    # reads a different L at every stop; tapered (network.port_spectra), the same one.
+    t = np.arange(8000) * DT
+    i = np.exp(-(((t - 1e-9) / 0.2e-9) ** 2)) / 50.0
+    v = 1.4e-9 * np.gradient(i, DT)
+    ring = np.where(t > 2e-9, 0.3 * np.max(np.abs(v)) * np.exp(-(t - 2e-9) / 1.3e-9)
+                    * np.sin(2 * np.pi * 1.5e9 * (t - 2e-9)), 0.0)
+    v, i = v + ring, i - ring / 50.0
+    f = np.array([100e6])
+
+    def x_at(n: int, taper_s: float) -> float:
+        vs, is_ = (post._dft(network.tapered(post.ProbeTrace(t[:n], x[:n]), taper_s), f)
+                   for x in (v, i))
+        return float((vs / is_).imag[0])
+
+    full = x_at(t.size, 0.0)
+    raw = [x_at(n, 0.0) / full - 1 for n in range(1600, 2400, 7)]
+    tapered = [x_at(n, network.TAIL_TAPER_S) / full - 1 for n in range(1600, 2400, 7)]
+    assert max(raw) - min(raw) > 0.01
+    assert max(np.abs(tapered)) < 0.001
 
 
 def test_an_unconverged_run_publishes_no_number(tmp_path):

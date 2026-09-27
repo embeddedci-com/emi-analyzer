@@ -44,7 +44,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import sp_harness as h  # noqa: E402
 from emi_worker.kicad import parse, parse_board  # noqa: E402
-from emi_worker.openems import post  # noqa: E402
+from emi_worker.openems import network  # noqa: E402
 from emi_worker.openems.coupon import PORT_HALF_WIDTH_MM  # noqa: E402
 from emi_worker.openems.model import _layer_z  # noqa: E402
 
@@ -101,8 +101,9 @@ def main() -> int:
             h_mm = lz["F.Cu"] - lz["B.Cu"]
             params, c = h.coupon_params(text, ["PORT"], preset=preset)
             got = h.solve(text, params, f"via-{d}-{s}-{preset}")
-            src = post.source_spectrum(str(got.workdir), "p1", 50.0, READ_HZ.tolist())
-            z = src["z_in"]
+            # The product's own reading of the port (``network.json``), tapered tail and all.
+            v, i = network.port_spectra(str(got.workdir), "p1", READ_HZ)
+            z = v / i
             l_meas = z.imag / (2 * np.pi * READ_HZ)
             r1 = SQUARE_TO_ROUND * 2 * PORT_HALF_WIDTH_MM
             r2 = SQUARE_TO_ROUND * d
