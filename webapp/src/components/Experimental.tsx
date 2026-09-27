@@ -77,13 +77,9 @@ export const EXPERIMENTAL = {
     + 'simulated time whatever the board is.',
 
   cableEmissions:
-    'The composition behind this — open-circuit voltage at the connector divided by the ' +
-    'cable\'s antenna impedance — has been checked against a fully coupled simulation on a ' +
-    'synthetic board, where it agreed to 1.2 dB typical and 2.2 dB worst. It has not yet been ' +
-    'checked that way on a real board: those runs need the record length the 30 MHz floor ' +
-    'implies, and none has been measured. Treat the level as indicative and ' +
-    'the ranking between layouts as the useful part. The uncertainty budget carries a ' +
-    'deliberately conservative 4.5 dB for this term until real-board residuals replace it.',
+    'Checked on one real board against a fully coupled simulation: from 80 MHz up it reads '
+    + 'about 4 dB low (worst 7 dB), and 8 to 20 dB low below 80 MHz. Use it to compare '
+    + 'layouts, not as a level. Not compared with a measurement.',
 
   conducted:
     'Differential mode only. The LISN, a buck\'s input ripple and an LC filter match closed '
