@@ -126,6 +126,10 @@ def params() -> SolveParams:
         dx_um=dx, dy_um=dy, dz_um=dz, air_mm=3.0,
         model_components=True, solver_series_rlc=True,
         end_criteria=float(os.environ.get("END_CRITERIA", "1e-4")),
+        # 0 is the solve's own cap, three periods of the lowest frequency. The part's charge
+        # drains through the port far slower than that (tail_time_constant), so a tight end
+        # criterion needs a higher one.
+        max_timesteps=int(os.environ.get("MAX_TIMESTEPS", "0")),
     )
 
 
@@ -160,7 +164,34 @@ def solve(name: str, doc, built) -> tuple[np.ndarray, run.RunResult]:
     u = post.read_probe(str(work / "p1_ut"))
     i = post.read_probe(str(work / "p1_it"))
     f = np.asarray(FREQS)
+    tails[name] = tail_time_constant(u, i)
     return post._dft(u, f) / post._dft(i, f), res
+
+
+#: What ``tail_time_constant`` measured on each run, for the report.
+tails: dict[str, dict] = {}
+
+
+def tail_time_constant(u, i) -> dict:
+    """The decay of the port voltage over the second half of the record, fitted as one
+    exponential, and the ratio of voltage to current there.
+
+    A charged capacitor drains through the port's 50 ohm, so its tail is exp(-t / tau) with
+    tau = (50 + ESR) C and V/I = -50 (the port resistor's own law). Anything else in the tail,
+    ringing or a level that does not fall, shows as a poor fit or a tau far from that.
+    """
+    t, v = np.asarray(u.time_s), np.asarray(u.values)
+    cur = np.asarray(i.values)
+    half = t >= t[-1] / 2
+    tt, vv = t[half], v[half]
+    if len(tt) < 4 or np.any(vv == 0) or np.any(np.sign(vv) != np.sign(vv[0])):
+        return {"tau_s": None, "note": "the tail changes sign: ringing, not a single decay"}
+    slope, _ = np.polyfit(tt, np.log(np.abs(vv)), 1)
+    n = min(len(v), len(cur))
+    ratio = float(np.median(v[:n][half[:n]] / cur[:n][half[:n]]))
+    return {"tau_s": float(-1 / slope) if slope < 0 else None,
+            "v_end": float(v[-1]), "v_over_i": ratio,
+            "v_peak": float(np.max(np.abs(v)))}
 
 
 def crossing(f: np.ndarray, x: np.ndarray) -> float | None:
@@ -213,6 +244,13 @@ def main() -> int:
     print(f"mounted SRF: analytic {fmt(srf_mounted_expected)}, measured {fmt(srf_mounted)}")
     worst = float(np.max(np.abs(err_db[band]))) if band.any() else float("nan")
     print(f"worst |Z| error from SRF/3 to 3 x SRF: {worst:.2f} dB")
+    tau_rc = (50.0 + ESR_OHM) * C_F
+    for name, tail in tails.items():
+        tau = tail.get("tau_s")
+        print(f"{name} tail: " + (
+            f"tau {tau * 1e9:.2f} ns (50 ohm x C: {tau_rc * 1e9:.2f} ns), "
+            f"V/I {tail['v_over_i']:.1f} ohm, last sample {tail['v_end']:.2e} V "
+            f"of a {tail['v_peak']:.2e} V peak" if tau else tail.get("note", "no decay")))
 
     report = {
         "preset": PRESET, "cells": built.mesh.cells,
@@ -227,6 +265,7 @@ def main() -> int:
         "timesteps": [res_short.final_timestep, res_cap.final_timestep],
         "converged": [res_short.converged, res_cap.converged],
         "elapsed_s": [res_short.elapsed_s, res_cap.elapsed_s],
+        "tails": tails,
     }
     (OUT / "report.json").write_text(
         json.dumps(report, indent=2) + "\n")

@@ -201,6 +201,44 @@ and its impedance is within 1 dB of the series R-L-C except at resonance, where 
 1.4 dB, **provided the run goes to -70 dB**. It is not verified at the solve's -40 dB, not on
 the shipped solver, and not at 1 nF or above.
 
+### Rerun on the shipped image (in progress)
+
+September 26, the worker image built from `worker/` (prebuilt openEMS f73bf97, openEMS core
+65f8771; its build probe answers "series R-L-C: True"), three threads.
+
+- **Lumped R-L-C (§3), unchanged.** R 20 ohm 0.00-0.08 dB, C 10 pF -0.13 to -0.39 dB, L 10 nH
+  0.09-0.73 dB, series 1 ohm + 10 nH + 10 pF 0.07-0.52 dB (2.55 dB at 500 MHz, where \|Z\| is
+  1 ohm). The series 10 nH alone is still refused: its energy grows 4.4e3x after the source,
+  with a steady port current from 6 ns on. No model uses a series element without C.
+- **100 pF 0402 at -70 dB: fails, and not on the end criterion.** The mesh is now 94,116 cells
+  and L_mount 0.243 nH. The part run hit the solve's own cap (173,409 steps, 12.9 ns) at
+  -55.5 dB, so it is unusable; its transform put the part SRF at 622.9 MHz against 750.3
+  (-17 %) and \|Z\| up to 7.96 dB off. The earlier -70 dB part run took the same 173,409 steps,
+  so it may have ended on the cap too.
+- **Why it does not settle.** After the pulse the port voltage decays as one exponential with
+  V/I = -50.0 ohm: charge draining through the port. The fitted time constant is 7.35 ns, as if
+  C were 146 pF. It does not depend on C: the same part set to 200 pF decays with 7.35 ns too.
+  Across the same gap a plain C element (openEMS's core lumped C, no `LEtype`) decays with
+  4.92 ns, 97.7 pF, as 50 ohm x 100 pF should. The series element's tail moves with its
+  geometry instead: 4.68 ns with `Caps="0"`, and no decay at all (a fitted 14 us) when the
+  element is narrowed in y to 9.83-10.17 mm. Each figure is a 150,000-step run of the same
+  model with one change (`research/verify_0402.py` now fits and reports the tail).
+
+**So the open question is openEMS's series element at low frequency, not the record length.**
+Its ADE (`operator_ext_lumpedRLC.cpp`, `engine_ext_lumpedRLC.cpp`) splits R, L and C equally
+over the edges it spans; the core lumped C weights them by edge area over length. Which part of
+the series path holds the slow charge is not yet known.
+
+**Next.**
+
+1. Isolate the series element in `verify_lumped_rlc.py`'s loop: a planar, x-directed element on
+   a non-uniform mesh, with and without caps, C swept. Confirm a tail that does not scale with C.
+2. 100 pF 0402 at -70 dB with `MAX_TIMESTEPS` raised, once the element's tail is understood:
+   SRF within 5 %, \|Z\| within 1 dB to 3x SRF.
+3. 1 nF 0402: whether it settles, and why not (record length, end criterion, mesh).
+4. Whether component solves need a tighter end criterion within a bounded runtime.
+5. Then this section's verdict, `known-issues.md` (components row) and the CHANGELOG.
+
 ---
 
 ## 5. Record length on a real board
