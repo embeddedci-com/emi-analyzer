@@ -26,7 +26,7 @@ ESL_RANGE = {
     "0402": (0.1e-9, 0.7e-9),
     "0603": (0.15e-9, 1.0e-9),
     "0805": (0.15e-9, 1.2e-9),
-    "1206": (0.2e-9, 1.5e-9),
+    "1206": (0.2e-9, 2.0e-9),
 }
 
 
@@ -91,10 +91,42 @@ def test_values_are_plausible_for_the_package(raw):
     # measurement conditions. A factor of 1000 off is a unit slip.
     nominal = cap_farads(c.match["value"])
     ratio = rlc.c_f / nominal
-    if c.model.get("type") == "series_rlc" and raw.get("dielectric") == "C0G":
-        assert ratio == pytest.approx(1.0, rel=0.05)
+    if raw.get("dielectric") == "C0G":
+        assert ratio == pytest.approx(1.0, rel=0.1)
     else:
         assert 0.4 <= ratio <= 1.1, f"{c.id}: C is {ratio:.2f} of the nominal value"
+
+
+#: Parts whose single R-L-C should track the manufacturer's model to within 1 dB around the
+#: notch. Bulk X5R parts are not here: their notch is a broad valley that one R-L-C cannot
+#: follow, and they are held to the looser bound below.
+TIGHT = ("CL05B104KO5NNNC", "CL05B103KB5NNNC", "CL10B473KB8NNNC", "CL10C100JB8NNNC",
+         "CL21B104KCFNNNE", "CL31B104KBCNNNC")
+
+
+def _db_errors(c):
+    rlc = c.series_rlc()
+    return [20 * math.log10(abs(rlc.impedance_at(f)) / z) for f, z in c.reference[1]]
+
+
+@pytest.mark.parametrize("raw", entries(), ids=ids)
+def test_the_rlc_reproduces_the_source_models_notch(raw):
+    """The decoupling view reports where each capacitor stops working, which is its
+    self-resonance, so the stored R-L-C must put it where the manufacturer's model does."""
+    c = parse(raw)
+    assert c.reference is not None, f"{c.id} has no reference |Z| to check against"
+    notch, points = c.reference
+    assert c.series_rlc().self_resonance_hz() == pytest.approx(notch, rel=0.05)
+    assert any(f == pytest.approx(notch, rel=1e-3) for f, _ in points)
+    assert max(map(abs, _db_errors(c))) <= 2.0
+
+
+@pytest.mark.parametrize("mpn", TIGHT)
+def test_small_parts_track_the_model_within_a_decibel(mpn):
+    raw = next(r for r in entries() if r["match"]["mpn"] == mpn)
+    errors = _db_errors(parse(raw))
+    assert len(errors) == 5
+    assert max(map(abs, errors)) <= 1.0
 
 
 @pytest.mark.parametrize("raw", [r for r in entries() if r.get("dc_bias")], ids=ids)

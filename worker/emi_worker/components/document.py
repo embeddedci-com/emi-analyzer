@@ -149,6 +149,9 @@ class Component:
     #: (volts, farads): the manufacturer's capacitance under DC bias. Recorded as data; the
     #: series R-L-C above is the 0 V figure and the solve does not derate it yet.
     dc_bias: tuple[tuple[float, float], ...] = ()
+    #: |Z| of the model the numbers were fitted to, at and around its notch:
+    #: (notch hertz, ((hertz, ohms), ...)). Lets a test check the fit still holds.
+    reference: tuple[float, tuple[tuple[float, float], ...]] | None = None
 
     @property
     def is_generic(self) -> bool:
@@ -222,6 +225,10 @@ def normalise_part_number(s: str) -> str:
     """Part numbers compare case-insensitively and without spaces: "cl05b104ko5nnnc" and
     "CL05B104KO5NNNC " are the same part, and a board is not wrong for writing either."""
     return "".join(s.split()).upper()
+
+
+def _positive(v: object) -> bool:
+    return isinstance(v, (int, float)) and not isinstance(v, bool) and v > 0
 
 
 def _opt_float(v: object) -> float | None:
@@ -305,11 +312,22 @@ def parse(doc: dict) -> Component:
 
     dc_bias = []
     for point in doc.get("dc_bias") or []:
-        if (not isinstance(point, dict) or not isinstance(point.get("v"), (int, float))
-                or not isinstance(point.get("c_f"), (int, float))
-                or isinstance(point.get("v"), bool) or point["v"] <= 0 or point["c_f"] <= 0):
+        if not isinstance(point, dict) or not _positive(point.get("v")) \
+                or not _positive(point.get("c_f")):
             raise ComponentError("each dc_bias point needs a positive v (volts) and c_f (farads)")
         dc_bias.append((float(point["v"]), float(point["c_f"])))
+
+    reference = None
+    ref = doc.get("reference")
+    if ref is not None:
+        points = ref.get("z_ohm") if isinstance(ref, dict) else None
+        if (not isinstance(ref, dict) or not _positive(ref.get("notch_hz"))
+                or not isinstance(points, list)
+                or not all(isinstance(pt, list) and len(pt) == 2 and all(map(_positive, pt))
+                           for pt in points)):
+            raise ComponentError(
+                "reference must give a positive notch_hz and z_ohm as [hertz, ohms] pairs")
+        reference = (float(ref["notch_hz"]), tuple((float(f), float(z)) for f, z in points))
 
     component = Component(
         id=doc["id"].strip(), kind=doc["kind"], name=doc["name"].strip(),
@@ -317,7 +335,7 @@ def parse(doc: dict) -> Component:
         sources=sources, valid_hz=valid_hz,
         esl_includes_mount=bool(doc.get("esl_includes_mount", False)),
         provenance=provenance, manufacturer=manufacturer.strip(),
-        dc_bias=tuple(sorted(dc_bias)),
+        dc_bias=tuple(sorted(dc_bias)), reference=reference,
     )
 
     # §11.2's rule, enforced rather than documented: a number with no source is not usable.
