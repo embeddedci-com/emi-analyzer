@@ -23,7 +23,7 @@ solver or a measurement — and passed. The gap between the two is most of this 
 | **Full-wave solve (openEMS)** | ✅ | ⚠️ **a 50 ohm microstrip within 1 % of theory on every preset; solves end to end on the fixture board; long records on whole boards are out of scope — §2** | **off** (`full-wave`) |
 | Small-part solve (one net cut out over its planes, Part solve tab) | ✅ | ✅ microstrip, stripline and via within their closed forms; a synthetic coupon and three real coupons converge over the cut and the mesh; the sample board solves in minutes from the app. No far field, no compliance estimate, no coupling into neighboring nets, no component models; nothing against a measurement ([verification/small-part-solve.md](verification/small-part-solve.md)) | on |
 | Drivers (re-weighting a solve) | ✅ | ⚠️ every check in §3 passes; nothing against a measured source | off, with full-wave |
-| Components (MLCC models in a solve) | ✅ | ⚠️ the image now ships openEMS built from source, which models an inductor (0.0.35 did not, so no capacitor was placed); a 100 pF 0402 resonates within 1.6 % but only with a -70 dB record (§3) | off, with full-wave |
+| Components (MLCC models in a solve) | ✅ | ⚠️ upstream openEMS lost the capacitor to float rounding (SRF 17 % low); the image patches it, and a 100 pF and a 1 nF 0402 then match their series R-L-C within 0.01 % on SRF and 0.23 dB on \|Z\|, but only with a -70 dB record: at the solve's -40 dB a 100 pF part is 4.7 dB off (§3) | off, with full-wave |
 | Board far field (NF2FF) | ✅ | ⚠️ matches nec2c on dipoles over the ground plane as the product runs it, 30 MHz up (§3); no board checked against a measurement | off, with full-wave |
 | Cable emissions, Tier B | ✅ | ❌ failed its real-board gate, 7-9 dB low on average on two boards below resonance. Cause found in nec2c (the board modelled as a wire, not a plate) and fixed; a residual of 0-5 dB low remains by where the source is. Needs the openEMS re-run — §3 | off, with full-wave |
 | Compliance estimate | ✅ | ❌ runs end to end on the fixture board; never checked against a lab or a second solver (§3) | off, with full-wave |
@@ -192,7 +192,7 @@ Details and numbers: [`verification/cables-and-drivers.md`](verification/cables-
 
 | Check | Status |
 |---|---|
-| **One 0402 capacitor over a plane: SRF within 5 %, \|Z\| within 1 dB to 3× SRF** | ⚠️ **100 pF on a current openEMS build, run to -70 dB: SRF +1.6 % ✅, \|Z\| within 1.37 dB (1 dB missed at resonance only) ❌. At the solve's -40 dB it ripples ±6 dB; a 1 nF part never settled. openEMS 0.0.35 (an `apt` image) cannot run it at all** |
+| **One 0402 capacitor over a plane: SRF within 5 %, \|Z\| within 1 dB to 3× SRF** | ⚠️ **On the patched openEMS the image ships, run to -70 dB: 100 pF SRF +0.01 %, \|Z\| within 0.23 dB ✅; 1 nF SRF 0.0 %, \|Z\| within 0.02 dB ✅. At the solve's own -40 dB a 100 pF part is 4.7 dB off ❌. Upstream openEMS loses the capacitor to float rounding (SRF -17 %) and is refused by the solver probe; openEMS 0.0.35 (an `apt` image) cannot run it at all** |
 | No matched parts gives results identical to before | ✅ |
 | Every standard KiCad capacitor footprint on four real boards resolves | ✅ (46 % → 99 %) |
 | A decoupling finding quotes the library's SRF and source | ❌ |
@@ -201,7 +201,9 @@ The first of these is the only check that the series R-L-C construction behaves 
 capacitor. It found that the construction used until September 2026 (R, L and C elements in three
 adjacent cells) was an open circuit on openEMS 0.0.35, which the image shipped until then and which skips an
 element with only L; every solve with components on had modelled its capacitors as missing. Capacitors are
-now one series element, placed only on a solver that models an inductor.
+now one series element, placed only on a solver that models an inductor. A rerun then found that
+upstream openEMS keeps that element's state in float and loses the capacitor to rounding at a
+board's timestep; the image patches openEMS for it, and the solve's probe checks.
 
 ### Decoupling view
 
