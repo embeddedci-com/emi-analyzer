@@ -56,16 +56,19 @@ def test_a_microstrip_coupon_reads_its_impedance_delay_and_s21(harness):
 
 
 def test_a_via_between_planes_matches_two_posts(harness, monkeypatch):
+    """At the normal mesh, which the app uses for a part with vias whenever it fits the budget.
+    Coarse reads up to about 10 % high (the app says so); run here it passed at +9.0 % on arm64
+    and failed at +10.2 % on the amd64 CI runner, so it checked the mesh's noise, not the model."""
     import sp_verify_via as v
 
     monkeypatch.setattr(v, "CASES", [(0.3, 2.0)])
     monkeypatch.setattr(v, "h", harness)
-    monkeypatch.setenv("PRESETS", "coarse")
+    monkeypatch.setenv("PRESETS", "normal")
     v.main()
     import json
 
     report = json.loads((harness.OUT / "smallpart" / "via.json").read_text())
-    row = report["presets"]["coarse"]["rows"][0]
+    row = report["presets"]["normal"]["rows"][0]
     assert row["pass"], row["error"]
 
 

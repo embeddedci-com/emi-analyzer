@@ -113,6 +113,9 @@ def test_precision_probe_reads_a_decay_and_refuses_a_hold():
     # What an unpatched openEMS does: the charge stays, or rings about zero.
     assert run.precision_probe_tau(t, np.full_like(t, 5e-3)) is None
     assert run.precision_probe_tau(t, 5e-3 * np.cos(t / 20e-9)) is None
+    # A hold that rounding tilts slightly downward is still a hold: on amd64 a constant fitted
+    # a 1e8 s "decay" and was taken for one.
+    assert run.precision_probe_tau(t, 5e-3 * (1 - 1e-12 * np.arange(t.size))) is None
 
 
 def test_series_element_refused_when_the_precision_probe_fails(monkeypatch, tmp_path):

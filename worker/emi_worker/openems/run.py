@@ -583,7 +583,13 @@ def precision_probe_tau(time_s, values) -> float | None:
     if half.sum() < 4 or np.any(v[half] == 0) or np.any(np.sign(v[half]) != np.sign(v[half][0])):
         return None
     slope = np.polyfit(t[half], np.log(np.abs(v[half])), 1)[0]
-    return float(-1 / slope) if slope < 0 else None
+    # A held charge fits a slope of zero, but rounding in the fit leaves it slightly negative
+    # on some CPUs: on amd64 a constant read as a 1e8 s "decay" and passed as one. Anything
+    # that loses less than a tenth of its size over the window it was fitted on is a hold.
+    window = t[half][-1] - t[half][0]
+    if slope >= 0 or -slope * window < 0.1:
+        return None
+    return float(-1 / slope)
 
 
 def _run_probe(xml: str, tmp: str) -> str:
