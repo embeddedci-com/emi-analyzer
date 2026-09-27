@@ -107,6 +107,8 @@ class PartMatch:
     footprint: str
     farads: float | None
     package: PackageMatch | None
+    #: (field, part number) pairs from the footprint, as written: (("LCSC", "C1525"),).
+    part_numbers: tuple[tuple[str, str], ...] = ()
 
     @property
     def modellable(self) -> bool:
@@ -126,8 +128,12 @@ class PartMatch:
         return f"{self.ref}: {self.footprint!r} is not a standard package name"
 
 
-def match_part(ref: str, value: str, footprint: str) -> PartMatch:
+def match_part(ref: str, value: str, footprint: str,
+               part_numbers: dict[str, str] | None = None) -> PartMatch:
     """Everything that can be read off the board about one part.
+
+    ``part_numbers`` are the footprint's part-number fields (MPN, LCSC and the like), which
+    ingest keeps on each pad.
 
     Deliberately does not decide on a model. Choosing between an MPN match, the user's own
     library, a shared component and the built-in family is a separate decision with its own
@@ -140,4 +146,5 @@ def match_part(ref: str, value: str, footprint: str) -> PartMatch:
         ref=ref, value=value, footprint=footprint,
         farads=cap_farads(value),
         package=parse_package(footprint),
+        part_numbers=tuple((k, v) for k, v in (part_numbers or {}).items() if v and v.strip()),
     )

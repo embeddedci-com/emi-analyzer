@@ -101,6 +101,23 @@ class Track:
         )
 
 
+#: Footprint fields that name the part, compared case-insensitively with spaces collapsed.
+#: These are what KiCad libraries, JLCPCB's tooling and the common plugins write. A field
+#: named anything else ("Datasheet", "Description") says nothing a model can be chosen on.
+PART_NUMBER_FIELDS = frozenset({
+    "mpn", "manufacturer part number", "manufacturer_part_number", "mfr part number",
+    "part number", "lcsc", "lcsc part", "lcsc part #", "lcsc part number", "jlcpcb part #",
+    "jlcpcb part", "jlc part",
+})
+
+#: Values that fill a field without naming anything.
+_EMPTY_PART_NUMBERS = frozenset({"", "~", "-", "n/a", "na", "none", "dnp", "tbd"})
+
+
+def part_number_field(name: str) -> bool:
+    return " ".join(name.split()).lower() in PART_NUMBER_FIELDS
+
+
 @dataclass
 class Via:
     x: float
@@ -128,6 +145,10 @@ class Pad:
     #: which is the difference between a decoupling check that guesses and one that knows.
     value: str = ""
     footprint: str = ""
+    #: The footprint's part-number fields as written, {"LCSC": "C1525", "MPN": "..."}. A part
+    #: number is the one thing on a board that says which part this is rather than what
+    #: kind, so the component library tries it before value and package.
+    part_numbers: dict[str, str] = field(default_factory=dict)
 
     @property
     def is_through(self) -> bool:
@@ -392,11 +413,16 @@ def _parse_footprints(root: Node, nets: _NetResolver, warnings: list[str]) -> li
         ref = ""
         value = ""
         footprint = str(fp[1]) if len(fp) > 1 and isinstance(fp[1], str) else ""
+        part_numbers: dict[str, str] = {}
         for prop in children(fp, "property"):
             if len(prop) > 2 and prop[1] == "Reference" and not ref:
                 ref = _name(prop[2])
             elif len(prop) > 2 and prop[1] == "Value" and not value:
                 value = _name(prop[2])
+            elif len(prop) > 2 and isinstance(prop[1], str) and part_number_field(prop[1]):
+                pn = _name(prop[2]).strip()
+                if pn.lower() not in _EMPTY_PART_NUMBERS:
+                    part_numbers.setdefault(prop[1], pn)
         # KiCad 7 and earlier kept both as fp_text rather than property.
         for t in children(fp, "fp_text"):
             if len(t) > 2 and t[1] == "reference" and not ref:
@@ -437,6 +463,7 @@ def _parse_footprints(root: Node, nets: _NetResolver, warnings: list[str]) -> li
                 drill_mm=drill,
                 value=value,
                 footprint=footprint,
+                part_numbers=part_numbers,
             ))
     return pads
 

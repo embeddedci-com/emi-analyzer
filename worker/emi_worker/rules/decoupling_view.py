@@ -26,7 +26,7 @@ import logging
 import math
 import re
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 
@@ -183,15 +183,20 @@ class CapPart:
     model_name: str
     source: str  # library | assumed
     assumed_what: list[str]
+    #: "datasheet (Samsung CL05B104KO5NNNC)" or "generic 0402 X7R"; empty when assumed.
+    basis: str = ""
+    matched_by: str = ""
+    matched_on: str = ""
+    notes: list[str] = field(default_factory=list)
 
     @property
     def pitch_mm(self) -> float:
         return math.dist((self.supply.x, self.supply.y), (self.ground.x, self.ground.y))
 
 
-def _library(ref: str, value: str, footprint: str):
+def _library(ref: str, value: str, footprint: str, part_numbers: dict[str, str] | None = None):
     from emi_worker.components import match_part, resolve_part
-    part = match_part(ref, value, footprint)
+    part = match_part(ref, value, footprint, part_numbers)
     return part, resolve_part(part)
 
 
@@ -208,12 +213,16 @@ def _family_esr(c_f: float) -> float:
 def cap_part(ref: str, supply: Pad, ground: Pad) -> CapPart:
     value = supply.value or ground.value
     footprint = supply.footprint or ground.footprint
-    part, resolved = _library(ref, value, footprint)
+    part, resolved = _library(ref, value, footprint,
+                              getattr(supply, "part_numbers", None)
+                              or getattr(ground, "part_numbers", None))
     package = part.package.imperial if part.package else ""
     if resolved is not None and resolved.rlc.esl_h is not None and resolved.rlc.esr_ohm is not None:
         return CapPart(ref=ref, supply=supply, ground=ground, value=value, c_f=resolved.rlc.c_f,
                        esl_h=resolved.rlc.esl_h, esr_ohm=resolved.rlc.esr_ohm, package=package,
-                       model_name=resolved.component_name, source="library", assumed_what=[])
+                       model_name=resolved.component_name, source="library", assumed_what=[],
+                       basis=resolved.basis, matched_by=resolved.matched_by,
+                       matched_on=resolved.matched_on, notes=list(resolved.notes))
     c_f = cap_farads(value)
     assumed = []
     if c_f is None:
@@ -560,6 +569,8 @@ def _ic_entry(ctx: RuleContext, f: np.ndarray, ref: str, rail: str, supply_pins:
         parts_seen.setdefault(c.ref, {
             "value": c.value, "package": c.package, "c_f": c.c_f, "esl_h": c.esl_h,
             "esr_ohm": c.esr_ohm, "source": c.source, "model": c.model_name,
+            "basis": c.basis, "matched_by": c.matched_by, "matched_on": c.matched_on,
+            "notes": c.notes,
             "assumed": c.assumed_what, "x": round(x, 4), "y": round(y, 4),
         })
 

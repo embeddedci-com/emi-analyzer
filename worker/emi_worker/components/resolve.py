@@ -2,7 +2,8 @@
 
 The order is fixed and first match wins:
 
-  1. MPN — phase 2, once ingest keeps the part-number fields
+  1. part number: a footprint field (MPN, LCSC and the like) naming a component's MPN, one
+     of its aliases or its LCSC number, searched in the order of 2 to 5
   2. the user's own component
   3. a component shared with their organisation
   4. an unsaved component from the browser tab
@@ -19,10 +20,16 @@ from __future__ import annotations
 
 import functools
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from emi_worker.components.document import Component, ComponentError, Resolved
+from emi_worker.components.document import (
+    Component,
+    ComponentError,
+    Resolved,
+    normalise_part_number,
+)
 from emi_worker.components.document import parse as parse_component
 from emi_worker.components.match import PartMatch
 
@@ -112,10 +119,28 @@ def resolve_part(part: PartMatch, candidates: list[Candidate] | None = None) -> 
     order — the server knows who owns what and this does not need to. Built-ins are appended,
     so a user's component always beats the library.
     """
+    ordered = list(candidates or []) + list(built_in())
+
+    # Tier 1. A part number is tried first and needs neither a readable value nor a standard
+    # footprint: an LCSC number on a custom footprint still says exactly which part it is.
+    wanted = [(f, v, normalise_part_number(v)) for f, v in part.part_numbers]
+    if wanted:
+        for cand in ordered:
+            c = cand.component
+            numbers = c.part_numbers()
+            if c.kind != "capacitor" or not numbers:
+                continue
+            hit = next(((f, v) for f, v, n in wanted if n in numbers), None)
+            if hit is None:
+                continue
+            rlc = _rlc_for(c, part)
+            if rlc is None:
+                continue
+            return _resolved(c, part, rlc, "part number", f"{hit[0]} {hit[1]}",
+                             _disagreements(c, part))
+
     if not part.modellable:
         return None
-
-    ordered = list(candidates or []) + list(built_in())
     for cand in ordered:
         c = cand.component
         if c.kind != "capacitor" or not _matches(c, part):
@@ -123,16 +148,72 @@ def resolve_part(part: PartMatch, candidates: list[Candidate] | None = None) -> 
         rlc = c.resolve_for(part.farads, part.package.imperial)
         if rlc is None:
             continue
-        gaps: list[str] = []
-        if rlc.esl_h is None:
-            gaps.append("no ESL, so there is no self-resonance to report")
-        if rlc.esr_ohm is None:
-            gaps.append("no ESR, so the impedance at resonance is unknown")
-        return Resolved(
-            ref=part.ref, component_id=c.id, component_name=c.name, rlc=rlc,
-            gaps=gaps, source=c.cites("ESL"), generic=c.is_generic,
-        )
+        how = "package" if c.model_type == "mlcc_family" else "value and package"
+        return _resolved(c, part, rlc, how, "", [])
     return None
+
+
+def _rlc_for(c: Component, part: PartMatch):
+    if c.model_type == "series_rlc":
+        return c.series_rlc()
+    if not part.modellable:
+        return None
+    return c.resolve_for(part.farads, part.package.imperial)
+
+
+def _disagreements(c: Component, part: PartMatch) -> list[str]:
+    """What the board says that the part number contradicts. The part number wins, because it
+    is what gets ordered, but a board whose value field says otherwise deserves a note."""
+    from emi_worker.rules.decoupling import cap_farads
+
+    notes = []
+    want = cap_farads(str((c.match or {}).get("value") or ""))
+    if want is not None and part.farads is not None and abs(part.farads - want) > want * 1e-6:
+        notes.append(f"the board's value {part.value!r} disagrees with {c.mpn or c.name}; "
+                     f"modelled as the part number says")
+    pkg = (c.match or {}).get("package")
+    if pkg and part.package is not None and part.package.imperial != pkg:
+        notes.append(f"the footprint is {part.package.imperial} but {c.mpn or c.name} is {pkg}; "
+                     f"modelled as the part number says")
+    return notes
+
+
+_DIELECTRIC = re.compile(r"\b(C0G|NP0|X5R|X6S|X7R|X7S|X7T|X8R|Y5V|Z5U)\b", re.I)
+
+
+def basis_label(c: Component, part: PartMatch) -> str:
+    """One short label for where a model came from: "datasheet (Samsung CL05B104KO5NNNC)"
+    for a named part, "generic 0402 X7R" for a class average. The generic label never names
+    a manufacturer, because a class average describes none."""
+    if c.is_generic:
+        bits = ["generic"]
+        if part.package is not None:
+            bits.append(part.package.imperial)
+        d = _DIELECTRIC.search(part.value or "")
+        if d:
+            bits.append(d.group(1).upper().replace("NP0", "C0G"))
+        return " ".join(bits)
+    named = f"{c.manufacturer} {c.mpn}".strip() if c.mpn else c.name
+    if c.provenance == "vendor":
+        return f"datasheet ({named})"
+    if c.provenance == "measured":
+        return f"measured ({named})"
+    return f"your library ({named})"
+
+
+def _resolved(c: Component, part: PartMatch, rlc, matched_by: str, matched_on: str,
+              notes: list[str]) -> Resolved:
+    gaps: list[str] = []
+    if rlc.esl_h is None:
+        gaps.append("no ESL, so there is no self-resonance to report")
+    if rlc.esr_ohm is None:
+        gaps.append("no ESR, so the impedance at resonance is unknown")
+    return Resolved(
+        ref=part.ref, component_id=c.id, component_name=c.name, rlc=rlc,
+        gaps=gaps, source=c.cites("ESL"), generic=c.is_generic,
+        matched_by=matched_by, matched_on=matched_on, basis=basis_label(c, part),
+        notes=notes,
+    )
 
 
 @dataclass
