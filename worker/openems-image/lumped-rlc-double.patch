@@ -1,0 +1,155 @@
+Keep the lumped R-L-C extension's state and coefficients in double precision
+
+Applies to thliebig/openEMS 65f8771 (the openEMS submodule of openEMS-Project f73bf97).
+Applied by worker/openems-image/Dockerfile; the base image tag carries a hash of it.
+
+The series ADE (LEtype=1) advances J with J0 = ib0 (V0 - V2) - (b1 ib0) J1 - (b2 ib0) J2.
+Its characteristic polynomial at z = 1 is 1 + b1 ib0 + b2 ib0 = 4 dT^2 / D, about
+(w0 dT)^2: the whole capacitor term. With FDTD_FLOAT (float), b1 ib0 is about -2 and b2 ib0
+about 1, each rounded to about 1e-7, so once (w0 dT)^2 is near 1e-7 the capacitor is lost
+to rounding. A 100 pF, 0.45 nH part at a 84 fs timestep drained through 50 ohm with
+13.3 ns instead of 5 ns; at 481 fs it was right. The R-L form (no C) has the same
+cancellation in its z = 1 root. Keeping the extension's own arrays in double removes it;
+the field arrays stay float.
+
+diff --git a/FDTD/extensions/engine_ext_lumpedRLC.cpp b/FDTD/extensions/engine_ext_lumpedRLC.cpp
+index 0b15fde..1a10a3e 100644
+--- a/FDTD/extensions/engine_ext_lumpedRLC.cpp
++++ b/FDTD/extensions/engine_ext_lumpedRLC.cpp
+@@ -27,8 +27,8 @@ Engine_Ext_LumpedRLC::Engine_Ext_LumpedRLC(Operator_Ext_LumpedRLC* op_ext_RLC) :
+ 	// Local pointer of the operator.
+ 	m_Op_Ext_RLC = op_ext_RLC;
+ 
+-	v_Vdn		= new FDTD_FLOAT*[3];
+-	v_Jn		= new FDTD_FLOAT*[3];
++	v_Vdn		= new double*[3];
++	v_Jn		= new double*[3];
+ 	v_Il		= NULL;
+ 
+ 	// No additional allocations are required if there are no actual lumped elements.
+@@ -36,15 +36,15 @@ Engine_Ext_LumpedRLC::Engine_Ext_LumpedRLC(Operator_Ext_LumpedRLC* op_ext_RLC) :
+ 		return;
+ 
+ 	// Initialize ADE containers for currents and voltages
+-	v_Il		= new FDTD_FLOAT[m_Op_Ext_RLC->RLC_count];
++	v_Il		= new double[m_Op_Ext_RLC->RLC_count];
+ 
+ 	for (unsigned int posIdx = 0 ; posIdx < m_Op_Ext_RLC->RLC_count ; ++posIdx)
+ 		v_Il[posIdx] 	= 0.0;
+ 
+ 	for (unsigned int k = 0 ; k < 3 ; k++)
+ 	{
+-		v_Vdn[k] = new FDTD_FLOAT[m_Op_Ext_RLC->RLC_count];
+-		v_Jn[k] = new FDTD_FLOAT[m_Op_Ext_RLC->RLC_count];
++		v_Vdn[k] = new double[m_Op_Ext_RLC->RLC_count];
++		v_Jn[k] = new double[m_Op_Ext_RLC->RLC_count];
+ 
+ 		for (unsigned int posIdx = 0 ; posIdx < m_Op_Ext_RLC->RLC_count ; ++posIdx)
+ 		{
+@@ -88,7 +88,7 @@ void Engine_Ext_LumpedRLC::DoPreVoltageUpdates()
+ 		return;
+ 
+ 	// Iterate Vd containers
+-	FDTD_FLOAT	*v_temp;
++	double	*v_temp;
+ 	v_temp = v_Vdn[2];
+ 	v_Vdn[2] = v_Vdn[1];
+ 	v_Vdn[1] = v_Vdn[0];
+@@ -111,7 +111,7 @@ void Engine_Ext_LumpedRLC::Apply2VoltagesImpl(EngType* eng)
+ 	int *dir = m_Op_Ext_RLC->v_RLC_dir;
+ 
+ 	// Iterate J containers
+-	FDTD_FLOAT	*v_temp;
++	double	*v_temp;
+ 	v_temp = v_Jn[2];
+ 	v_Jn[2] = v_Jn[1];
+ 	v_Jn[1] = v_Jn[0];
+diff --git a/FDTD/extensions/engine_ext_lumpedRLC.h b/FDTD/extensions/engine_ext_lumpedRLC.h
+index e5ccfa6..77562ea 100644
+--- a/FDTD/extensions/engine_ext_lumpedRLC.h
++++ b/FDTD/extensions/engine_ext_lumpedRLC.h
+@@ -49,10 +49,10 @@ protected:
+ 	// Auxilliary containers
+ 
+ 	// Array setup: volt_C_ADE[mesh_pos]
+-	FDTD_FLOAT *v_Il;		// Container for current on inductor- Parallel RLC
++	double *v_Il;		// Container for current on inductor- Parallel RLC
+ 
+-	FDTD_FLOAT **v_Vdn;		// Container for nodal vd at [n],[n-1],[n-2]
+-	FDTD_FLOAT **v_Jn;		// Container for nodal J at [n],[n-1],[n-2]
++	double **v_Vdn;		// Container for nodal vd at [n],[n-1],[n-2]
++	double **v_Jn;		// Container for nodal J at [n],[n-1],[n-2]
+ 
+ };
+ 
+diff --git a/FDTD/extensions/operator_ext_lumpedRLC.cpp b/FDTD/extensions/operator_ext_lumpedRLC.cpp
+index 3707c2b..863935e 100644
+--- a/FDTD/extensions/operator_ext_lumpedRLC.cpp
++++ b/FDTD/extensions/operator_ext_lumpedRLC.cpp
+@@ -362,7 +362,7 @@ bool Operator_Ext_LumpedRLC::BuildExtension()
+ 								{
+ 									m_Op->EC_G[dir][iPos] = 0.0;
+ 
+-									FDTD_FLOAT Cd = m_Op->EC_C[dir][iPos];
++									double Cd = m_Op->EC_C[dir][iPos];
+ 
+ 									// Check if the natural grid capacitance is too small
+ 									// relative to the series impedance at fMax.
+@@ -464,17 +464,17 @@ bool Operator_Ext_LumpedRLC::BuildExtension()
+ 		v_RLC_dir 	= new int[RLC_count];
+ 
+ 		// Parallel circuit coefficients
+-		v_RLC_ilv 	= new FDTD_FLOAT[RLC_count];
+-		v_RLC_i2v 	= new FDTD_FLOAT[RLC_count];
++		v_RLC_ilv 	= new double[RLC_count];
++		v_RLC_i2v 	= new double[RLC_count];
+ 
+ 		// Series circuit coefficients
+-		v_RLC_vv2 = new FDTD_FLOAT[RLC_count];
+-		v_RLC_vj1 = new FDTD_FLOAT[RLC_count];
+-		v_RLC_vj2 = new FDTD_FLOAT[RLC_count];
+-		v_RLC_vvd = new FDTD_FLOAT[RLC_count];
+-		v_RLC_ib0 = new FDTD_FLOAT[RLC_count];
+-		v_RLC_b1 = new FDTD_FLOAT[RLC_count];
+-		v_RLC_b2 = new FDTD_FLOAT[RLC_count];
++		v_RLC_vv2 = new double[RLC_count];
++		v_RLC_vj1 = new double[RLC_count];
++		v_RLC_vj2 = new double[RLC_count];
++		v_RLC_vvd = new double[RLC_count];
++		v_RLC_ib0 = new double[RLC_count];
++		v_RLC_b1 = new double[RLC_count];
++		v_RLC_b2 = new double[RLC_count];
+ 
+ 		v_RLC_pos = new unsigned int*[3];
+ 		for (unsigned int dIdx = 0 ; dIdx < 3 ; ++dIdx)
+diff --git a/FDTD/extensions/operator_ext_lumpedRLC.h b/FDTD/extensions/operator_ext_lumpedRLC.h
+index fe881d9..889c0e2 100644
+--- a/FDTD/extensions/operator_ext_lumpedRLC.h
++++ b/FDTD/extensions/operator_ext_lumpedRLC.h
+@@ -62,17 +62,17 @@ protected:
+ 	// ADE update coefficients, array setup: coeff[mesh_pos_index]
+ 
+ 	// Parallel circuit coefficients
+-	FDTD_FLOAT		*v_RLC_ilv;
+-	FDTD_FLOAT		*v_RLC_i2v;
++	double		*v_RLC_ilv;
++	double		*v_RLC_i2v;
+ 
+ 	// Series circuit coefficients
+-	FDTD_FLOAT		*v_RLC_vv2;		// Coefficient for [n-2] time of Vd update in Vd equation
+-	FDTD_FLOAT		*v_RLC_vj1;		// Coefficient for [n-1] time of J update in Vd equation
+-	FDTD_FLOAT		*v_RLC_vj2;		// Coefficient for [n-2] time of J update in Vd equation
+-	FDTD_FLOAT		*v_RLC_vvd;		// Coefficient to multiply all Vd in the Vd update equation
+-	FDTD_FLOAT		*v_RLC_ib0;		// Inverse of beta_0
+-	FDTD_FLOAT		*v_RLC_b1;		// beta_1
+-	FDTD_FLOAT		*v_RLC_b2;		// beta_2
++	double		*v_RLC_vv2;		// Coefficient for [n-2] time of Vd update in Vd equation
++	double		*v_RLC_vj1;		// Coefficient for [n-1] time of J update in Vd equation
++	double		*v_RLC_vj2;		// Coefficient for [n-2] time of J update in Vd equation
++	double		*v_RLC_vvd;		// Coefficient to multiply all Vd in the Vd update equation
++	double		*v_RLC_ib0;		// Inverse of beta_0
++	double		*v_RLC_b1;		// beta_1
++	double		*v_RLC_b2;		// beta_2
+ 
+ 	// Additional containers
+ 	int				*v_RLC_dir;

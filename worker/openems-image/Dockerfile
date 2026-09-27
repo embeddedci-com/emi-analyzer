@@ -11,10 +11,12 @@
 #
 # Changing OPENEMS_REF or this file publishes a new image when it reaches main. The worker
 # picks it up only when its OPENEMS_IMAGE digest is moved by hand, so a rebuild here never
-# changes a released worker.
+# changes a released worker. The tag is the commit's first 12 characters, then "-" and the
+# first 8 of the SHA-256 of this folder's *.patch files in name order, when there are any.
 #
 # Licences: openEMS and nf2ff are GPL-3.0-or-later, CSXCAD LGPL-3.0-or-later. The exact
-# source is the upstream commit below; worker/NOTICE says so inside the worker image.
+# source is the upstream commit below plus the patches in this folder; worker/NOTICE says so
+# inside the worker image.
 
 # A commit of thliebig/openEMS-Project, not a branch: with `master`, two builds of the same
 # worker commit could get two different solvers. The workflow takes the image tag from here.
@@ -45,6 +47,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         python3 python3-pip python3-venv python3-setuptools-scm cython3 python3-numpy python3-h5py \
         python3-matplotlib \
     && rm -rf /var/lib/apt/lists/*
+# The series lumped R-L-C's state in double precision. Upstream keeps it in float, and its
+# capacitor term is (w0 dT)^2 of the state, about 1e-7 at a board's timestep: float epsilon,
+# so a 100 pF part resonated 17 % low (docs/verification/solver-and-components.md §4).
+COPY lumped-rlc-double.patch /tmp/lumped-rlc-double.patch
 # `clone --branch` takes no commit, so this fetches the one commit it needs.
 RUN git init -q /src/openEMS-Project \
     && cd /src/openEMS-Project \
@@ -52,8 +58,10 @@ RUN git init -q /src/openEMS-Project \
     && git fetch -q --depth 1 origin "${OPENEMS_REF}" \
     && git checkout -q FETCH_HEAD \
     && git submodule update -q --init --recursive --depth 1 \
+    && git -C openEMS apply /tmp/lumped-rlc-double.patch \
     && git submodule status --recursive > /usr/local/share/openems-source.txt \
     && sed -i "1i openEMS-Project ${OPENEMS_REF}" /usr/local/share/openems-source.txt \
+    && echo "patched: lumped-rlc-double.patch (openEMS)" >> /usr/local/share/openems-source.txt \
     && ./update_openEMS.sh /usr/local --python ${OPENEMS_NJOBS:+--njobs="$OPENEMS_NJOBS"} \
     && rm -rf /src
 # The shared libraries the build links against, as Debian package names, so the runtime

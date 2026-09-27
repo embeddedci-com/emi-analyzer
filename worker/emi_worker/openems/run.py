@@ -519,26 +519,115 @@ def series_rlc_probe_xml() -> str:
     return doc.to_string()
 
 
+#: The precision probe's circuit: a 50 ohm port drains a series R-L-C of 2 nF through a
+#: loop of 1 mm cells. L is a tenth of R^2 C, so the circuit is overdamped and its slow
+#: root is 0.887 R C, about 90 ns: 47,000 timesteps at this grid's 1.93 ps.
+PRECISION_PROBE_R = 50.0
+PRECISION_PROBE_ESR = 0.1
+PRECISION_PROBE_C = 2e-9
+PRECISION_PROBE_L = 0.1 * PRECISION_PROBE_R ** 2 * PRECISION_PROBE_C
+#: How far the measured decay may be from the circuit's. Measured 0.2 % off on the patched
+#: build; the unpatched one does not decay at all.
+PRECISION_PROBE_TOLERANCE = 0.05
+
+
+def series_rlc_precision_probe_xml() -> str:
+    """The model ``solver_has_series_rlc`` uses to check the series element's capacitor.
+
+    openEMS's series R-L-C advances its state with a recursion whose capacitor term is
+    (w0 dT)^2 of it. Upstream keeps that state in float, so once (w0 dT)^2 is near 1e-7, as
+    it is for a 100 pF 0402 at a board's timestep, the capacitor is lost to rounding
+    (docs/verification/solver-and-components.md §4). Here it is 3.6e-9: an openEMS that
+    keeps the state in double drains the part with the circuit's time constant, and one that
+    does not holds or grows the charge instead. About half a second.
+    """
+    from . import csx
+
+    lines = [float(v) for v in range(8)]
+    doc = csx.CSXDocument(
+        excitation=csx.Excitation(type=0, f0=0.0, fc=50e6),
+        x_lines=lines, y_lines=lines, z_lines=lines, f_max=100e6,
+        max_timesteps=int(4 * PRECISION_PROBE_R * PRECISION_PROBE_C / 1.9e-12),
+        end_criteria=OPENEMS_NEVER_STOPS, boundaries=csx.Boundaries(*(["PEC"] * 6)),
+    )
+    metal = csx.PRIORITY_METAL
+    doc.add(csx.Metal(name="loop", primitives=[
+        csx.Box(p1=(2.0, 3.0, 2.0), p2=(5.0, 4.0, 2.0), priority=metal),
+        csx.Box(p1=(2.0, 3.0, 4.0), p2=(5.0, 4.0, 4.0), priority=metal)]))
+    port = csx.Box(p1=(2.0, 3.0, 2.0), p2=(2.0, 4.0, 4.0), priority=csx.PRIORITY_PORT)
+    doc.add(csx.LumpedElement(name="port", direction=2, resistance=PRECISION_PROBE_R,
+                              primitives=[port]))
+    doc.add(csx.ExcitationProperty(name="exc", excite=(0.0, 0.0, 1.0), primitives=[port]))
+    doc.add(csx.series_rlc_element(
+        "part", 2, resistance=PRECISION_PROBE_ESR, inductance=PRECISION_PROBE_L,
+        capacitance=PRECISION_PROBE_C, box=((5.0, 3.0, 2.0), (5.0, 4.0, 4.0))))
+    doc.add(csx.ProbeBox(name="part_ut", type=0, norm_dir=2, primitives=[
+        csx.Box(p1=(5.0, 3.0, 2.0), p2=(5.0, 3.0, 4.0))]))
+    return doc.to_string()
+
+
+def precision_probe_expected_tau() -> float:
+    """The slow time constant of the probe's circuit, in seconds."""
+    r = PRECISION_PROBE_R + PRECISION_PROBE_ESR
+    lc, rc = PRECISION_PROBE_L * PRECISION_PROBE_C, r * PRECISION_PROBE_C
+    return 2 * lc / (rc - (rc * rc - 4 * lc) ** 0.5)
+
+
+def precision_probe_tau(time_s, values) -> float | None:
+    """The decay the probe measured over the second half of its record, or None when the
+    voltage there does not decay: it holds, grows or changes sign."""
+    import numpy as np
+
+    t, v = np.asarray(time_s), np.asarray(values)
+    half = t >= t[-1] / 2
+    if half.sum() < 4 or np.any(v[half] == 0) or np.any(np.sign(v[half]) != np.sign(v[half][0])):
+        return None
+    slope = np.polyfit(t[half], np.log(np.abs(v[half])), 1)[0]
+    return float(-1 / slope) if slope < 0 else None
+
+
+def _run_probe(xml: str, tmp: str) -> str:
+    path = os.path.join(tmp, "probe.xml")
+    with open(path, "w") as fh:
+        fh.write(xml)
+    out = subprocess.run([OPENEMS_BIN, path], cwd=tmp, capture_output=True, text=True,
+                         timeout=60)
+    text = out.stdout + out.stderr
+    if out.returncode != 0:
+        raise subprocess.SubprocessError(f"openEMS exited {out.returncode}: {text[-500:]}")
+    return text
+
+
 @lru_cache(maxsize=1)
 def solver_has_series_rlc() -> bool:
-    """Whether the installed openEMS models a series lumped R-L-C (``LEtype``).
+    """Whether the installed openEMS models a series lumped R-L-C (``LEtype``) correctly.
 
-    Asked of the binary rather than assumed from a version: it is given a one-cell inductor
-    and one timestep, and a solver that cannot model it says "R or C not specified" while
-    setting up. openEMS 0.0.35, the Debian package (``OPENEMS_SOURCE=apt``), cannot; the
-    openEMS the released image is built on can. A second or so, once per worker process.
+    Asked of the binary rather than assumed from a version, in two runs. The first gives it
+    a one-cell inductor and one timestep: a solver that cannot model it says "R or C not
+    specified" while setting up. openEMS 0.0.35, the Debian package (``OPENEMS_SOURCE=apt``),
+    cannot. The second drains a series R-L-C through a port (``series_rlc_precision_probe_xml``)
+    and checks the decay: an upstream openEMS has the element but loses its capacitor to
+    rounding at a board's timestep, and only the patched build the released image is built on
+    (worker/openems-image/lumped-rlc-double.patch) passes. A second or so, once per worker
+    process.
     """
+    from . import post
+
     try:
         with tempfile.TemporaryDirectory() as tmp:
-            path = os.path.join(tmp, "probe.xml")
-            with open(path, "w") as fh:
-                fh.write(series_rlc_probe_xml())
-            out = subprocess.run([OPENEMS_BIN, path], cwd=tmp, capture_output=True, text=True,
-                                 timeout=60)
-    except (OSError, subprocess.SubprocessError) as exc:
+            if "R or C not specified" in _run_probe(series_rlc_probe_xml(), tmp):
+                log.info("openEMS does not model a series lumped R-L-C")
+                return False
+        with tempfile.TemporaryDirectory() as tmp:
+            _run_probe(series_rlc_precision_probe_xml(), tmp)
+            trace = post.read_probe(os.path.join(tmp, "part_ut"))
+    except (OSError, subprocess.SubprocessError, ValueError) as exc:
         log.warning("could not ask openEMS about lumped elements: %s", exc)
         return False
-    text = out.stdout + out.stderr
-    ok = out.returncode == 0 and "R or C not specified" not in text
-    log.info("openEMS %s a series lumped R-L-C", "models" if ok else "does not model")
+    tau = precision_probe_tau(trace.time_s, trace.values)
+    want = precision_probe_expected_tau()
+    ok = tau is not None and abs(tau / want - 1) <= PRECISION_PROBE_TOLERANCE
+    log.info("openEMS %s a series lumped R-L-C (probe decay %s, circuit %.1f ns)",
+             "models" if ok else "does not correctly model",
+             f"{tau * 1e9:.1f} ns" if tau else "none", want * 1e9)
     return ok

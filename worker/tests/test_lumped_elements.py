@@ -91,3 +91,42 @@ def test_sub_megahertz_frequencies_survive_formatting():
     assert _fmt_mhz(5.3) == "5.3 MHz"
     assert _fmt_mhz(23.7) == "24 MHz"
     assert _fmt_mhz(480.0) == "480 MHz"
+
+
+def test_precision_probe_circuit_is_overdamped_and_its_decay_is_the_slow_root():
+    """The probe's pass mark is the circuit's slow time constant, 0.887 R C."""
+    from emi_worker.openems import run
+
+    rc = (run.PRECISION_PROBE_R + run.PRECISION_PROBE_ESR) * run.PRECISION_PROBE_C
+    assert run.precision_probe_expected_tau() == pytest.approx(0.887 * rc, rel=2e-3)
+    xml = run.series_rlc_precision_probe_xml()
+    assert 'LEtype="1"' in xml and 'Name="part_ut"' in xml
+
+
+def test_precision_probe_reads_a_decay_and_refuses_a_hold():
+    import numpy as np
+
+    from emi_worker.openems import run
+
+    t = np.linspace(0, 400e-9, 2000)
+    assert run.precision_probe_tau(t, np.exp(-t / 89e-9)) == pytest.approx(89e-9, rel=1e-6)
+    # What an unpatched openEMS does: the charge stays, or rings about zero.
+    assert run.precision_probe_tau(t, np.full_like(t, 5e-3)) is None
+    assert run.precision_probe_tau(t, 5e-3 * np.cos(t / 20e-9)) is None
+
+
+def test_series_element_refused_when_the_precision_probe_fails(monkeypatch, tmp_path):
+    """An openEMS with the element but not the precision passes the first probe only."""
+    import numpy as np
+
+    from emi_worker.openems import post, run
+
+    monkeypatch.setattr(run, "_run_probe", lambda xml, tmp: "")
+    t = np.linspace(0, 400e-9, 2000)
+    for values, want in ((np.exp(-t / run.precision_probe_expected_tau()), True),
+                         (np.exp(-t / 14e-9), False), (np.full_like(t, 1e-3), False)):
+        monkeypatch.setattr(post, "read_probe",
+                            lambda path, v=values: post.ProbeTrace(time_s=t, values=v))
+        run.solver_has_series_rlc.cache_clear()
+        assert run.solver_has_series_rlc() is want
+    run.solver_has_series_rlc.cache_clear()
