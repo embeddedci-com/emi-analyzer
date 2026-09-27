@@ -96,6 +96,11 @@ MAX_NS = float(os.environ.get("MAX_NS", "40"))
 #: check that says whether such a tail moves the result; the worker's divergence check
 #: catches a run that climbs.
 MIN_DECAY_DB = float(os.environ.get("MIN_DECAY_DB", "30"))
+#: Roll the last TAPER_NS of every record off to zero before it is transformed, as the port
+#: network does (``network.tapered``). 0 is off. Board C rings on a 496 MHz mode through the
+#: whole record, 60-75 dB above its low band, and cutting that ring off where it stands spreads
+#: it over every frequency: its record check read 15 dB. Pure post-processing: runs are reused.
+TAPER_NS = float(os.environ.get("TAPER_NS", "0"))
 #: A third run per case: the cable attached and the gap left open. Its gap voltage is V_oc
 #: with the cable present, which splits what is left of the error into "V_oc moved when the
 #: cable was attached" and "Z_ant is wrong". nec2c puts the first at 0-6 dB, depending on where
@@ -393,6 +398,13 @@ def _head(trace, fraction: float = 0.8):
     return post.ProbeTrace(trace.time_s[:n], trace.values[:n])
 
 
+def _tx(trace):
+    """``trace`` as it is transformed: its last TAPER_NS rolled off, when that is set."""
+    from emi_worker.openems.network import tapered
+
+    return tapered(trace, TAPER_NS * 1e-9) if TAPER_NS > 0 else trace
+
+
 def antenna(length_m: float, freqs: np.ndarray, gap_mm: float, board_span_m: float,
             board_width_m: float | None = None, board_offset_m: float | None = None,
             ) -> tuple[np.ndarray, np.ndarray]:
@@ -525,6 +537,7 @@ def main() -> None:
             i_tr = post.read_probe(str(rb["wd"] / "drv_it"))
 
             def pred_from(gap, u, i):
+                gap, u, i = _tx(gap), _tx(u), _tx(i)
                 hh = post.cable_transfer(gap, u, i, FREQS.tolist())
                 vs = post._dft(u, FREQS) + post._dft(i, FREQS) * 50.0
                 return (np.asarray(hh["h_real"]) + 1j * np.asarray(hh["h_imag"])) * vs
@@ -537,7 +550,7 @@ def main() -> None:
                                        width_m, offset_m)
             pred = pred_from(gap_tr, u_tr, i_tr) / z_ant
             c_tr = post.read_probe(str(rc["wd"] / "cable_it"))
-            meas = post._dft(c_tr, FREQS)
+            meas = post._dft(_tx(c_tr), FREQS)
             err = 20.0 * np.log10(np.abs(pred) / np.abs(meas))
             # What the first runs composed with: the board as a thin wire.
             z_thin, _ = antenna(length_m, FREQS, b.cable_ports[0]["gap_mm"], arm_m)
@@ -555,9 +568,10 @@ def main() -> None:
                 voc_db = 20.0 * np.log10(np.abs(voc_cable) / np.abs(pred * z_ant))
             # The same on 80 % of each record: how far the result still depends on its tail.
             pred_s = pred_from(_head(gap_tr), _head(u_tr), _head(i_tr)) / z_ant
-            meas_s = post._dft(_head(c_tr), FREQS)
-            record_db = float(max(np.max(np.abs(20 * np.log10(np.abs(pred_s) / np.abs(pred)))),
-                                  np.max(np.abs(20 * np.log10(np.abs(meas_s) / np.abs(meas))))))
+            meas_s = post._dft(_tx(_head(c_tr)), FREQS)
+            record = np.maximum(np.abs(20 * np.log10(np.abs(pred_s) / np.abs(pred))),
+                                np.abs(20 * np.log10(np.abs(meas_s) / np.abs(meas))))
+            record_db = float(record.max())
 
             f_res = first_resonance_hz(z_ant, FREQS)
             below = FREQS < f_res
@@ -581,7 +595,8 @@ def main() -> None:
                 print(f"    V_oc with the cable over V_oc without, below resonance: "
                       f"{voc_db[sel].min():+.2f} to {voc_db[sel].max():+.2f} dB")
             print(f"    whole band:      median {np.median(np.abs(err)):.2f} dB, "
-                  f"worst {np.abs(err).max():.2f} dB; record check {record_db:.3f} dB\n",
+                  f"worst {np.abs(err).max():.2f} dB; record check {record_db:.3f} dB "
+                  f"({record[sel].max():.3f} dB below resonance)\n",
                   flush=True)
 
             out["cases"].append({
@@ -597,6 +612,9 @@ def main() -> None:
                 "steps_b": rb["steps"],
                 "steps_c": rc["steps"],
                 "record_db": record_db,
+                "record_db_below_resonance": float(record[sel].max()),
+                "record_db_per_frequency": record.tolist(),
+                "taper_ns": TAPER_NS,
                 "below_resonance_worst_db": float(lo.max()),
                 "below_resonance_median_db": float(np.median(lo)),
             })
