@@ -13,9 +13,13 @@
  * via ring), the ports, and the stackup. Lines closer than half a cell merge, gaps fill with
  * cells growing 1.4x a step up to the band's largest, and each end gets eight absorbing lines.
  * On the fourteen coupons meshed for the checks it came within 0.76x to 1.9x of the real mesh.
- * It leaves out the worker's lines along diagonal traces: read off the triangles they doubled
- * the count, since a triangle cannot say which of its sides is a trace's. The worker publishes
- * the real mesh within seconds.
+ *
+ * Traces are read off the triangles' outline: a straight span is two long parallel edges a
+ * trace's width apart, however the viewer fanned the triangles inside it. An axis-aligned one
+ * that is narrow sets the smallest cell; a diagonal one gets lines along both axes it spans, as
+ * the worker gives it. Without those lines the sample board's SPI_CLK counted 1.0 M cells where
+ * the worker meshed 2.4 M, and the app offered a normal mesh the worker then refused. The worker
+ * publishes the real mesh within seconds.
  */
 
 import type { BoardDoc, GeometryIndex } from './boardTypes'
@@ -29,8 +33,9 @@ const CELLS_PER_WAVELENGTH = 20
 const MERGE_FRACTION = 0.5
 /** Air above and below the board, mm (model.py `DEFAULT_AIR_MM`). */
 const AIR_MM = 5
-/** A right triangle with a side this long along an axis, over five times its shortest, is half
- *  a straight trace span. No trace is narrower than the floor; a cap's chords are. */
+/** Two parallel outline edges this long, at least five times further apart than the floor and
+ *  at most five times closer than their length, are a straight trace span. No trace is narrower
+ *  than the floor; a cap's chords are. */
 const SPAN_MIN_MM = 0.5
 const WIDTH_FLOOR_MM = 0.05
 
@@ -39,6 +44,65 @@ export interface MeshCount {
   lines: [number, number, number]
   /** The smallest cell expected, mm: it sets the timestep. */
   min_cell_mm: number
+}
+
+type Pt = readonly [number, number]
+
+interface Edge {
+  key: string
+  a: Pt
+  b: Pt
+  len: number
+  /** Unit direction, pointing to +x (or +y when vertical). */
+  u: Pt
+}
+
+interface Span {
+  /** The trace's centerline and width, mm. */
+  a: Pt
+  b: Pt
+  w: number
+  diagonal: boolean
+}
+
+function edge(p: Pt, q: Pt): Edge | null {
+  const len = Math.hypot(q[0] - p[0], q[1] - p[1])
+  if (len < SPAN_MIN_MM) return null
+  const [a, b] = p[0] < q[0] || (p[0] === q[0] && p[1] < q[1]) ? [p, q] : [q, p]
+  const key = [a[0], a[1], b[0], b[1]].map((c) => c.toFixed(4)).join(',')
+  return { key, a, b, len, u: [(b[0] - a[0]) / len, (b[1] - a[1]) / len] }
+}
+
+/** Straight trace spans: pairs of long outline edges, parallel and a trace's width apart, of
+ *  the same length and side by side. The centerline runs between their matching ends. */
+function spans(edges: Edge[]): Span[] {
+  const out: Span[] = []
+  const used = new Set<number>()
+  for (let i = 0; i < edges.length; i++) {
+    if (used.has(i)) continue
+    const e = edges[i]
+    for (let j = i + 1; j < edges.length; j++) {
+      if (used.has(j)) continue
+      const f = edges[j]
+      if (Math.abs(e.u[0] * f.u[1] - e.u[1] * f.u[0]) > 1e-3) continue
+      if (Math.abs(e.len - f.len) > 0.01 * e.len) continue
+      const ox = f.a[0] - e.a[0]
+      const oy = f.a[1] - e.a[1]
+      const w = Math.abs(e.u[0] * oy - e.u[1] * ox)
+      const along = e.u[0] * ox + e.u[1] * oy
+      if (w < WIDTH_FLOOR_MM || w * 5 > e.len || Math.abs(along) > w) continue
+      used.add(i)
+      used.add(j)
+      out.push({
+        a: [(e.a[0] + f.a[0]) / 2, (e.a[1] + f.a[1]) / 2],
+        b: [(e.b[0] + f.b[0]) / 2, (e.b[1] + f.b[1]) / 2],
+        w,
+        diagonal: Math.min(Math.abs(e.u[0]), Math.abs(e.u[1])) > 1e-3,
+      })
+      break
+    }
+  }
+  return out
 }
 
 /** The largest cell the band allows, mm (mesh.py `max_cell_for_frequency`). */
@@ -123,11 +187,14 @@ export function countSmallPartMesh(
   const dx = cell.dx / 1000
   const dy = cell.dy / 1000
   let narrowest = Infinity
+  const diagonals: Span[] = []
 
   if (geometry && index) {
     const v = new Float32Array(geometry)
     for (const g of index.groups) {
       if (want && !want.has(g.net)) continue
+      // The group's outline: an edge two triangles share is inside the copper (null here).
+      const edges = new Map<string, Edge | null>()
       for (let t = g.offset; t + 2 < g.offset + g.count && 2 * (t + 2) + 1 < v.length; t += 3) {
         const p = [0, 1, 2].map((k) => [v[2 * (t + k)], v[2 * (t + k) + 1]] as const)
         if (!p.some(([x, y]) => inside(x, y))) continue
@@ -135,20 +202,27 @@ export function countSmallPartMesh(
           xs.push(x)
           ys.push(y)
         }
-        // Half of a straight trace span is a long, thin right triangle: its shortest side is
-        // the trace's width, and its middle one runs along an axis. A trace narrower than two
-        // cells sets a finer cell (model.py `THIRDS_RULE`).
-        const sides = [[p[0], p[1]], [p[1], p[2]], [p[2], p[0]]]
-          .map(([a, b]) => ({ dx: Math.abs(b[0] - a[0]), dy: Math.abs(b[1] - a[1]) }))
-          .map((e) => ({ ...e, len: Math.hypot(e.dx, e.dy) }))
-          .sort((a, b) => a.len - b.len)
-        const [short, along, hyp] = sides
-        const right = Math.abs(hyp.len ** 2 - short.len ** 2 - along.len ** 2) < 1e-3 * hyp.len ** 2
-        if (right && along.len >= SPAN_MIN_MM && short.len >= WIDTH_FLOOR_MM
-            && short.len * 5 <= along.len && Math.min(along.dx, along.dy) < 1e-3) {
-          narrowest = Math.min(narrowest, short.len)
+        for (const [i, j] of [[0, 1], [1, 2], [2, 0]] as const) {
+          const e = edge(p[i], p[j])
+          if (e) edges.set(e.key, edges.has(e.key) ? null : e)
         }
       }
+      // A trace narrower than two cells sets a finer cell (model.py `THIRDS_RULE`).
+      for (const span of spans([...edges.values()].filter((e): e is Edge => !!e))) {
+        if (span.diagonal) diagonals.push(span)
+        else narrowest = Math.min(narrowest, span.w)
+      }
+    }
+  }
+  // Lines along both axes a diagonal spans, no further apart than 0.7 of its width and no
+  // closer than half of it or the preset's cell (model.py `_copper_features`).
+  const edgeCell = Math.min(dx, dy)
+  for (const { a, b, w } of diagonals) {
+    const step = Math.min(Math.max(edgeCell, w / 2), 0.7 * w)
+    for (const [lo, hi, axis] of [[Math.min(a[0], b[0]), Math.max(a[0], b[0]), xs],
+      [Math.min(a[1], b[1]), Math.max(a[1], b[1]), ys]] as const) {
+      const n = Math.ceil((hi - lo) / step)
+      for (let k = 1; k < n; k++) axis.push(lo + ((hi - lo) * k) / n)
     }
   }
   for (const via of doc.vias) {
