@@ -282,6 +282,24 @@ def _pad_with_air() -> None:
     nf2ff_mod.add_dumps = lambda *a, **k: None
 
 
+#: Lay a narrow trace's thirds rule out at half its width, as the product now does
+#: (``model.THIRDS_RULE``). Off here: at this study's 2000 um preset every trace is "narrow",
+#: and pinning each one's lines put 50 um cells into a grid that had 500 um ones, a timestep
+#: several times shorter and 5x the record on board A. B and C share the grid, so the rule
+#: moves both sides together; off is the grid the 40 ns runs used.
+PIN_NARROW = os.environ.get("PIN_NARROW", "0") == "1"
+
+
+def _unpin_narrow_traces() -> None:
+    """The thirds rule at the preset's cell, merged like any other line; see PIN_NARROW."""
+    if PIN_NARROW:
+        return
+    from emi_worker.openems import model as model_mod
+
+    model_mod._rule_cell = lambda width_mm, cell_mm: cell_mm
+    model_mod.narrow_trace_lines = lambda ruled, cell_mm: ()
+
+
 def _record_steps(doc) -> int:
     """Timesteps for MAX_NS of record, from the Courant limit of the finished grid."""
     d = [float(np.diff(np.asarray(v)).min()) * 1e-3
@@ -428,6 +446,7 @@ def first_resonance_hz(z: np.ndarray, freqs: np.ndarray) -> float:
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     _pad_with_air()
+    _unpin_narrow_traces()
     print(f"cable test 4 — {DX_UM:.0f}/{DZ_UM:.0f} um preset, "
           f"{F_MIN/1e6:.0f}-{F_MAX/1e6:.0f} MHz, {len(FREQS)} points\n")
 
