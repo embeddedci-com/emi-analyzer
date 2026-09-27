@@ -257,6 +257,20 @@ def test_the_reports_below_must_also_span_a_nanosecond(tmp_path, monkeypatch):
     assert r.converged is True
 
 
+def test_a_run_climbing_out_of_a_trough_is_not_stopped(tmp_path, monkeypatch):
+    """Check 4's via fell from -33 to -52 dB in one report and climbed back over the next ones
+    (docs/verification/small-part-solve.md). Stopped there, its inductance read 27 % high. The
+    last report must read no higher than the first one below."""
+    from emi_worker.openems import run as runmod
+
+    monkeypatch.setattr(runmod, "OPENEMS_BIN", _abortable_openems(
+        tmp_path, [(2000, -33.0), (2200, -52.4), (2400, -51.7), (2600, -50.7), (2800, -51.0),
+                   (3000, -53.0), (3200, -55.0)]))
+    r = runmod.run_openems("model.xml", str(tmp_path), stop_below_db=-50.0)
+    assert r.stopped_on_energy_at == 3000
+    assert r.converged is True
+
+
 def test_a_ringing_run_that_never_holds_goes_to_its_cap(tmp_path, monkeypatch):
     from emi_worker.openems import run as runmod
 

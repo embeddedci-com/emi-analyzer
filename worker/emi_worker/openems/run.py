@@ -108,6 +108,11 @@ DECAY_MARGIN_DB = 20.0
 #: three reports fell in one trough (-50.8, -62.8, -50.2 dB) with the peaks still at -47, and the
 #: next report read -46.9. So the reports below must also span ``END_HOLD_S``, which holds two
 #: of those swings and costs a short run about a nanosecond.
+#:
+#: And the energy must not be climbing when it stops: the last report must read no higher than
+#: the first report below. A via between two planes (check 4) fell from -33 to -52 dB in one
+#: report and then climbed, -51.7 and -50.7 dB, over the nanosecond; stopped there, its
+#: inductance read 27 % high at 100 MHz, where the run that went on to -58 dB read 1 %.
 END_HOLD_READINGS = 3
 END_HOLD_S = 1e-9
 
@@ -220,7 +225,8 @@ def run_openems(
 
     ``stop_below_db`` moves the end criterion out of openEMS and into this loop: once openEMS's
     own excitation has finished and its energy has read that far below its running maximum
-    ``hold_readings`` reports in a row, over ``hold_s`` of simulated time (``END_HOLD_S``), an
+    ``hold_readings`` reports in a row, over ``hold_s`` of simulated time (``END_HOLD_S``), with
+    the last no higher than the first, an
     ``ABORT`` file is written in ``workdir``, which openEMS polls for and treats as a normal
     end, writing every dump. openEMS checks its own criterion while the source is still on,
     and stopped a real board's 30 MHz-1 GHz solve on a dip between two lobes of the pulse
@@ -270,10 +276,11 @@ def run_openems(
     energy_steps: list[int] = []
     cancelled = False
     aborted_at = 0
-    # Reports in a row below ``stop_below_db`` since the source ended, and the timestep of the
-    # first of them; one above resets both.
+    # Reports in a row below ``stop_below_db`` since the source ended, and the timestep and
+    # level of the first of them; one above resets them.
     below = 0
     below_since = 0
+    below_first_db = 0.0
 
     assert proc.stdout is not None
     try:
@@ -330,10 +337,11 @@ def run_openems(
                     if last.energy_db > stop_below_db:
                         below = 0
                     elif below == 0:
-                        below, below_since = 1, last.timestep
+                        below, below_since, below_first_db = 1, last.timestep, last.energy_db
                     else:
                         below += 1
                 held = dt <= 0 or (last.timestep - below_since) * dt >= hold_s
+                held = held and last.energy_db <= below_first_db
                 if not aborted_at and below >= max(1, hold_readings) and held:
                     aborted_at = last.timestep
                     try:
