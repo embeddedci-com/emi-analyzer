@@ -353,6 +353,8 @@ def solve(tag: str, built, freqs: np.ndarray) -> dict:
     r = run.run_openems(str(wd / "model.xml"), str(wd), threads=THREADS,
                         excitation_s=excitation_seconds(built.doc.excitation.fc))
     tail = _probe_decay_db(wd)
+    # The solver's own log: its energy reports are the only record of how the energy moved.
+    (wd / "openems.log").write_text(r.log_text)
     print(f"    {tag}: {r.final_timestep:,} steps, {time.time()-t0:.0f}s, "
           f"energy {r.final_energy_db:.1f} dB, loudest probe ends {tail:.0f} dB down",
           flush=True)
