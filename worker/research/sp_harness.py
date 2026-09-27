@@ -88,7 +88,14 @@ class Solved:
 
 
 def solve(board_text: str, params: dict, name: str, *, keep: bool = True) -> Solved:
-    """Run one solve through the production stage. ``params`` is what the app would send."""
+    """Run one solve through the production stage. ``params`` is what the app would send.
+
+    ``REUSE`` (output folders, colon separated) reads a run that already finished under the
+    same name from one of them instead, so a stopped study resumes where it was. Only a run
+    made by the same code is worth reusing; the caller decides that."""
+    reused = _reuse(name)
+    if reused:
+        return reused
     work = OUT / "smallpart" / name
     if work.exists():
         shutil.rmtree(work)
@@ -108,6 +115,19 @@ def solve(board_text: str, params: dict, name: str, *, keep: bool = True) -> Sol
     return Solved(summary=result.summary, files=client.files,
                   workdir=work / "run" / "openems", elapsed_s=elapsed, peak_mb=peak,
                   events=client.events)
+
+
+def _reuse(name: str) -> Solved | None:
+    for root in filter(None, os.environ.get("REUSE", "").split(":")):
+        work = Path(root) / "smallpart" / name
+        if not (work / "summary.json").exists() or not (work / "run" / "openems").is_dir():
+            continue
+        summary = json.loads((work / "summary.json").read_text())
+        files = {f.name: f.read_bytes() for f in work.iterdir() if f.is_file()}
+        print(f"   (reused {work})", flush=True)
+        return Solved(summary=summary, files=files, workdir=work / "run" / "openems",
+                      elapsed_s=float(summary.get("elapsed_seconds", 0.0)), peak_mb=0.0)
+    return None
 
 
 def coupon_params(board_text: str, nets: list[str], *, preset: str = "normal",
