@@ -90,6 +90,12 @@ END_CRITERIA = float(os.environ.get("END_CRITERIA", "1e-12"))
 #: Length of every record, in ns. 40 ns is four times the excitation; the 80 % check says
 #: whether it was enough.
 MAX_NS = float(os.environ.get("MAX_NS", "40"))
+#: How far the energy must have fallen by the end of the record, in dB. 30 unless a run's
+#: solver log shows it falling steadily: board C's Tier B at 100 ns ended 24 dB down, still
+#: falling ~1.5 dB per report, on a 496 MHz mode above its first resonance. It is the 80 %
+#: check that says whether such a tail moves the result; the worker's divergence check
+#: catches a run that climbs.
+MIN_DECAY_DB = float(os.environ.get("MIN_DECAY_DB", "30"))
 #: A third run per case: the cable attached and the gap left open. Its gap voltage is V_oc
 #: with the cable present, which splits what is left of the error into "V_oc moved when the
 #: cable was attached" and "Z_ant is wrong". nec2c puts the first at 0-6 dB, depending on where
@@ -347,6 +353,7 @@ def solve(tag: str, built, freqs: np.ndarray) -> dict:
     if done.exists() and (wd / "model.xml").exists() and (wd / "model.xml").read_text() == xml:
         info = json.loads(done.read_text())
         print(f"    {tag}: reusing {info['steps']:,} steps", flush=True)
+        _check_decay(tag, info["energy_db"])
         return {"wd": wd, "steps": info["steps"]}
     (wd / "model.xml").write_text(xml)
     t0 = time.time()
@@ -363,14 +370,22 @@ def solve(tag: str, built, freqs: np.ndarray) -> dict:
     done.write_text(json.dumps({"steps": r.final_timestep, "seconds": time.time() - t0,
                                 "energy_db": r.final_energy_db, "warnings": r.warnings,
                                 "probe_tail_db": tail}))
-    # Judged on the energy. A probe alone is not evidence: the 1 MOhm gap holds the charge the
-    # pulse's DC content leaves on it and bleeds it off over ~100 ns, so its voltage can end
-    # 10 dB below peak in a run whose energy is 60 dB down. A cable still ringing is a short
-    # record, which the 80 % check prices.
-    if r.final_energy_db > -30.0:
-        raise SystemExit(f"{tag}: the energy is only {-r.final_energy_db:.0f} dB down at the "
-                         f"end of the record: this run is not decaying")
+    _check_decay(tag, r.final_energy_db)
     return {"wd": wd, "steps": r.final_timestep, "probe_tail_db": tail}
+
+
+def _check_decay(tag: str, energy_db: float) -> None:
+    """Refuse a run whose energy has not fallen MIN_DECAY_DB by the end of its record.
+
+    Judged on the energy. A probe alone is not evidence: the 1 MOhm gap holds the charge the
+    pulse's DC content leaves on it and bleeds it off over ~100 ns, so its voltage can end
+    10 dB below peak in a run whose energy is 60 dB down. A cable still ringing is a short
+    record, which the 80 % check prices. A reused run is judged again, with the threshold in
+    force now.
+    """
+    if energy_db > -MIN_DECAY_DB:
+        raise SystemExit(f"{tag}: the energy is only {-energy_db:.0f} dB down at the "
+                         f"end of the record: this run is not decaying")
 
 
 def _head(trace, fraction: float = 0.8):
