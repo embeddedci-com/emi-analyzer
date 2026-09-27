@@ -79,6 +79,11 @@ def _matches(c: Component, part: PartMatch) -> bool:
     same capacitor, and a string comparison would model one and miss the other two.
     """
     m = c.match or {}
+    if c.part_numbers():
+        # A component that names its part number is that part, and answers only when the
+        # board names it too. A 100 nF 0402 on a board is not evidence that it is this
+        # 100 nF 0402: two of JLCPCB's Basic parts alone share that value and package.
+        return False
     if c.model_type == "mlcc_family":
         # A family answers for any value in a package it knows. It carries no match rules of
         # its own precisely because enumerating them is what it exists to avoid.

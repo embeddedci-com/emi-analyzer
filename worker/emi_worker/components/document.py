@@ -51,6 +51,9 @@ class Source:
     doc: str
     rev: str = ""
     what: str = ""
+    #: Where the document can be fetched again. Required for a vendor part in the built-in
+    #: library (its test checks it), optional for a user's own component.
+    url: str = ""
 
     def describe(self) -> str:
         parts = [self.doc]
@@ -141,10 +144,26 @@ class Component:
     valid_hz: tuple[float, float] | None = None
     esl_includes_mount: bool = False
     provenance: str = "user"
+    #: Who makes the part, for a named one. Shown next to its part number.
+    manufacturer: str = ""
+    #: (volts, farads): the manufacturer's capacitance under DC bias. Recorded as data; the
+    #: series R-L-C above is the 0 V figure and the solve does not derate it yet.
+    dc_bias: tuple[tuple[float, float], ...] = ()
 
     @property
     def is_generic(self) -> bool:
         return self.provenance == "generic"
+
+    @property
+    def mpn(self) -> str:
+        return str((self.match or {}).get("mpn") or "")
+
+    def part_numbers(self) -> frozenset[str]:
+        """Every part number this component answers to, normalised for comparison: the MPN,
+        its aliases (packaging variants, the base number) and the LCSC number."""
+        m = self.match or {}
+        raw = [m.get("mpn"), m.get("lcsc"), *(m.get("mpn_aliases") or [])]
+        return frozenset(normalise_part_number(r) for r in raw if isinstance(r, str) and r.strip())
 
     def describe_provenance(self) -> str:
         """One line for the UI. Never names a manufacturer for a generic entry, because a
@@ -199,6 +218,12 @@ class Component:
         return None
 
 
+def normalise_part_number(s: str) -> str:
+    """Part numbers compare case-insensitively and without spaces: "cl05b104ko5nnnc" and
+    "CL05B104KO5NNNC " are the same part, and a board is not wrong for writing either."""
+    return "".join(s.split()).upper()
+
+
 def _opt_float(v: object) -> float | None:
     if v is None:
         return None
@@ -241,7 +266,8 @@ def parse(doc: dict) -> Component:
         raise ComponentError(f"unknown model type {model_type!r}")
 
     sources = tuple(
-        Source(doc=str(s.get("doc", "")), rev=str(s.get("rev", "")), what=str(s.get("what", "")))
+        Source(doc=str(s.get("doc", "")), rev=str(s.get("rev", "")), what=str(s.get("what", "")),
+               url=str(s.get("url", "")))
         for s in doc.get("sources", []) or []
         if isinstance(s, dict)
     )
@@ -261,12 +287,37 @@ def parse(doc: dict) -> Component:
         raise ComponentError(
             f"unknown provenance {provenance!r}; use one of {', '.join(PROVENANCE)}")
 
+    match = doc.get("match") or {}
+    if not isinstance(match, dict):
+        raise ComponentError("match must be an object")
+    for key in ("mpn", "lcsc"):
+        if match.get(key) is not None and (not isinstance(match[key], str)
+                                           or not match[key].strip()):
+            raise ComponentError(f"match.{key} must be a part number or null")
+    aliases = match.get("mpn_aliases")
+    if aliases is not None and (not isinstance(aliases, list)
+                                or not all(isinstance(a, str) and a.strip() for a in aliases)):
+        raise ComponentError("match.mpn_aliases must be a list of part numbers")
+
+    manufacturer = doc.get("manufacturer", "")
+    if not isinstance(manufacturer, str):
+        raise ComponentError("manufacturer must be a name")
+
+    dc_bias = []
+    for point in doc.get("dc_bias") or []:
+        if (not isinstance(point, dict) or not isinstance(point.get("v"), (int, float))
+                or not isinstance(point.get("c_f"), (int, float))
+                or isinstance(point.get("v"), bool) or point["v"] <= 0 or point["c_f"] <= 0):
+            raise ComponentError("each dc_bias point needs a positive v (volts) and c_f (farads)")
+        dc_bias.append((float(point["v"]), float(point["c_f"])))
+
     component = Component(
         id=doc["id"].strip(), kind=doc["kind"], name=doc["name"].strip(),
-        match=doc.get("match") or {}, model_type=model_type, model=model,
+        match=match, model_type=model_type, model=model,
         sources=sources, valid_hz=valid_hz,
         esl_includes_mount=bool(doc.get("esl_includes_mount", False)),
-        provenance=provenance,
+        provenance=provenance, manufacturer=manufacturer.strip(),
+        dc_bias=tuple(sorted(dc_bias)),
     )
 
     # §11.2's rule, enforced rather than documented: a number with no source is not usable.
@@ -293,6 +344,10 @@ def parse(doc: dict) -> Component:
             raise ComponentError(
                 f"{component.id} gives per-package ESL values but says nothing about where "
                 f"they came from")
+    if dc_bias and component.cites("DC bias") is None:
+        raise ComponentError(
+            f"{component.id} gives capacitance under DC bias but says nothing about where it "
+            f"came from")
     if provenance == "vendor" and not sources:
         raise ComponentError(
             f"{component.id} claims to come from a vendor datasheet but cites none")
@@ -313,6 +368,16 @@ class Resolved:
     #: True when the numbers are a class average rather than a specific part. Callers must
     #: say so and must not attribute them to a manufacturer, because they describe none.
     generic: bool = False
+    #: How the component was chosen: "part number" (the board named it), "value and package"
+    #: or "package" (the generic family).
+    matched_by: str = ""
+    #: The board field that named it, as "LCSC C1525", when matched by part number.
+    matched_on: str = ""
+    #: One short label for the UI: "datasheet (Samsung CL05B104KO5NNNC)" or "generic 0402".
+    basis: str = ""
+    #: Things worth saying that do not stop the part being placed, such as a board value that
+    #: disagrees with the part number.
+    notes: list[str] = field(default_factory=list)
 
     @property
     def placeable(self) -> bool:
