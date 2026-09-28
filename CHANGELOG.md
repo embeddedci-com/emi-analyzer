@@ -9,6 +9,11 @@ The KiCad plugin is versioned and released separately; see
 
 ## [Unreleased]
 
+### Fixed
+
+- USB pairs named `USB_DP`/`USB_DM` are now found as pairs, so their skew is checked. Only
+  `_P/_N`, `P/N` and `+/-` were recognized before.
+
 ### Added
 
 - Named capacitors: the 59 MLCCs on JLCPCB's Basic Parts list that have a manufacturer model

@@ -23,6 +23,11 @@ from dataclasses import dataclass, field
 #: but so is "CLKP", and stripping the wrong one turns "VCCP" into "VCC".
 PAIR_SUFFIXES = (("_P", "_N"), ("_p", "_n"), ("+", "-"), ("P", "N"))
 
+#: USB names its pair D+/D- in the spec but DP/DM on most schematics. M is not N, so the
+#: suffixes above never saw USB_DP/USB_DM as a pair and its skew was never checked. Only
+#: find_pairs uses these, where the other half must exist: "UDM" alone is a DDR data mask.
+PAIR_ONLY_SUFFIXES = (("DP", "DM"), ("dp", "dm"))
+
 
 @dataclass
 class NetClass:
@@ -156,18 +161,23 @@ def find_pairs(nets: list[str], classes: NetClasses | None = None) -> list[DiffP
     in P, not half of a pair, and inventing its partner would produce a finding about a
     signal that is not there.
     """
-    bases: dict[str, dict[bool, str]] = {}
-    for net in nets:
-        split = split_pair_name(net)
-        if not split:
-            continue
-        base, positive = split
-        bases.setdefault(base, {})[positive] = net
+    present = set(nets)
+    halves_by_base: list[tuple[str, dict[bool, str]]] = []
+    used: set[str] = set()
+    # Suffix by suffix, and only when the partner exists. Splitting each net on its own gave
+    # USB2_DP the base "USB2" (from DP/DM) and USB2_DN the base "USB2_D" (from P/N), and the
+    # pair was lost.
+    for pos, neg in PAIR_SUFFIXES[:3] + PAIR_ONLY_SUFFIXES + PAIR_SUFFIXES[3:]:
+        for net in nets:
+            if net in used or not net.endswith(pos) or len(net) <= len(pos):
+                continue
+            partner = net[: -len(pos)] + neg
+            if partner in present and partner not in used:
+                used.update((net, partner))
+                halves_by_base.append((net[: -len(pos)].rstrip("_-"), {True: net, False: partner}))
 
     out: list[DiffPair] = []
-    for base, halves in sorted(bases.items()):
-        if True not in halves or False not in halves:
-            continue
+    for base, halves in sorted(halves_by_base, key=lambda bh: (bh[0], bh[1][True])):
         pair = DiffPair(base=base, positive=halves[True], negative=halves[False])
         spec = classes.spec(pair.positive) if classes else None
         if spec and (spec.diff_pair_gap_mm or spec.diff_pair_width_mm):

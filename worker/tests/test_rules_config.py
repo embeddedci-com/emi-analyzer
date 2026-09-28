@@ -148,6 +148,13 @@ def test_a_lone_net_ending_in_p_is_not_half_of_a_pair():
     assert len(find_pairs(["CLK_P", "CLK_N"], None)) == 1
 
 
+def test_usb_dp_dm_is_a_pair():
+    """The most common USB naming. M is not N, so it used to go unchecked."""
+    pairs = find_pairs(["USB_DP", "USB_DM", "/USB2_DP", "/USB2_DN", "UDM", "LDM"], None)
+    assert {(p.positive, p.negative) for p in pairs} == {
+        ("USB_DP", "USB_DM"), ("/USB2_DP", "/USB2_DN")}
+
+
 # ---- impedance ----------------------------------------------------------------------------
 
 def _microstrip(assumed=False, er=4.3, h=0.2):
