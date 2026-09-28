@@ -241,13 +241,24 @@ RULE_CATALOGUE: dict[str, dict] = {
                  "connector, where a cable becomes their antenna.",
         "params": {"min_edge_mm": 5.0, "min_connector_mm": 10.0, "keepout_margin_mm": 0.5},
     },
+    "antenna": {
+        "title": "Copper under antennas",
+        "category": "Radiation",
+        "about": "Traces, vias or pours of any net, ground included, in the area of an antenna or an "
+                 "RF module's printed antenna, on any layer. They couple into the antenna and detune "
+                 "it.",
+        # margin_mm grows the area outward (0: the body; ground vias beside a module are fine and
+        # were flagged at 1 mm on a real board); min_strip_mm is how deep a module's pad-free end has
+        # to be to count as its antenna; min_pour_pct ignores a pour that only grazes the area.
+        "params": {"margin_mm": 0.0, "min_strip_mm": 3.0, "min_pour_pct": 5.0},
+    },
     # ---- EMC: immunity and conducted emissions (rules/emc.py) ----
     "esd-protection": {
         "title": "ESD protection at connectors",
         "category": "Immunity",
         "about": "Lines leaving the board through an edge connector with no clamp on them, clamps "
-                 "placed far from the connector or after the IC they protect, and clamps with no "
-                 "short path to ground.",
+                 "placed far from the connector or after the IC they protect, clamps with no "
+                 "short path to ground, and other signals routed under a clamp.",
         # edge_mm: a connector counts as I/O when it is this close to the outline; 0 = all.
         # max_distance_mm: 10 flagged SRV05 arrays spaced along a 20-pin header on a real board,
         # which is a sensible layout; 15 still catches a clamp placed with the IC it protects.

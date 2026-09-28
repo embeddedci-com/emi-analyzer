@@ -34,6 +34,7 @@ from ..kicad.geometry import point_segment_distance, ring_area
 from .decoupling import CAP_RE, IC_RE
 from .model import Finding, RuleContext, classify_net
 from .planes import severity
+from .under import box_ring, pad_box, signals_under
 
 RES_RE = re.compile(r"^R\d", re.I)
 #: Two-pad series parts a filter is built from: inductors and ferrite beads.
@@ -296,6 +297,7 @@ def check_esd_protection(ctx: RuleContext) -> Iterator[Finding]:
     where = f"within {edge_mm:g} mm of the board edge" if edge_mm > 0 else "a connector"
 
     used: dict[str, object] = {}
+    active: set[str] = set()
     far: dict[tuple[str, str], tuple[float, list[str], object, bool]] = {}
 
     for ref, pads in sorted(parts.connectors.items()):
@@ -329,6 +331,7 @@ def check_esd_protection(ctx: RuleContext) -> Iterator[Finding]:
                 ((_route(ctx, net, cpad, cp), cr, cp, g) for cr, cp, g in clamps),
                 key=lambda t: t[0][0],
             )
+            active.add(cref)
             if gnd is not None:
                 used.setdefault(cref, gnd)
             measured = "along the routing" if routed else "in a straight line"
@@ -379,6 +382,8 @@ def check_esd_protection(ctx: RuleContext) -> Iterator[Finding]:
             net=nets[0], x=x, y=y,
         )
 
+    yield from _routed_under_clamps(ctx, parts, sorted(active))
+
     stitches = parts.ground_stitches()
     if not stitches:
         return
@@ -400,6 +405,47 @@ def check_esd_protection(ctx: RuleContext) -> Iterator[Finding]:
                 f"onto the voltage the protected line sees. Put a via at the pad."
             ),
             net=gnd.net, x=x, y=y,
+        )
+
+
+def _routed_under_clamps(ctx: RuleContext, parts: _Parts, clamps: list[str]) -> Iterator[Finding]:
+    """Signals routed under a clamp that protects a connector line.
+
+    The clamp carries the discharge to ground: amps, rising in under a nanosecond, through the
+    clamp and its ground pad. A trace under it, on the same side or on a layer with no ground
+    plane in between, is right beside that current and picks up a share of it, which puts the
+    unprotected line straight back into the path the clamp was meant to take away.
+    """
+    rule = "esd-protection"
+    order = ctx.model.copper_layer_names
+    for cref in clamps:
+        pads = parts.by_ref.get(cref, [])
+        if not pads:
+            continue
+        own = {p.net for p in pads if p.net}
+        side = {l for p in pads for l in p.layers if l in order}
+        under = signals_under(ctx, box_ring(pad_box(pads, 0.25)), own, side)
+        if not under:
+            continue
+        nets = sorted(under)
+        shown = ", ".join(nets[:4]) + (f" and {len(nets) - 4} more" if len(nets) > 4 else "")
+        layers = sorted(set(under.values()), key=lambda l: order.index(l) if l in order else 0)
+        cx = sum(p.x for p in pads) / len(pads)
+        cy = sum(p.y for p in pads) / len(pads)
+        x, y = ctx.pt(cx, cy)
+        yield Finding(
+            rule=rule,
+            severity=severity(ctx, rule, "warning"),
+            title=f"{shown} {'is' if len(nets) == 1 else 'are'} routed under ESD clamp {cref}",
+            detail=(
+                f"{shown} {'passes' if len(nets) == 1 else 'pass'} under {cref} on "
+                f"{', '.join(layers)}, with no ground plane in between. During a discharge {cref} "
+                f"carries amps to ground in under a nanosecond, and a trace beside that current "
+                f"couples a share of it straight past the protection. Route other signals around "
+                f"the clamp, or on a layer with a ground plane between them and it."
+            ),
+            action="Route other signals around the clamp, or under a ground plane.",
+            net=nets[0], layer=layers[0], x=x, y=y,
         )
 
 

@@ -57,6 +57,7 @@ const ACTION: Record<string, string> = {
   stackup: 'Put a solid plane next to each signal layer.',
   'copper-island': 'Tie the copper to ground with vias, or remove it.',
   crystal: 'Keep the crystal next to its IC, over solid ground.',
+  antenna: 'Keep every layer clear under the antenna.',
   'esd-protection': 'Put a TVS clamp at the connector, before any IC.',
   'connector-shield': 'Tie the connector shield to ground.',
   'reset-filter': 'Add a small capacitor to ground at the reset pin.',

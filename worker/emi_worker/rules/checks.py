@@ -842,6 +842,7 @@ from .cable_resonance import check_cable_resonance  # noqa: E402
 from .decoupling import check_decoupling  # noqa: E402
 from .placement import check_copper_islands, check_crystals, check_stackup  # noqa: E402
 from .stitching import check_edge_stitching, check_stitching  # noqa: E402
+from .rf import check_antennas  # noqa: E402
 from .emc import (  # noqa: E402
     check_connector_shield, check_esd_protection, check_input_filter, check_reset_filter,
     check_switch_node,
@@ -862,6 +863,7 @@ RULES: list[tuple[str, Callable[[RuleContext], Iterator[Finding]]]] = [
     ("edge-proximity", check_edge_proximity),
     ("copper-island", check_copper_islands),
     ("crystal", check_crystals),
+    ("antenna", check_antennas),
     # EMC: immunity and conducted emissions.
     ("esd-protection", check_esd_protection),
     ("connector-shield", check_connector_shield),

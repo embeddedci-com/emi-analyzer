@@ -79,6 +79,23 @@ def test_a_clamp_beside_the_connector_passes():
     assert run(emc.check_esd_protection, _io(clamp_x=3.0)) == []
 
 
+def test_a_signal_routed_under_the_clamp_is_found():
+    """Reddit r/PCB, picture 5: a line run under the ESD part instead of on another layer."""
+    m = _io(clamp_x=3.0)
+    m.tracks = [Track(layer="B.Cu", net="/SPI_CLK", width_mm=0.2, pts=[(3.0, 10.0), (3.0, 30.0)])]
+    f = run(emc.check_esd_protection, m)
+    assert titles(f) == ["/SPI_CLK is routed under ESD clamp D1"]
+    assert f[0].layer == "B.Cu"
+
+
+def test_a_signal_routed_beside_the_clamp_passes():
+    m = _io(clamp_x=3.0)
+    m.tracks = [Track(layer="B.Cu", net="/SPI_CLK", width_mm=0.2, pts=[(6.0, 10.0), (6.0, 30.0)]),
+                # The protected line itself runs through its own clamp.
+                Track(layer="F.Cu", net="/DATA", width_mm=0.2, pts=[(1.0, 20.0), (20.0, 20.0)])]
+    assert run(emc.check_esd_protection, m) == []
+
+
 def test_a_clamp_far_from_the_connector_says_what_it_costs():
     f = run(emc.check_esd_protection, _io(clamp_x=21.0, ic_x=35.0))
     assert titles(f) == ["ESD clamp D1 is 20.0 mm from J1"]

@@ -22,7 +22,8 @@ import numpy as np
 
 from ..kicad.geometry import point_in_ring, point_segment_distance, ring_area
 from .model import Finding, RuleContext, classify_net
-from .planes import ground_planes, plane_layers, severity
+from .planes import plane_layers, severity
+from .under import box_ring, pad_box, signals_under
 
 XTAL_REF = re.compile(r"^(Y|X|XTAL|XO|OSC)\d", re.I)
 XTAL_HINT = re.compile(r"crystal|xtal|oscillat|resonator|\d\s*[mk]hz", re.I)
@@ -120,25 +121,6 @@ def check_copper_islands(ctx: RuleContext) -> Iterator[Finding]:
 # Crystals
 # ---------------------------------------------------------------------------------------
 
-def _segment_hits_box(x0, y0, x1, y1, bx0, by0, bx1, by1) -> bool:
-    """Liang-Barsky: does the segment enter the box?"""
-    t0, t1 = 0.0, 1.0
-    dx, dy = x1 - x0, y1 - y0
-    for p, q in ((-dx, x0 - bx0), (dx, bx1 - x0), (-dy, y0 - by0), (dy, by1 - y0)):
-        if p == 0:
-            if q < 0:
-                return False
-        else:
-            r = q / p
-            if p < 0:
-                t0 = max(t0, r)
-            else:
-                t1 = min(t1, r)
-            if t0 > t1:
-                return False
-    return True
-
-
 def check_crystals(ctx: RuleContext) -> Iterator[Finding]:
     if not ctx.enabled("crystal"):
         return
@@ -152,7 +134,6 @@ def check_crystals(ctx: RuleContext) -> Iterator[Finding]:
             by_ref[p.ref].append(p)
 
     order = ctx.model.copper_layer_names
-    grounds = set(ground_planes(ctx.model))
     edges = [
         (*ring[i], *ring[i + 1]) for ring in ctx.model.outline for i in range(len(ring) - 1)
     ]
@@ -162,34 +143,14 @@ def check_crystals(ctx: RuleContext) -> Iterator[Finding]:
         hint = f"{getattr(pads[0], 'value', '')} {getattr(pads[0], 'footprint', '')}"
         if not (XTAL_REF.match(ref) or XTAL_HINT.search(hint)):
             continue
-        pts = [q for p in pads for q in (p.ring or [(p.x, p.y)])]
-        bx0 = min(q[0] for q in pts) - margin
-        bx1 = max(q[0] for q in pts) + margin
-        by0 = min(q[1] for q in pts) - margin
-        by1 = max(q[1] for q in pts) + margin
+        bx0, by0, bx1, by1 = pad_box(pads, margin)
         cx, cy = (bx0 + bx1) / 2, (by0 + by1) / 2
         x, y = ctx.pt(cx, cy)
         own = {p.net for p in pads}
         side = {l for p in pads for l in p.layers if l in order}
 
         # Signals under the crystal -- unless a ground plane lies between them and it.
-        under: dict[str, str] = {}
-        for t in ctx.model.tracks:
-            if not t.net or t.net in own or classify_net(t.net) != "signal" or t.net in under:
-                continue
-            if t.layer in order and side:
-                ti = order.index(t.layer)
-                shielded = all(
-                    any(g in grounds and min(ti, order.index(s)) < order.index(g) < max(ti, order.index(s))
-                        for g in order)
-                    for s in side if s in order
-                )
-                if shielded:
-                    continue
-            for (x0, y0), (x1, y1) in zip(t.pts, t.pts[1:]):
-                if _segment_hits_box(x0, y0, x1, y1, bx0, by0, bx1, by1):
-                    under[t.net] = t.layer
-                    break
+        under = signals_under(ctx, box_ring((bx0, by0, bx1, by1)), own, side)
         for net, layer in sorted(under.items()):
             yield Finding(
                 rule="crystal",

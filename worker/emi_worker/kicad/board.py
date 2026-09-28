@@ -163,6 +163,54 @@ class ZonePolygon:
 
 
 @dataclass
+class Footprint:
+    """A placed part's body, as opposed to its pads.
+
+    Only what the checks ask for: where the part is and how big. The body is the courtyard,
+    or the fabrication outline when there is none, as a rotated rectangle in the file's frame.
+    Lines inside it are kept too: an RF module's fab layer draws the edge of its antenna area.
+    """
+
+    ref: str
+    footprint: str = ""
+    value: str = ""
+    layer: str = "F.Cu"
+    x: float = 0.0
+    y: float = 0.0
+    rotation: float = 0.0
+    #: Axis-aligned in the footprint's own frame: (x0, y0, x1, y1). Empty when it draws none.
+    local_bbox: tuple[float, float, float, float] | None = None
+    #: Straight fab/courtyard lines in the footprint's own frame, ((x0, y0), (x1, y1)).
+    local_lines: list[tuple[tuple[float, float], tuple[float, float]]] = field(default_factory=list)
+
+    def to_board(self, x: float, y: float) -> tuple[float, float]:
+        rx, ry = g.rotate(x, y, self.rotation)
+        return self.x + rx, self.y + ry
+
+    def ring(self, box: tuple[float, float, float, float] | None = None) -> list[tuple[float, float]]:
+        """A local box (the body by default) as four board-frame corners."""
+        box = box or self.local_bbox
+        if box is None:
+            return []
+        x0, y0, x1, y1 = box
+        return [self.to_board(x, y) for x, y in ((x0, y0), (x1, y0), (x1, y1), (x0, y1))]
+
+
+@dataclass
+class Keepout:
+    """A rule area. Its copper is not real, but it says where the designer wanted none."""
+
+    ring: list[tuple[float, float]]
+    layers: list[str]
+    #: The footprint it belongs to, or "" for one drawn on the board.
+    ref: str = ""
+    name: str = ""
+    no_tracks: bool = False
+    no_vias: bool = False
+    no_pour: bool = False
+
+
+@dataclass
 class BoardModel:
     version: int = 0
     generator: str = ""
@@ -174,6 +222,8 @@ class BoardModel:
     vias: list[Via] = field(default_factory=list)
     pads: list[Pad] = field(default_factory=list)
     zones: list[ZonePolygon] = field(default_factory=list)
+    footprints: list[Footprint] = field(default_factory=list)
+    keepouts: list[Keepout] = field(default_factory=list)
     outline: list[list[tuple[float, float]]] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
@@ -406,7 +456,61 @@ def _footprints(root: Node) -> list[Node]:
     return [*children(root, "footprint"), *children(root, "module")]
 
 
-def _parse_footprints(root: Node, nets: _NetResolver, warnings: list[str]) -> list[Pad]:
+#: Layers a part's body is read from, best first.
+_BODY_LAYERS = (("F.CrtYd", "B.CrtYd"), ("F.Fab", "B.Fab"))
+
+
+def _body(fp: Node) -> tuple[tuple[float, float, float, float] | None, list]:
+    """The footprint's body box and its straight lines, in its own frame."""
+    for names in _BODY_LAYERS:
+        pts: list[tuple[float, float]] = []
+        lines = []
+        for kind in ("fp_line", "fp_rect", "fp_poly"):
+            for item in children(fp, kind):
+                if text(item, "layer", default="") not in names:
+                    continue
+                if kind == "fp_poly":
+                    pts.extend(points(item))
+                    continue
+                a, b = _xy(item, "start"), _xy(item, "end")
+                if a is None or b is None:
+                    continue
+                pts.extend((a, b))
+                if kind == "fp_line":
+                    lines.append((a, b))
+        if len(pts) >= 2:
+            xs = [p[0] for p in pts]
+            ys = [p[1] for p in pts]
+            return (min(xs), min(ys), max(xs), max(ys)), lines
+    return None, []
+
+
+def _keepout(zone: Node, ref: str = "") -> Keepout | None:
+    rule = child(zone, "keepout")
+    if rule is None:
+        return None
+    ring: list[tuple[float, float]] = []
+    for poly in children(zone, "polygon"):
+        ring = points(poly)
+        break
+    if len(ring) < 3:
+        return None
+    layers = _layer_list(zone) if child(zone, "layers") is not None else []
+    if not layers:
+        layers = [text(zone, "layer", default="")]
+
+    def banned(what: str) -> bool:
+        vs = values(rule, what)
+        return bool(vs) and vs[0] == "not_allowed"
+
+    return Keepout(ring=ring, layers=[l for l in layers if l], ref=ref,
+                   name=text(zone, "name", default=""),
+                   no_tracks=banned("tracks"), no_vias=banned("vias"), no_pour=banned("copperpour"))
+
+
+def _parse_footprints(root: Node, nets: _NetResolver, warnings: list[str],
+                      bodies: list[Footprint] | None = None,
+                      keepouts: list[Keepout] | None = None) -> list[Pad]:
     pads: list[Pad] = []
     for fp in _footprints(root):
         fx, fy, frot = _at(fp)
@@ -429,6 +533,18 @@ def _parse_footprints(root: Node, nets: _NetResolver, warnings: list[str]) -> li
                 ref = _name(t[2])
             elif len(t) > 2 and t[1] == "value" and not value:
                 value = _name(t[2])
+
+        if bodies is not None:
+            box, lines = _body(fp)
+            bodies.append(Footprint(ref=ref, footprint=footprint, value=value,
+                                    layer=text(fp, "layer", default="F.Cu"), x=fx, y=fy,
+                                    rotation=frot, local_bbox=box, local_lines=lines))
+        if keepouts is not None:
+            # Footprint zones are written in board coordinates, like the board's own.
+            for zone in children(fp, "zone"):
+                k = _keepout(zone, ref)
+                if k is not None:
+                    keepouts.append(k)
 
         for pad in children(fp, "pad"):
             number_str = _name(pad[1]) if len(pad) > 1 else ""
@@ -664,13 +780,16 @@ def parse_board(root: Node) -> BoardModel:
             kind=kind,
         ))
 
-    model.pads = _parse_footprints(root, nets, warnings)
+    model.pads = _parse_footprints(root, nets, warnings, model.footprints, model.keepouts)
     _summarise_odd_pads(warnings)
 
     unfilled = 0
     for zone in children(root, "zone"):
         # A keepout zone has no copper; including it would invent a plane that is not there.
         if child(zone, "keepout") is not None:
+            k = _keepout(zone)
+            if k is not None:
+                model.keepouts.append(k)
             continue
         net = nets.resolve(zone)
         fills = list(children(zone, "filled_polygon"))

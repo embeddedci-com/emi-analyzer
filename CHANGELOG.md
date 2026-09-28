@@ -9,6 +9,14 @@ The KiCad plugin is versioned and released separately; see
 
 ## [Unreleased]
 
+### Added
+
+- Copper under antennas: traces, vias and pours of any net (ground too) in the antenna area of
+  an RF module (ESP32-WROOM, -MINI and similar: the pad-free end of the body), a chip antenna,
+  or a keep-out area drawn in the antenna's footprint.
+
+- ESD protection also reports other signals routed under a clamp with no ground plane between.
+
 ### Fixed
 
 - USB pairs named `USB_DP`/`USB_DM` are now found as pairs, so their skew is checked. Only
