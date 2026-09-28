@@ -47,6 +47,7 @@ const ACTION: Record<string, string> = {
   'plane-gap': 'Route over solid plane, or bridge the gap with a stitching capacitor.',
   'return-via': 'Add a ground via next to the layer change.',
   'via-stub': 'Change layers nearer the via end, or backdrill it.',
+  'test-point-stub': 'Put the test point on the trace, not at the end of a branch.',
   radiator: 'Shorten the trace, or route it on an inner layer between planes.',
   'edge-proximity': 'Move the copper away from the board edge.',
   'ddr-skew': 'Add length to the short traces in the group.',

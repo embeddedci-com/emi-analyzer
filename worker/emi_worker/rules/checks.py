@@ -843,6 +843,7 @@ from .decoupling import check_decoupling  # noqa: E402
 from .placement import check_copper_islands, check_crystals, check_stackup  # noqa: E402
 from .stitching import check_edge_stitching, check_stitching  # noqa: E402
 from .rf import check_antennas  # noqa: E402
+from .stubs import check_test_point_stubs  # noqa: E402
 from .emc import (  # noqa: E402
     check_connector_shield, check_esd_protection, check_input_filter, check_reset_filter,
     check_switch_node,
@@ -857,6 +858,7 @@ RULES: list[tuple[str, Callable[[RuleContext], Iterator[Finding]]]] = [
     ("decoupling", check_decoupling),
     ("cable-resonance", check_cable_resonance),
     ("via-stub", check_via_stubs),
+    ("test-point-stub", check_test_point_stubs),
     ("ddr-skew", check_length_matching),
     ("impedance", check_impedance),
     ("radiator", check_radiators),

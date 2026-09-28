@@ -15,6 +15,10 @@ The KiCad plugin is versioned and released separately; see
   an RF module (ESP32-WROOM, -MINI and similar: the pad-free end of the body), a chip antenna,
   or a keep-out area drawn in the antenna's footprint.
 
+- Test point stubs: a test point on a fast net (clocks, SPI, SDIO, USB, Ethernet, pairs) reached
+  by a branch longer than λ/20 instead of sitting on the trace. A net group can mark any net
+  fast and give it its own budget.
+
 - ESD protection also reports other signals routed under a clamp with no ground plane between.
 
 ### Fixed

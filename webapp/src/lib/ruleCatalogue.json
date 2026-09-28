@@ -36,6 +36,24 @@
     ]
   },
   {
+    "id": "test-point-stub",
+    "title": "Test point stubs",
+    "about": "Test points on fast nets reached by a branch off the route instead of sitting on it. The branch is an open stub that makes the signal ring and radiates.",
+    "category": "Signal integrity",
+    "params": [
+      {
+        "key": "max_stub_mm",
+        "default": 0.0,
+        "per_net": true
+      },
+      {
+        "key": "fast_nets_only",
+        "default": true,
+        "per_net": true
+      }
+    ]
+  },
+  {
     "id": "radiator",
     "title": "Long nets",
     "about": "A net long enough against the wavelength to couple to free space efficiently.",

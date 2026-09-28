@@ -138,6 +138,16 @@ RULE_CATALOGUE: dict[str, dict] = {
                  "which resonates.",
         "params": {"resonance_margin": 4.0},
     },
+    "test-point-stub": {
+        "title": "Test point stubs",
+        "category": "Signal integrity",
+        "about": "Test points on fast nets reached by a branch off the route instead of sitting on "
+                 "it. The branch is an open stub that makes the signal ring and radiates.",
+        # max_stub_mm: 0 = λ/20 at the board's maximum frequency. fast_nets_only: only nets named
+        # like clocks, SPI, SDIO, USB, Ethernet and the like, plus differential pairs; a stub on
+        # a supply or a slow control line does no harm.
+        "params": {"max_stub_mm": 0.0, "fast_nets_only": True},
+    },
     "radiator": {
         "title": "Long nets",
         "category": "Radiation",
@@ -322,6 +332,7 @@ PER_NET_PARAMS: dict[str, tuple[str, ...]] = {
     "ddr-skew": ("intra_pair_ps", "byte_lane_ps", "address_command_ps"),
     "impedance": ("single_ended_ohm", "differential_ohm"),
     "decoupling": ("ripple_pct", "step_current_a", "switching_hz", "board_max_hz"),
+    "test-point-stub": ("max_stub_mm", "fast_nets_only"),
 }
 
 
