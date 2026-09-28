@@ -4,7 +4,8 @@ A test point placed on the trace costs nothing. One reached by a branch off the 
 open stub: the edge runs down it, reflects off the open end and comes back to the line late,
 so a fast signal rings, and the stub is a small antenna driven by every edge. On a supply or
 a slow control line it does not matter, so the check only looks at nets whose name says they
-are fast (clocks, SPI, SDIO, USB, Ethernet and the like) and at differential pairs.
+are fast (clocks, SPI, SDIO, USB, Ethernet and the like), at differential pairs, and at nets a
+net group gives a stub budget.
 
 The stub is measured along the copper: for a test point T on a net whose other pins include
 A and B, the branch off the A-B route is (d(A,T) + d(B,T) - d(A,B)) / 2, which is exact for
@@ -61,9 +62,9 @@ def check_test_point_stubs(ctx: RuleContext) -> Iterator[Finding]:
             if not net or (ref, net) in seen or classify_net(net) != "signal":
                 continue
             seen.add((ref, net))
-            # Per net, so a net group can mark a net fast (or slow) and give it its own budget.
-            if (ctx.setting(RULE, "fast_nets_only", net=net) and net not in pair_nets
-                    and not FAST_NET.search(net)):
+            # A net group that gives a net its own budget marks it fast, whatever its name.
+            if (net not in pair_nets and not FAST_NET.search(net)
+                    and not ctx.group_sets("max_stub_mm", net)):
                 continue
             limit = float(ctx.setting(RULE, "max_stub_mm", net=net) or 0.0) or default_limit
             topo = ctx.topology.get(net)

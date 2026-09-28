@@ -45,11 +45,6 @@
         "key": "max_stub_mm",
         "default": 0.0,
         "per_net": true
-      },
-      {
-        "key": "fast_nets_only",
-        "default": true,
-        "per_net": true
       }
     ]
   },
@@ -344,6 +339,34 @@
       {
         "key": "max_distance_mm",
         "default": 15.0
+      }
+    ]
+  },
+  {
+    "id": "power-neck",
+    "title": "Thin power traces",
+    "about": "Supply copper squeezed through a thin trace between two wide pieces, so all the current goes through it; and, when a net group gives a net its current, traces narrower than IPC-2221 asks for.",
+    "category": "Power integrity",
+    "params": [
+      {
+        "key": "neck_ratio",
+        "default": 4.0,
+        "per_net": true
+      },
+      {
+        "key": "min_wide_mm",
+        "default": 1.0,
+        "per_net": true
+      },
+      {
+        "key": "current_a",
+        "default": 0.0,
+        "per_net": true
+      },
+      {
+        "key": "max_rise_c",
+        "default": 10.0,
+        "per_net": true
       }
     ]
   },

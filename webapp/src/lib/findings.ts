@@ -65,6 +65,7 @@ const ACTION: Record<string, string> = {
   'reset-filter': 'Add a small capacitor to ground at the reset pin.',
   'input-filter': 'Add a capacitor or filter at the power input.',
   'switch-node': 'Keep the switch node copper small and tight.',
+  'power-neck': 'Widen the trace to match the copper on either side, or pour it.',
   'cable-resonance': 'Filter the lines at the connector.',
 }
 

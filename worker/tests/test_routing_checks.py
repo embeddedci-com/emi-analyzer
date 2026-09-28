@@ -11,7 +11,7 @@ from emi_worker import topology
 from emi_worker.kicad.board import BoardModel, CopperLayer, Pad, Track, ZonePolygon
 from emi_worker.kicad.netclass import find_pairs
 from emi_worker.kicad.normalize import board_extent
-from emi_worker.rules import pairs, settings, stubs
+from emi_worker.rules import current, pairs, settings, stubs
 from emi_worker.rules.model import RuleContext
 
 
@@ -82,11 +82,8 @@ def test_a_short_branch_passes():
     assert run(stubs.check_test_point_stubs, _spi(branch=5.0)) == []
 
 
-def test_a_slow_net_is_not_checked_unless_asked():
-    m = _spi(net="/LED_EN")
-    assert run(stubs.check_test_point_stubs, m) == []
-    f = run(stubs.check_test_point_stubs, m, {"test-point-stub": {"params": {"fast_nets_only": False}}})
-    assert titles(f) == ["Test point TP1 hangs 20.0 mm off /LED_EN"]
+def test_a_slow_net_is_not_checked():
+    assert run(stubs.check_test_point_stubs, _spi(net="/LED_EN")) == []
 
 
 def test_the_budget_can_be_set():
@@ -105,11 +102,11 @@ def test_a_pin_and_its_test_point_alone_is_not_a_stub():
     assert run(stubs.check_test_point_stubs, m) == []
 
 
-def test_a_net_group_can_mark_a_net_fast():
+def test_a_net_group_with_a_budget_marks_a_net_fast():
     m = _spi(net="/LED_EN")
     ctx = ctx_for(m)
     ctx.settings = settings.load(("file", {"groups": [
-        {"match": "/LED_EN", "params": {"fast_nets_only": False}}]}))
+        {"match": "/LED_EN", "params": {"max_stub_mm": 10.0}}]}))
     assert titles(stubs.check_test_point_stubs(ctx)) == ["Test point TP1 hangs 20.0 mm off /LED_EN"]
 
 
@@ -173,3 +170,71 @@ def test_each_part_can_be_switched_off():
     m = _pair(split=3.0)
     m.zones.append(ZonePolygon(layer="F.Cu", net="GND", ring=square(0, 20.375, 60, 60)))
     assert run(pairs.check_pair_coupling, m, rules) == []
+
+
+# ---- thin power necks ---------------------------------------------------------------------
+
+def _pours(neck_width=0.2, bypass=None):
+    """Two +5V pours on F.Cu, x=0..20 and x=30..60, joined by a trace at y=30."""
+    m = board()
+    m.zones = [ZonePolygon(layer="F.Cu", net="+5V", ring=square(0, 10, 20, 50)),
+               ZonePolygon(layer="F.Cu", net="+5V", ring=square(30, 10, 60, 50))]
+    m.tracks = [track("+5V", (19.5, 30), (30.5, 30), width=neck_width)]
+    if bypass:
+        m.tracks.append(track("+5V", (19.5, 15), (30.5, 15), width=bypass))
+    return m
+
+
+def test_a_thin_trace_between_two_pours_is_found():
+    """Reddit r/PCB picture 7: a tiny trace feeding giant copper."""
+    f = run(current.check_power_necks, _pours())
+    assert titles(f) == ["+5V necks down to 0.20 mm between a pour and a pour"]
+    assert "mΩ" in f[0].detail and f[0].layer == "F.Cu"
+
+
+def test_a_wide_trace_between_pours_passes():
+    assert run(current.check_power_necks, _pours(neck_width=1.5)) == []
+
+
+def test_a_thin_trace_beside_a_wide_one_is_not_a_neck():
+    assert run(current.check_power_necks, _pours(bypass=2.0)) == []
+
+
+def test_a_thin_branch_to_a_pin_is_not_a_neck():
+    m = board()
+    m.zones = [ZonePolygon(layer="F.Cu", net="+5V", ring=square(0, 10, 20, 50))]
+    m.pads = [pad("U1", "4", "+5V", 30, 30)]
+    m.tracks = [track("+5V", (19.5, 30), (30, 30), width=0.2)]
+    assert run(current.check_power_necks, m) == []
+
+
+def test_a_thin_run_between_wide_tracks_is_found():
+    m = board()
+    m.tracks = [track("+12V", (5, 30), (20, 30), width=2.0),
+                track("+12V", (20, 30), (30, 30), width=0.3),
+                track("+12V", (30, 30), (45, 30), width=2.0)]
+    f = run(current.check_power_necks, m)
+    assert titles(f) == ["+12V necks down to 0.30 mm between a 2.00 mm track and a 2.00 mm track"]
+
+
+def test_a_signal_net_is_not_checked():
+    m = _pours()
+    for z in m.zones:
+        z.net = "/PWM"
+    m.tracks[0].net = "/PWM"
+    assert run(current.check_power_necks, m) == []
+
+
+def test_a_net_groups_current_is_held_to_ipc_2221():
+    m = board()
+    m.tracks = [track("+5V", (5, 30), (45, 30), width=0.5)]
+    ctx = ctx_for(m)
+    ctx.settings = settings.load(("file", {"groups": [{"match": "+5V", "params": {"current_a": 3.0}}]}))
+    f = list(current.check_power_necks(ctx))
+    # 3 A, 10 °C rise, 35 µm outer copper: IPC-2221 gives about 54 mil.
+    assert titles(f) == ["+5V carries 3 A on a 0.50 mm trace; it needs 1.37 mm"]
+
+
+def test_ipc_2221_width_matches_the_published_chart():
+    assert round(current.ipc2221_width_mm(1.0, 10.0, 0.035, outer=True), 2) == 0.30
+    assert current.ipc2221_width_mm(1.0, 10.0, 0.035, outer=False) > 0.7

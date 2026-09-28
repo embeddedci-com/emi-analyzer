@@ -5,7 +5,7 @@ see what to fix, marked on the board, in seconds.
 
 | | |
 |---|---|
-| **Layout checks** | 19 checks: return paths, plane gaps and stitching, decoupling, impedance, length matching, ESD protection at connectors, shield grounding, reset lines, power input and switching-regulator layout. Each finding says what to do. |
+| **Layout checks** | 23 checks: return paths, plane gaps and stitching, decoupling, impedance, length matching, differential pair routing, test point stubs, copper under antennas, thin power traces, ESD protection at connectors, shield grounding, reset lines, power input and switching-regulator layout. Each finding says what to do. |
 | **Decoupling** | Per supply rail and IC: the impedance of its capacitors against a target, where it falls short, and which change closes the gap. |
 | **ESD** | An IEC 61000-4-2 contact discharge into each line that leaves the board, simulated in ngspice, with the clamp where it is and moved to the connector. |
 | **Cables** | How much common-mode current each connector's cable can carry before it passes the FCC limit, from an antenna model in nec2c. |

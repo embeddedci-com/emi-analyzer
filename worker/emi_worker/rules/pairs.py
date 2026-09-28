@@ -95,6 +95,12 @@ def check_pair_coupling(ctx: RuleContext) -> Iterator[Finding]:
     for z in ctx.model.zones:
         if z.net and z.ring:
             pours_by_layer.setdefault(z.layer, []).append(z)
+    # Every pour edge on a layer, with the index of the pour it belongs to, built once.
+    edges_by_layer: dict[str, tuple[np.ndarray, np.ndarray]] = {}
+    for layer, zs in pours_by_layer.items():
+        parts = [ring_edges([z.ring]) for z in zs]
+        edges_by_layer[layer] = (np.concatenate(parts),
+                                 np.concatenate([np.full(len(e), i) for i, e in enumerate(parts)]))
 
     for pair in ctx.pairs:
         halves = (pair.positive, pair.negative)
@@ -152,15 +158,16 @@ def check_pair_coupling(ctx: RuleContext) -> Iterator[Finding]:
                 if split.any() and where_uncoupled is None:
                     where_uncoupled = tuple(pts[int(np.argmax(split))])
 
-                pours = [z for z in pours_by_layer.get(layer, []) if z.net not in halves]
-                if not pours:
+                if layer not in edges_by_layer:
                     continue
+                pours = pours_by_layer[layer]
                 x0, y0 = pts.min(axis=0) - 3 * pitch
                 x1, y1 = pts.max(axis=0) + 3 * pitch
-                edges = ring_edges([z.ring for z in pours])
-                owner = np.concatenate([np.full(len(ring_edges([z.ring])), i) for i, z in enumerate(pours)])
+                edges, owner = edges_by_layer[layer]
                 keep = ~((np.maximum(edges[:, 0], edges[:, 2]) < x0) | (np.minimum(edges[:, 0], edges[:, 2]) > x1)
                          | (np.maximum(edges[:, 1], edges[:, 3]) < y0) | (np.minimum(edges[:, 1], edges[:, 3]) > y1))
+                # The pair's own nets never pour, but a board that does must not count them.
+                keep &= ~np.array([z.net in halves for z in pours], dtype=bool)[owner]
                 edges, owner = edges[keep], owner[keep]
                 if len(edges) == 0:
                     continue

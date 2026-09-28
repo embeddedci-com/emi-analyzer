@@ -143,10 +143,10 @@ RULE_CATALOGUE: dict[str, dict] = {
         "category": "Signal integrity",
         "about": "Test points on fast nets reached by a branch off the route instead of sitting on "
                  "it. The branch is an open stub that makes the signal ring and radiates.",
-        # max_stub_mm: 0 = λ/20 at the board's maximum frequency. fast_nets_only: only nets named
-        # like clocks, SPI, SDIO, USB, Ethernet and the like, plus differential pairs; a stub on
-        # a supply or a slow control line does no harm.
-        "params": {"max_stub_mm": 0.0, "fast_nets_only": True},
+        # max_stub_mm: 0 = λ/20 at the board's maximum frequency. Only nets named like clocks, SPI,
+        # SDIO, USB, Ethernet and the like, and differential pairs, are checked: a stub on a supply
+        # or a slow control line does no harm. A net group that sets max_stub_mm adds its nets.
+        "params": {"max_stub_mm": 0.0},
     },
     "radiator": {
         "title": "Long nets",
@@ -308,6 +308,18 @@ RULE_CATALOGUE: dict[str, dict] = {
                  "the way in.",
         "params": {"edge_mm": 5.0, "max_distance_mm": 15.0},
     },
+    "power-neck": {
+        "title": "Thin power traces",
+        "category": "Power integrity",
+        "about": "Supply copper squeezed through a thin trace between two wide pieces, so all the "
+                 "current goes through it; and, when a net group gives a net its current, traces "
+                 "narrower than IPC-2221 asks for.",
+        # neck_ratio: the copper on both sides is at least this many times wider than the neck.
+        # min_wide_mm: narrower copper on either side is not "wide", and a neck is always narrower
+        # than this. current_a: 0 = unknown; set
+        # it per net in a net group to check widths against IPC-2221 at max_rise_c.
+        "params": {"neck_ratio": 4.0, "min_wide_mm": 1.0, "current_a": 0.0, "max_rise_c": 10.0},
+    },
     "switch-node": {
         "title": "Switching regulator nodes",
         "category": "Conducted emissions",
@@ -342,8 +354,9 @@ PER_NET_PARAMS: dict[str, tuple[str, ...]] = {
     "ddr-skew": ("intra_pair_ps", "byte_lane_ps", "address_command_ps"),
     "impedance": ("single_ended_ohm", "differential_ohm"),
     "decoupling": ("ripple_pct", "step_current_a", "switching_hz", "board_max_hz"),
-    "test-point-stub": ("max_stub_mm", "fast_nets_only"),
+    "test-point-stub": ("max_stub_mm",),
     "pair-coupling": ("max_uncoupled_mm", "max_asymmetry_mm", "pour_gap_factor"),
+    "power-neck": ("neck_ratio", "min_wide_mm", "current_a", "max_rise_c"),
 }
 
 

@@ -23,6 +23,10 @@ The KiCad plugin is versioned and released separately; see
   pads and vias), and one half running beside another net's pour more than the other. Both turn
   part of the signal into common-mode current.
 
+- Thin power traces: a supply squeezed through a thin trace that is the only copper between two
+  wide pieces (pours, or tracks four times wider). With a current set per net in a net group,
+  traces are also held to the IPC-2221 width for it.
+
 - ESD protection also reports other signals routed under a clamp with no ground plane between.
 
 ### Fixed

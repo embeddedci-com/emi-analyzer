@@ -845,6 +845,7 @@ from .stitching import check_edge_stitching, check_stitching  # noqa: E402
 from .rf import check_antennas  # noqa: E402
 from .stubs import check_test_point_stubs  # noqa: E402
 from .pairs import check_pair_coupling  # noqa: E402
+from .current import check_power_necks  # noqa: E402
 from .emc import (  # noqa: E402
     check_connector_shield, check_esd_protection, check_input_filter, check_reset_filter,
     check_switch_node,
@@ -874,4 +875,5 @@ RULES: list[tuple[str, Callable[[RuleContext], Iterator[Finding]]]] = [
     ("reset-filter", check_reset_filter),
     ("input-filter", check_input_filter),
     ("switch-node", check_switch_node),
+    ("power-neck", check_power_necks),
 ]

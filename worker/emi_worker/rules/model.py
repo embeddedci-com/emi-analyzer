@@ -162,6 +162,11 @@ class RuleContext:
     def enabled(self, rule_id: str) -> bool:
         return self._settings().enabled(rule_id)
 
+    def group_sets(self, key: str, net: str) -> bool:
+        """A net group matching this net sets the parameter (not the board-wide default)."""
+        netclass = self.netclasses.of(net) if (self.netclasses and net) else ""
+        return any(key in g.params and g.matches(net, netclass) for g in self._settings().groups)
+
     def ps_per_mm(self, layer: str) -> float:
         return self.electrics.ps_per_mm(layer) if self.electrics else 6.0
 

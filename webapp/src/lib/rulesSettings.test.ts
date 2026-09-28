@@ -194,6 +194,11 @@ describe('net groups and suppressions', () => {
       'decoupling.board_max_hz', 'decoupling.ripple_pct', 'decoupling.step_current_a',
       'decoupling.switching_hz',
       'impedance.differential_ohm', 'impedance.single_ended_ohm',
+      'pair-coupling.max_asymmetry_mm', 'pair-coupling.max_uncoupled_mm',
+      'pair-coupling.pour_gap_factor',
+      'power-neck.current_a', 'power-neck.max_rise_c', 'power-neck.min_wide_mm',
+      'power-neck.neck_ratio',
+      'test-point-stub.max_stub_mm',
     ])
   })
 
