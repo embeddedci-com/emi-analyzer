@@ -179,6 +179,16 @@ RULE_CATALOGUE: dict[str, dict] = {
             "min_group_size": 3,
         },
     },
+    "pair-coupling": {
+        "title": "Differential pair routing",
+        "category": "Radiation",
+        "about": "Pair halves that run apart, and one half running beside another net's pour more "
+                 "than the other. Either way the halves stop matching and part of the signal "
+                 "turns into common-mode current, which radiates.",
+        # pour_gap_factor: a pour closer than this many pair gaps counts as beside the half.
+        # Either length at zero switches that part off.
+        "params": {"max_uncoupled_mm": 5.0, "max_asymmetry_mm": 3.0, "pour_gap_factor": 2.0},
+    },
     "impedance": {
         "title": "Impedance",
         "category": "Signal integrity",
@@ -333,6 +343,7 @@ PER_NET_PARAMS: dict[str, tuple[str, ...]] = {
     "impedance": ("single_ended_ohm", "differential_ohm"),
     "decoupling": ("ripple_pct", "step_current_a", "switching_hz", "board_max_hz"),
     "test-point-stub": ("max_stub_mm", "fast_nets_only"),
+    "pair-coupling": ("max_uncoupled_mm", "max_asymmetry_mm", "pour_gap_factor"),
 }
 
 

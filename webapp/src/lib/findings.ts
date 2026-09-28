@@ -52,6 +52,7 @@ const ACTION: Record<string, string> = {
   'edge-proximity': 'Move the copper away from the board edge.',
   'ddr-skew': 'Add length to the short traces in the group.',
   impedance: 'Adjust the trace width for the target impedance.',
+  'pair-coupling': 'Keep both halves together, with the same clearance to any pour.',
   decoupling: 'Move the capacitor next to the pin, with its own ground via.',
   stitching: 'Add vias to tie the planes together here.',
   'edge-stitching': 'Add a row of ground vias along this edge.',

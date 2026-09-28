@@ -19,6 +19,10 @@ The KiCad plugin is versioned and released separately; see
   by a branch longer than λ/20 instead of sitting on the trace. A net group can mark any net
   fast and give it its own budget.
 
+- Differential pair routing: halves that run apart (more than three times their pitch, away from
+  pads and vias), and one half running beside another net's pour more than the other. Both turn
+  part of the signal into common-mode current.
+
 - ESD protection also reports other signals routed under a clamp with no ground plane between.
 
 ### Fixed

@@ -109,6 +109,29 @@
     ]
   },
   {
+    "id": "pair-coupling",
+    "title": "Differential pair routing",
+    "about": "Pair halves that run apart, and one half running beside another net's pour more than the other. Either way the halves stop matching and part of the signal turns into common-mode current, which radiates.",
+    "category": "Radiation",
+    "params": [
+      {
+        "key": "max_uncoupled_mm",
+        "default": 5.0,
+        "per_net": true
+      },
+      {
+        "key": "max_asymmetry_mm",
+        "default": 3.0,
+        "per_net": true
+      },
+      {
+        "key": "pour_gap_factor",
+        "default": 2.0,
+        "per_net": true
+      }
+    ]
+  },
+  {
     "id": "impedance",
     "title": "Impedance",
     "about": "Computed characteristic impedance against a target, and discontinuities along a net where width or reference plane changes.",

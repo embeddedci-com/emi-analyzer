@@ -8,10 +8,10 @@ change that fixes it.
 from __future__ import annotations
 
 from emi_worker import topology
-from emi_worker.kicad.board import BoardModel, CopperLayer, Pad, Track
+from emi_worker.kicad.board import BoardModel, CopperLayer, Pad, Track, ZonePolygon
 from emi_worker.kicad.netclass import find_pairs
 from emi_worker.kicad.normalize import board_extent
-from emi_worker.rules import settings, stubs
+from emi_worker.rules import pairs, settings, stubs
 from emi_worker.rules.model import RuleContext
 
 
@@ -111,3 +111,65 @@ def test_a_net_group_can_mark_a_net_fast():
     ctx.settings = settings.load(("file", {"groups": [
         {"match": "/LED_EN", "params": {"fast_nets_only": False}}]}))
     assert titles(stubs.check_test_point_stubs(ctx)) == ["Test point TP1 hangs 20.0 mm off /LED_EN"]
+
+
+# ---- differential pair routing ------------------------------------------------------------
+
+def _pair(split=0.0, pour_above=None, pour_below=None):
+    """USB_DP at y=20.15 and USB_DM at y=19.85 (0.15 mm wide, 0.15 mm gap), x=5 to x=45.
+
+    split: USB_DM detours this far down between x=20 and x=30. pour_above/below: a GND pour whose
+    edge sits that far from the nearest half's copper, above DP or below DM.
+    """
+    m = board()
+    m.pads = [pad("J1", "2", "USB_DM", 5, 19.85, half=0.1), pad("J1", "3", "USB_DP", 5, 20.15, half=0.1),
+              pad("U1", "1", "USB_DM", 45, 19.85, half=0.1), pad("U1", "2", "USB_DP", 45, 20.15, half=0.1)]
+    m.tracks = [track("USB_DP", (5, 20.15), (45, 20.15), width=0.15)]
+    if split:
+        m.tracks.append(track("USB_DM", (5, 19.85), (20, 19.85), (20, 19.85 - split), (30, 19.85 - split),
+                              (30, 19.85), (45, 19.85), width=0.15))
+    else:
+        m.tracks.append(track("USB_DM", (5, 19.85), (45, 19.85), width=0.15))
+    if pour_above is not None:
+        y = 20.225 + pour_above
+        m.zones.append(ZonePolygon(layer="F.Cu", net="GND", ring=square(0, y, 60, 60)))
+    if pour_below is not None:
+        y = 19.775 - pour_below
+        m.zones.append(ZonePolygon(layer="F.Cu", net="GND", ring=square(0, 0, 60, y)))
+    return m
+
+
+def test_a_coupled_pair_passes():
+    assert run(pairs.check_pair_coupling, _pair()) == []
+
+
+def test_halves_that_split_are_found():
+    """Reddit r/PCB picture 1: one half takes its own shortest path."""
+    f = run(pairs.check_pair_coupling, _pair(split=3.0))
+    # The detour is 3 + 10 + 3 mm of USB_DM, less the half millimetre at each end still
+    # within reach of USB_DP.
+    assert titles(f) == ["USB_DP and USB_DM run apart for 15.0 mm"]
+
+
+def test_a_pour_beside_one_half_only_is_found():
+    """Reddit r/PCB picture 1: a plane routed close to one half of the pair."""
+    f = run(pairs.check_pair_coupling, _pair(pour_above=0.15))
+    assert len(f) == 1
+    assert f[0].title.startswith("USB_DP runs beside the GND pour for ")
+    assert f[0].title.endswith(" mm more than USB_DM")
+    assert f[0].layer == "F.Cu"
+
+
+def test_a_pour_on_both_sides_is_a_coplanar_pair_and_passes():
+    assert run(pairs.check_pair_coupling, _pair(pour_above=0.15, pour_below=0.15)) == []
+
+
+def test_a_pour_well_clear_of_the_pair_passes():
+    assert run(pairs.check_pair_coupling, _pair(pour_above=1.0)) == []
+
+
+def test_each_part_can_be_switched_off():
+    rules = {"pair-coupling": {"params": {"max_uncoupled_mm": 0, "max_asymmetry_mm": 0}}}
+    m = _pair(split=3.0)
+    m.zones.append(ZonePolygon(layer="F.Cu", net="GND", ring=square(0, 20.375, 60, 60)))
+    assert run(pairs.check_pair_coupling, m, rules) == []
