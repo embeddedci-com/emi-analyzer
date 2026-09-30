@@ -7,12 +7,12 @@
  * the host's to supply. The defaults are true of any server, and say no more than that.
  */
 
-import { createContext, useContext } from 'react'
+import { createContext, useContext, type ReactNode } from 'react'
 import { Outlet, useParams, useResolvedPath } from 'react-router'
 
 export interface EmiHostCopy {
-  /** Where board files are stored and who processes them, for the upload card. One sentence. */
-  storage?: string
+  /** Where board files are stored and who processes them, for the upload card. May hold links. */
+  storage?: ReactNode
   /** The privacy entry on the limitations page. */
   privacy?: { what: string; why: string }
   /** The hint on the "Not signed in" badge. */
