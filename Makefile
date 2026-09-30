@@ -248,21 +248,21 @@ plugin-icons:
 # ---- the Plugin and Content Manager repository ----
 #
 # The index PCM reads is its own public repo, shared with the other EmbeddedCI plugins:
-# repository.json, packages.json and resources.zip on its main branch. The plugin's source
-# and the archive stay here; this target builds the archive into dist/pcm/ and updates a
-# checkout of that repo. Publishing is attaching the archive to a release here and
-# committing that checkout.
+# repository.json, packages.json and resources.zip on its main branch, with each archive
+# attached to a release there. The plugin's source stays here; this target builds the
+# archive into dist/pcm/ and updates a checkout of that repo. Releasing is done by that
+# repo's "Release EMI Analyzer" workflow, which runs this target on a clean checkout.
 #
 # Users add https://raw.githubusercontent.com/$(PCM_GITHUB)/main/repository.json under
 # Plugin and Content Manager -> Manage repositories.
 
 PCM_GITHUB  ?= embeddedci-com/kicad-plugins
 PCM_REPO    ?= ../kicad-plugins
-PCM_STATUS  ?= testing
-PCM_TAG      = kicad-plugin-v$(VERSION)
+PCM_STATUS  ?= stable
+PCM_TAG      = emi-analyzer-v$(VERSION)
 PCM_ZIP      = emi-analyzer-kicad-plugin-$(VERSION).zip
 PCM_RAW_URL ?= https://raw.githubusercontent.com/$(PCM_GITHUB)/main
-PCM_DL_URL  ?= https://github.com/embeddedci-com/emi-analyzer/releases/download/$(PCM_TAG)/$(PCM_ZIP)
+PCM_DL_URL  ?= https://github.com/$(PCM_GITHUB)/releases/download/$(PCM_TAG)/$(PCM_ZIP)
 
 .PHONY: pcm-release
 pcm-release:
@@ -272,10 +272,6 @@ pcm-release:
 	@$(MAKE) --no-print-directory plugin-test
 	$(PLUGIN_PY) $(PLUGIN)/scripts/pcm_release.py --version $(VERSION) --status $(PCM_STATUS) \
 	  --repo "$(PCM_REPO)" --download-url "$(PCM_DL_URL)" --repo-url "$(PCM_RAW_URL)"
-	@echo
-	@echo "next:"
-	@echo "  gh release create $(PCM_TAG) dist/pcm/$(PCM_ZIP) --title 'KiCad plugin $(VERSION)'"
-	@echo "  cd $(PCM_REPO) && git add -A && git commit -m 'emi-analyzer $(VERSION)' && git push"
 
 # ---- a worker from source ----
 #

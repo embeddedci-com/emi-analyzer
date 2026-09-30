@@ -157,16 +157,16 @@ EMI_ANALYZER_URL=http://127.0.0.1:7465 <kicad>    # KiCad started with it set
 
 ### Release
 
-```bash
-make pcm-release VERSION=0.1.1 PCM_STATUS=testing
-```
+Bump `emi_analyzer/__init__.py` and push. Then, in
+[embeddedci-com/kicad-plugins](https://github.com/embeddedci-com/kicad-plugins):
+**Actions → Release EMI Analyzer → Run workflow**, with the version and **publish** on.
+That repository is where every EmbeddedCI plugin is published from, so a user who added it
+once gets this plugin too. The workflow builds from a clean checkout with
+`make pcm-release`, attaches the archive to a release there, and only then commits the
+index files.
 
-Bump `emi_analyzer/__init__.py` first. The archive is built into `dist/pcm/` and the
-Plugin and Content Manager index files are written into a checkout of
-[embeddedci-com/kicad-plugins](https://github.com/embeddedci-com/kicad-plugins), which is
-where every EmbeddedCI plugin is published from, so a user who added that repository once
-gets this plugin too. The plugin's source and its archive stay in this repository: attach the
-archive to a release here, and commit the index files there.
+`make pcm-release VERSION=x.y.z` does the same build locally, into `dist/pcm/` and a
+`../kicad-plugins` checkout, without publishing anything.
 
 ## License
 
