@@ -1,0 +1,79 @@
+# Updates the Homebrew cask in embeddedci-com/homebrew-tap when a release is published, so
+#
+#   brew install --cask embeddedci-com/tap/emi-analyzer
+#
+# installs that release. It runs on publish, not on the tag: the release workflow only makes a
+# draft, and the cask must never point at installers nobody has released yet. Pre-releases are
+# skipped. Run it by hand with a tag to redo one.
+#
+# The tap is another repository, so the default token cannot push to it: TAP_GITHUB_TOKEN is a
+# token with write access to embeddedci-com/homebrew-tap (the same one benchpod-cli uses).
+name: homebrew
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Published release to put in the cask (e.g. v0.3.0)"
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: homebrew-tap
+  cancel-in-progress: false
+
+jobs:
+  cask:
+    if: github.event_name == 'workflow_dispatch' || !github.event.release.prerelease
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Tag and version
+        env:
+          TAG: ${{ inputs.tag || github.event.release.tag_name }}
+        run: |
+          if ! printf '%s' "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::$TAG is not a release tag (vX.Y.Z)"; exit 1
+          fi
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+          echo "VERSION=${TAG#v}" >> "$GITHUB_ENV"
+
+      - name: Check the token is set
+        env:
+          TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+        run: |
+          [ -n "$TOKEN" ] || { echo "::error::set the TAP_GITHUB_TOKEN secret (write access to embeddedci-com/homebrew-tap)"; exit 1; }
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.TAG }}
+          path: src
+
+      - name: Render the cask
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download "$TAG" -R "$GITHUB_REPOSITORY" -p SHA256SUMS -D .
+          sh src/deploy/homebrew/render-cask.sh "$VERSION" SHA256SUMS > emi-analyzer.rb
+          cat emi-analyzer.rb
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: embeddedci-com/homebrew-tap
+          token: ${{ secrets.TAP_GITHUB_TOKEN }}
+          path: tap
+
+      - name: Push the cask
+        working-directory: tap
+        run: |
+          mkdir -p Casks
+          cp ../emi-analyzer.rb Casks/emi-analyzer.rb
+          git add Casks/emi-analyzer.rb
+          if git diff --cached --quiet; then echo "cask already at $VERSION"; exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          git commit -m "emi-analyzer $VERSION"
+          git push

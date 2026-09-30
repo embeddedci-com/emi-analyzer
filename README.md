@@ -65,6 +65,14 @@ Skip this step if `docker ps` already works in a terminal.
 
 ### macOS
 
+With [Homebrew](https://brew.sh), one command:
+
+```bash
+brew install --cask docker-desktop
+```
+
+Then continue at step 3. Without Homebrew:
+
 1. Download **Docker Desktop for Mac** from
    <https://docs.docker.com/desktop/setup/install/mac-install/>. Choose **Apple Silicon** or
    **Intel** to match your Mac (Apple menu → *About This Mac* → *Chip* or *Processor*).
@@ -135,7 +143,18 @@ Skip this step if `docker ps` already works in a terminal.
 
 ## Step 2: Install EMI Analyzer
 
-Go to the [latest release](https://github.com/embeddedci-com/emi-analyzer/releases/latest) and
+**On a Mac, use Homebrew.** One command installs the app and gets it past macOS's check for
+apps that are not code-signed:
+
+```bash
+brew install --cask embeddedci-com/tap/emi-analyzer
+```
+
+Then open **EMI Analyzer** from Applications. Update it later with
+`brew upgrade --cask embeddedci-com/tap/emi-analyzer`. No Homebrew? Install it from <https://brew.sh>, or use the
+`.dmg` below.
+
+For other computers, or a Mac without Homebrew, go to the [latest release](https://github.com/embeddedci-com/emi-analyzer/releases/latest) and
 download the file for your computer:
 
 | Computer | Download |
@@ -150,7 +169,9 @@ download the file for your computer:
 The installers are **not code-signed** yet, so your operating system warns you the first time you
 open the app. That is expected; here is how to get past it.
 
-### macOS
+### macOS (`.dmg`)
+
+Skip this if you installed with Homebrew.
 
 1. Open the downloaded `.dmg` and drag **EMI Analyzer** into **Applications**.
 2. Open **EMI Analyzer** from Applications. macOS says it cannot verify the developer: click
@@ -391,7 +412,7 @@ docker image rm ghcr.io/embeddedci-com/emi-worker:<old-version>
 
 **Uninstall:**
 
-1. Remove the app: drag it from Applications to the Bin (macOS), use *Settings → Apps* (Windows),
+1. Remove the app: `brew uninstall --cask embeddedci-com/tap/emi-analyzer` or drag it from Applications to the Bin (macOS), use *Settings → Apps* (Windows),
    run `sudo apt remove emi-analyzer` (`.deb`), or delete the AppImage.
 2. Delete the data folder listed above.
 3. Remove the worker images:

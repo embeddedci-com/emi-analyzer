@@ -11,6 +11,13 @@ The KiCad plugin is versioned and released separately; see
 
 ### Added
 
+- Homebrew cask for macOS: `brew install --cask embeddedci-com/tap/emi-analyzer` installs the
+  app without the Gatekeeper steps the `.dmg` needs. Updated on every release.
+
+## [0.3.0] - 2026-09-30
+
+### Added
+
 - Copper under antennas: traces, vias and pours of any net (ground too) in the antenna area of
   an RF module (ESP32-WROOM, -MINI and similar: the pad-free end of the body), a chip antenna,
   or a keep-out area drawn in the antenna's footprint.
@@ -165,5 +172,6 @@ The KiCad plugin is versioned and released separately; see
 First public release: the desktop app for macOS, Windows and Linux, the standalone `emi-local`
 binary and the worker image.
 
-[Unreleased]: https://github.com/embeddedci-com/emi-analyzer/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/embeddedci-com/emi-analyzer/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/embeddedci-com/emi-analyzer/releases/tag/v0.3.0
 [0.1.0]: https://github.com/embeddedci-com/emi-analyzer/releases/tag/v0.1.0
