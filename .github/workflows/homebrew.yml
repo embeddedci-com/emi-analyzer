@@ -47,9 +47,10 @@ jobs:
         run: |
           [ -n "$TOKEN" ] || { echo "::error::set the TAP_GITHUB_TOKEN secret (write access to embeddedci-com/homebrew-tap)"; exit 1; }
 
+      # The renderer from this workflow's own commit, not from the tag: a release tagged before
+      # a change to the cask would otherwise get the old cask (or none, before v0.4.0).
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ env.TAG }}
           path: src
 
       - name: Render the cask
