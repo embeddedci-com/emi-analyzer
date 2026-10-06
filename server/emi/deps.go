@@ -1,6 +1,8 @@
 package emi
 
 import (
+	"github.com/coder/websocket"
+
 	"context"
 	"errors"
 	"log/slog"
@@ -108,6 +110,11 @@ type Deps struct {
 	// DefaultMaxUploadBytes. Storage is told the declared size when the client gives one,
 	// and every object is checked against the cap before a row names it.
 	MaxUploadBytes int64
+
+	// TrackWebSocket, when set, is told about every worker socket for its lifetime and returns
+	// the function that ends the tracking. The host uses it to close the sockets cleanly
+	// ("going away") on shutdown, so a worker reconnects to the new instance after a deploy.
+	TrackWebSocket func(*websocket.Conn) (untrack func())
 }
 
 // DefaultMaxUploadBytes fits a zipped KiCad project with room to spare, and the largest

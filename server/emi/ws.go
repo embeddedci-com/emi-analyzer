@@ -43,6 +43,9 @@ func (s *Service) handleWorkerWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	conn.SetReadLimit(wsReadLimit)
+	if s.deps.TrackWebSocket != nil {
+		defer s.deps.TrackWebSocket(conn)()
+	}
 
 	// The worker's declared capabilities come from its most recent register call. A worker
 	// that connects without ever registering gets conservative defaults, which in practice
