@@ -46,7 +46,8 @@ func members(t *testing.T, data []byte) []string {
 }
 
 func TestPackKiCadTakesItsProjectAndTheFirstRulesFile(t *testing.T) {
-	dir := t.TempDir()
+	dir := filepath.Join(t.TempDir(), "amp")
+	_ = os.Mkdir(dir, 0o755)
 	write(t, dir, map[string]string{
 		"amp.kicad_pcb": "(kicad_pcb)", "amp.kicad_pro": "{}", "other.kicad_pro": "{}",
 		"emi.rules.yml": "a: 1", "emi.rules.json": "{}", "notes.txt": "x",
@@ -62,6 +63,18 @@ func TestPackKiCadTakesItsProjectAndTheFirstRulesFile(t *testing.T) {
 		}
 		if p.Name != "amp" || p.Filename != "amp.zip" || p.Kind != emi.SourceKiCad || p.Key != filepath.Join(dir, "amp.kicad_pcb") {
 			t.Errorf("%s: packed = %+v", path, p)
+		}
+	}
+}
+
+func TestProjectNameSaysWhichBoard(t *testing.T) {
+	for _, c := range []struct{ dir, stem, want string }{
+		{"/pcb/amp", "amp", "amp"},
+		{"/pcb/AMP", "amp", "amp"},
+		{"/pcb/benchpod-digital", "vbench-pod", "benchpod-digital/vbench-pod"},
+	} {
+		if got := projectName(c.dir, c.stem); got != c.want {
+			t.Errorf("projectName(%q, %q) = %q, want %q", c.dir, c.stem, got, c.want)
 		}
 	}
 }
@@ -92,7 +105,7 @@ func TestPackFolderWithSeveralBoards(t *testing.T) {
 	// The one named after the project file is the project's board.
 	write(t, dir, map[string]string{"b.kicad_pro": "{}"})
 	p, err := Pack(dir)
-	if err != nil || p.Name != "b" {
+	if err != nil || filepath.Base(p.Key) != "b.kicad_pcb" {
 		t.Fatalf("Pack = %+v, %v", p, err)
 	}
 }
@@ -263,6 +276,8 @@ func newFakeApp(t *testing.T) *fakeApp {
 
 func board(t *testing.T, dir, body string) *Packed {
 	t.Helper()
+	dir = filepath.Join(dir, "amp") // a project folder named after its board
+	_ = os.MkdirAll(dir, 0o755)
 	write(t, dir, map[string]string{"amp.kicad_pcb": body})
 	p, err := Pack(filepath.Join(dir, "amp.kicad_pcb"))
 	if err != nil {

@@ -97,7 +97,23 @@ func packKiCad(pcb string) (*Packed, error) {
 		files[stem+".kicad_pro"] = pro
 	}
 	addSettings(dir, files)
-	return pack(files, stem, emi.SourceKiCad, pcb)
+	p, err := pack(files, stem, emi.SourceKiCad, pcb)
+	if err == nil {
+		p.Name = projectName(dir, stem)
+	}
+	return p, err
+}
+
+// projectName is what a new project is called: the board's name, with its folder in front
+// when the two differ. Boards are often named after the product and kept in folders named
+// after the variant ("benchpod-digital/vbench-pod.kicad_pcb"), and two projects both called
+// "vbench-pod" cannot be told apart in a list.
+func projectName(dir, stem string) string {
+	folder := filepath.Base(dir)
+	if folder == "" || folder == "." || folder == string(filepath.Separator) || strings.EqualFold(folder, stem) {
+		return stem
+	}
+	return folder + "/" + stem
 }
 
 func packDir(dir string) (*Packed, error) {
