@@ -2,7 +2,8 @@
 
 The app publishes where it is listening in one file that never moves -- the user's config
 folder, ``emi-analyzer/endpoint.json`` -- because its port is not fixed and its data folder
-is not either (see server/cmd/emi-local/endpoint.go). That file is a hint and nothing more:
+is not either (see server/cmd/emi-local/endpoint.go). server/localapp is the Go twin of
+this module, for the MCP server; keep the two in step. That file is a hint and nothing more:
 it outlives a crash, a kill and a reboot, so it is never believed without asking the URL in
 it whether anything is there.
 
