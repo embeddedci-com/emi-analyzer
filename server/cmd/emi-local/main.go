@@ -71,6 +71,9 @@ const HideWindowLine = "EMI_LOCAL_HIDE_WINDOW"
 const shellDesktop = "desktop"
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "mcp" {
+		os.Exit(runMCP(os.Args[2:]))
+	}
 	var (
 		addr        = flag.String("addr", envOr("EMI_LOCAL_ADDR", defaultAddr), "listen address; must be a loopback address")
 		dataDir     = flag.String("data-dir", envOr("EMI_LOCAL_DATA_DIR", defaultDataDir()), "where the database, board files and results are kept")
