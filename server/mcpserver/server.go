@@ -1,9 +1,9 @@
 // Package mcpserver is the EMI Analyzer's MCP server: what lets a coding agent (Claude Code,
-// Codex) analyse a board, read what the checks found and compare versions, against the app
+// Codex) analyze a board, read what the checks found and compare versions, against the app
 // running on this computer. `emi-local mcp` serves it over stdio.
 //
 // It is a client of the app, not a second app: every tool goes through the same HTTP API the
-// webapp and the KiCad plugin use (package emiclient), so boards analysed here show up in the
+// webapp and the KiCad plugin use (package emiclient), so boards analyzed here show up in the
 // app's window, and the other way round. Nothing leaves the computer.
 package mcpserver
 
@@ -19,9 +19,9 @@ import (
 )
 
 // Instructions are sent to the client once, when it connects.
-const Instructions = `Analyse PCB layouts for EMI and EMC problems with the EMI Analyzer app on this computer. Boards and results stay on this computer.
+const Instructions = `Analyze PCB layouts for EMI and EMC problems with the EMI Analyzer app on this computer. Boards and results stay on this computer.
 
-Start with analyze_board on a .kicad_pcb, a .kicad_pro, a project folder, a folder of Gerber files (with the drill file and an IPC-D-356 netlist) or a .zip of either. Unsaved edits in an open KiCad are not on disk: ask the user to save first. The first analysis of a board makes a project; every later one adds a version to it, and an unchanged board is not analysed again (force=true does).
+Start with analyze_board on a .kicad_pcb, a .kicad_pro, a project folder, a folder of Gerber files (with the drill file and an IPC-D-356 netlist) or a .zip of either. Unsaved edits in an open KiCad are not on disk: ask the user to save first. The first analysis of a board makes a project; every later one adds a version to it, and an unchanged board is not analyzed again (force=true does).
 
 Analysis runs in the background: analyze_board returns a run_id. Pass wait_s to wait for it, or call run_status with wait_s until its status is done (or failed, timed_out). A small board takes seconds, a large one a few minutes. If the app is not running it is started; its worker runs in Docker, and status says when Docker is the problem.
 
@@ -121,11 +121,11 @@ func (s *Server) register(srv *mcp.Server) {
 
 	mcp.AddTool(srv, &mcp.Tool{
 		Name: "analyze_board",
-		Description: "Analyse a board from disk: a .kicad_pcb (sent with its .kicad_pro and any emi.rules.yaml beside it), " +
+		Description: "Analyze a board from disk: a .kicad_pcb (sent with its .kicad_pro and any emi.rules.yaml beside it), " +
 			"a .kicad_pro, a folder with one board or a Gerber set, or a .zip of either. Returns the project, the version " +
-			"(board_id) and the run analysing it. An unchanged board is not analysed again unless force is true. " +
+			"(board_id) and the run analyzing it. An unchanged board is not analyzed again unless force is true. " +
 			"wait_s waits up to that many seconds for the run to finish.",
-		Annotations: &mcp.ToolAnnotations{Title: "Analyse a board", OpenWorldHint: &no, DestructiveHint: &no, IdempotentHint: true},
+		Annotations: &mcp.ToolAnnotations{Title: "Analyze a board", OpenWorldHint: &no, DestructiveHint: &no, IdempotentHint: true},
 	}, s.analyzeBoard)
 
 	mcp.AddTool(srv, &mcp.Tool{
@@ -153,7 +153,7 @@ func (s *Server) register(srv *mcp.Server) {
 		Description: "What the checks found in an analysis, worst first, paginated: counts by severity and by check, then " +
 			"one page of findings (id, check, severity, title, net, layer, board x/y in mm, suggested action). Filter by " +
 			"severity, check, net, layer or a point on the board. Name the analysis with run_id, or project_id for its " +
-			"newest analysed version.",
+			"newest analyzed version.",
 		Annotations: readOnly("Findings"),
 	}, s.findings)
 
@@ -180,9 +180,9 @@ func (s *Server) register(srv *mcp.Server) {
 
 	mcp.AddTool(srv, &mcp.Tool{
 		Name: "compare",
-		Description: "What changed between two analysed versions of a project: findings fixed, new and unchanged, grouped " +
+		Description: "What changed between two analyzed versions of a project: findings fixed, new and unchanged, grouped " +
 			"by check (a finding that moved a little is the same finding), and the nets whose length or vias changed. " +
-			"Defaults to the two newest analysed versions.",
+			"Defaults to the two newest analyzed versions.",
 		Annotations: readOnly("Compare versions"),
 	}, s.compareVersions)
 

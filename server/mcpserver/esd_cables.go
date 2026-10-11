@@ -444,7 +444,7 @@ func (s *Server) cables(ctx context.Context, _ *mcpRequest, in cablesIn) (*mcpRe
 func (s *Server) registerESDCables(srv *mcp.Server) {
 	mcp.AddTool(srv, &mcp.Tool{
 		Name: "run_esd",
-		Description: "Start an ESD simulation on an analysed version: an IEC 61000-4-2 contact discharge into every line " +
+		Description: "Start an ESD simulation on an analyzed version: an IEC 61000-4-2 contact discharge into every line " +
 			"that leaves the board through a connector (or the named lines), in ngspice, with each clamp where it is and " +
 			"moved to the connector. Takes seconds to minutes; wait_s waits. Read it with esd.",
 		Annotations: &mcp.ToolAnnotations{Title: "Start ESD simulation", OpenWorldHint: &no, DestructiveHint: &no},
@@ -457,7 +457,7 @@ func (s *Server) registerESDCables(srv *mcp.Server) {
 	}, s.esd)
 	mcp.AddTool(srv, &mcp.Tool{
 		Name: "run_cables",
-		Description: "Start a cable budget on an analysed version: for each connector you give a cable type and length, how " +
+		Description: "Start a cable budget on an analyzed version: for each connector you give a cable type and length, how " +
 			"much common-mode current the cable can carry before it radiates past the limit. Call cables first for the types " +
 			"and the connectors' suggestions.",
 		Annotations: &mcp.ToolAnnotations{Title: "Start cable budget", OpenWorldHint: &no, DestructiveHint: &no},

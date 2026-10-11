@@ -118,7 +118,7 @@ func (s *Server) decoupling(ctx context.Context, _ *mcpRequest, in decouplingIn)
 	}
 	out := decouplingOut{analysis: a}
 	if d.Decoupling == nil || len(d.Decoupling.Rails) == 0 {
-		out.Missing = "This analysis has no decoupling view: no supply rail with ICs and capacitors was recognised, or the board was analysed by an older version."
+		out.Missing = "This analysis has no decoupling view: no supply rail with ICs and capacitors was recognised, or the board was analyzed by an older version."
 		return nil, out, nil
 	}
 	out.Note = d.Decoupling.Note
@@ -310,8 +310,8 @@ func (s *Server) nets(ctx context.Context, _ *mcpRequest, in netsIn) (*mcpResult
 
 type compareIn struct {
 	ProjectID string `json:"project_id"`
-	Before    string `json:"before_board_id,omitempty" jsonschema:"the older version; default: the second newest analysed one"`
-	After     string `json:"after_board_id,omitempty" jsonschema:"the newer version; default: the newest analysed one"`
+	Before    string `json:"before_board_id,omitempty" jsonschema:"the older version; default: the second newest analyzed one"`
+	After     string `json:"after_board_id,omitempty" jsonschema:"the newer version; default: the newest analyzed one"`
 	Unchanged bool   `json:"include_unchanged,omitempty" jsonschema:"also list findings present in both (long)"`
 	Limit     int    `json:"limit,omitempty" jsonschema:"findings listed per status, default 50"`
 }
@@ -374,10 +374,10 @@ func (s *Server) compareVersions(ctx context.Context, _ *mcpRequest, in compareI
 		return nil, compareOut{}, err
 	}
 	vs := versions(p, boards, runs).Versions
-	var analysed []versionOut
+	var analyzed []versionOut
 	for _, v := range vs {
 		if v.Analysis != nil {
-			analysed = append(analysed, v)
+			analyzed = append(analyzed, v)
 		}
 	}
 	pick := func(id string) (versionOut, bool) {
@@ -396,8 +396,8 @@ func (s *Server) compareVersions(ctx context.Context, _ *mcpRequest, in compareI
 			return nil, compareOut{}, fmt.Errorf("project %s has no version %s", in.ProjectID, in.After)
 		}
 		after = v
-	case len(analysed) > 0:
-		after = analysed[len(analysed)-1]
+	case len(analyzed) > 0:
+		after = analyzed[len(analyzed)-1]
 	}
 	switch {
 	case in.Before != "":
@@ -407,15 +407,15 @@ func (s *Server) compareVersions(ctx context.Context, _ *mcpRequest, in compareI
 		}
 		before = v
 	default:
-		for i := len(analysed) - 1; i >= 0; i-- {
-			if analysed[i].BoardID != after.BoardID && analysed[i].Number < after.Number {
-				before = analysed[i]
+		for i := len(analyzed) - 1; i >= 0; i-- {
+			if analyzed[i].BoardID != after.BoardID && analyzed[i].Number < after.Number {
+				before = analyzed[i]
 				break
 			}
 		}
 	}
 	if before.BoardID == "" || after.BoardID == "" {
-		return nil, compareOut{}, fmt.Errorf("project %s needs two analysed versions to compare; it has %d", in.ProjectID, len(analysed))
+		return nil, compareOut{}, fmt.Errorf("project %s needs two analyzed versions to compare; it has %d", in.ProjectID, len(analyzed))
 	}
 	if before.Analysis == nil || after.Analysis == nil {
 		return nil, compareOut{}, fmt.Errorf("both versions need a finished analysis; list_versions shows which do")

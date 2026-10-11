@@ -30,7 +30,7 @@ var (
 
 // zipTime is the timestamp inside every archive. Uploads are content-addressed, so the same
 // board has to give the same bytes: with a real timestamp every call would look like a new
-// board and re-analyse a design that had not changed.
+// board and re-analyze a design that had not changed.
 var zipTime = time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
 
 // Packed is a board ready to upload.
@@ -59,7 +59,7 @@ type Packed struct {
 //   - a .zip, sent as it is: a zipped KiCad project or Gerber output.
 //
 // Nothing is written: the analyzer reports on a layout, it does not edit one. Unsaved edits
-// in an open editor are not on disk and so not analysed; save first.
+// in an open editor are not on disk and so not analyzed; save first.
 func Pack(path string) (*Packed, error) {
 	abs, err := filepath.Abs(path)
 	if err != nil {
@@ -151,7 +151,7 @@ func packDir(dir string) (*Packed, error) {
 			}
 		}
 		sort.Strings(boards)
-		return nil, fmt.Errorf("%s holds %d boards (%s): give the one to analyse", dir, len(boards), strings.Join(boards, ", "))
+		return nil, fmt.Errorf("%s holds %d boards (%s): give the one to analyze", dir, len(boards), strings.Join(boards, ", "))
 	case marked:
 		files := map[string]string{}
 		for _, g := range gerbers {

@@ -226,7 +226,7 @@ func TestNets(t *testing.T) {
 	}
 }
 
-func TestCompareTheTwoNewestAnalysedVersions(t *testing.T) {
+func TestCompareTheTwoNewestAnalyzedVersions(t *testing.T) {
 	app := newFakeApp(t)
 	p := app.project("amp")
 	v1, r1 := app.version(p, emi.StatusDone, map[string]any{
@@ -238,7 +238,7 @@ func TestCompareTheTwoNewestAnalysedVersions(t *testing.T) {
 		"rules.json": rulesJSON(f("plane-gap-3", "plane-gap", "warning", "A", 10.5, 10), f("return-via-0", "return-via", "critical", "C", 5, 5)),
 		"nets.json":  netsJSON(map[string]any{"net": "A", "copper_mm": 14, "path_mm": 14}),
 	})
-	app.version(p, emi.StatusFailed, nil) // a newer version that never analysed is skipped
+	app.version(p, emi.StatusFailed, nil) // a newer version that never analyzed is skipped
 	cs := connect(t, finder{e: localapp.Endpoint{URL: app.srv.URL}})
 
 	var out compareOut
@@ -259,7 +259,7 @@ func TestCompareTheTwoNewestAnalysedVersions(t *testing.T) {
 
 	only := app.project("single")
 	app.version(only, emi.StatusDone, map[string]any{"rules.json": rulesJSON()})
-	if e := call(t, cs, "compare", map[string]any{"project_id": only}, &compareOut{}); !strings.Contains(e, "needs two analysed versions") {
+	if e := call(t, cs, "compare", map[string]any{"project_id": only}, &compareOut{}); !strings.Contains(e, "needs two analyzed versions") {
 		t.Errorf("one version: %q", e)
 	}
 }

@@ -16,7 +16,7 @@ import (
 
 // ProjectStore remembers which project a board file became, between calls.
 //
-// One board file is one project. A board is analysed over and over while it is being worked
+// One board file is one project. A board is analyzed over and over while it is being worked
 // on, and each pass is a new board (a version) in the same project, so the history of a
 // design stays in one place instead of scattering into a project per call. Same file format
 // as the KiCad plugin's ProjectStore (project.py), one JSON file per board path.
@@ -115,8 +115,8 @@ func Pending(s emi.RunStatus) bool {
 type Opened struct {
 	ProjectID string `json:"project_id"`
 	BoardID   string `json:"board_id,omitempty"`
-	// RunID is the ingest analysing it: a new one, or the one still pending for these exact
-	// bytes sent from here. Empty when the app already had this board analysed and nothing was sent.
+	// RunID is the ingest analyzing it: a new one, or the one still pending for these exact
+	// bytes sent from here. Empty when the app already had this board analyzed and nothing was sent.
 	RunID    string `json:"run_id,omitempty"`
 	Uploaded bool   `json:"uploaded"`
 	// NewProject is true when this call made the project.
@@ -125,7 +125,7 @@ type Opened struct {
 
 // Open hands a packed board to the app and says which project and run to look at.
 //
-// Nothing is sent when the app already holds exactly these bytes, analysed: the common case of
+// Nothing is sent when the app already holds exactly these bytes, analyzed: the common case of
 // asking again about a board that was not touched. force sends it anyway, for a fresh run.
 // store may be nil; project, when set, files the board there instead of the remembered one.
 func Open(ctx context.Context, c *Client, store *ProjectStore, p *Packed, project string, force bool) (Opened, error) {
@@ -134,7 +134,7 @@ func Open(ctx context.Context, c *Client, store *ProjectStore, p *Packed, projec
 		remembered = store.Load(p.Key)
 	}
 	// A project deleted in the app is not a project. Checked before it is preferred over what
-	// the app already holds, or the board would be analysed again for nothing.
+	// the app already holds, or the board would be analyzed again for nothing.
 	if remembered != "" {
 		if _, err := c.GetProject(ctx, remembered); err != nil {
 			var ae *APIError

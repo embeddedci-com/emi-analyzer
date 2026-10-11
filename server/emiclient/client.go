@@ -238,7 +238,7 @@ func (c *Client) resolve(u string) string {
 	return u
 }
 
-// UploadResult is the board an upload became and the ingest run analysing it.
+// UploadResult is the board an upload became and the ingest run analyzing it.
 type UploadResult struct {
 	Board emi.Board `json:"board"`
 	Run   emi.Run   `json:"run"`

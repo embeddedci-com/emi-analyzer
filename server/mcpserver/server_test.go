@@ -211,7 +211,10 @@ func call(t *testing.T, cs *mcp.ClientSession, name string, args map[string]any,
 
 func boardFile(t *testing.T) string {
 	t.Helper()
-	dir := t.TempDir()
+	dir := filepath.Join(t.TempDir(), "amp") // a project folder named after its board
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
 	for name, body := range map[string]string{"amp.kicad_pcb": "(kicad_pcb)", "amp.kicad_pro": "{}"} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
 			t.Fatal(err)

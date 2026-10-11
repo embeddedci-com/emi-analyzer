@@ -313,7 +313,7 @@ func TestOpenFilesEveryVersionOfABoardInOneProject(t *testing.T) {
 		t.Fatalf("edited = %+v, %v", edited, err)
 	}
 
-	// Forced: analysed again although the app has it. The bytes are not sent twice.
+	// Forced: analyzed again although the app has it. The bytes are not sent twice.
 	forced, err := Open(ctx, c, store, board(t, dir, "(kicad_pcb 2)"), "", true)
 	if err != nil || !forced.Uploaded || forced.RunID == "" || forced.ProjectID != first.ProjectID || app.puts != 2 {
 		t.Fatalf("forced = %+v, %v (puts %d)", forced, err, app.puts)

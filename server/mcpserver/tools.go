@@ -26,7 +26,7 @@ type statusOut struct {
 	URL     string          `json:"url" jsonschema:"where the app is listening (loopback only)"`
 	Version string          `json:"version"`
 	DataDir string          `json:"data_dir" jsonschema:"where its database, boards and results are kept"`
-	Worker  localapp.Worker `json:"worker" jsonschema:"the Docker worker that runs analyses; state 'running' means it can take work"`
+	Worker  localapp.Worker `json:"worker" jsonschema:"the Docker worker that runs analyzes; state 'running' means it can take work"`
 	Advice  string          `json:"advice,omitempty" jsonschema:"what to tell the user when the worker cannot run"`
 }
 
@@ -46,7 +46,7 @@ func workerAdvice(w localapp.Worker) string {
 	case "docker_not_running":
 		return "Docker is installed but not running. Start Docker Desktop (or the Docker engine) and the app picks it up."
 	case "pulling":
-		return "The worker image is downloading, once per app version. Analyses queue until it is ready."
+		return "The worker image is downloading, once per app version. Analyzes queue until it is ready."
 	case "error":
 		return "The worker could not start: " + w.Message + " Open the app for details and its worker log."
 	}
@@ -58,7 +58,7 @@ func workerAdvice(w localapp.Worker) string {
 type analyzeIn struct {
 	Path    string `json:"path" jsonschema:"absolute path to a .kicad_pcb, .kicad_pro, project folder, Gerber folder or .zip"`
 	Project string `json:"project_id,omitempty" jsonschema:"file the board as a new version of this project instead of the one remembered for this path"`
-	Force   bool   `json:"force,omitempty" jsonschema:"analyse again even when the app already has these exact files analysed"`
+	Force   bool   `json:"force,omitempty" jsonschema:"analyze again even when the app already has these exact files analyzed"`
 	WaitS   int    `json:"wait_s,omitempty" jsonschema:"seconds to wait for the analysis to finish (0 returns at once, max 600)"`
 }
 
@@ -69,7 +69,7 @@ type analyzeOut struct {
 	Uploaded   bool     `json:"uploaded" jsonschema:"false when the app already had these files and nothing was sent"`
 	Kind       string   `json:"source_kind" jsonschema:"kicad or gerber"`
 	Files      []string `json:"files" jsonschema:"what was sent"`
-	Run        *runOut  `json:"run,omitempty" jsonschema:"the analysis; absent when the app already had this board analysed"`
+	Run        *runOut  `json:"run,omitempty" jsonschema:"the analysis; absent when the app already had this board analyzed"`
 	Note       string   `json:"note,omitempty"`
 }
 
@@ -92,7 +92,7 @@ func (s *Server) analyzeBoard(ctx context.Context, req *mcp.CallToolRequest, in 
 	out := analyzeOut{ProjectID: o.ProjectID, BoardID: o.BoardID, NewProject: o.NewProject, Uploaded: o.Uploaded,
 		Kind: string(p.Kind), Files: p.Files}
 	if o.RunID == "" {
-		out.Note = "The app already has these exact files analysed; nothing was sent. Pass force=true to analyse them again."
+		out.Note = "The app already has these exact files analyzed; nothing was sent. Pass force=true to analyze them again."
 		return nil, out, nil
 	}
 	if !o.Uploaded {

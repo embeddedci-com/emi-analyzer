@@ -20,10 +20,10 @@ import (
 // more than an agent should read to answer one question.
 
 // target names the analysis a tool reads: a run, or a version of a project, or a project's
-// newest analysed version.
+// newest analyzed version.
 type target struct {
 	RunID     string `json:"run_id,omitempty" jsonschema:"an ingest run (analyze_board returns it)"`
-	ProjectID string `json:"project_id,omitempty" jsonschema:"a project; without board_id its newest analysed version is read"`
+	ProjectID string `json:"project_id,omitempty" jsonschema:"a project; without board_id its newest analyzed version is read"`
 	BoardID   string `json:"board_id,omitempty" jsonschema:"a version of the project (needs project_id)"`
 }
 
@@ -32,7 +32,7 @@ type analysis struct {
 	RunID     string `json:"run_id"`
 	ProjectID string `json:"project_id"`
 	BoardID   string `json:"board_id"`
-	// Note says when a newer version exists that is not analysed yet.
+	// Note says when a newer version exists that is not analyzed yet.
 	Note string `json:"note,omitempty"`
 }
 
