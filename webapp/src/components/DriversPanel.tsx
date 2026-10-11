@@ -356,7 +356,7 @@ export function DriversPanel({ api, projectId, frequencies = [], nets = [] }: Pr
                 />
                 <Text size="xs" c="dimmed">
                   Parsed here in the browser. A capture has to cover at least one whole period
-                  and be evenly sampled — the document carries a single sample interval, so
+                  and be evenly sampled. The document carries a single sample interval, so
                   uneven spacing cannot be represented and is refused rather than averaged.
                 </Text>
                 {uploadError && (
@@ -408,7 +408,7 @@ export function DriversPanel({ api, projectId, frequencies = [], nets = [] }: Pr
                 ) : null}
                 {parsed.driver && (
                   <Text size="xs" c="dimmed">
-                    Weakest source: <b>{weakestSource(parsed.driver)}</b> — this driver
+                    Weakest source: <b>{weakestSource(parsed.driver)}</b>. This driver
                     contributes ±{sigmaDb(parsed.driver)} dB to the confidence budget.
                   </Text>
                 )}

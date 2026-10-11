@@ -135,7 +135,7 @@ export function RunProgress({ run, energyHistory = [], height = 90 }: RunProgres
         <Paper withBorder p={4} radius="sm">
           <EnergyChart samples={energyHistory} height={height} />
           <Text size="10px" c="dimmed" ta="center" mt={2}>
-            field energy vs timestep — a curve that flattens is not converging
+            field energy vs timestep: a curve that flattens is not converging
           </Text>
         </Paper>
       )}

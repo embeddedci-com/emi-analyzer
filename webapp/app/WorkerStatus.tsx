@@ -285,7 +285,7 @@ export function WorkerBanner() {
                   target="_blank" rel="noreferrer">
             Docker Desktop
           </Anchor>
-          {' '}(or Docker Engine on Linux) and start it — this page picks it up on its own.
+          {' '}(or Docker Engine on Linux) and start it. This page picks it up on its own.
         </Text>
       )}
       {(w.state === 'error' || w.state === 'stopped') && (

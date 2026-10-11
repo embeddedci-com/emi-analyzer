@@ -124,7 +124,7 @@ export function placePortOnNet(
 
   const note =
     withinRoi.length === 0 && roi
-      ? ` No pad on this net is inside the region, so the port sits outside it — widen the region or move the port.`
+      ? ` No pad on this net is inside the region, so the port sits outside it. Widen the region or move the port.`
       : ''
 
   return {

@@ -66,9 +66,9 @@ export interface SolveRequest {
 
 /** Mesh presets. Named for what they are for, not by their numbers. */
 const MESH_PRESETS = [
-  { value: 'coarse', label: 'Coarse — a first look', dx: 150, dy: 150, dz: 100 },
-  { value: 'normal', label: 'Normal — comparing layouts', dx: 75, dy: 75, dz: 50 },
-  { value: 'fine', label: 'Fine — a considered answer', dx: 50, dy: 50, dz: 25 },
+  { value: 'coarse', label: 'Coarse: a first look', dx: 150, dy: 150, dz: 100 },
+  { value: 'normal', label: 'Normal: comparing layouts', dx: 75, dy: 75, dz: 50 },
+  { value: 'fine', label: 'Fine: a considered answer', dx: 50, dy: 50, dz: 25 },
 ]
 
 export function SolveSetup({
@@ -103,7 +103,7 @@ export function SolveSetup({
         .sort((a, b) => b.length_mm - a.length_mm)
         .map((n) => ({
           value: n.name,
-          label: `${n.name} — ${n.length_mm.toFixed(0)} mm`,
+          label: `${n.name} (${n.length_mm.toFixed(0)} mm)`,
         })),
     [doc.nets],
   )
@@ -202,7 +202,7 @@ export function SolveSetup({
             size="xs"
             searchable
             clearable
-            placeholder="Pick a net — longest first"
+            placeholder="Pick a net (longest first)"
             data={signalNets}
             value={netQuery}
             onChange={addPortFromNet}
@@ -220,7 +220,7 @@ export function SolveSetup({
 
           {pickMiss && (
             <Text size="xs" c="orange">
-              Nothing there — click closer to a pad or a via, or zoom in first.
+              Nothing there. Click closer to a pad or a via, or zoom in first.
             </Text>
           )}
 
@@ -305,7 +305,7 @@ export function SolveSetup({
           {ports.some((p) => p.excited) && (
             <Text size="xs" c="dimmed">
               <b>Driver: none (relative).</b> This solve records the port spectra a driver
-              needs, so one can be attached to the result afterwards — on the Drivers tab —
+              needs, so one can be attached to the result afterwards (on the Drivers tab)
               without solving again. Choosing it now would change nothing about the run.
             </Text>
           )}
@@ -339,7 +339,7 @@ export function SolveSetup({
           </Group>
         ) : (
           <Text size="xs" c="dimmed">
-            Whole-board solves are not possible — see the limitations page. Pick a region
+            Whole-board solves are not possible (see the limitations page). Pick a region
             around whatever you think is radiating.
           </Text>
         )}
@@ -373,7 +373,7 @@ export function SolveSetup({
           ))}
         </Group>
         <Text size="10px" c="dimmed" mt={4}>
-          Odd harmonics only — a square-wave clock has essentially no even ones, so solving
+          Odd harmonics only: a square-wave clock has essentially no even ones, so solving
           for them would spend hours on frequencies your source does not produce.
         </Text>
       </div>
@@ -451,7 +451,7 @@ export function SolveSetup({
           ? 'Choose what is driving'
           : !roi
             ? 'Choose a region'
-            : `Solve — at least ${formatDuration(est?.value.eta_seconds ?? 0)}`}
+            : `Solve (at least ${formatDuration(est?.value.eta_seconds ?? 0)})`}
       </Button>
     </Stack>
   )

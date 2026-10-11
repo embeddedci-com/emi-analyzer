@@ -129,7 +129,7 @@ export function CompliancePanel({ doc }: { doc: ComplianceDoc }) {
                 multiline w={330} withArrow
                 label={
                   'The probability the true margin is positive under the model\'s own ' +
-                  'uncertainty budget. It says how much weight this margin can bear — it is ' +
+                  'uncertainty budget. It says how much weight this margin can bear. It is ' +
                   'not a probability of passing a test, and it stays uncalibrated until lab ' +
                   'results have been recorded against it.'
                 }
@@ -229,12 +229,12 @@ export function CompliancePanel({ doc }: { doc: ComplianceDoc }) {
           {doc.recommendations && (
             <div>
               <Text size="xs" fw={600} tt="uppercase" c="dimmed" mb={4}>
-                What to change — {doc.recommendations.path_label}
+                What to change: {doc.recommendations.path_label}
               </Text>
               {doc.recommendations.general_only ? (
                 <Alert color="gray" variant="light">
                   <Text size="xs" fw={600} mb={4}>
-                    General guidance — nothing specific found on this board
+                    General guidance: nothing specific found on this board
                   </Text>
                   <List size="xs" spacing={4}>
                     {doc.recommendations.general.map((g) => <List.Item key={g}>{g}</List.Item>)}

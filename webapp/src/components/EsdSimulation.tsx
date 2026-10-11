@@ -399,7 +399,7 @@ function LineItem({
                 </Badge>
                 <Text size="xs" c="dimmed">
                   {line.clamp.ref} {line.clamp.part}
-                  {line.clamp.assumptions.length > 0 && ` — ${line.clamp.assumptions.join('; ')}`}
+                  {line.clamp.assumptions.length > 0 && ` (${line.clamp.assumptions.join('; ')})`}
                 </Text>
               </Group>
             )}
@@ -501,7 +501,7 @@ function ModelsSection({
       <Text size="xs" fw={600} tt="uppercase" c="dimmed">Clamp models</Text>
       <Text size="xs" c="dimmed">
         Upload the manufacturer's SPICE model to replace the datasheet model. The worker checks
-        the file is a model — nothing that runs commands or reads files — and that it clamps,
+        the file is a model (nothing that runs commands or reads files) and that it clamps,
         before using it in the next simulation.
       </Text>
       {readError && <Alert color="red" variant="light">{readError}</Alert>}
@@ -528,7 +528,7 @@ function ModelsSection({
               <Group gap={6} wrap="nowrap">
                 <Text size="xs" style={{ flex: 1 }} truncate>
                   {mine.filename} · {mine.subckt}
-                  {report?.file === mine.filename ? '' : ' — used from the next simulation'}
+                  {report?.file === mine.filename ? '' : ' (used from the next simulation)'}
                 </Text>
                 <Anchor
                   size="xs"

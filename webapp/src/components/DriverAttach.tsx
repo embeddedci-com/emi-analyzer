@@ -124,7 +124,7 @@ export function DriverAttach({
           label="Driver"
           size="xs"
           w={220}
-          placeholder="none — relative dB"
+          placeholder="none (relative dB)"
           clearable
           data={options}
           value={driverId}

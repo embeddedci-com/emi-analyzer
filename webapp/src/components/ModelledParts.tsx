@@ -34,7 +34,7 @@ export function ModelledParts({ parts }: { parts?: ModelledPart[] }) {
   if (parts.length === 0) {
     return (
       <Text size="xs" c="dimmed">
-        No components were modeled in this solve — every part is bare copper, as it was
+        No components were modeled in this solve: every part is bare copper, as it was
         before component models existed.
       </Text>
     )
@@ -76,7 +76,7 @@ export function ModelledParts({ parts }: { parts?: ModelledPart[] }) {
                     </Text>
                     {p.generic ? (
                       <Tooltip
-                        label="Typical for this package and value — not a measurement of this part"
+                        label="Typical for this package and value, not a measurement of this part"
                         withArrow
                       >
                         <Badge size="xs" variant="light" color="gray">generic</Badge>

@@ -59,7 +59,7 @@ export function LayerRail({ doc, visibility, onToggle }: LayerRailProps) {
                     (layer.plane_coverage ?? 0) * 100,
                   )}% of the board on ${entry.name}${
                     layer.kind && layer.kind !== 'signal'
-                      ? ` — the board file types this layer "${layer.kind}"`
+                      ? `; the board file types this layer "${layer.kind}"`
                       : ''
                   }`}
                 >
@@ -109,7 +109,7 @@ export function LayerRail({ doc, visibility, onToggle }: LayerRailProps) {
               <Tooltip
                 multiline
                 w={240}
-                label="This value is not in the board file — we assumed it. A wrong εr shifts every resonance, so correct it before trusting a solve."
+                label="This value is not in the board file. We assumed it. A wrong εr shifts every resonance, so correct it before trusting a solve."
               >
                 <Badge size="xs" color="yellow" variant="light">
                   assumed

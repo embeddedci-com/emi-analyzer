@@ -352,7 +352,7 @@ export function HotspotResults({
                     size="xs"
                     ff="monospace"
                     c={p.peak === 0 ? 'orange' : 'dimmed'}
-                    title={p.quiet && p.peak !== null ? `${p.peak.toFixed(1)} dB — within ${NOISE_MARGIN_DB} dB of the solver's floor` : undefined}
+                    title={p.quiet && p.peak !== null ? `${p.peak.toFixed(1)} dB, within ${NOISE_MARGIN_DB} dB of the solver's floor` : undefined}
                   >
                     {p.peak === null ? '—' : p.quiet ? 'no field' : `${p.peak.toFixed(1)} dB`}
                   </Text>
@@ -382,7 +382,7 @@ export function HotspotResults({
 
       {showOverlay && quality?.belowNoise && (
         <Text size="xs" c="dimmed">
-          {layer} carries no field above the solver's floor — usually because a plane shields it
+          {layer} carries no field above the solver's floor, usually because a plane shields it
           from the driven trace. There is nothing to draw, so the map is left off rather than
           showing residue at the edge of the region.
         </Text>
@@ -428,7 +428,7 @@ export function HotspotResults({
         <Text size="xs" c="dimmed" mt="xs">
           Hide below {gate} dB
           {quality && !quality.belowNoise
-            ? ` — showing ${Math.round(quality.visibleShare * 100)}% of the region`
+            ? `, showing ${Math.round(quality.visibleShare * 100)}% of the region`
             : ''}
         </Text>
         <Slider
@@ -500,8 +500,8 @@ export function HotspotResults({
         <Text size="10px" c="dimmed">
           The magnetic field just above each copper layer. Over copper that is the surface
           current density; over bare board it is fringe field, not current. Values are relative to
-          the loudest point in this run — usually at or beside the excitation port, which is marked
-          on the board, because that is where current is injected — so they compare layers and
+          the loudest point in this run (usually at or beside the excitation port, which is marked
+          on the board, because that is where current is injected), so they compare layers and
           frequencies within this run, not against another board and not against a limit.
         </Text>
       </Card>

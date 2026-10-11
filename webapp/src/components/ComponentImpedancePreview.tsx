@@ -126,7 +126,7 @@ export function ComponentImpedancePreview({ rlc, marks = [] }: Props) {
       <Group gap="md">
         <Text size="xs">
           Self-resonates at <Text span fw={600} ff="monospace">{fmtHz(srf)}</Text>
-          {' '}— above that it is an inductor.
+          . Above that it is an inductor.
         </Text>
         <Text size="xs" c="dimmed">
           minimum <Text span ff="monospace">{fmtOhm(rlc.esr_ohm)}</Text>

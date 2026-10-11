@@ -75,7 +75,7 @@ export function NetsExportButton({
           </Menu.Item>
           <Menu.Item onClick={() => exportAs(PLAIN_CSV)}>
             <Text size="xs" fw={500}>Plain CSV</Text>
-            <Text size="xs" c="dimmed">comma separated, “.” decimals — for scripts</Text>
+            <Text size="xs" c="dimmed">comma separated, “.” decimals, for scripts</Text>
           </Menu.Item>
         </Menu.Dropdown>
       </Menu>

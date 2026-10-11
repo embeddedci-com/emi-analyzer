@@ -37,7 +37,7 @@ const LIMITATIONS: Limitation[] = [
     what: 'Full-wave solving is experimental and off by default',
     kind: 'method',
     why:
-      'Full-wave solving works — a board solves end to end and the field maps come back — but ' +
+      'Full-wave solving works (a board solves end to end and the field maps come back), but ' +
       'none of it has been checked against a real board, and no run has been made at the ' +
       'record length a radiated result needs (30 MHz means 100 ns of simulated time, millions ' +
       'of timesteps). Until that is done, full-wave solving and everything built on it ' +
@@ -84,8 +84,8 @@ const LIMITATIONS: Limitation[] = [
       'Below about 300 MHz, most emission failures are caused by common-mode current on an ' +
       'attached cable harness, which acts as the antenna. A full-wave solve contains only the ' +
       'board and cannot show that. The Cables tab covers it separately: each declared cable is ' +
-      'modeled as a wire over a ground plane, and the result is a budget — how much ' +
-      'common-mode current that cable can carry before it reaches a limit — not a prediction ' +
+      'modeled as a wire over a ground plane, and the result is a budget: how much ' +
+      'common-mode current that cable can carry before it reaches a limit, not a prediction ' +
       'of what it does carry. A connector you do not declare is not modeled at all.',
   },
   {
@@ -149,7 +149,7 @@ const LIMITATIONS: Limitation[] = [
       'The simulation models the trace, the clamp and its ground via from the layout, but an ' +
       "IC's internal protection is not published, so every pin is the same generic CMOS " +
       'input. Absolute volts at a pin are therefore estimates. What holds is the comparison ' +
-      'between variants of the same line — the clamp where it is against the clamp at the ' +
+      'between variants of the same line: the clamp where it is against the clamp at the ' +
       'connector. Planes are ideal (no ground bounce or coupling to neighboring traces), only ' +
       'contact discharge is simulated, and it is injected at a pin, which is the worst case: a ' +
       'test discharges to a metal shell. Uploaded SPICE models replace the datasheet model only ' +
@@ -196,8 +196,8 @@ export function EmiLimitationsPage({ deployment = 'hosted', host }: EmiLimitatio
           </Title>
           <Text c="dimmed" mt="xs">
             The EMI Analyzer works from the geometry of your board: it checks the layout,
-            simulates an ESD discharge, budgets each cable, and — where full-wave simulation is
-            enabled — runs an electromagnetic field solver over a region you choose. It gives
+            simulates an ESD discharge, budgets each cable, and (where full-wave simulation is
+            enabled) runs an electromagnetic field solver over a region you choose. It gives
             more detail than a rule-based design checker, but it does not replace measurements
             at a test house. This page describes what the results can
             and cannot be used for.
