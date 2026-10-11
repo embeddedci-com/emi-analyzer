@@ -28,12 +28,12 @@ func TestObjectKeyStaysInsideThePrefix(t *testing.T) {
 }
 
 func TestObjectKeyPrefixSpellings(t *testing.T) {
-	// "emi", "emi/" and "/emi/" all name the same folder; normalisation happens once, at
+	// "emi", "emi/" and "/emi/" all name the same folder; normalization happens once, at
 	// construction, so the hot path is a string concatenation.
 	for _, prefix := range []string{"emi", "emi/", "/emi/"} {
 		cfg := S3Config{KeyPrefix: prefix}
 		if got := normaliseKeyPrefix(cfg.KeyPrefix); got != "emi/" {
-			t.Errorf("prefix %q normalised to %q, want %q", prefix, got, "emi/")
+			t.Errorf("prefix %q normalized to %q, want %q", prefix, got, "emi/")
 		}
 	}
 	if got := normaliseKeyPrefix(""); got != DefaultKeyPrefix {

@@ -37,7 +37,7 @@ const LIMITATIONS: Limitation[] = [
     what: 'Full-wave solving is experimental and off by default',
     kind: 'method',
     why:
-      'Full-wave solving works — a board solves end to end and the field maps come back — but ' +
+      'Full-wave solving works (a board solves end to end and the field maps come back), but ' +
       'none of it has been checked against a real board, and no run has been made at the ' +
       'record length a radiated result needs (30 MHz means 100 ns of simulated time, millions ' +
       'of timesteps). Until that is done, full-wave solving and everything built on it ' +
@@ -63,7 +63,7 @@ const LIMITATIONS: Limitation[] = [
     why:
       'Comparing two versions of the same board gives a reliable result, for example that ' +
       'one layout radiates 8 dB less than another at 480 MHz, and which trace causes the ' +
-      'difference. Modelling errors largely cancel between two runs of the same design, so ' +
+      'difference. Modeling errors largely cancel between two runs of the same design, so ' +
       'a comparison remains valid despite the other limitations on this page. Absolute ' +
       'field strengths do not. Treat any single value as an order-of-magnitude estimate, ' +
       'not as a measurement.',
@@ -78,15 +78,15 @@ const LIMITATIONS: Limitation[] = [
       'limit of the FDTD method, not of this implementation.',
   },
   {
-    what: 'Cables are modelled separately from the board, and only as a budget',
+    what: 'Cables are modeled separately from the board, and only as a budget',
     kind: 'hard',
     why:
       'Below about 300 MHz, most emission failures are caused by common-mode current on an ' +
       'attached cable harness, which acts as the antenna. A full-wave solve contains only the ' +
       'board and cannot show that. The Cables tab covers it separately: each declared cable is ' +
-      'modelled as a wire over a ground plane, and the result is a budget — how much ' +
-      'common-mode current that cable can carry before it reaches a limit — not a prediction ' +
-      'of what it does carry. A connector you do not declare is not modelled at all.',
+      'modeled as a wire over a ground plane, and the result is a budget: how much ' +
+      'common-mode current that cable can carry before it reaches a limit, not a prediction ' +
+      'of what it does carry. A connector you do not declare is not modeled at all.',
   },
   {
     what: 'The useful frequency range is about 100 MHz to 3 GHz',
@@ -107,7 +107,7 @@ const LIMITATIONS: Limitation[] = [
       'source: a declared edge rate and amplitude, or a measured switching edge.',
   },
   {
-    what: 'Components are not modelled',
+    what: 'Components are not modeled',
     kind: 'setup',
     why:
       'ICs, connectors and decoupling capacitors are represented only by their copper ' +
@@ -138,8 +138,8 @@ const LIMITATIONS: Limitation[] = [
       'The ESD, shield and reset-line checks look for the layout mistakes behind most ' +
       'IEC 61000-4-2 and 61000-4-4 failures, from how parts are placed and connected. They ' +
       'inject nothing, so they cannot say what discharge or burst level a board survives; ' +
-      'the ESD simulation below estimates one line at a time. Parts are recognised by reference designator, value and footprint: a ' +
-      'protection device the tool does not recognise is reported as missing, and a connector ' +
+      'the ESD simulation below estimates one line at a time. Parts are recognized by reference designator, value and footprint: a ' +
+      'protection device the tool does not recognize is reported as missing, and a connector ' +
       'counts as I/O by how close it sits to the board edge.',
   },
   {
@@ -149,8 +149,8 @@ const LIMITATIONS: Limitation[] = [
       'The simulation models the trace, the clamp and its ground via from the layout, but an ' +
       "IC's internal protection is not published, so every pin is the same generic CMOS " +
       'input. Absolute volts at a pin are therefore estimates. What holds is the comparison ' +
-      'between variants of the same line — the clamp where it is against the clamp at the ' +
-      'connector. Planes are ideal (no ground bounce or coupling to neighbouring traces), only ' +
+      'between variants of the same line: the clamp where it is against the clamp at the ' +
+      'connector. Planes are ideal (no ground bounce or coupling to neighboring traces), only ' +
       'contact discharge is simulated, and it is injected at a pin, which is the worst case: a ' +
       'test discharges to a metal shell. Uploaded SPICE models replace the datasheet model only ' +
       'after the worker has checked them.',
@@ -196,8 +196,8 @@ export function EmiLimitationsPage({ deployment = 'hosted', host }: EmiLimitatio
           </Title>
           <Text c="dimmed" mt="xs">
             The EMI Analyzer works from the geometry of your board: it checks the layout,
-            simulates an ESD discharge, budgets each cable, and — where full-wave simulation is
-            enabled — runs an electromagnetic field solver over a region you choose. It gives
+            simulates an ESD discharge, budgets each cable, and (where full-wave simulation is
+            enabled) runs an electromagnetic field solver over a region you choose. It gives
             more detail than a rule-based design checker, but it does not replace measurements
             at a test house. This page describes what the results can
             and cannot be used for.

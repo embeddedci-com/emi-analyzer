@@ -4,7 +4,7 @@ Everything downstream — the viewer, the rules tier, the mesher — reads only 
 this module is the whole of the Gerber support. Nothing else changes.
 
 The hard part is that Gerbers carry no net information. Copper is reconstructed into
-connected islands by rasterising each layer, and the IPC-D-356 netlist supplies the names:
+connected islands by rasterizing each layer, and the IPC-D-356 netlist supplies the names:
 each netlist point falls inside one island, and that island takes its net. Through-holes
 then tie islands together across layers, which is how an inner plane gets a name despite
 having no netlist point of its own.
@@ -35,7 +35,7 @@ log = logging.getLogger(__name__)
 NET_RASTER_MM = 0.05
 
 #: How far a netlist point may be from copper and still be attached to it, in mm. A via's
-#: recorded centre sits over its drill, which is not copper, so some tolerance is required.
+#: recorded center sits over its drill, which is not copper, so some tolerance is required.
 NET_POINT_TOLERANCE_MM = 0.35
 
 #: Assumed dielectric properties. A .gbrjob carries thicknesses but never permittivity, so
@@ -204,7 +204,7 @@ def _job_list(doc: dict, key: str) -> list[dict]:
 
 def _stackup_from_job(job_text: str | None, layers: list[str],
                       warnings: list[str]) -> tuple[list[StackupLayer], float]:
-    """Build a stackup from the .gbrjob, or synthesise one.
+    """Build a stackup from the .gbrjob, or synthesize one.
 
     A job file gives real thicknesses, which matter: the dielectric between a signal layer
     and its reference plane sets the vertical mesh and therefore the run time. It never
@@ -268,13 +268,13 @@ def _stackup_from_job(job_text: str | None, layers: list[str],
 # --- geometry --------------------------------------------------------------------------
 #
 # gerbonara hands back every coordinate and aperture size in the file's own unit and never
-# converts on its own. Reading those numbers as millimetres made a %MOIN% board 25.4 times
-# too small: a one-inch track came back one millimetre long, on a board that still parsed,
+# converts on its own. Reading those numbers as millimeters made a %MOIN% board 25.4 times
+# too small: a one-inch track came back one millimeter long, on a board that still parsed,
 # rendered and named its nets. Everything below goes through _to_mm or asks gerbonara for
 # MM explicitly.
 
 def _to_mm(unit):
-    """A converter from ``unit`` to millimetres. A file with no MO statement is taken as mm."""
+    """A converter from ``unit`` to millimeters. A file with no MO statement is taken as mm."""
     from gerbonara.utils import MM
 
     if unit is None:
@@ -622,7 +622,7 @@ def _layer_extent(gf) -> tuple[float, float, float, float] | None:
 
 
 def _arc_points(obj) -> list[tuple[float, float]]:
-    """Points along a Gerber arc, via its centre offset, in mm (Gerber's Y-up)."""
+    """Points along a Gerber arc, via its center offset, in mm (Gerber's Y-up)."""
     mm = _to_mm(getattr(obj, "unit", None))
     x1, y1, x2, y2 = mm(obj.x1), mm(obj.y1), mm(obj.x2), mm(obj.y2)
     cx = x1 + mm(getattr(obj, "cx", 0.0))

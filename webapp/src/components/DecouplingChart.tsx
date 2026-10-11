@@ -34,7 +34,7 @@ export interface DecouplingChartProps {
   bandHz: number
   antiResonances: { hz: number; ohm: number }[]
   noise: NoiseMark[]
-  /** A capacitor to draw in color rather than grey. */
+  /** A capacitor to draw in color rather than gray. */
   selected?: string | null
   /** A recommendation's curve, drawn dashed over the total. */
   whatIf?: number[] | null

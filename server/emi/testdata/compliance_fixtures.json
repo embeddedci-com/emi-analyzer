@@ -16,7 +16,7 @@
               38.4
             ],
             "sigma_terms": {
-              "cable idealisation": 4.5
+              "cable idealization": 4.5
             }
           }
         ],
@@ -49,7 +49,7 @@
           "driver provenance": 3.0,
           "mesh preset": 2.0,
           "far-field interpolation": 1.0,
-          "cable idealisation (cable J1 (USB 2.0, 1 m))": 4.5
+          "cable idealization (cable J1 (USB 2.0, 1 m))": 4.5
         },
         "confidence_uncalibrated": 0.8082443362667413,
         "range_80_db": [
@@ -86,7 +86,7 @@
               40.0
             ],
             "sigma_terms": {
-              "cable idealisation": 4.5
+              "cable idealization": 4.5
             }
           },
           {
@@ -132,7 +132,7 @@
         "sigma_db": 2.3769728648009423,
         "sigma_terms": {
           "mesh preset (board region around U3)": 0.8944271909999159,
-          "cable idealisation (cable J1)": 2.0124611797498106,
+          "cable idealization (cable J1)": 2.0124611797498106,
           "mesh preset (board region around U7)": 0.8944271909999159
         },
         "confidence_uncalibrated": 0.07103474997948878,

@@ -14,6 +14,33 @@ The KiCad plugin is versioned and released separately; see
 - Homebrew cask for macOS: `brew install --cask embeddedci-com/tap/emi-analyzer` installs the
   app without the Gatekeeper steps the `.dmg` needs. Updated on every release.
 
+- An MCP server for coding agents, `emi-local mcp`: analyze a board from disk, read the findings,
+  decoupling, nets, ESD and cable results, and compare versions, against the app on your
+  computer. The `emi-analyzer` plugin for Claude Code (in the `embeddedci-com/benchpod-mcp`
+  marketplace) runs it and adds a review skill. See "Using it from Claude Code" in the README.
+
+### Changed
+
+Findings now weigh what a net carries and what a pin is, so a board's critical list opens with
+its real problems. On a 4-layer reference board (BenchPod digital) the criticals went from 27 to
+4, every one of them on a fast net; on its analog board from 20 to 1.
+
+- Long nets, return vias and plane gaps follow what a net's name says it carries: clocks and
+  fast buses (SPI, RMII, USB, Ethernet, DDR, PSRAM) as before; slow or static lines (I2C,
+  resets, enables, status, sense and LED lines, boot straps, MDIO, UART flow control) are
+  advisory; a net whose name says nothing is at most a warning for its length.
+- On a board with reference planes, a long fast net is critical only where its return path is
+  also broken (a wide plane gap or a layer change far from a return via); over an intact plane
+  its loop stays small.
+- Decoupling reads the pin types and names KiCad writes from the schematic: a current monitor's
+  sense input, an LDO's enable, an op-amp input, an analog switch pin or a GPIO on a net named
+  like a rail no longer needs a capacitor. Boards without pin data behave as before.
+- A net joining only pins of one part (a USB charging port's D+ to D- strap) is not checked as
+  a signal; chassis and shield nets (CHSGND, CGND, SHIELD) count as ground.
+- Length matching: no address/command group without a DRAM on the board (A0 and CS0 are also
+  mux and SPI pins), and no picosecond skew budget for CAN, RS-485, RS-422 or LIN pairs.
+- When a check has more findings than it lists, the most severe are kept.
+
 ## [0.3.0] - 2026-09-30
 
 ### Added
@@ -72,7 +99,7 @@ The KiCad plugin is versioned and released separately; see
   margin, which capacitor carries the ripple, what adding a capacitor or an LC filter would
   change, and what each input capacitor is worth. Differential mode only; see
   [docs/verification/conducted-emissions.md](docs/verification/conducted-emissions.md).
-- The conducted scan finds more regulators: boosts (modelled by their inductor ripple, not as
+- The conducted scan finds more regulators: boosts (modeled by their inductor ripple, not as
   pulses), inverting stages, controllers with external FETs (drawing through the high-side
   drain), buck modules by part number, and each output of a PMIC as its own source with its own
   frequency and phase. The rail also follows a charger or LDO a regulator draws from, and a
@@ -92,7 +119,7 @@ The KiCad plugin is versioned and released separately; see
 - Deleting and renaming boards; cable settings are kept per board.
 - The worker reads `emi.rules.yaml` (PyYAML is now in the image; YAML also reads JSON). A file
   whose top level is not a mapping is an error rather than a silent fallback to the defaults.
-- A licence notice in the worker image (`/usr/share/doc/emi-worker/NOTICE`) with the Debian
+- A license notice in the worker image (`/usr/share/doc/emi-worker/NOTICE`) with the Debian
   and Python package lists it refers to.
 - SHA256SUMS on every release, and a security policy, code of conduct and issue templates.
 - Rule settings in the app: a Checks view under Findings switches checks on and off and sets
@@ -126,7 +153,7 @@ The KiCad plugin is versioned and released separately; see
 
 ### Fixed
 
-- Modelled capacitors (full-wave, experimental): upstream openEMS keeps its series lumped
+- Modeled capacitors (full-wave, experimental): upstream openEMS keeps its series lumped
   element's state in float and lost the capacitor to rounding at a board's timestep, so a
   100 pF 0402 resonated 17 % low. The worker image's openEMS is now patched for it
   (`worker/openems-image/lumped-rlc-double.patch`; NOTICE says so), and a worker whose openEMS

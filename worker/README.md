@@ -8,8 +8,8 @@ It **dials out**: it opens a WebSocket to the app, says what it can do, and is h
 that connection. It **keeps nothing**: its identity is a key in its environment, and its disk is
 one scratch directory per run, deleted when the run ends.
 
-The app starts this worker in Docker by itself. To run one yourself — on another machine, or from
-source — see [docs/running-a-worker.md](../docs/running-a-worker.md).
+The app starts this worker in Docker by itself. To run one yourself (on another machine, or from
+source), see [docs/running-a-worker.md](../docs/running-a-worker.md).
 
 ## Develop on it
 

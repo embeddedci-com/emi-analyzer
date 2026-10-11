@@ -20,7 +20,9 @@ from .model import (
     Finding,
     RuleContext,
     RulesResult,
+    SLOW_NOTE,
     classify_net,
+    net_activity,
     dedupe,
 )
 from .planes import plane_layers
@@ -58,10 +60,10 @@ RADIATOR_MAX_REPORTED = 12
 
 
 def copper_z(ctx: RuleContext) -> dict[str, float]:
-    """Height of each copper layer's centre above the bottom of the stack, in mm.
+    """Height of each copper layer's center above the bottom of the stack, in mm.
 
     From the stackup's thicknesses. A board file with no stackup falls back to the layer
-    order, one unit apart, which still ranks neighbours correctly.
+    order, one unit apart, which still ranks neighbors correctly.
     """
     z: dict[str, float] = {}
     running = 0.0
@@ -80,7 +82,7 @@ def _layer_pairs(ctx: RuleContext) -> dict[str, str]:
 
     The planes are the ones ingest decided from pour coverage, which the viewer labels and
     the impedance model uses, so the plane checks and the electrical model agree on which
-    layer is whose reference. With the stackup analysed, its answer is used directly: it
+    layer is whose reference. With the stackup analyzed, its answer is used directly: it
     already knows which plane is physically nearest and that a signal layer in between
     blocks it. Without one, the nearest plane layer by stackup height stands in.
     """
@@ -112,7 +114,7 @@ def check_return_vias(ctx: RuleContext) -> Iterator[Finding]:
 
     When a signal changes layer, its return current has to change reference plane too. The
     only path for that is a via tying the planes together. Without one within a couple of
-    millimetres, the return detours around the nearest stitching point, and the loop that
+    millimeters, the return detours around the nearest stitching point, and the loop that
     detour encloses is what radiates.
     """
     ground = [v for v in ctx.model.vias if classify_net(v.net) == "ground"]
@@ -136,21 +138,26 @@ def check_return_vias(ctx: RuleContext) -> Iterator[Finding]:
     radius = float(ctx.setting("return-via", "max_distance_mm") or RETURN_VIA_RADIUS_MM)
 
     for via in signals:
+        if ctx.single_part(via.net):
+            continue
         d = np.hypot(gxy[:, 0] - via.x, gxy[:, 1] - via.y)
         nearest = float(d.min())
         if nearest <= radius:
             continue
         x, y = ctx.pt(via.x, via.y)
         severity = "critical" if nearest > 3 * radius else "warning"
+        detail = (
+            f"The nearest ground via is {nearest:.1f} mm away. The return current for "
+            f"this layer change has to travel there and back, enclosing a loop roughly "
+            f"{2 * nearest:.0f} mm around. Add a ground via beside this one."
+        )
+        if net_activity(via.net) == "slow":
+            severity, detail = "info", f"{detail} {SLOW_NOTE}"
         yield Finding(
             rule="return-via",
             severity=severity,
             title=f"Layer change on {via.net} has no return via within {radius:g} mm",
-            detail=(
-                f"The nearest ground via is {nearest:.1f} mm away. The return current for "
-                f"this layer change has to travel there and back, enclosing a loop roughly "
-                f"{2 * nearest:.0f} mm around. Add a ground via beside this one."
-            ),
+            detail=detail,
             net=via.net,
             x=x, y=y,
         )
@@ -237,7 +244,14 @@ def check_via_stubs(ctx: RuleContext) -> Iterator[Finding]:
 # --------------------------------------------------------------------------------------
 
 def check_radiators(ctx: RuleContext) -> Iterator[Finding]:
-    """Nets longer than a twentieth of a wavelength at the assumed top frequency."""
+    """Nets longer than a twentieth of a wavelength at the assumed top frequency.
+
+    Length is only half of it: a net radiates at a frequency only if it carries one. So the
+    nets listed, and how severe, follow what a net's name says it carries (net_activity):
+    a clock or a fast bus is critical past a fraction of a wavelength, a net whose name says
+    nothing is at most a warning, and a slow or static line (I2C, reset, enable, LED) is only
+    counted. The longest fast nets get the listed slots first.
+    """
     lam = ctx.wavelength_mm
     threshold = lam * float(ctx.setting("radiator", "wavelength_fraction") or RADIATOR_FRACTION)
     report_at = lam * RADIATOR_REPORT_FRACTION
@@ -246,31 +260,40 @@ def check_radiators(ctx: RuleContext) -> Iterator[Finding]:
     where: dict[str, tuple[float, float]] = {}
     layers: dict[str, set[str]] = defaultdict(set)
     for track in ctx.model.tracks:
-        if not track.net or classify_net(track.net) != "signal":
+        if not track.net or classify_net(track.net) != "signal" or ctx.single_part(track.net):
             continue
         length[track.net] += track.length_mm
         layers[track.net].add(track.layer)
         where.setdefault(track.net, track.pts[0])
 
     over_threshold = sum(1 for total in length.values() if total >= threshold)
+    activity = {net: net_activity(net) for net in length}
+    slow_long = sum(1 for net, total in length.items() if total >= report_at and activity[net] == "slow")
+    rank = {"fast": 0, "unknown": 1, "slow": 2}
     reported = 0
 
-    for net, total in sorted(length.items(), key=lambda kv: -kv[1]):
-        if total < report_at or reported >= RADIATOR_MAX_REPORTED:
+    for net, total in sorted(length.items(), key=lambda kv: (rank[activity[kv[0]]], -kv[1])):
+        if total < report_at or reported >= RADIATOR_MAX_REPORTED or activity[net] == "slow":
             continue
         reported += 1
         x, y = ctx.pt(*where[net])
         ratio = total / lam
+        severity = "warning" if ratio < RADIATOR_CRITICAL_FRACTION else "critical"
+        if activity[net] == "fast":
+            carries = "Its name says it carries a clock or a fast bus, so it is a likely source."
+        else:
+            severity = "warning"
+            carries = ("Its name does not say what it carries: if that is a clock or a "
+                       "switching edge, it is a likely source; if not, this is not a problem.")
         yield Finding(
             rule="radiator",
-            severity="warning" if ratio < RADIATOR_CRITICAL_FRACTION else "critical",
+            severity=severity,
             title=f"{net} is {total:.0f} mm long ({ratio:.2f} wavelengths)",
             detail=(
                 f"At {ctx.max_frequency_hz / 1e6:.0f} MHz a wavelength in this board is "
                 f"about {lam:.0f} mm, so this net is {ratio:.2f} of one. Anything past "
                 f"1/20 of a wavelength ({threshold:.0f} mm) couples to free space "
-                f"efficiently. If it carries a clock or a switching edge, it is a likely "
-                f"source; if it does not, this is not a problem."
+                f"efficiently. {carries}"
             ),
             net=net,
             layer=", ".join(sorted(layers[net])),
@@ -278,13 +301,18 @@ def check_radiators(ctx: RuleContext) -> Iterator[Finding]:
         )
 
     if over_threshold > reported:
+        slow_part = (
+            f" {slow_long} of them are slow or static lines by name (I2C, resets, enables, "
+            f"LEDs) and are not listed." if slow_long else ""
+        )
         yield Finding(
             rule="radiator",
             severity="info",
             title=f"{over_threshold} nets exceed 1/20 of a wavelength",
             detail=(
                 f"At {ctx.max_frequency_hz / 1e6:.0f} MHz that threshold is "
-                f"{threshold:.0f} mm. Only the {reported} longest are listed individually. "
+                f"{threshold:.0f} mm. Only the {reported} longest that may carry fast edges "
+                f"are listed individually, clocks and fast buses first.{slow_part} "
                 f"Length alone is not a fault -- it matters for nets that carry fast edges, "
                 f"and not at all for ones that do not."
             ),
@@ -348,7 +376,7 @@ def check_edge_proximity(ctx: RuleContext) -> Iterator[Finding]:
 def _rasterize_layer(ctx: RuleContext, layer: str) -> tuple[np.ndarray, float, float, float] | None:
     """Boolean copper mask for one layer, plus its origin and resolution.
 
-    Rasterised from the layer's zone fills only. A reference plane *is* its pours; the
+    Rasterized from the layer's zone fills only. A reference plane *is* its pours; the
     tracks on a plane layer are incidental and including them would fill in the very gaps
     this check is looking for.
     """
@@ -368,7 +396,7 @@ def _rasterize_layer(ctx: RuleContext, layer: str) -> tuple[np.ndarray, float, f
 
     mask = np.zeros((h, w), dtype=bool)
 
-    # Scanline fill, vectorised per row.
+    # Scanline fill, vectorized per row.
     #
     # Even-odd *within* one polygon, OR *across* polygons. Both halves matter. KiCad emits
     # a pour's voids by letting a single outline travel into the void and back out along a
@@ -425,7 +453,7 @@ def check_plane_gaps(ctx: RuleContext) -> Iterator[Finding]:
             rasters[plane] = r
 
     # A plane with no filled copper in the file (pours never filled, or too large to
-    # rasterise) is unknown, not a gap: flagging every trace over it would report the
+    # rasterize) is unknown, not a gap: flagging every trace over it would report the
     # whole layer as missing.
     unknown = sorted(p for p in set(pairs.values()) if p not in rasters)
     if unknown:
@@ -451,7 +479,7 @@ def check_plane_gaps(ctx: RuleContext) -> Iterator[Finding]:
     worst_by_key: dict[tuple[str, str, str], tuple[float, tuple[float, float]]] = {}
 
     for track in ctx.model.tracks:
-        if not track.net or classify_net(track.net) != "signal":
+        if not track.net or classify_net(track.net) != "signal" or ctx.single_part(track.net):
             continue
         plane = pairs.get(track.layer)
         if plane is None or plane == track.layer or plane not in rasters:
@@ -495,15 +523,16 @@ def check_plane_gaps(ctx: RuleContext) -> Iterator[Finding]:
     # A board with no dedicated plane layer -- a two-layer board, typically -- has no true
     # reference to be missing. The mechanism is still real, but calling it critical there
     # would mean every two-layer board opens with a wall of red.
-    dedicated_planes = any(
-        layer.kind in ("power", "mixed") for layer in ctx.model.copper_layers
-    )
+    dedicated_planes = ctx.has_planes
 
     for (net, layer, plane), (gap, at) in sorted(
         worst_by_key.items(), key=lambda kv: -kv[1][0]
     ):
         x, y = ctx.pt(*at)
         severity = "critical" if (gap > 2.0 and dedicated_planes) else "warning"
+        slow = net_activity(net) == "slow"
+        if slow:
+            severity = "info"
         yield Finding(
             rule="plane-gap",
             severity=severity,
@@ -522,7 +551,8 @@ def check_plane_gaps(ctx: RuleContext) -> Iterator[Finding]:
                 else " This board has no dedicated plane layer, so every signal shares its "
                      "reference with other routing; treat these as places to check rather "
                      "than as defects."
-            ),
+            )
+            + (f" {SLOW_NOTE}" if slow else ""),
             net=net,
             layer=layer,
             x=x, y=y,
@@ -554,6 +584,8 @@ def run_rules(ctx: RuleContext, progress: Callable[[str, float], None] | None = 
                 f"The {RULE_CATALOGUE.get(name, {}).get('title', name)} check failed to run. "
                 "Other checks are unaffected.")
 
+    _weigh_radiators(ctx, findings)
+
     # Severity overrides, applied the same way to every rule for the same reason.
     if ctx.settings is not None:
         for f in findings:
@@ -569,6 +601,37 @@ def run_rules(ctx: RuleContext, progress: Callable[[str, float], None] | None = 
     )
 
 
+def _weigh_radiators(ctx: RuleContext, findings: list[Finding]) -> None:
+    """A long net is critical only where its return path is broken too.
+
+    Over a solid reference plane a trace and its return enclose a loop as small as the
+    dielectric is thin, whatever its length; it radiates where that return is interrupted --
+    a gap under it, a layer change with no return via. So on a board with planes a long fast
+    net stays critical only when the same net has a critical plane-gap or return-via finding
+    (a real break, not a return via a few millimeters off), and the finding says which;
+    otherwise it is a warning. A board without planes keeps the length
+    rule, since nothing there holds the return under the trace.
+    """
+    if not ctx.has_planes:
+        return
+    broken: dict[str, list[str]] = {}
+    for f in findings:
+        if f.rule in ("plane-gap", "return-via") and f.net and f.severity == "critical":
+            broken.setdefault(f.net, []).append(f.rule)
+    for f in findings:
+        if f.rule != "radiator" or f.severity != "critical" or not f.net:
+            continue
+        if f.net in broken:
+            what = " and ".join(sorted({"a gap in its reference plane" if r == "plane-gap"
+                                        else "a layer change with no return via" for r in broken[f.net]}))
+            f.detail += f" Its return path is also broken ({what}), which is what makes the length radiate."
+        else:
+            f.severity = "warning"
+            f.detail += (" Its return path has no serious break (no wide plane gap, no layer change "
+                         "far from a return via), so over the plane its loop stays small; worth "
+                         "keeping short, not a fault.")
+
+
 # ---------------------------------------------------------------------------------------
 # Length matching
 # ---------------------------------------------------------------------------------------
@@ -576,7 +639,7 @@ def run_rules(ctx: RuleContext, progress: Callable[[str, float], None] | None = 
 def check_length_matching(ctx: RuleContext) -> Iterator[Finding]:
     """Members of a matched group whose delay differs from their reference by too much.
 
-    In picoseconds, not millimetres. On a four-layer board an inner-layer millimetre costs
+    In picoseconds, not millimeters. On a four-layer board an inner-layer millimeter costs
     about 6.9 ps and an outer-layer one about 5.5 -- so 20 mm moved between layers shifts a
     net by nearly 30 ps while its length does not change at all. For a DDR4-3200 byte lane,
     whose whole budget is around 10 ps, a millimetre-based check would call that matched.
@@ -623,7 +686,7 @@ def check_length_matching(ctx: RuleContext) -> Iterator[Finding]:
                 title=f"{net} is {abs(skew):.0f} ps {longer} than {group.reference}",
                 detail=(
                     f"In {group.name}, {net} arrives {abs(skew):.0f} ps {longer} than its "
-                    f"reference {group.reference} — about {abs(mm):.1f} mm of trace. The "
+                    f"reference {group.reference}, about {abs(mm):.1f} mm of trace. The "
                     f"budget is ±{tol:.0f} ps ({_describe_tolerance(ctx, group)}). "
                     f"{_path_summary(ctx, net)} "
                     f"Group identified by {group.source}."
@@ -638,10 +701,10 @@ def check_length_matching(ctx: RuleContext) -> Iterator[Finding]:
 def _lane_to_lane(ctx: RuleContext) -> Iterator[Finding]:
     """Byte lanes against each other, compared by their strobes. Off unless lane_to_lane_ps > 0.
 
-    A controller with write levelling absorbs the difference between lanes, so by default this
+    A controller with write leveling absorbs the difference between lanes, so by default this
     compares nothing: on a correct DDR3/DDR4 board it would be a wall of findings. It is for
-    parts without levelling (DDR2, some LPDDR and FPGA soft controllers). The parameter was in
-    the catalogue and the docs for a release before anything read it, so setting it silently
+    parts without leveling (DDR2, some LPDDR and FPGA soft controllers). The parameter was in
+    the catalog and the docs for a release before anything read it, so setting it silently
     did nothing.
 
     Each lane is compared with the median lane rather than the fastest, so one outlier is
@@ -670,7 +733,7 @@ def _lane_to_lane(ctx: RuleContext) -> Iterator[Finding]:
             detail=(
                 f"Its strobe {group.reference} is {abs(skew):.0f} ps {later} than the median of "
                 f"{len(lanes)} byte lanes. The lane-to-lane budget is ±{tol:.0f} ps. Only set "
-                "this budget for a memory controller without write levelling; one with it "
+                "this budget for a memory controller without write leveling; one with it "
                 "absorbs the difference."
             ),
             net=group.reference,

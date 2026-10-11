@@ -92,7 +92,7 @@ def antenna_terms(
 
 
 def board_arm(exit_normal, anchor_mm, extent_mm) -> dict:
-    """The board as the antenna's other arm, from its outline's bounding box, in metres.
+    """The board as the antenna's other arm, from its outline's bounding box, in meters.
 
     ``board_span_m`` runs along the cable's exit, ``board_width_m`` across it, and
     ``board_offset_m`` is where the cable leaves, measured across from the low edge.

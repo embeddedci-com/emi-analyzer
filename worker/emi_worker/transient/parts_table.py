@@ -21,7 +21,7 @@ Entry fields (all optional except topology and source):
   v_c_points    [[amps, volts, "conditions"], ...] maximum clamping voltage
   c_j_pf        line capacitance (typical when stated, otherwise the maximum)
   v_f_points    [[amps, volts], ...] diode forward voltage (maximum)
-  notes         what affects modelling
+  notes         what affects modeling
 """
 
 from __future__ import annotations

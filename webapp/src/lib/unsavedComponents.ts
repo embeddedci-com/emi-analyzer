@@ -1,7 +1,7 @@
 /**
  * Components a signed-out visitor has made (docs/implementation.md §3).
  *
- * They are usable immediately — sent inline with a run, so a visitor gets the same modelling
+ * They are usable immediately — sent inline with a run, so a visitor gets the same modeling
  * a signed-in user does — but they live in `sessionStorage` and are gone when the tab closes.
  * That is the honest bargain: there is no account to file them under, so there is nothing that
  * could bring them back, and pretending otherwise would lose someone's work silently.

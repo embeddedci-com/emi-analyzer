@@ -142,7 +142,7 @@ def test_an_unrouted_pad_is_reported_not_hidden():
 
 
 def test_joining_tolerates_a_small_gap_but_not_a_real_one():
-    """Gerber-sourced boards have been through a rasteriser; KiCad ones have not."""
+    """Gerber-sourced boards have been through a rasterizer; KiCad ones have not."""
     near = _model(
         pads=[_pad("U1", "1", "S", 0, 0), _pad("U2", "1", "S", 10, 0)],
         tracks=[_track("S", [(0.05, 0), (10, 0)])],
@@ -159,7 +159,7 @@ def test_joining_tolerates_a_small_gap_but_not_a_real_one():
 def test_a_fixup_segment_shorter_than_the_join_tolerance_does_not_break_the_route():
     """Regression: found on a real board, where a USB pair had copper but no path.
 
-    Corners are often cleaned up with a segment a few hundredths of a millimetre long.
+    Corners are often cleaned up with a segment a few hundredths of a millimeter long.
     Both its ends merge into one node, and the segment after it used to be dropped because
     that node sat just outside it -- so the route fell into two pieces and no path existed.
     """

@@ -20,7 +20,7 @@ import { DriverError, reweight, type Complex } from './driverSpectrum'
 import type { Driver } from './driverDocument'
 import { resolveDriver, type Resolved } from './driverResolve'
 
-/** One microamp per metre, the reference for dBµA/m. */
+/** One microamp per meter, the reference for dBµA/m. */
 export const MICRO = 1e-6
 
 /**

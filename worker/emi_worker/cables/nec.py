@@ -49,10 +49,10 @@ MAX_SEGMENTS = 801
 #: is 80 segments at every frequency.
 MAX_SEGMENT_M = 0.0125
 
-#: Height of the table top above the ground plane, in metres. The tabletop setups of ANSI C63.4
+#: Height of the table top above the ground plane, in meters. The tabletop setups of ANSI C63.4
 #: and CISPR 16-2-3 put the product and its cables 0.8 m up, and the full-wave far field uses
 #: the same height (openems.nf2ff.TABLE_HEIGHT_M). This was 1.0 m, so board and cable paths
-#: were modelled over two different grounds.
+#: were modeled over two different grounds.
 TABLE_HEIGHT_M = 0.8
 
 SPEED_OF_LIGHT = 299_792_458.0
@@ -86,7 +86,7 @@ def transmission_line_resonance_hz(length_m: float, height_m: float, far_end: st
 
 
 def segments_for(length_m: float, frequency_hz: float) -> int:
-    """An odd segment count, so a centre feed lands on a segment rather than between two."""
+    """An odd segment count, so a center feed lands on a segment rather than between two."""
     lam = SPEED_OF_LIGHT / frequency_hz
     step = min(lam / SEGMENTS_PER_WAVELENGTH, MAX_SEGMENT_M)
     n = int(math.ceil(length_m / step - 1e-9))
@@ -101,10 +101,10 @@ class ObservationRing:
     The measurement distance is from the antenna to the **boundary of the product
     arrangement**, the smallest circle around it (CISPR 16-2-3; ANSI C63.4 measures from the
     periphery the same way). The turntable spins that circle, so the antenna sweeps a ring
-    centred on it, ``distance_m`` outside it, at the heights the mast covers. The maximum over
+    centered on it, ``distance_m`` outside it, at the heights the mast covers. The maximum over
     the ring is what a measurement reports.
 
-    The ring was once centred on the board/cable junction with a 3 m radius, whatever the
+    The ring was once centered on the board/cable junction with a 3 m radius, whatever the
     cable's length. A 2 m cable along +x then ended 1 m from the antenna, and a 3 m one ran
     straight through it: the "field at 3 m" was the field on the wire.
     """
@@ -131,7 +131,7 @@ class Deck:
 
     length_m: float
     frequency_hz: float
-    #: Height of the cable above the ground plane, in metres.
+    #: Height of the cable above the ground plane, in meters.
     height_m: float = TABLE_HEIGHT_M
     #: The board, as the other arm of the antenna: its length along the cable's exit.
     board_span_m: float = 0.1
@@ -352,7 +352,7 @@ class NecResult:
     z_in: complex
     #: The strongest reading a receiving antenna gets at each observation point, V/m, for
     #: the 1 V source the deck excites with. "Strongest" means the better of vertical and
-    #: horizontal polarisation, which is what a scan reports (§6.2) — not the total field,
+    #: horizontal polarization, which is what a scan reports (§6.2) — not the total field,
     #: which no single antenna can read at once.
     e_v_per_m: list[float]
 
@@ -375,7 +375,7 @@ def parse_output(text: str, frequency_hz: float) -> NecResult:
     if "ANTENNA INPUT PARAMETERS" not in text:
         raise NecError(
             "nec2c produced no results block. NEC computes only when it reaches an execution "
-            "card, and reports nothing at all when it does not — check the deck has an XQ"
+            "card, and reports nothing at all when it does not. Check the deck has an XQ"
         )
     z = _IMPEDANCE.search(text.split("ANTENNA INPUT PARAMETERS", 1)[1])
     if not z:
@@ -398,7 +398,7 @@ def parse_output(text: str, frequency_hz: float) -> NecResult:
     if not fields:
         raise NecError(
             "nec2c reported no near-field points. The deck asked for them, so this means the "
-            "NE cards were not reached — check the execution card"
+            "NE cards were not reached. Check the execution card"
         )
     return NecResult(frequency_hz=frequency_hz, z_in=z_in, e_v_per_m=fields)
 

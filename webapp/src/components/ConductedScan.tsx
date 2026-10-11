@@ -396,7 +396,7 @@ function ResultView({ doc, compareId, onCompare, onFocus }: {
           </Accordion.Panel>
         </Accordion.Item>
         <Accordion.Item value="not-modelled">
-          <Accordion.Control><Text size="xs" fw={500}>Not modelled</Text></Accordion.Control>
+          <Accordion.Control><Text size="xs" fw={500}>Not modeled</Text></Accordion.Control>
           <Accordion.Panel>
             <List size="xs" spacing={4}>
               {doc.not_modelled.map((a, i) => (

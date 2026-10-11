@@ -100,10 +100,10 @@ Four private boards, read only. First run:
 
 | Board | Found | Why not more |
 |---|---|---|
-| A | the USB input and a series diode | its one regulator is a boost, which is not modelled |
+| A | the USB input and a series diode | its one regulator is a boost, which is not modeled |
 | B | the USB input, two eFuses, a PMIC behind them, 23 capacitors; scanned in 3.8 s | the PMIC's several bucks are one source |
-| C | the USB input, a diode, four ferrites, 29 capacitors | its buck's switch node is not one the `switch-node` check recognises; a dual-output converter is skipped as not a load |
-| D | the input and 3 capacitors | a four-switch buck-boost controller with external FETs is not recognised as on the rail |
+| C | the USB input, a diode, four ferrites, 29 capacitors | its buck's switch node is not one the `switch-node` check recognizes; a dual-output converter is skipped as not a load |
+| D | the input and 3 capacitors | a four-switch buck-boost controller with external FETs is not recognized as on the rail |
 
 Before those runs the default input was the first connector by reference, a +3V3 pin carrying
 the board's own supply out, and the buck making it was read as a load on it; and every regulator
@@ -124,18 +124,18 @@ settings, each board in under 1.5 s):
 Still not found: board A's second input, a screw terminal with a U reference on an unnamed net,
 feeding a buck module; that module is found and reported as not fed from the USB input. Board
 C's MCU pins PH0 and PH1 matched the switch-node name pattern; with no inductor on them they are
-no longer candidates. A charge pump on board C is not modelled.
+no longer candidates. A charge pump on board C is not modeled.
 
 ## Still to do
 
 - **A measurement.** No board has been compared with a LISN reading. Until one is, the level is
   an estimate and the what-ifs are the useful part.
-- **Common mode.** Not modelled: it flows through the capacitance from the switch node and the
+- **Common mode.** Not modeled: it flows through the capacitance from the switch node and the
   board to the test bench's reference plane, which depends on the setup and the enclosure.
 - **More regulators and modes**: flyback, SEPIC and charge-pump input currents; a buck-boost in
-  boost mode (it is modelled in buck mode, the louder one); discontinuous conduction; power
+  boost mode (it is modeled in buck mode, the louder one); discontinuous conduction; power
   inputs on connectors with U references or unnamed nets. The part-number table is short.
 - **Part models**: inductor and ferrite self-resonance and a bead's resistive peak; DC-bias
   derating of ceramics (a 10 µF 0805 at its rated voltage has well below 10 µF).
 - **Detectors**: spread spectrum, burst and pulse-skipping modes, which lower quasi-peak and
-  average readings, are not modelled; every line is a steady tone.
+  average readings, are not modeled; every line is a steady tone.

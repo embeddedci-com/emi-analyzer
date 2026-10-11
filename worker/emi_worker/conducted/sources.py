@@ -7,7 +7,7 @@ switch's edges, and a top that slopes with the inductor's ripple. The slope is k
 a flat top has exact nulls at every harmonic that is a multiple of 1/D, and there it reads
 nothing at all where a real converter reads a line 30-40 dB down. An inverting buck-boost draws
 the same shape (its input switch carries the inductor current for D of the period), and so does
-a four-switch buck-boost in buck mode, which is how one is modelled.
+a four-switch buck-boost in buck mode, which is how one is modeled.
 
 A boost's inductor sits in its input, so the input current is the inductor current: continuous,
 I_in on average with a triangle on top, rising for D of the period and falling for the rest. The

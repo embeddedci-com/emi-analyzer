@@ -447,7 +447,7 @@ def antenna(length_m: float, freqs: np.ndarray, gap_mm: float, board_span_m: flo
 
 
 def board_strip(board, transform, anchor) -> tuple[float, float]:
-    """Width and cable offset, in metres, of the board the grid holds: the ROI_MM strip
+    """Width and cable offset, in meters, of the board the grid holds: the ROI_MM strip
     across the exit plus the copper margin the model keeps, clipped to the outline."""
     from emi_worker.openems.model import COPPER_MARGIN_MM
 

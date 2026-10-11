@@ -1,5 +1,5 @@
 /**
- * Composing a solve, a driver and a cable into a field at three metres — the browser's copy
+ * Composing a solve, a driver and a cable into a field at three meters — the browser's copy
  * of `compose_cable` in `worker/emi_worker/compliance/assemble.py` (§7, §10).
  *
  *     I_cm(f) = |H_cm(f)| · |Z_s + Z_in| / |Z_d + Z_in| · V_d(f) / |Z_ant(f)|
@@ -12,7 +12,7 @@
  *
  * **The same composition as the compliance estimate, not a resemblance of it.** The chart used
  * to compose on the solve's 60-point grid, which drives a clock only where a harmonic happens
- * to land on a grid point, and it assumed the driver's source impedance equalled the port's.
+ * to land on a grid point, and it assumed the driver's source impedance equaled the port's.
  * It now evaluates every harmonic, interpolating the transfer functions between grid points,
  * and applies `|Z_s + Z_in| / |Z_d + Z_in|`, exactly as the worker does. Both are pinned by
  * `server/emi/testdata/cable_emission_fixtures.json`.
@@ -27,7 +27,7 @@ import { resolveDriver } from './driverResolve'
 import type { Driver } from './driverDocument'
 import { inRange, limitAt, standard } from './limits'
 
-/** One microvolt per metre, the reference for dBµV/m. */
+/** One microvolt per meter, the reference for dBµV/m. */
 export const MICRO = 1e-6
 
 /** A gap port's transfer function, the `transfer` block of a `cable_ports.json` entry. */
@@ -93,7 +93,7 @@ export interface Emission {
   ref: string
   cableId: string
   standardId: string
-  /** Where the field is evaluated, in metres — the standard's measuring distance. */
+  /** Where the field is evaluated, in meters — the standard's measuring distance. */
   distanceM: number
   /** True when the points are the driver's harmonics rather than a continuous spectrum. */
   line: boolean

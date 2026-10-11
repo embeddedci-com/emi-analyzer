@@ -2,7 +2,7 @@
 
 September 2026. Six checks of the parts every full-wave result stands on: whether a run that
 did not settle can still publish a number, whether the model gets a transmission line's
-impedance right, whether the shipped solver can model a capacitor at all, whether a modelled
+impedance right, whether the shipped solver can model a capacitor at all, whether a modeled
 capacitor behaves like one, what a run at radiated record length costs, and whether the cost
 estimator matches the mesher. Each has a criterion, a number against it, and a script that
 reproduces it. Full-wave solving stays behind the `full-wave` experimental flag; nothing here
@@ -19,7 +19,7 @@ was made in the worker image with at most three threads.
 |---|---|---|---|
 | 1 | A run that did not settle | nothing derived from it is used | ✅ after three fixes, one of them to how a run ends |
 | 2 | 50 ohm microstrip through the production path | Z0 within 5 % of Hammerstad-Jensen | ✅ -0.9 to +0.2 % on all presets, after three fixes |
-| 3 | Lumped inductor in openEMS 0.0.35 | an L element is modelled | ❌ it is skipped; capacitors were open circuits. Fixed by refusing on 0.0.35, and the image now ships an openEMS that models it (patched, §4) |
+| 3 | Lumped inductor in openEMS 0.0.35 | an L element is modeled | ❌ it is skipped; capacitors were open circuits. Fixed by refusing on 0.0.35, and the image now ships an openEMS that models it (patched, §4) |
 | 4 | One 0402 capacitor over a plane | SRF within 5 %, \|Z\| within 1 dB to 3x SRF | ⚠️ upstream openEMS lost the capacitor to float rounding (SRF -17 %); patched: 100 pF SRF +0.01 %, \|Z\| 0.23 dB ✅, 1 nF SRF 0.0 %, \|Z\| 0.02 dB ✅, only with a -70 dB record the solve does not ask for |
 | 5 | 100 ns record on a real board | decays to -40 dB; cost measured | dropped (out of scope); found openEMS ending runs inside the pulse |
 | 6 | Cost estimator against the mesher | per-preset floors from real boards | ✅ recalibrated on 4-10 mm regions; the timestep term was also 2.0-2.7x low |
@@ -91,7 +91,7 @@ The first run found three defects, in order:
 | Defect | Symptom | Fix |
 |---|---|---|
 | A shape was kept only if one of its vertices lay in the region | the plane under the line, drawn as one rectangle over the board, was dropped: Z0 = -j9000 ohm | kept by bounding-box overlap |
-| Copper sheets sat mid-copper while each dielectric kept its own thickness | half a copper thickness of air either side of every dielectric; at fine: 56.3 ohm, eps_eff 2.18 | sheets sit on the dielectric face (the thinner neighbour for an inner layer); slabs reach them |
+| Copper sheets sat mid-copper while each dielectric kept its own thickness | half a copper thickness of air either side of every dielectric; at fine: 56.3 ohm, eps_eff 2.18 | sheets sit on the dielectric face (the thinner neighbor for an inner layer); slabs reach them |
 | A grid line on a zero-thickness strip's edge | the strip acts about half a cell wider per side: 40.0-40.6 ohm on every preset, because the cell beside a lone trace is set by the copper, not the preset | thirds rule on straight trace edges: a line a third of a cell inside, two thirds outside, none on the edge |
 
 After them, and after the second mesh-grading fix, with runs ended by the runner (§1):
@@ -129,8 +129,8 @@ subtracted (1.60 nH of loop), leaving the element.
 **The reviewer was right.** openEMS 0.0.35's `Operator::Calc_LumpedElements` models R and C and
 drops an element with neither; the warning was not in `_SIGNIFICANT_WARNINGS`. The capacitor
 model was three single-value elements in adjacent cells, so the L cell was skipped and every
-modelled capacitor was R, an open gap and C: an open circuit. Every solve with
-`model_components` on has modelled its decoupling capacitors as missing.
+modeled capacitor was R, an open gap and C: an open circuit. Every solve with
+`model_components` on has modeled its decoupling capacitors as missing.
 
 **Fix.**
 
@@ -144,7 +144,7 @@ modelled capacitor was R, an open gap and C: an open circuit. Every solve with
 - "R or C not specified" and "capacity is too small for its size" are significant warnings, so
   any skipped element reaches the result.
 
-Components can therefore only be modelled on a worker built with `OPENEMS_SOURCE=build`.
+Components can therefore only be modeled on a worker built with `OPENEMS_SOURCE=build`.
 
 **The image was then switched.** openEMS is compiled once per upstream commit into its own image,
 `ghcr.io/embeddedci-com/emi-openems` (`worker/openems-image`, pinned at f73bf97, the commit
@@ -188,7 +188,7 @@ What the other runs showed:
 - **At the solve's own -40 dB the transform ripples by +-6 dB.** The same model ended by the
   runner at -40 dB (46,436 steps) measured the mounted SRF 4 % low and |Z| between -6.6 and
   +5.9 dB. The capacitor's loop rings down slowly, and -40 dB leaves enough of it untransformed
-  to matter. A solve with a modelled capacitor needs a tighter end criterion than one without;
+  to matter. A solve with a modeled capacitor needs a tighter end criterion than one without;
   that is not built.
 - **Before the second mesh-grading fix** the same part measured C at 0.71x nominal and the SRF 17 %
   high, with a record ended at -65 dB on a 131,208-cell mesh. The fix changed the mesh around
@@ -299,17 +299,17 @@ continuation, this part needs about 400 ns, 5.4 M steps, several hours.
 
 **At the solve's own -40 dB it is still wrong.** The same 100 pF part with the solve's defaults
 (-40 dB, its own cap) ended at 54,723 steps, about 4 ns, before the discharge had started:
-part SRF -1.9 %, mounted SRF +7.9 %, \|Z\| off by 4.7 dB. The record a modelled capacitor needs
+part SRF -1.9 %, mounted SRF +7.9 %, \|Z\| off by 4.7 dB. The record a modeled capacitor needs
 is set by 50 ohm x C through the port, 4.6x the steps at 100 pF, and grows with C. The solve
 does not ask for it, so component models stay opt-in and experimental.
 
-**Verdict.** With the patched openEMS a modelled 0402 is the library's series R-L-C: 100 pF
+**Verdict.** With the patched openEMS a modeled 0402 is the library's series R-L-C: 100 pF
 within 0.01 % on SRF and 0.23 dB on \|Z\|, 1 nF within 0.05 % and 0.02 dB. Only with a record to -70 dB, which
 the solve does not yet request.
 
 **Next.**
 
-1. Give a solve with modelled capacitors a -70 dB end criterion and a cap from 50 ohm x the
+1. Give a solve with modeled capacitors a -70 dB end criterion and a cap from 50 ohm x the
    largest C, or continue the port's discharge analytically as `verify_0402.py` does with
    `TAIL_EXTEND=1`, and price it in the estimate.
 2. Publish the patched base image and pin its digest in `worker/Dockerfile`.

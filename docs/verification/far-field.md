@@ -56,7 +56,7 @@ with the new one:
    magnetic parts do not cancel radiates it at one power of f, which is the 20 dB/decade seen.
 2. **The box was open.** Faces were recorded every 4th grid line. openEMS strides from a dump
    box's first line and drops whatever does not fit the stride at the far end, so on the fixture
-   every face stopped 13.6-13.8 mm short of its neighbours: a slot round every edge of the box.
+   every face stopped 13.6-13.8 mm short of its neighbors: a slot round every edge of the box.
    The same leak, the same f^1 term. Nothing checked what the dumps actually sampled.
 
 The record length is not a cause: running the fixture to -61 dB instead of the production -46 dB

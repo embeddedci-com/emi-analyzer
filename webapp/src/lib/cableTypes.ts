@@ -4,9 +4,9 @@
  * Mirrors `worker/emi_worker/stages/cable.py`. The shape worth noticing is that a connector
  * appears in exactly one of three places, and they mean different things:
  *
- *   - in `cables` with a `cable_id` — modelled, and there is a budget for it;
+ *   - in `cables` with a `cable_id` — modeled, and there is a budget for it;
  *   - in `cables` with `declared_none` — the user said it is never cabled, which is an answer;
- *   - in `unassigned` — nothing was declared, so it is **not modelled at all** and compliance
+ *   - in `unassigned` — nothing was declared, so it is **not modeled at all** and compliance
  *     treats it as incomplete rather than as zero.
  *
  * A UI that collapsed the last two would tell someone their board is covered when it is not.

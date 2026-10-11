@@ -27,7 +27,7 @@ from .stackup import BoardElectrics
 #: Two endpoints closer than this are the same point.
 #:
 #: KiCad writes coordinates that meet exactly, but a board that arrived as Gerbers has been
-#: through a rasteriser, and a track that ends "on" a pad may miss by a rounding error. This
+#: through a rasterizer, and a track that ends "on" a pad may miss by a rounding error. This
 #: is the tolerance the Gerber net reconstruction settled on for the same reason.
 JOIN_TOLERANCE_MM = 0.08
 
@@ -61,8 +61,8 @@ class Path:
     def delay_ps(self, elec: BoardElectrics) -> float:
         """Delay, which is the number that actually matters.
 
-        Summed per layer rather than from a board average: an inner-layer millimetre and an
-        outer-layer millimetre are about 25% apart, and a length-matching check that missed
+        Summed per layer rather than from a board average: an inner-layer millimeter and an
+        outer-layer millimeter are about 25% apart, and a length-matching check that missed
         that would pass a board whose lanes are skewed by ten times their budget.
         """
         return sum(r.length_mm * elec.ps_per_mm(r.layer) for r in self.runs) + self.vias * elec.via_ps
@@ -275,7 +275,7 @@ def build(model: BoardModel, nets: list[str] | None = None) -> dict[str, NetTopo
     # Pads joined by a copper pour rather than by a track. Very common for ground and power,
     # and without it every decoupling capacitor looks unrouted. The pour is treated as one
     # node: the path through a plane is short, wide and not what length matching is about,
-    # so its length is taken as zero rather than modelled.
+    # so its length is taken as zero rather than modeled.
     #
     # Pours are indexed by (net, layer) with their bounding boxes, so a pad is only tested
     # against pours that could contain it. Testing every pad against every pour was a

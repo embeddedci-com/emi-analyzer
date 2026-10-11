@@ -10,7 +10,7 @@
  *  - A small region around a driven trace is near-field everywhere, so a gate far below the
  *    peak paints the entire rectangle and nothing stands out.
  *  - Traces are cut where they leave the region. Strong field at the boundary means values
- *    there are partly an artefact of that cut.
+ *    there are partly an artifact of that cut.
  *  - A run that stopped before its energy decayed is a transient snapshot, not a
  *    steady-state map, however smooth it looks.
  *

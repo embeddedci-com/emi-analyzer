@@ -25,7 +25,7 @@
 # To try another openEMS, build openems-image/Dockerfile with a different OPENEMS_REF and pass
 # the result as --build-arg OPENEMS_IMAGE=<tag>.
 #
-# Licences: the worker is Apache-2.0; openEMS (GPL-3+), nec2c (GPL-2+) and the rest of the
+# Licenses: the worker is Apache-2.0; openEMS (GPL-3+), nec2c (GPL-2+) and the rest of the
 # image keep their own. NOTICE, copied into the image below, lists them and says where their
 # source is.
 ARG OPENEMS_SOURCE=build
@@ -57,7 +57,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 #
 #   ngspice  Debian bookworm ships 39.3 (BSD-3-Clause). ESD transient simulation.
 #   nec2c    1.3-4, a C translation of NEC-2 (GPL-2). The antenna solver for cable
-#            radiation. Run as a subprocess, never linked, so its licence stays its own --
+#            radiation. Run as a subprocess, never linked, so its license stays its own --
 #            which is also why PyNEC is not used despite being the obvious binding.
 #
 # The worker advertises a run kind only when the binary it needs resolves, so an image
@@ -137,7 +137,7 @@ RUN /opt/venv/bin/pip install --no-deps -c /app/requirements.lock gerbonara
 COPY emi_worker /app/emi_worker
 RUN /opt/venv/bin/pip install --no-deps --no-build-isolation /app
 
-# What is in the image and under which licence: NOTICE, plus the exact Debian and Python
+# What is in the image and under which license: NOTICE, plus the exact Debian and Python
 # package versions it points to, and the openEMS commits when it was compiled, so the
 # matching source can be found.
 COPY NOTICE /usr/share/doc/emi-worker/NOTICE

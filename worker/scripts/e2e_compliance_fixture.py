@@ -104,7 +104,7 @@ def check_fd_convention(workdir: str) -> list[float]:
     import h5py
 
     with h5py.File(os.path.join(workdir, "check_port_E.h5"), "r") as f:
-        z = np.asarray(f["Mesh/z"][:], dtype=float)   # metres
+        z = np.asarray(f["Mesh/z"][:], dtype=float)   # meters
         fd = f["FieldData/FD"]
         integrals = []
         for k in range(len(CHECK_FREQS)):

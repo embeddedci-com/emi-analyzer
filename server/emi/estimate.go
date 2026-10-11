@@ -27,12 +27,12 @@ const (
 // on the worker at the mesh stage where it becomes authoritative. All three are checked
 // against testdata/estimate_fixtures.json so they cannot drift apart.
 type EstimateInput struct {
-	// Region of interest, including the air box above and below the board, in millimetres.
+	// Region of interest, including the air box above and below the board, in millimeters.
 	ROIXmm float64 `json:"roi_x_mm"`
 	ROIYmm float64 `json:"roi_y_mm"`
 	ROIZmm float64 `json:"roi_z_mm"`
 
-	// Requested cell size per axis, in micrometres: the mesh preset.
+	// Requested cell size per axis, in micrometers: the mesh preset.
 	//
 	// The Courant limit keys off the smallest cell in *any* axis, and in plane that is a
 	// quarter of the request (InPlaneMinCellFraction), because copper edges put grid lines

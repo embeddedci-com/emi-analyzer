@@ -6,15 +6,15 @@ clock" is not how DDR works:
     DQ and DM within a byte lane   ->  their own DQS pair, not CK
     DQS+/-, CK+/-                  ->  their own complement (tightest of all)
     address, command, control      ->  CK
-    byte lane vs byte lane         ->  nothing; write levelling absorbs it
+    byte lane vs byte lane         ->  nothing; write leveling absorbs it
 
 Getting that backwards is costly in both directions. Matching lanes to each other produces a
 wall of findings on a correct board; matching DQ to CK instead of to DQS misses the error
 that actually stops the board working.
 
 Everything here is measured in **picoseconds**. See docs/length-matching-and-impedance.md:
-an inner-layer millimetre and an outer-layer millimetre differ by about 25% in delay, so a
-check that compared millimetres would pass a board whose lanes are skewed by ten times
+an inner-layer millimeter and an outer-layer millimeter differ by about 25% in delay, so a
+check that compared millimeters would pass a board whose lanes are skewed by ten times
 their budget.
 """
 
@@ -33,6 +33,10 @@ DQS_RE = re.compile(r"(?:^|[_/])([LU]?DQS)(\d*)(?:[_-]?[PN])?$", re.I)
 DM_RE = re.compile(r"(?:^|[_/])(?:DM|DQM|LDM|UDM)(\d*)$", re.I)
 ADDR_RE = re.compile(r"(?:^|[_/])(?:A|BA|MA)(\d{1,2})$", re.I)
 CMD_RE = re.compile(r"(?:^|[_/])(?:RAS|CAS|WE|CKE|CS|ODT|ACT|PAR)(?:_?N|#)?(\d*)$", re.I)
+#: Differential pairs whose bit time is microseconds, where skew in picoseconds means nothing:
+#: CAN (1-8 Mbit/s), RS-485 and RS-422, LIN. Their pairing still matters for coupling and
+#: common-mode noise (pair-coupling), just not their length match.
+SLOW_PAIR_RE = re.compile(r"(?:^|[/_.-])(?:can\d*|rs-?485|rs-?422|lin\d*)(?:$|[/_.-])", re.I)
 CK_RE = re.compile(r"(?:^|[_/])(?:CK|CLK|MCK)(\d*)(?:[_-]?[PN])?$", re.I)
 
 
@@ -70,6 +74,8 @@ def find_groups(
     # 1. Differential pairs. Each is a group of two matched to each other, and this is the
     #    one case that needs no guessing at all -- the two halves are named as a pair.
     for p in pairs:
+        if SLOW_PAIR_RE.search(p.base):
+            continue
         groups.append(MatchGroup(
             name=p.base,
             kind="pair",
@@ -119,8 +125,12 @@ def find_groups(
             ))
             claimed.update(members)
 
-    # 4. Address and command, matched to the clock.
-    if addr_cmd and ck_nets:
+    # 4. Address and command, matched to the clock -- on a board with a DRAM. Names like A0,
+    #    CS0 and REF_CLK are everywhere: a mux's address pins, an SPI chip select, an Ethernet
+    #    reference clock. Without data strobes or a byte lane there is no DRAM to capture
+    #    them, and matching a SPI chip select to an RMII clock is noise.
+    has_dram = bool(dqs_nets) or any(g.kind == "byte-lane" for g in groups)
+    if addr_cmd and ck_nets and has_dram:
         # Prefer the positive half of the clock pair; either would do for skew, but a
         # finding that quotes CK_N reads as though something is inverted.
         ref = next((n for n in sorted(ck_nets) if split_pair_name(n) and split_pair_name(n)[1]),

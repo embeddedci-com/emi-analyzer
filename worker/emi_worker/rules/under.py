@@ -19,7 +19,7 @@ Box = tuple[float, float, float, float]
 
 
 def pad_box(pads, margin: float = 0.0) -> Box:
-    """The box around a part's pads (their copper, not their centres), grown by margin."""
+    """The box around a part's pads (their copper, not their centers), grown by margin."""
     pts = [q for p in pads for q in (p.ring or [(p.x, p.y)])]
     return (min(q[0] for q in pts) - margin, min(q[1] for q in pts) - margin,
             max(q[0] for q in pts) + margin, max(q[1] for q in pts) + margin)

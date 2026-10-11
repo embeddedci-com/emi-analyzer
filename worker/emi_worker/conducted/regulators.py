@@ -1,4 +1,4 @@
-"""Which switching regulators a board has, what kind each is, and how each was recognised.
+"""Which switching regulators a board has, what kind each is, and how each was recognized.
 
 The scan starts from the ``switch-node`` check's nodes and adds what that check cannot see or
 does not need to tell apart. On the four real boards it was first run on it found the power
@@ -47,7 +47,7 @@ MAX_PASS_PADS = 16
 
 #: Part numbers whose topology is known: (pattern, topologies, what it is). First match wins, so
 #: a specific part goes before the family it would otherwise fall into (TPS65131 before TPS65).
-#: Not a complete list: a part not here is recognised by its layout alone.
+#: Not a complete list: a part not here is recognized by its layout alone.
 PART_NUMBERS: list[tuple[re.Pattern, tuple[str, ...], str]] = [
     (re.compile(r"^(TPS8\d{4}|TPSM\d|LMZM?\d|MPM\d|LTM\d|MAXM1\d|RPM\d|MIC45\d)"), ("buck",), "buck module"),
     (re.compile(r"^TPS6513"), ("boost", "inverting"), "boost and inverting converter"),
@@ -132,7 +132,7 @@ def _supply(net: str) -> bool:
 
 def find(ctx, parts) -> list[Candidate]:
     """Every switching regulator on the board, and parts that look like one but cannot be
-    modelled (kind "unmatched"). Whether the input rail feeds each is decided by ``attach``."""
+    modeled (kind "unmatched"). Whether the input rail feeds each is decided by ``attach``."""
     from .rail import parse_henries  # rail imports this module
 
     nodes = dict(emc.switch_nodes(ctx))
@@ -351,7 +351,7 @@ def attach(cands: list[Candidate], rail: set[str], entry_net: str, other_entries
             pool = fets or on_rail_ic
             if not pool:
                 skip(c.ref, f"not fed from {entry_net}: its input ripple reaches the power input only "
-                            f"through another regulator, which is not modelled")
+                            f"through another regulator, which is not modeled")
                 continue
             anchor = c.anchor or pool[0]
             pad = min(pool, key=lambda p: math.dist((p.x, p.y), (anchor.x, anchor.y)))

@@ -8,7 +8,7 @@
 //	Keys   a worker key issued at startup          (local.Keys)
 //
 // plus the webapp, embedded in the binary, and a supervisor for the worker, which is the
-// published Docker image dialling back into this process exactly as it would dial into a
+// published Docker image dialing back into this process exactly as it would dial into a
 // hosted server.
 //
 // There is no sign-in. Every request is one fixed local identity, which is only safe because
@@ -71,6 +71,9 @@ const HideWindowLine = "EMI_LOCAL_HIDE_WINDOW"
 const shellDesktop = "desktop"
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "mcp" {
+		os.Exit(runMCP(os.Args[2:]))
+	}
 	var (
 		addr        = flag.String("addr", envOr("EMI_LOCAL_ADDR", defaultAddr), "listen address; must be a loopback address")
 		dataDir     = flag.String("data-dir", envOr("EMI_LOCAL_DATA_DIR", defaultDataDir()), "where the database, board files and results are kept")

@@ -3,7 +3,7 @@
 Qt-free, so the whole flow -- pack the board, ask whether the app already has it, upload,
 find what the checks said -- can be driven from a test with a stand-in for the app.
 
-One board file is one project. A board is analysed over and over while it is being worked
+One board file is one project. A board is analyzed over and over while it is being worked
 on, and each pass is a new board in the same project: the project page already shows the
 newest finished analysis and says when a newer one is running, so the history of a design
 stays in one place instead of scattering into a project per press.
@@ -119,17 +119,17 @@ class Opened:
     """What became of a board that was handed to the app."""
 
     project_id: str
-    #: The run analysing it, or None when the app already had this exact board analysed.
+    #: The run analyzing it, or None when the app already had this exact board analyzed.
     run_id: Optional[str] = None
     board_id: Optional[str] = None
-    #: False when nothing was sent because the app recognised the bytes.
+    #: False when nothing was sent because the app recognized the bytes.
     uploaded: bool = True
 
 
 def open_board(client, store: Optional[ProjectStore], files: BoardFiles) -> Opened:
     """Hand the board to the app, and return the project to show.
 
-    Nothing is sent when the app already holds exactly these bytes, analysed -- which is the
+    Nothing is sent when the app already holds exactly these bytes, analyzed -- which is the
     common case of opening a board again without having touched it.
     """
     data = archive(files)
@@ -160,7 +160,7 @@ def open_board(client, store: Optional[ProjectStore], files: BoardFiles) -> Open
 
 
 def _lookup(client, sha256: str):
-    """``(project_id, board_id)`` for a board the app has already analysed, or None."""
+    """``(project_id, board_id)`` for a board the app has already analyzed, or None."""
     try:
         got = client.lookup_board(sha256)
     except Exception:  # noqa: BLE001 -- a lookup that fails costs an upload, not the run

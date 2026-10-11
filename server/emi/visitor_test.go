@@ -12,7 +12,7 @@ func visitorRequest() *http.Request {
 }
 
 // Two signed-out visitors must not be able to read each other's boards. This is the whole
-// point of the cookie: without it they shared one organisation, and a board is somebody's
+// point of the cookie: without it they shared one organization, and a board is somebody's
 // unreleased layout.
 func TestSignedOutVisitorsAreSeparatedFromOneAnother(t *testing.T) {
 	v := Visitors{Secret: []byte("cookie-signing-key")}
@@ -24,11 +24,11 @@ func TestSignedOutVisitorsAreSeparatedFromOneAnother(t *testing.T) {
 		t.Fatal("a first-time visitor was not given a cookie")
 	}
 	if first.OrganizationID == second.OrganizationID {
-		t.Fatal("two visitors landed in the same organisation")
+		t.Fatal("two visitors landed in the same organization")
 	}
 	for _, id := range []string{first.OrganizationID, second.OrganizationID} {
 		if !strings.HasPrefix(id, VisitorOrgPrefix) || len(id) < len(VisitorOrgPrefix)+32 {
-			t.Errorf("visitor organisation %q is not a random id", id)
+			t.Errorf("visitor organization %q is not a random id", id)
 		}
 	}
 }
@@ -76,7 +76,7 @@ func TestATamperedVisitorCookieIsRejected(t *testing.T) {
 	}
 }
 
-// A header is not an identity: nothing a client can simply set may name an organisation.
+// A header is not an identity: nothing a client can simply set may name an organization.
 func TestHeadersAreNotAVisitorIdentity(t *testing.T) {
 	v := Visitors{Secret: []byte("cookie-signing-key")}
 	r := visitorRequest()
@@ -85,6 +85,6 @@ func TestHeadersAreNotAVisitorIdentity(t *testing.T) {
 
 	id, _ := v.Identify(r)
 	if !id.Anonymous || !strings.HasPrefix(id.OrganizationID, VisitorOrgPrefix) {
-		t.Errorf("a header named an organisation: %+v", id)
+		t.Errorf("a header named an organization: %+v", id)
 	}
 }

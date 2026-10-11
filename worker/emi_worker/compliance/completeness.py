@@ -18,7 +18,7 @@ the view shows in place of the number.
 took them from the request: ``solved_f_max_hz=0`` skipped the band check, ``power_entry_found``
 defaulted to true, and leaving ``driven_ports`` or ``connectors`` out removed those gaps -- so an
 API client could get ``complete: true`` and a margin on numbers of its choosing. Now the band,
-the excited ports, the far field, the connectors, the cables the solve modelled and the power
+the excited ports, the far field, the connectors, the cables the solve modeled and the power
 entry all come from the solve's artifacts and the board itself. What the user may still say
 is what only they know -- which connectors carry no cable, which nets are sources, the
 enclosure, the power -- and each of those can only *add* a requirement or record a decision
@@ -85,7 +85,7 @@ def check(
 
     if not has_solve:
         c.add("solve",
-              "No finished solve was given, so nothing radiating is modelled. Pick a finished "
+              "No finished solve was given, so nothing radiating is modeled. Pick a finished "
               "solve on the Results tab.",
               "solve")
 
@@ -124,7 +124,7 @@ def check(
         if modelled is None:
             if spec is None:
                 c.add(f"cable:{ref}",
-                      f"{ref} has no cable declared. An undeclared connector is not modelled "
+                      f"{ref} has no cable declared. An undeclared connector is not modeled "
                       f"at all. Say which cable it carries, or that it carries none.",
                       "cables")
             else:
@@ -135,7 +135,7 @@ def check(
             continue
         if declared and declared != modelled.get("cable_id"):
             c.add(f"cable-mismatch:{ref}",
-                  f"{ref} is declared as {declared}, but the solve modelled "
+                  f"{ref} is declared as {declared}, but the solve modeled "
                   f"{modelled.get('cable_id')}. Run the solve again with the cable you mean.",
                   "solve")
             continue
@@ -143,7 +143,7 @@ def check(
         if length and modelled.get("length_m") and \
                 abs(float(length) - float(modelled["length_m"])) > 1e-6:
             c.add(f"cable-mismatch:{ref}",
-                  f"{ref} is declared {float(length):g} m long, but the solve modelled "
+                  f"{ref} is declared {float(length):g} m long, but the solve modeled "
                   f"{float(modelled['length_m']):g} m. Run the solve again with that length.",
                   "solve")
 
@@ -182,7 +182,7 @@ def check(
 
     if enclosure == "metal":
         c.add("metal-enclosure",
-              "A metal enclosure is not modelled. It usually helps a great deal, so a radiated "
+              "A metal enclosure is not modeled. It usually helps a great deal, so a radiated "
               "estimate without it would be pessimistic by an unknown amount rather than "
               "conservative by a known one.",
               "product")
@@ -194,7 +194,7 @@ def check(
               "product")
     elif power != "dc" and not power_entry_found:
         c.add("power-entry",
-              "The power-entry path was not recognised on this board, so the conducted "
+              "The power-entry path was not recognized on this board, so the conducted "
               "estimate has nowhere to measure.",
               "product")
 

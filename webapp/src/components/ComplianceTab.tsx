@@ -134,12 +134,12 @@ export function ComplianceTab({
       ok: assigned.length > 0 || cableRefs.length > 0,
       label: 'Cables declared',
       detail: cableRefs.length > 0
-        ? `The solve modelled cables on ${cableRefs.join(', ')}.`
+        ? `The solve modeled cables on ${cableRefs.join(', ')}.`
         : assigned.length > 0
           ? `${assigned.length} connector${assigned.length === 1 ? '' : 's'} declared on the `
             + 'Cables tab. A declared cable only counts once a solve models it.'
           : 'Declare what each connector carries on the Cables tab. An undeclared connector '
-            + 'is not modelled at all, which is different from carrying nothing.',
+            + 'is not modeled at all, which is different from carrying nothing.',
     },
     {
       ok: !!power,

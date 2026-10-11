@@ -2,8 +2,8 @@ package emi
 
 import "testing"
 
-// A worker's key decides which organisations it serves, and there are two legitimate
-// answers. A shared worker -- the kind a hosted service runs -- names no organisation and does
+// A worker's key decides which organizations it serves, and there are two legitimate
+// answers. A shared worker -- the kind a hosted service runs -- names no organization and does
 // the solving for everybody. A scoped worker is a customer's own hardware and must never be
 // handed anyone else's board.
 func TestSharedWorkersServeEveryOrgAndScopedOnesDoNot(t *testing.T) {
@@ -12,14 +12,14 @@ func TestSharedWorkersServeEveryOrgAndScopedOnesDoNot(t *testing.T) {
 
 	for _, org := range []string{"acme", "globex", "public", ""} {
 		if !shared.serves(org) {
-			t.Errorf("a shared worker refused organisation %q", org)
+			t.Errorf("a shared worker refused organization %q", org)
 		}
 	}
 	if !scoped.serves("acme") {
-		t.Error("a scoped worker refused its own organisation")
+		t.Error("a scoped worker refused its own organization")
 	}
 	if scoped.serves("globex") {
-		t.Error("a scoped worker accepted another organisation's work")
+		t.Error("a scoped worker accepted another organization's work")
 	}
 }
 
@@ -56,7 +56,7 @@ func TestEligibilityMixesSharedAndScopedWorkers(t *testing.T) {
 	}
 }
 
-// Capability filtering still applies to a shared worker: serving every organisation does
+// Capability filtering still applies to a shared worker: serving every organization does
 // not mean accepting every run.
 func TestASharedWorkerStillDeclinesWorkItCannotDo(t *testing.T) {
 	small := &workerConn{orgID: "", caps: Capabilities{

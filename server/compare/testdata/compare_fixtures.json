@@ -1,0 +1,169 @@
+{
+  "_comment": "Shared cases for comparing two versions of a board. server/compare (Go) and webapp/src/lib/compare.ts must both give these answers. Written by hand: every expectation here is a decision about what counts as the same finding, so change one only on purpose. In expected, unchanged lists 'beforeId>afterId' pairs, fixed and new list ids, all sorted.",
+  "findings": [
+    {
+      "name": "moved within the tolerance, new id and title",
+      "before": [
+        {"id": "a", "rule": "return-via", "severity": "warning", "title": "Via 3.1 mm from a return", "net": "CLK", "layer": "F.Cu", "x": 10, "y": 10}
+      ],
+      "after": [
+        {"id": "b", "rule": "return-via", "severity": "warning", "title": "Via 2.8 mm from a return", "net": "CLK", "layer": "F.Cu", "x": 11.2, "y": 10.5}
+      ],
+      "expected": {"unchanged": ["a>b"], "fixed": [], "new": [], "headline": "No change"}
+    },
+    {
+      "name": "moved too far with a different title",
+      "before": [
+        {"id": "a", "rule": "return-via", "severity": "warning", "title": "Via 3.1 mm from a return", "net": "CLK", "layer": "F.Cu", "x": 10, "y": 10}
+      ],
+      "after": [
+        {"id": "b", "rule": "return-via", "severity": "warning", "title": "Via 2.8 mm from a return", "net": "CLK", "layer": "F.Cu", "x": 20, "y": 10}
+      ],
+      "expected": {"unchanged": [], "fixed": ["a"], "new": ["b"], "headline": "1 fixed, 1 new"}
+    },
+    {
+      "name": "moved far with exactly the same title",
+      "before": [
+        {"id": "a", "rule": "return-via", "severity": "warning", "title": "D1's ground pad has no via", "net": "CLK", "layer": "F.Cu", "x": 10, "y": 10}
+      ],
+      "after": [
+        {"id": "b", "rule": "return-via", "severity": "warning", "title": "D1's ground pad has no via", "net": "CLK", "layer": "F.Cu", "x": 40, "y": 10}
+      ],
+      "expected": {"unchanged": ["a>b"], "fixed": [], "new": [], "headline": "No change"}
+    },
+    {
+      "name": "a near partner wins over a far one with the same title",
+      "before": [
+        {"id": "far", "rule": "return-via", "severity": "warning", "title": "T", "net": "CLK", "layer": "F.Cu", "x": 40, "y": 10},
+        {"id": "near", "rule": "return-via", "severity": "warning", "title": "U", "net": "CLK", "layer": "F.Cu", "x": 10.5, "y": 10}
+      ],
+      "after": [
+        {"id": "b", "rule": "return-via", "severity": "warning", "title": "T", "net": "CLK", "layer": "F.Cu", "x": 10, "y": 10}
+      ],
+      "expected": {"unchanged": ["near>b"], "fixed": ["far"], "new": [], "headline": "1 fixed"}
+    },
+    {
+      "name": "never matches across rule, net or layer",
+      "before": [
+        {"id": "a1", "rule": "return-via", "severity": "warning", "title": "Missing return via", "net": "CLK", "layer": "F.Cu", "x": 10, "y": 10},
+        {"id": "a2", "rule": "return-via", "severity": "warning", "title": "Missing return via", "net": "DATA", "layer": "F.Cu", "x": 10, "y": 10},
+        {"id": "a3", "rule": "return-via", "severity": "warning", "title": "Missing return via", "net": "CLK", "layer": "B.Cu", "x": 10, "y": 10}
+      ],
+      "after": [
+        {"id": "b1", "rule": "plane-gap", "severity": "warning", "title": "Missing return via", "net": "CLK", "layer": "F.Cu", "x": 10, "y": 10},
+        {"id": "b2", "rule": "return-via", "severity": "warning", "title": "Missing return via", "net": "SDA", "layer": "F.Cu", "x": 10, "y": 10},
+        {"id": "b3", "rule": "return-via", "severity": "warning", "title": "Missing return via", "net": "CLK", "layer": "In1.Cu", "x": 10, "y": 10}
+      ],
+      "expected": {"unchanged": [], "fixed": ["a1", "a2", "a3"], "new": ["b1", "b2", "b3"], "headline": "3 fixed, 3 new"}
+    },
+    {
+      "name": "closest pairs first, not file order",
+      "before": [
+        {"id": "a", "rule": "return-via", "severity": "warning", "title": "Missing return via", "net": "CLK", "layer": "F.Cu", "x": 10, "y": 10},
+        {"id": "b", "rule": "return-via", "severity": "warning", "title": "Missing return via", "net": "CLK", "layer": "F.Cu", "x": 11.5, "y": 10}
+      ],
+      "after": [
+        {"id": "c", "rule": "return-via", "severity": "warning", "title": "Missing return via", "net": "CLK", "layer": "F.Cu", "x": 11.6, "y": 10}
+      ],
+      "expected": {"unchanged": ["b>c"], "fixed": ["a"], "new": [], "headline": "1 fixed"}
+    },
+    {
+      "name": "findings with no place match each other, by title first",
+      "before": [
+        {"id": "sA", "rule": "return-via", "severity": "warning", "title": "A", "net": "", "layer": "F.Cu", "x": null, "y": null},
+        {"id": "sB", "rule": "return-via", "severity": "warning", "title": "B", "net": "", "layer": "F.Cu", "x": null, "y": null}
+      ],
+      "after": [
+        {"id": "tB", "rule": "return-via", "severity": "warning", "title": "B", "net": "", "layer": "F.Cu", "x": null, "y": null},
+        {"id": "tC", "rule": "return-via", "severity": "warning", "title": "C", "net": "", "layer": "F.Cu", "x": null, "y": null}
+      ],
+      "expected": {"unchanged": ["sA>tC", "sB>tB"], "fixed": [], "new": [], "headline": "No change"}
+    },
+    {
+      "name": "located and not located never match",
+      "before": [
+        {"id": "s", "rule": "return-via", "severity": "warning", "title": "A", "net": "", "layer": "F.Cu", "x": null, "y": null}
+      ],
+      "after": [
+        {"id": "l", "rule": "return-via", "severity": "warning", "title": "A", "net": "", "layer": "F.Cu", "x": 10, "y": 10}
+      ],
+      "expected": {"unchanged": [], "fixed": ["s"], "new": ["l"], "headline": "1 fixed, 1 new"}
+    },
+    {
+      "name": "counts by severity, a matched finding at its new severity",
+      "before": [
+        {"id": "a", "rule": "return-via", "severity": "critical", "title": "Missing return via", "net": "A", "layer": "F.Cu", "x": 10, "y": 10},
+        {"id": "b", "rule": "return-via", "severity": "critical", "title": "Missing return via", "net": "B", "layer": "F.Cu", "x": 10, "y": 10}
+      ],
+      "after": [
+        {"id": "b2", "rule": "return-via", "severity": "warning", "title": "Missing return via", "net": "B", "layer": "F.Cu", "x": 10, "y": 10},
+        {"id": "c", "rule": "return-via", "severity": "info", "title": "Missing return via", "net": "C", "layer": "F.Cu", "x": 10, "y": 10},
+        {"id": "d", "rule": "return-via", "severity": "critical", "title": "Missing return via", "net": "D", "layer": "F.Cu", "x": 10, "y": 10}
+      ],
+      "expected": {
+        "unchanged": ["b>b2"], "fixed": ["a"], "new": ["c", "d"], "headline": "1 fixed, 2 new",
+        "counts": {
+          "fixed": {"critical": 1, "warning": 0, "info": 0, "total": 1},
+          "new": {"critical": 1, "warning": 0, "info": 1, "total": 2},
+          "unchanged": {"critical": 0, "warning": 1, "info": 0, "total": 1}
+        }
+      }
+    },
+    {
+      "name": "groups: rules with something new first, new before fixed, worst first",
+      "before": [
+        {"id": "pa", "rule": "plane-gap", "severity": "warning", "title": "Missing return via", "net": "A", "layer": "F.Cu", "x": 10, "y": 10},
+        {"id": "rb", "rule": "return-via", "severity": "warning", "title": "Missing return via", "net": "B", "layer": "F.Cu", "x": 10, "y": 10}
+      ],
+      "after": [
+        {"id": "rc", "rule": "return-via", "severity": "info", "title": "Missing return via", "net": "C", "layer": "F.Cu", "x": 10, "y": 10},
+        {"id": "rd", "rule": "return-via", "severity": "critical", "title": "Missing return via", "net": "D", "layer": "F.Cu", "x": 10, "y": 10}
+      ],
+      "expected": {
+        "unchanged": [], "fixed": ["pa", "rb"], "new": ["rc", "rd"], "headline": "2 fixed, 2 new",
+        "groups": [
+          {"rule": "return-via", "changes": ["new:rd", "new:rc", "fixed:rb"]},
+          {"rule": "plane-gap", "changes": ["fixed:pa"]}
+        ]
+      }
+    }
+  ],
+  "nets": [
+    {
+      "name": "changed, added and removed, the biggest length change first",
+      "before": [
+        {"net": "A", "copper_mm": 10, "path_mm": 10, "path_vias": 0, "vias_total": 0},
+        {"net": "B", "copper_mm": 10, "path_mm": 10, "path_vias": 0, "vias_total": 0},
+        {"net": "C", "copper_mm": 10, "path_mm": 10, "path_vias": 0, "vias_total": 1},
+        {"net": "OLD", "copper_mm": 10, "path_mm": 10, "path_vias": 0, "vias_total": 0},
+        {"net": "SAME", "copper_mm": 10, "path_mm": 5.004, "path_vias": 0, "vias_total": 0}
+      ],
+      "after": [
+        {"net": "A", "copper_mm": 10, "path_mm": 11, "path_vias": 0, "vias_total": 0},
+        {"net": "B", "copper_mm": 10, "path_mm": 16, "path_vias": 0, "vias_total": 0},
+        {"net": "C", "copper_mm": 10, "path_mm": 10, "path_vias": 0, "vias_total": 2},
+        {"net": "NEW", "copper_mm": 10, "path_mm": 10, "path_vias": 0, "vias_total": 0},
+        {"net": "SAME", "copper_mm": 10, "path_mm": 5.0, "path_vias": 0, "vias_total": 0}
+      ],
+      "expected": [
+        {"net": "B", "status": "changed", "length_before_mm": 10, "length_after_mm": 16, "vias_before": 0, "vias_after": 0},
+        {"net": "A", "status": "changed", "length_before_mm": 10, "length_after_mm": 11, "vias_before": 0, "vias_after": 0},
+        {"net": "C", "status": "changed", "length_before_mm": 10, "length_after_mm": 10, "vias_before": 1, "vias_after": 2},
+        {"net": "NEW", "status": "added", "length_after_mm": 10, "vias_after": 0},
+        {"net": "OLD", "status": "removed", "length_before_mm": 10, "vias_before": 0}
+      ]
+    },
+    {
+      "name": "no routed path falls back to all the copper, null vias to the path's",
+      "before": [
+        {"net": "SIG", "copper_mm": 4, "path_mm": null, "path_vias": 1, "vias_total": null}
+      ],
+      "after": [
+        {"net": "SIG", "copper_mm": 6, "path_mm": null, "path_vias": 1, "vias_total": null}
+      ],
+      "expected": [
+        {"net": "SIG", "status": "changed", "length_before_mm": 4, "length_after_mm": 6, "vias_before": 1, "vias_after": 1}
+      ]
+    }
+  ]
+}

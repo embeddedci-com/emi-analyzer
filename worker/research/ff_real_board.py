@@ -1,6 +1,6 @@
 """Far-field verification: the production solve, far field on, on one of your own boards.
 
-What it measures is the cost and the behaviour, not the level (nothing independent says what a
+What it measures is the cost and the behavior, not the level (nothing independent says what a
 real board's level should be): the box's size and clearance, cells, runtime, peak memory,
 convergence, the size of the face dumps on disk and of the artifacts uploaded, whether the
 nf2ff guard agreed, and the per-volt slope at the low end.

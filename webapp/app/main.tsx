@@ -45,7 +45,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
       <Stack gap="md" p="xl" maw={640}>
         <Title order={3}>Something went wrong in the app</Title>
         <Text size="sm">
-          Your boards and results are unaffected — they are files on this computer. Reloading
+          Your boards and results are unaffected: they are files on this computer. Reloading
           usually clears this.
         </Text>
         <Code block style={{ whiteSpace: 'pre-wrap' }}>{this.state.error.message}</Code>

@@ -41,7 +41,7 @@ func TestTransientParamsAcceptsAModelFromTheOrganisation(t *testing.T) {
 	}
 }
 
-// A run must not be able to point a worker at another organisation's objects, or anywhere
+// A run must not be able to point a worker at another organization's objects, or anywhere
 // else in the bucket, by naming a key.
 func TestTransientParamsRefusesKeysOutsideTheOrganisation(t *testing.T) {
 	cases := map[string]string{

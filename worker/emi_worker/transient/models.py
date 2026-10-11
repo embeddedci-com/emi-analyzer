@@ -133,9 +133,9 @@ def _quasi_static_netlist(text: str, subckt: str, roles: list[str], amps: float)
 
 def load(entries: list[dict], files: dict[str, bytes], board_parts: dict[str, list[tuple[str, list]]],
          kind) -> dict[str, VendorModel]:
-    """Vet every uploaded model. Returns {normalised part value: model}, accepted or not.
+    """Vet every uploaded model. Returns {normalized part value: model}, accepted or not.
 
-    ``board_parts`` maps a normalised part value to [(ref, pads), ...] on this board.
+    ``board_parts`` maps a normalized part value to [(ref, pads), ...] on this board.
     """
     out: dict[str, VendorModel] = {}
     for entry in entries[:MAX_MODELS]:
@@ -226,7 +226,7 @@ def load(entries: list[dict], files: dict[str, bytes], board_parts: dict[str, li
             "clamps a discharge", ok,
             f"a 2 kV contact discharge (7.5 A) peaks at {peaks['p']:.1f} V positive and "
             f"{peaks['n']:.1f} V negative on {ref} pin {line_pad.number}"
-            + ("" if ok else f" — above {SANITY_LIMIT_V:g} V, so it is not clamping"),
+            + ("" if ok else f", above {SANITY_LIMIT_V:g} V, so it is not clamping"),
         ))
         if not ok:
             vm.reasons.append(f"it does not clamp: the line pin reaches {worst:.0f} V")

@@ -4,11 +4,11 @@
  * Kept separate from BoardRenderer because it is a second GL program with its own texture
  * lifecycle, and because the data conversion below is the part most likely to need tuning.
  *
- * Field data arrives as float32 dB, already normalised by the worker against a reference
+ * Field data arrives as float32 dB, already normalized by the worker against a reference
  * shared across every layer and frequency — so a quiet frequency looks quiet rather than
- * being stretched to fill the colour scale. Here it is quantised to 8 bits and uploaded as
+ * being stretched to fill the color scale. Here it is quantized to 8 bits and uploaded as
  * an R8 texture: 60 dB across 256 levels is 0.23 dB per step, far finer than the eye can
- * read off a colour ramp, and R8 with linear filtering works everywhere without the float
+ * read off a color ramp, and R8 with linear filtering works everywhere without the float
  * texture extensions.
  */
 
@@ -90,7 +90,7 @@ export interface FieldOverlayData {
   height: number
   /** Board-space extent the grid covers: [minX, minY, maxX, maxY] in mm. */
   extent: [number, number, number, number]
-  /** Most negative dB the colour ramp covers. Matches the worker's dynamic range. */
+  /** Most negative dB the color ramp covers. Matches the worker's dynamic range. */
   floorDb: number
 }
 
@@ -251,7 +251,7 @@ export class FieldOverlay {
   }
 }
 
-/** Colour stops matching the shader ramp, for drawing a legend in the DOM. */
+/** Color stops matching the shader ramp, for drawing a legend in the DOM. */
 export const RAMP_STOPS: [number, string][] = [
   [0.0, 'rgb(13, 8, 51)'],
   [0.25, 'rgb(115, 26, 115)'],

@@ -143,7 +143,7 @@ def test_a_coupled_pair_passes():
 def test_halves_that_split_are_found():
     """Reddit r/PCB picture 1: one half takes its own shortest path."""
     f = run(pairs.check_pair_coupling, _pair(split=3.0))
-    # The detour is 3 + 10 + 3 mm of USB_DM, less the half millimetre at each end still
+    # The detour is 3 + 10 + 3 mm of USB_DM, less the half millimeter at each end still
     # within reach of USB_DP.
     assert titles(f) == ["USB_DP and USB_DM run apart for 15.0 mm"]
 

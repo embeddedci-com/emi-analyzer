@@ -97,7 +97,7 @@ export interface Placement {
   boardHeight: number
   /** Readings are already dB; otherwise they are linear and converted with 20·log10. */
   valuesAreDb: boolean
-  /** How far below the peak the colour ramp reaches. */
+  /** How far below the peak the color ramp reaches. */
   rangeDb: number
 }
 
@@ -162,7 +162,7 @@ export function scanToOverlay(scan: ParsedScan, p: Placement): ScanOverlay {
 
   const yLo = p.flipY ? p.boardHeight - ay.max : ay.min
   const yHi = p.flipY ? p.boardHeight - ay.min : ay.max
-  // Readings are cell centres; the extent covers the cells, or the drawing sits half a
+  // Readings are cell centers; the extent covers the cells, or the drawing sits half a
   // pitch off from where the probe actually was.
   const extent: [number, number, number, number] = [
     ax.min - ax.step / 2 + p.offsetX,

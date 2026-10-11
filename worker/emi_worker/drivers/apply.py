@@ -26,7 +26,7 @@ from emi_worker.drivers.document import Driver
 from emi_worker.drivers.resolve import Resolved, resolve
 from emi_worker.drivers.spectrum import DriverError, reweight
 
-#: One microamp per metre, the reference for dBuA/m.
+#: One microamp per meter, the reference for dBuA/m.
 MICRO = 1e-6
 
 #: Below this fraction of the driver's own peak, a harmonic is a spectral null rather than a

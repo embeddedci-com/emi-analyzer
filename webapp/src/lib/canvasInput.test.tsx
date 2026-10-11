@@ -46,7 +46,7 @@ describe('keyboard', () => {
     expect(keyAction('Tab')).toBeNull()
   })
 
-  it('the canvas is labelled and can take focus', () => {
+  it('the canvas is labeled and can take focus', () => {
     const html = renderToString(<BoardCanvas doc={null} geometry={null} />)
     expect(html).toContain('tabindex="0"')
     expect(html).toContain('aria-label="Board view. Arrow keys pan, plus and minus zoom, 0 fits the board."')

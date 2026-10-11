@@ -1,7 +1,7 @@
-"""Recognising a part well enough to model it (§12).
+"""Recognizing a part well enough to model it (§12).
 
 §21's rule for this milestone is matching before physics: a wrong match is worse than no
-model, because bare copper is visibly incomplete while a capacitor modelled as the wrong
+model, because bare copper is visibly incomplete while a capacitor modeled as the wrong
 package is a confident number with a self-resonance in the wrong place.
 
 Measured against four real KiCad boards: 429 two-pad capacitors, of
@@ -53,7 +53,7 @@ class PackageMatch:
         if not self.ambiguous:
             return f"{self.imperial} (imperial), {self.metric} metric"
         return (
-            f"{self.imperial} — read as imperial. The footprint name carries one code and "
+            f"{self.imperial}, read as imperial. The footprint name carries one code and "
             f"no system, and metric {self.imperial} would be imperial "
             f"{_METRIC_TO_IMPERIAL.get(self.imperial, '?')} instead"
         )
@@ -121,7 +121,7 @@ class PartMatch:
         if self.farads is None and self.package is None:
             return (
                 f"{self.ref}: neither the value {self.value!r} nor the footprint "
-                f"{self.footprint!r} is one this build recognises"
+                f"{self.footprint!r} is one this build recognizes"
             )
         if self.farads is None:
             return f"{self.ref}: {self.value!r} is not a capacitance this build can read"

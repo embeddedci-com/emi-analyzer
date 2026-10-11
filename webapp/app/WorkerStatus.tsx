@@ -268,8 +268,8 @@ export function WorkerBanner() {
 
   const tone = w.state === 'pulling' || w.state === 'starting' ? 'blue' : 'orange'
   const title: Partial<Record<WorkerState, string>> = {
-    docker_missing: 'Docker is needed to analyse boards',
-    docker_not_running: 'Start Docker to analyse boards',
+    docker_missing: 'Docker is needed to analyze boards',
+    docker_not_running: 'Start Docker to analyze boards',
     pulling: 'Downloading the worker image',
     starting: 'Starting the worker',
     error: 'The worker is not running',
@@ -285,7 +285,7 @@ export function WorkerBanner() {
                   target="_blank" rel="noreferrer">
             Docker Desktop
           </Anchor>
-          {' '}(or Docker Engine on Linux) and start it — this page picks it up on its own.
+          {' '}(or Docker Engine on Linux) and start it. This page picks it up on its own.
         </Text>
       )}
       {(w.state === 'error' || w.state === 'stopped') && (

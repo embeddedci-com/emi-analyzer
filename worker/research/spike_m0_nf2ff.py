@@ -40,7 +40,7 @@ SPAN_Z_MM = float(os.environ.get("SPAN_Z_MM", "600.0"))
 #: The NF2FF box. Surface equivalence is exact in principle, so the first version of this
 #: spike put the faces close in to keep the dumps small — 70 mm from the wire tips, 0.064 λ,
 #: on 12.5 mm cells. That is the reactive near field of a wire end, and the six faces came
-#: back nearly cancelling: the pattern oscillated on a 7° scale, which no 0.22 λ box can do.
+#: back nearly canceling: the pattern oscillated on a 7° scale, which no 0.22 λ box can do.
 #: The box belongs just inside the PML, as far from the structure as the domain allows.
 FACE_XY_MM = float(os.environ.get("FACE_XY_MM", "350.0"))
 FACE_Z_MM = float(os.environ.get("FACE_Z_MM", "550.0"))
@@ -122,7 +122,7 @@ def write_job(wd: Path, out_h5: Path, mirror: tuple[int, float] | None) -> Path:
         })
     if mirror is not None:
         axis, pos = mirror
-        # Metres, like everything else nf2ff reads: the dump meshes are in metres, not in
+        # Meters, like everything else nf2ff reads: the dump meshes are in meters, not in
         # the model's drawing unit. mm here is silently accepted and moves the image plane
         # a thousand wavelengths away.
         ET.SubElement(root, "Mirror",

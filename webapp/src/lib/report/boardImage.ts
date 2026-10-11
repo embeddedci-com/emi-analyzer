@@ -54,7 +54,7 @@ export function renderBoardImage(doc: BoardDoc, geometry: ArrayBuffer, maxPx = 1
     const [r, g, b] = DEFAULT_LAYER_COLORS[i % DEFAULT_LAYER_COLORS.length]
     ctx.fillStyle = `rgba(${Math.round(r * 255)},${Math.round(g * 255)},${Math.round(b * 255)},${i === 0 ? 1 : 0.55})`
     // One path per layer. Each triangle is wound the same way, so under the nonzero rule an
-    // overlap (a pad over a track) adds up instead of cancelling into a hole.
+    // overlap (a pad over a track) adds up instead of canceling into a hole.
     ctx.beginPath()
     for (const grp of groups) {
       const end = Math.min(grp.offset + grp.count, v.length / 2)

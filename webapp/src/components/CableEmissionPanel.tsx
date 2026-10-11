@@ -159,7 +159,7 @@ export function CableEmissionPanel({ api, runId, projectId, manifest }: CableEmi
           label="Driver"
           size="xs"
           w={220}
-          placeholder="none — no absolute level"
+          placeholder="none (no absolute level)"
           clearable
           data={options}
           value={driverId}
@@ -177,7 +177,7 @@ export function CableEmissionPanel({ api, runId, projectId, manifest }: CableEmi
 
       {options.length === 0 && !drivers.isLoading && (
         <Text size="xs" c="dimmed">
-          No drivers yet. Add one on the Drivers tab — without a source this solve says which
+          No drivers yet. Add one on the Drivers tab. Without a source this solve says which
           layout is quieter, not how many µV/m it radiates.
         </Text>
       )}
@@ -200,8 +200,8 @@ export function CableEmissionPanel({ api, runId, projectId, manifest }: CableEmi
         <Text size="xs" c="dimmed">
           Predicted from the layout's common-mode drive at {ref}, an antenna model of the cable,
           and this driver. Not a pre-compliance test: a measured result can differ by more than
-          the margin shown, and this composition is not yet validated on a real board — see the
-          experimental note above.
+          the margin shown, and this composition is not yet validated on a real board (see the
+          experimental note above).
         </Text>
       )}
     </Stack>

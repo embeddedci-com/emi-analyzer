@@ -9,7 +9,7 @@
  * names the tab that fixes it. Showing a margin with a warning would be worse than showing
  * nothing: the warning is what gets dropped when someone screenshots the number.
  *
- * **Confidence is not a pass probability**, and is labelled uncalibrated until real test results
+ * **Confidence is not a pass probability**, and is labeled uncalibrated until real test results
  * have been recorded against the budget (§17.4). It is stated as what it is — the probability the
  * true margin is positive *under the model's own assumptions* — rather than as a percentage with
  * a tooltip.
@@ -86,7 +86,7 @@ export function CompliancePanel({ doc }: { doc: ComplianceDoc }) {
       </Group>
 
       {doc.no_paths && (
-        <Alert color="gray" variant="light" title="Nothing radiating is modelled yet">
+        <Alert color="gray" variant="light" title="Nothing radiating is modeled yet">
           <Text size="xs">{doc.no_paths}</Text>
         </Alert>
       )}
@@ -129,7 +129,7 @@ export function CompliancePanel({ doc }: { doc: ComplianceDoc }) {
                 multiline w={330} withArrow
                 label={
                   'The probability the true margin is positive under the model\'s own ' +
-                  'uncertainty budget. It says how much weight this margin can bear — it is ' +
+                  'uncertainty budget. It says how much weight this margin can bear. It is ' +
                   'not a probability of passing a test, and it stays uncalibrated until lab ' +
                   'results have been recorded against it.'
                 }
@@ -229,12 +229,12 @@ export function CompliancePanel({ doc }: { doc: ComplianceDoc }) {
           {doc.recommendations && (
             <div>
               <Text size="xs" fw={600} tt="uppercase" c="dimmed" mb={4}>
-                What to change — {doc.recommendations.path_label}
+                What to change: {doc.recommendations.path_label}
               </Text>
               {doc.recommendations.general_only ? (
                 <Alert color="gray" variant="light">
                   <Text size="xs" fw={600} mb={4}>
-                    General guidance — nothing specific found on this board
+                    General guidance: nothing specific found on this board
                   </Text>
                   <List size="xs" spacing={4}>
                     {doc.recommendations.general.map((g) => <List.Item key={g}>{g}</List.Item>)}

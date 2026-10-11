@@ -18,7 +18,7 @@ describe('assessGrid', () => {
   })
 
   it('flags strong field at the boundary as a cut structure', () => {
-    // A trace running out of the region: loud at the centre and still loud at one edge.
+    // A trace running out of the region: loud at the center and still loud at one edge.
     const v = grid(20, 20, (r, c) => (r === 10 ? -2 * Math.abs(c - 10) / 10 : -35))
     const q = assessGrid(v, 20, 20, -60, -45)
     expect(q.truncated).toBe(true)

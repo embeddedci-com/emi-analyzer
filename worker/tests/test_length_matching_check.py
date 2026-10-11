@@ -37,7 +37,7 @@ LATE_LANE = {"DQS0_P": 100.0, "DQS1_P": 102.0, "DQS2_P": 98.0, "DQS3_P": 160.0}
 
 
 def test_lanes_are_not_compared_by_default(monkeypatch):
-    """Write levelling absorbs lane-to-lane skew, so a correct board must stay quiet."""
+    """Write leveling absorbs lane-to-lane skew, so a correct board must stay quiet."""
     found = _run(monkeypatch, LATE_LANE, {})
     assert not [f for f in found if "other lanes" in f.title]
 

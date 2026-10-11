@@ -23,7 +23,7 @@ vertical dipole and 19 dB high on a horizontal one at 30 MHz. This module reads 
 nec2c on short dipoles, and within 1 dB on half-wave ones up to their resonance.
 docs/verification/far-field.md has the numbers.
 
-The ground plane is modelled with image currents: a PEC plane reverses the horizontal parts of
+The ground plane is modeled with image currents: a PEC plane reverses the horizontal parts of
 J and the vertical part of M. The solve itself has no plane in it -- the board is simulated in
 free space and only its radiation is imaged -- so the plane's effect back on the board's own
 currents is left out. nec2c, which does include it, puts it at under 1 % of an electrically short
@@ -42,13 +42,13 @@ from . import post
 C0 = 299_792_458.0
 ETA0 = 376.730313668
 
-#: Metres from the product's boundary to the antenna. FCC Part 15 Class B is measured at 3 m,
+#: Meters from the product's boundary to the antenna. FCC Part 15 Class B is measured at 3 m,
 #: from the periphery of the equipment (ANSI C63.4), which is how the cable path measures too.
 SCAN_DISTANCE_M = 3.0
 
 #: Antenna heights above the ground plane. The standard sweeps 1-4 m continuously. The direct
 #: and reflected rays interfere, and at 1 GHz from a board 0.8 m up the lobes are about half a
-#: metre apart in height, so a step of 0.1 m keeps the reading within a few tenths of a dB of
+#: meter apart in height, so a step of 0.1 m keeps the reading within a few tenths of a dB of
 #: the true peak where 1 m steps can miss it by several dB.
 SCAN_HEIGHTS_M = tuple(float(h) for h in np.round(np.arange(1.0, 4.0001, 0.1), 3))
 
@@ -67,17 +67,17 @@ class ScanError(RuntimeError):
 class Surface:
     """The equivalent currents on the box, already multiplied by their area."""
 
-    #: (N, 3) metres.
+    #: (N, 3) meters.
     pos: np.ndarray
     #: (F, N, 3) complex: J dA in A*m and M dA in V*m, in openEMS's spectral density units.
     j: np.ndarray
     m: np.ndarray
-    #: The box, (x0, y0, z0, x1, y1, z1) in metres, as the dumps actually sampled it.
+    #: The box, (x0, y0, z0, x1, y1, z1) in meters, as the dumps actually sampled it.
     box: tuple[float, float, float, float, float, float]
 
 
 def _dual(lines: np.ndarray) -> np.ndarray:
-    """Length each sample stands for along one axis: half the distance to each neighbour."""
+    """Length each sample stands for along one axis: half the distance to each neighbor."""
     w = np.empty_like(lines)
     w[1:-1] = (lines[2:] - lines[:-2]) / 2
     w[0] = (lines[1] - lines[0]) / 2
@@ -111,7 +111,7 @@ def read_surface(workdir: str, frequencies: list[float]) -> Surface:
     what was asked for. openEMS sub-samples a dump by striding from its first grid line, so a
     face whose line count does not fit the stride stops short of the edge. That is how the
     production box used to be open: on the fixture board every face stopped 14 mm short of its
-    neighbours, and a surface with a slot in it does not satisfy surface equivalence.
+    neighbors, and a surface with a slot in it does not satisfy surface equivalence.
     """
     faces = {}
     for name, axis, sign in _FACES:
@@ -178,7 +178,7 @@ def _with_image(s: Surface, ground_z_m: float | None):
 
 def field(s: Surface, frequencies: list[float], points: np.ndarray, *,
           ground_z_m: float | None = None, chunk: int = 2048) -> np.ndarray:
-    """E at ``points`` (P, 3 metres) for each frequency: (F, P, 3) complex.
+    """E at ``points`` (P, 3 meters) for each frequency: (F, P, 3) complex.
 
     The exact field of electric and magnetic current elements, time convention e^{jwt} as
     openEMS's dumps use (outgoing waves are e^{-jkr}):
@@ -224,6 +224,6 @@ def ring(centre_m: tuple[float, float], radius_m: float, ground_z_m: float,
 
 
 def reading(e: np.ndarray) -> np.ndarray:
-    """What a linearly polarised antenna reports at each point: the larger of vertical and
+    """What a linearly polarized antenna reports at each point: the larger of vertical and
     horizontal, as the cable path reads nec2c. (F, P, 3) -> (F, P)."""
     return np.maximum(np.abs(e[..., 2]), np.sqrt(np.abs(e[..., 0]) ** 2 + np.abs(e[..., 1]) ** 2))

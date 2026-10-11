@@ -22,9 +22,9 @@ import (
 
 // componentOwner loads a component and checks the caller may act on it as its owner.
 //
-// Ownership, not organisation. A colleague in the same organisation can *see* a shared
+// Ownership, not organization. A colleague in the same organization can *see* a shared
 // component and use it; editing, sharing and deleting stay with whoever made it, because an
-// edit silently changes what every future run of every colleague's board is modelled with.
+// edit silently changes what every future run of every colleague's board is modeled with.
 func (s *Service) componentOwner(w http.ResponseWriter, r *http.Request) (*Component, bool) {
 	u, ok := userFrom(r.Context())
 	if !ok {
@@ -37,7 +37,7 @@ func (s *Service) componentOwner(w http.ResponseWriter, r *http.Request) (*Compo
 		return nil, false
 	}
 	if c.OrganizationID != u.OrganizationID {
-		// Not "forbidden": outside the organisation the component does not exist as far as
+		// Not "forbidden": outside the organization the component does not exist as far as
 		// this caller is concerned, and saying otherwise confirms an id for them.
 		writeErr(w, http.StatusNotFound, "not found")
 		return nil, false
@@ -212,7 +212,7 @@ func (s *Service) handleDeleteComponent(w http.ResponseWriter, r *http.Request) 
 // reported. That is why the worker is handed documents rather than ids.
 //
 // **Precedence is decided here**, because only the server knows who owns what: the caller's
-// own components first, then anything their organisation has shared. Anything the browser
+// own components first, then anything their organization has shared. Anything the browser
 // sent inline — an unsaved component from a signed-out visitor — is already at the front of
 // the list and stays there, because the person who just typed it means it.
 func (s *Service) attachComponents(r *http.Request, raw json.RawMessage) (json.RawMessage, error) {

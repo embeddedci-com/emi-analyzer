@@ -1,7 +1,7 @@
 """The scan's field from the NF2FF box: exact at 3 m, with the ground plane as an image.
 
 The box here is written the way openEMS writes it -- twelve HDF5 dumps, (component, z, y, x),
-metres -- holding the exact fields of a Hertzian dipole, so the answer is known in closed form.
+meters -- holding the exact fields of a Hertzian dipole, so the answer is known in closed form.
 The same checks on a real openEMS run are in research/ff_verify_dipole.py.
 """
 
@@ -71,7 +71,7 @@ def write_box(wd, fields, freqs=FREQS, lines=None, drop_last=None, layout="split
 def test_both_openems_dump_layouts_read_as_the_same_surface(tmp_path):
     """The from-source openEMS writes the faces as complex (component, x, y, z); read the old
     way, the first far-field solve on it failed on "object 'f0_real' doesn't exist". The source
-    is off centre and tilted, so a transpose that swaps two in-plane axes changes the currents."""
+    is off center and tilted, so a transpose that swaps two in-plane axes changes the currents."""
     m = np.array([1e-3, 0.0, 2e-3])
     surfaces = {}
     for layout in ("split", "complex"):

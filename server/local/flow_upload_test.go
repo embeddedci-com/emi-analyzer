@@ -124,7 +124,7 @@ func TestALateCompletionAttachesNothing(t *testing.T) {
 	}
 }
 
-// Deduplication used to trust the hash the uploader claimed. In a shared organisation one
+// Deduplication used to trust the hash the uploader claimed. In a shared organization one
 // user could put other bytes under the hash of a board somebody else was about to upload,
 // and that upload would be skipped. Now only a hash the ingest worker computed counts.
 func TestDedupeTrustsOnlyTheWorkersHash(t *testing.T) {

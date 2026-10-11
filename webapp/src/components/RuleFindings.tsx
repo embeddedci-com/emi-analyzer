@@ -59,7 +59,7 @@ const SEVERITY_COLOR: Record<string, string> = {
 const SIMULATABLE = new Set(['esd-protection'])
 
 /** Plain-language name for each rule, so the group headings read as findings, not slugs. */
-// Rule names come from the catalogue the worker exports, so a new check is named here the
+// Rule names come from the catalog the worker exports, so a new check is named here the
 // moment it exists rather than showing its id until somebody remembers this list.
 const RULE_LABEL: Record<string, string> = Object.fromEntries(
   (catalogue as { id: string; title: string }[]).map((r) => [r.id, r.title]),

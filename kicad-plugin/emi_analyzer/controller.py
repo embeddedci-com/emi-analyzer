@@ -97,7 +97,7 @@ class Controller:
         """Read the board from the editor and hand it to the app.
 
         Called on every press of the button and by Rescan, because the board has usually
-        changed in between. When it has not, the app recognises the bytes and nothing is
+        changed in between. When it has not, the app recognizes the bytes and nothing is
         sent or re-analysed.
         """
         self.connect_app()

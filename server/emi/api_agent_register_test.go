@@ -40,14 +40,14 @@ func (stubBlob) PresignPut(context.Context, string, string, int64, time.Duration
 }
 func (stubBlob) Stat(context.Context, string) (int64, string, error) { return 0, "", nil }
 
-// A worker's organisation must come from the key that was verified, not from a lookup the
+// A worker's organization must come from the key that was verified, not from a lookup the
 // store performs for itself.
 //
-// This is a regression test for a live 404. UpsertWorker used to resolve the organisation by
+// This is a regression test for a live 404. UpsertWorker used to resolve the organization by
 // querying emi.emi_dev_api_keys -- the table the standalone DevKeyVerifier writes. Mounted
 // into a host with its own key table, keys live there instead, so the lookup
 // matched nothing, returned ErrNotFound, and every worker registration answered
-// 404 {"error":"not found"}. Only the host knows where its keys live; the organisation has to
+// 404 {"error":"not found"}. Only the host knows where its keys live; the organization has to
 // travel with the request.
 func TestWorkerRegisterCarriesTheKeysOrganisation(t *testing.T) {
 	store := &registerStore{}
@@ -78,7 +78,7 @@ func TestWorkerRegisterCarriesTheKeysOrganisation(t *testing.T) {
 		t.Fatal("the handler never reached the store")
 	}
 	if store.got.OrganizationID != "org-1" {
-		t.Fatalf("organisation: got %q want org-1 -- the worker would serve the wrong org, or none",
+		t.Fatalf("organization: got %q want org-1 -- the worker would serve the wrong org, or none",
 			store.got.OrganizationID)
 	}
 	if store.got.APIKeyKid != "kid-1" {
@@ -86,7 +86,7 @@ func TestWorkerRegisterCarriesTheKeysOrganisation(t *testing.T) {
 	}
 }
 
-// A key with no organisation is a shared worker serving everyone; that must survive as empty
+// A key with no organization is a shared worker serving everyone; that must survive as empty
 // rather than being turned into a lookup failure.
 func TestWorkerRegisterAllowsAnUnscopedKey(t *testing.T) {
 	store := &registerStore{}
@@ -111,6 +111,6 @@ func TestWorkerRegisterAllowsAnUnscopedKey(t *testing.T) {
 		t.Fatal("the handler never reached the store")
 	}
 	if store.got.OrganizationID != "" {
-		t.Fatalf("organisation: got %q want empty (serves every organisation)", store.got.OrganizationID)
+		t.Fatalf("organization: got %q want empty (serves every organization)", store.got.OrganizationID)
 	}
 }

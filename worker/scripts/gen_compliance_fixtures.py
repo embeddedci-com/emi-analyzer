@@ -36,7 +36,7 @@ CASES = [
             {"kind": "cable", "label": "cable J1 (USB 2.0, 1 m)", "driver_id": "clk",
              # 43.5 dBuV/m is the Class B limit at 100 MHz; 5.1 dB under it is 38.4.
              "field_dbuv_per_m": [38.4],
-             "sigma_terms": {"cable idealisation": 4.5}},
+             "sigma_terms": {"cable idealization": 4.5}},
         ],
         "shared_sigma_terms": {"driver provenance": 3.0, "mesh preset": 2.0,
                                "far-field interpolation": 1.0},
@@ -51,7 +51,7 @@ CASES = [
             {"kind": "board", "label": "board region around U3", "driver_id": "clk",
              "field_dbuv_per_m": [40.0], "sigma_terms": {"mesh preset": 2.0}},
             {"kind": "cable", "label": "cable J1", "driver_id": "clk",
-             "field_dbuv_per_m": [40.0], "sigma_terms": {"cable idealisation": 4.5}},
+             "field_dbuv_per_m": [40.0], "sigma_terms": {"cable idealization": 4.5}},
             {"kind": "board", "label": "board region around U7", "driver_id": "buck",
              "field_dbuv_per_m": [40.0], "sigma_terms": {"mesh preset": 2.0}},
         ],

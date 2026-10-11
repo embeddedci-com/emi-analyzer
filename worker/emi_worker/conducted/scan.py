@@ -14,7 +14,7 @@ Detector: a regulator's harmonic is a steady sine, and a steady sine reads the s
 quasi-peak and average detectors (a receiver is calibrated to its RMS). So one level is compared
 with both limits, and the average limit, 10 dB lower, is the one that decides. A regulator that
 spreads its spectrum, skips pulses at light load or bursts reads lower on quasi-peak and average
-than this; none of that is modelled.
+than this; none of that is modeled.
 """
 
 from __future__ import annotations

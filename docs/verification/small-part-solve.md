@@ -59,7 +59,7 @@ on every preset while every run still settled, so nothing flagged them.
 
 Also added: a coupon now says how many pieces of other copper sit within one cell of the net
 on the same layer, and a small-part result no longer shows the band-edge note (every output is
-a ratio to the source) or "no components were modelled". The app starts a part on the coarse
+a ratio to the source) or "no components were modeled". The app starts a part on the coarse
 mesh when normal is over budget, since the sample board's first net was refused on normal.
 
 ## What was fixed in the third pass
@@ -83,7 +83,7 @@ pass (September 2026) fixed them and what the reruns found.
 - **A one-pad net's far end gets a 50 ohm load.** Left open, the old sample board's clock rang
   past its whole budget.
 - **Less of the pulse falls below the band.** At the default 20:1 band the Gaussian's half-width
-  equalled its center, so it was only 20 dB down at DC. It is now held to 0.71 of the center,
+  equaled its center, so it was only 20 dB down at DC. It is now held to 0.71 of the center,
   and a slow mode below the band is driven 38 dB down instead of 19. Every output is a ratio to
   the source, so the band's weaker edges move nothing. The timestep cap is computed from the
   narrower pulse.

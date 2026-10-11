@@ -92,7 +92,7 @@ func TestExperimentalRunKindsAreRefusedByDefault(t *testing.T) {
 		t.Errorf("retrying a solve: got %d, want 403", w.Code)
 	}
 
-	// A solve queued before the switch is neither listed to a worker nor tokenised for one.
+	// A solve queued before the switch is neither listed to a worker nor tokenized for one.
 	w := serve(mux, "GET", "/api/emi-agent/runs", "")
 	if strings.Contains(w.Body.String(), `"solve"`) || !strings.Contains(w.Body.String(), `"ingest"`) {
 		t.Errorf("worker run list = %s, want the ingest run only", w.Body.String())
@@ -184,7 +184,7 @@ func TestSmallPartSolveIsItsOwnFeature(t *testing.T) {
 	}
 
 	// A plain solve queued while full-wave was on is not handed to a worker now, and cannot be
-	// retried or tokenised; a small-part one is and can.
+	// retried or tokenized; a small-part one is and can.
 	store.runs["part"] = &Run{ID: "part", ProjectID: "p1", Kind: RunKindSolve, Status: StatusFailed,
 		Params: json.RawMessage(`{"mode":"small_part"}`)}
 	if w := serve(mux, "POST", "/api/emi/runs/solve/retry", ""); w.Code != http.StatusForbidden {

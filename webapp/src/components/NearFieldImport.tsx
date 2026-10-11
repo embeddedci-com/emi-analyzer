@@ -85,8 +85,8 @@ export function NearFieldImport({ boardHeight, onOverlayChange, onGateChange }: 
   return (
     <Stack gap="xs">
       <Text size="xs" c="dimmed">
-        Load a probe scan — rows of x, y and a reading — to see measured hotspots on the board,
-        drawn like a solve result. Coordinates are millimetres from the board's bottom-left
+        Load a probe scan (rows of x, y and a reading) to see measured hotspots on the board,
+        drawn like a solve result. Coordinates are millimeters from the board's bottom-left
         corner with Y up; use the offsets to line it up. The file is read here and not uploaded.
       </Text>
       <Group gap="xs">

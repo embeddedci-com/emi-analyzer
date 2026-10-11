@@ -85,7 +85,7 @@ export const EXPERIMENTAL = {
     'Differential mode only. The LISN, a buck\'s input ripple and an LC filter match closed '
     + 'forms (docs/verification/conducted-emissions.md); no board has been compared with a '
     + 'measurement. Regulator settings you have not entered are assumed. Common-mode current, '
-    + 'spread spectrum and light-load modes are not modelled.',
+    + 'spread spectrum and light-load modes are not modeled.',
 } satisfies Record<string, string>
 
 /** What each reason is about, as the limitations page titles it. Typed so none is left out. */

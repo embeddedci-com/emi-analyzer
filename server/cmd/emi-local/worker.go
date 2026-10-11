@@ -59,7 +59,7 @@ type workerStatus struct {
 	Message string      `json:"message,omitempty"`
 	// Detail is what the command actually said. The UI keeps it out of the banner and shows
 	// it with the worker log, because a registry error reads as gibberish to somebody who
-	// only wants to analyse a board.
+	// only wants to analyze a board.
 	Detail    string `json:"detail,omitempty"`
 	Image     string `json:"image,omitempty"`
 	Container string `json:"container,omitempty"`
@@ -123,7 +123,7 @@ func (s *workerSupervisor) setDetailed(state workerState, msg, detail string) {
 // explainDocker turns what the docker CLI printed into something worth showing a user.
 //
 // The raw text is a registry error with a URL-encoded token request in it; the useful part is
-// which of a handful of things went wrong. Anything unrecognised keeps the original text,
+// which of a handful of things went wrong. Anything unrecognized keeps the original text,
 // because a wrong guess is worse than an ugly sentence.
 func explainDocker(image, out string, err error) (msg, detail string) {
 	detail = strings.TrimSpace(out)

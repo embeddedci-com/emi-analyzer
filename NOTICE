@@ -4,7 +4,7 @@ Copyright EmbeddedCI contributors
 Licensed under the Apache License, Version 2.0 (see LICENSE).
 
 The worker Docker image (ghcr.io/embeddedci-com/emi-worker) also contains third-party
-programs under their own licences, among them openEMS (GPL-3.0-or-later, compiled from a
+programs under their own licenses, among them openEMS (GPL-3.0-or-later, compiled from a
 pinned upstream commit by worker/openems-image/Dockerfile and modified by the patch in that
 folder), nec2c (GPL-2.0-or-later) and ngspice (BSD-3-Clause). The worker runs them as
 separate programs. See worker/NOTICE, which is also inside the image at

@@ -138,7 +138,7 @@ def spots(x_mm: np.ndarray, y_mm: np.ndarray, db: np.ndarray, ports: list[tuple[
     for iy, ix in zip(*np.nonzero(hot)):
         if seen[iy, ix]:
             continue
-        # One connected area (eight neighbours), and its loudest point.
+        # One connected area (eight neighbors), and its loudest point.
         best = (float(db[iy, ix]), int(iy), int(ix))
         seen[iy, ix] = True
         queue = deque([(iy, ix)])

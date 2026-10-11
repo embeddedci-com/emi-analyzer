@@ -111,7 +111,7 @@ class Suppression:
         return fnmatch.fnmatchcase(rule, self.rule) and fnmatch.fnmatchcase(net or "", self.net)
 
 
-#: The catalogue. Every rule the analyzer knows, its parameters and their defaults.
+#: The catalog. Every rule the analyzer knows, its parameters and their defaults.
 #:
 #: Keyed by a stable id, deliberately decoupled from the title -- settings written today
 #: must keep meaning when a finding is reworded tomorrow. The UI builds its settings page
@@ -165,15 +165,15 @@ RULE_CATALOGUE: dict[str, dict] = {
         "title": "Length matching",
         "category": "Signal integrity",
         "about": "Members of a matched group whose delay differs from their reference by "
-                 "more than the budget. Measured in time, not millimetres: an inner-layer "
-                 "millimetre and an outer-layer one are about 25% apart.",
+                 "more than the budget. Measured in time, not millimeters: an inner-layer "
+                 "millimeter and an outer-layer one are about 25% apart.",
         "params": {
-            # Tolerances in picoseconds. Millimetres are shown alongside for convenience,
+            # Tolerances in picoseconds. Millimeters are shown alongside for convenience,
             # but the comparison is in time -- see docs/length-matching-and-impedance.md.
             "intra_pair_ps": 2.0,
             "byte_lane_ps": 10.0,
             "address_command_ps": 25.0,
-            # Lanes are independent; write levelling absorbs the difference between them.
+            # Lanes are independent; write leveling absorbs the difference between them.
             # Off by default because on a correct board it is a wall of noise.
             "lane_to_lane_ps": 0.0,
             "min_group_size": 3,
@@ -282,7 +282,7 @@ RULE_CATALOGUE: dict[str, dict] = {
         # edge_mm: a connector counts as I/O when it is this close to the outline; 0 = all.
         # max_distance_mm: 10 flagged SRV05 arrays spaced along a 20-pin header on a real board,
         # which is a sensible layout; 15 still catches a clamp placed with the IC it protects.
-        # max_ground_via_mm is measured from the ground pad's edge, not its centre.
+        # max_ground_via_mm is measured from the ground pad's edge, not its center.
         "params": {"edge_mm": 5.0, "max_distance_mm": 15.0, "max_ground_via_mm": 2.0},
     },
     "connector-shield": {
@@ -335,7 +335,7 @@ RULE_CATALOGUE["cable-resonance"] = {
     "category": "Radiated emissions",
     "about": "Cables assigned to connectors that are at their best as antennas at a frequency "
              "this board produces. A cable's resonances depend on the cable, not the layout, so "
-             "this needs no solve — and it decides more about a radiated result than the board "
+             "this needs no solve, and it decides more about a radiated result than the board "
              "does.",
     "params": {
         # The clock whose harmonics are checked against the peaks. Zero means no clock is
@@ -387,7 +387,7 @@ class Settings:
     suppressions: list[Suppression] = field(default_factory=list)
     #: Cable assignments per connector reference (docs/implementation.md §5). ``{"J1": {"type":
     #: "usb2-shielded", "length_m": 2.0}}``. A reference that is absent is **not** assigned a
-    #: default: an unassigned connector is not modelled and is reported as incomplete, and a cable
+    #: default: an unassigned connector is not modeled and is reported as incomplete, and a cable
     #: the user never declared would change a result without appearing in it.
     cables: dict[str, dict] = field(default_factory=dict)
     #: Which antenna solver to use. Printed on every cable result (docs/implementation.md §5.1).
@@ -474,7 +474,7 @@ _POSITIVE = frozenset({"max_frequency_hz", "epsilon_r_at_hz"})
 def check_value(where: str, value: Any, default: Any, positive: bool = False) -> Any:
     """A setting as the type its default has, or ValueError saying what is wrong with it.
 
-    Every parameter in the catalogue is a number or a switch. A string such as "1GHz" used to
+    Every parameter in the catalog is a number or a switch. A string such as "1GHz" used to
     be stored as given and fail the run later as an internal error, and a negative value gave
     negative wavelengths; both are refused here with a message naming the setting.
     """
@@ -703,7 +703,7 @@ def board_catalogue() -> list[dict]:
 
 
 def catalogue() -> list[dict]:
-    """The rule catalogue, for a UI that builds its settings page from the server."""
+    """The rule catalog, for a UI that builds its settings page from the server."""
     return [
         {
             "id": rid,

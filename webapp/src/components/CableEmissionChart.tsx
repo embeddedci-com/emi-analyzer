@@ -51,7 +51,7 @@ export function CableEmissionChart({ emission }: { emission: Emission }) {
       .join(' ')
 
   // The margin band: field along the top, back along the limit. Split into runs of the same
-  // sign so a segment that crosses the limit is not painted one colour for its whole length.
+  // sign so a segment that crosses the limit is not painted one color for its whole length.
   const bands: { over: boolean; d: string }[] = []
   let run: typeof points = []
   let runOver = marginDb(points[0]) < 0
@@ -145,7 +145,7 @@ export function CableEmissionChart({ emission }: { emission: Emission }) {
         )}
         {emission.undriven.size > 0 && (
           <Text size="xs" c="dimmed">
-            {emission.undriven.size} frequenc{emission.undriven.size === 1 ? 'y' : 'ies'} not modelled
+            {emission.undriven.size} frequenc{emission.undriven.size === 1 ? 'y' : 'ies'} not modeled
           </Text>
         )}
       </Group>

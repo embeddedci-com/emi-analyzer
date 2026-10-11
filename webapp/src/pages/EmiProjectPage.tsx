@@ -1126,8 +1126,8 @@ export function EmiProjectPage({ api, deployment = 'hosted' }: EmiProjectPagePro
                       {reanalysing || reanalyse.isPending
                         ? 'Analyzing again with the latest checks…'
                         : ingest?.finished_at
-                          ? `Analysed ${new Date(ingest.finished_at).toLocaleString()}`
-                          : 'Analysed'}
+                          ? `Analyzed ${new Date(ingest.finished_at).toLocaleString()}`
+                          : 'Analyzed'}
                     </Text>
                     <Tooltip label="The board has not finished processing yet"
                              disabled={!!ingest?.board_id} withArrow>

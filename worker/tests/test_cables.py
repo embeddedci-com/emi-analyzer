@@ -350,7 +350,7 @@ def test_the_solver_budget_needs_no_uniform_current_assumption():
 
 @needs_nec
 def test_a_longer_cable_resonates_lower_and_allows_less():
-    """The behaviour a user should be able to predict: length sets where it radiates, and a
+    """The behavior a user should be able to predict: length sets where it radiates, and a
     better antenna carries less current before it fails."""
     from emi_worker.cables.budget import solver_budget
 
@@ -428,7 +428,7 @@ def test_the_longest_matching_hint_wins():
 
 
 def test_an_unmatched_connector_says_so_rather_than_defaulting():
-    """§5: an unassigned connector is not modelled, and the result names it. A default cable
+    """§5: an unassigned connector is not modeled, and the result names it. A default cable
     would be exactly the invisible assumption this is meant to avoid."""
     from emi_worker.cables import suggest_for
 
@@ -458,7 +458,7 @@ def test_cable_5_no_diode_package_gets_a_cable():
     what keeps the two from drifting into disagreeing about it.
 
     Known limitation, asserted so it is a decision rather than a surprise: a genuine connector
-    carrying a non-connector reference is missed too — a 2-pin terminal block labelled `U4` on
+    carrying a non-connector reference is missed too — a 2-pin terminal block labeled `U4` on
     a real board. Erring this way keeps false cables off the board at the cost of a real
     connector going unlisted, and §5 already requires the user to confirm every assignment.
     """
@@ -528,7 +528,7 @@ def test_an_unknown_solver_is_warned_about_and_the_default_kept():
 
 
 def test_a_connector_with_no_assignment_produces_nothing():
-    """§5: an unassigned connector is not modelled. Guessing one here would put a finding on
+    """§5: an unassigned connector is not modeled. Guessing one here would put a finding on
     a cable the user never said existed."""
     from emi_worker.rules.cable_resonance import check_cable_resonance
 
@@ -537,7 +537,7 @@ def test_a_connector_with_no_assignment_produces_nothing():
 
 def test_none_is_a_real_answer_and_produces_nothing():
     """A debug header that is never cabled in the product. Kept in the assignments so the
-    connector counts as decided, but nothing is modelled for it."""
+    connector counts as decided, but nothing is modeled for it."""
     from emi_worker.rules.cable_resonance import check_cable_resonance
 
     assert list(check_cable_resonance(_rule_ctx({"J7": "none"}))) == []
@@ -595,7 +595,7 @@ def _peaks(points: int) -> list[float]:
 def test_peak_positions_do_not_move_with_the_grid():
     """Two bugs guarded here, both found by measuring rather than reasoning.
 
-    Judging a peak against its two neighbours made detection depend on grid spacing: adjacent
+    Judging a peak against its two neighbors made detection depend on grid spacing: adjacent
     points move closer as the grid gets finer, so a BROAD resonance rises less between them
     and a finer grid found FEWER peaks. A 40 MHz resonance was found on a 15 % grid and missed
     on an 8 % one.
@@ -626,7 +626,7 @@ def test_the_lowest_peaks_are_stable_on_any_usable_grid():
     for points in (28, 36, 48, 64):
         got = _peaks(points)
         assert got, f"{points}-point grid found no peaks at all"
-        # 45 MHz at the 0.8 m table height. It was 39 MHz when the cable was modelled 1 m up:
+        # 45 MHz at the 0.8 m table height. It was 39 MHz when the cable was modeled 1 m up:
         # the same structure at 1.0 m gives 38 MHz with today's ring and segmentation.
         assert abs(got[0] - 45e6) < 45e6 * 0.15, f"{points} points put the first peak at {got[0]}"
 
@@ -695,7 +695,7 @@ def test_cable_1_the_closed_form_agrees_in_shape_and_stays_conservative():
 
     **The gate as originally written could not be met, and the reason is physics.** It asked for
     agreement within 1 dB for "a 1 m wire with uniform current". A fed wire does not carry
-    uniform current: it tapers towards the open end, and a perfectly triangular taper would put
+    uniform current: it tapers toward the open end, and a perfectly triangular taper would put
     the solver 6 dB below a uniform-current formula. Measured here it is 3.5-4 dB below, between
     uniform and triangular, which is what a real distribution looks like.
 
@@ -952,7 +952,7 @@ def test_the_cable_stage_runs_on_a_real_board(tmp_path):
 
     modelled = [c for c in doc["cables"] if c.get("cable_id")]
     assert modelled, "J1 was assigned a cable and produced no budget"
-    assert modelled[0]["points"], "a modelled cable with no points has no budget"
+    assert modelled[0]["points"], "a modeled cable with no points has no budget"
     assert result.summary["stage"] == "cable"
 
 
@@ -997,7 +997,7 @@ def _wire_distance(point, x_min, x_max, height):
 
 @pytest.mark.parametrize("length_m", [0.2, 1.0, 2.0, 3.0, 10.0])
 def test_the_antenna_is_never_closer_than_the_measurement_distance(length_m):
-    """The ring was centred on the junction with a 3 m radius, so a 3 m cable ran through it."""
+    """The ring was centered on the junction with a 3 m radius, so a 3 m cable ran through it."""
     deck = nec.Deck(length_m=length_m, frequency_hz=100e6)
     ring = deck.ring.points(-deck.board_span_m, length_m)
     closest = min(_wire_distance(p, -deck.board_span_m, length_m, deck.height_m) for p in ring)
@@ -1049,7 +1049,7 @@ def test_every_arm_is_segmented_alike_at_every_frequency(frequency_hz):
 def test_a_cable_longer_than_the_model_supports_is_refused():
     from emi_worker.cables.library import MAX_LENGTH_M
 
-    with pytest.raises(CableError, match="not modelled"):
+    with pytest.raises(CableError, match="not modeled"):
         get("usb2-shielded").with_length(MAX_LENGTH_M + 1)
 
 

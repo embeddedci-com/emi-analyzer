@@ -2,7 +2,7 @@
 
 A full-wave solve of a region costs what the region's *mesh* costs, and on a routed board the
 mesh is set by every copper edge in it: the in-plane axes come out several times denser than
-the preset because each neighbouring trace forces its own grid lines. A coupon keeps only what
+the preset because each neighboring trace forces its own grid lines. A coupon keeps only what
 the chosen net's current actually flows through and returns through:
 
 * the net's own copper: tracks, arcs, vias, pads and pours;
@@ -11,9 +11,9 @@ the chosen net's current actually flows through and returns through:
 * ground copper inside the coupon: stitching vias, ground tracks and ground pads;
 * the board outline and stackup, unchanged.
 
-Everything else -- neighbouring signals, other parts' pins -- is left out, and the result says
+Everything else -- neighboring signals, other parts' pins -- is left out, and the result says
 how many nets that was. The coupon therefore answers "what does this net do over its return
-path", not "what does it couple into its neighbours".
+path", not "what does it couple into its neighbors".
 
 **Ports go at the net's ends**, the two pads furthest apart, both 50 ohm: the one on the part
 with the most pins is excited, on the reasoning that a many-pin part is the driver and a
@@ -65,7 +65,7 @@ PORT_HALF_WIDTH_MM = 0.2
 
 
 #: Ground copper within this distance of the net is kept (stitching vias, ground pins and
-#: coplanar ground), mm; further away it is left out. Two millimetres is several dielectric
+#: coplanar ground), mm; further away it is left out. Two millimeters is several dielectric
 #: heights on a multilayer board, which is where a return current leaves the plane for a via.
 GROUND_NEAR_MM = 2.0
 
@@ -78,7 +78,7 @@ OPEN_END_MIN_MM = 1.0
 #: What a loaded far end is called where a port names its pad.
 OPEN_END_LABEL = "far end, 50 ohm load"
 
-#: A port this close to a point is on it, mm. Ports sit on pad centres, to float precision.
+#: A port this close to a point is on it, mm. Ports sit on pad centers, to float precision.
 _ON_MM = 0.3
 
 
@@ -360,7 +360,7 @@ def _clip(ring: list[tuple[float, float]], x0: float, y0: float, x1: float, y1: 
     A plane drawn as one polygon over the whole board has no vertex near the coupon, and a model
     that keeps shapes by their vertices drops it: the net then solves over nothing. Clipping
     puts vertices on the coupon's edge. The subject may be concave (a pour around parts); the
-    result can then carry zero-width slivers along the clip edge, which rasterise to nothing.
+    result can then carry zero-width slivers along the clip edge, which rasterize to nothing.
     """
     def cut(pts, inside, meet):
         out = []
@@ -496,7 +496,7 @@ def tight_gaps(board: BoardModel, nets: list[str], cell_mm: float) -> int:
     """How many pieces of other copper come closer to the nets than one cell, on the same layer.
 
     A grid line runs the whole domain, so two copper edges closer together than a cell can land
-    on the same line, and the net is then joined to its neighbour: a trace becomes a stub to
+    on the same line, and the net is then joined to its neighbor: a trace becomes a stub to
     ground. That is how a real coupon's through line read S21 of -57 dB, before vias were drawn
     round (``model.py``). This counts the vias, pads and tracks of other nets a coupon keeps
     within a cell of the net, so a result can say its preset is too coarse for the spacing.

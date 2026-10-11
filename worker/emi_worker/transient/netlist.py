@@ -12,7 +12,7 @@ is exactly what happened on real boards whenever a clamp sat directly on the lin
 No node may sit between inductors with no capacitance of its own. Current pushed into such a
 node has nowhere to go, the simulator's timestep collapses to nothing, and the run aborts in
 the first nanosecond. Real circuits never have one -- an IC's supply pin has on-die
-capacitance, a diode's internal node has junction and package capacitance -- so each modelled
+capacitance, a diode's internal node has junction and package capacitance -- so each modeled
 node carries the small capacitance it physically has.
 """
 
@@ -26,7 +26,7 @@ from .lines import Segment
 
 #: Below this a segment is a wire, not a transmission line.
 MIN_TD_PS = 0.05
-#: On-die capacitance at a modelled supply node.
+#: On-die capacitance at a modeled supply node.
 ON_DIE_PF = 100.0
 #: Package and bond-wire capacitance inside an IC pin, behind its series resistance.
 PIN_INTERNAL_PF = 0.5

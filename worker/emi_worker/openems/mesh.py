@@ -8,7 +8,7 @@ mesh design is the whole cost problem. Three rules drive everything here:
 2. **The largest cell is bounded by the shortest wavelength.** Above about a twentieth of
    a wavelength the grid stops resolving the wave and the answer is numerical noise.
 3. **Adjacent cells must not differ by much.** A sudden jump in cell size reflects energy
-   off the discontinuity — a numerical artefact indistinguishable from a real reflection.
+   off the discontinuity — a numerical artifact indistinguishable from a real reflection.
 
 The timestep is set by the *smallest* cell anywhere in the grid, so grading buys fewer
 cells but never a larger timestep. That asymmetry is why a "small" refinement of the
@@ -50,7 +50,7 @@ def merge_close(lines: np.ndarray, min_spacing: float,
                 keep: frozenset[float] = frozenset()) -> np.ndarray:
     """Sort, deduplicate, and merge lines closer together than ``min_spacing``.
 
-    A line in ``keep`` (rounded to the micrometre's thousandth, as ``model`` writes them) is
+    A line in ``keep`` (rounded to the micrometer's thousandth, as ``model`` writes them) is
     never the one dropped: an ordinary line that close to it goes instead, on either side.
     """
     if len(lines) == 0:
@@ -94,15 +94,15 @@ def _fill_gap(length: float, s_left: float, s_right: float,
     somewhere in the middle; the series is then scaled to fit the gap exactly.
 
     Both halves matter. Growing from one end only leaves the far end abruptly meeting its
-    neighbour, and stopping the series early to let the remainder be one final cell leaves
-    a tail cell up to twice its neighbour — a worse discontinuity than the one being fixed.
+    neighbor, and stopping the series early to let the remainder be one final cell leaves
+    a tail cell up to twice its neighbor — a worse discontinuity than the one being fixed.
 
     **The direction of that final scaling is what decides whether the grading bound holds.**
     A series that stops just short of the gap has to be stretched to fit, and stretching
-    multiplies the first cell too: measured, that put the first cell 1.5-2.7x its neighbour
+    multiplies the first cell too: measured, that put the first cell 1.5-2.7x its neighbor
     where the bound is 1.4, which is most of why real boards came out with 2:1 and 4:1 jumps.
     Taking one cell more than fits and shrinking instead keeps every cell at or below its
-    target. Shrinking is only allowed while the smallest cell stays at or above the neighbour
+    target. Shrinking is only allowed while the smallest cell stays at or above the neighbor
     the series grew from, so this can never shorten the timestep; where it would, the old
     stretched series is used and the gap is simply one the bound cannot be met in.
     """
@@ -110,7 +110,7 @@ def _fill_gap(length: float, s_left: float, s_right: float,
         return []
     s_left = max(min(s_left, max_res), 1e-12)
     s_right = max(min(s_right, max_res), 1e-12)
-    # A single cell has to satisfy the grading against *both* neighbours. Testing only the
+    # A single cell has to satisfy the grading against *both* neighbors. Testing only the
     # larger one left a 0.35 mm cell against 0.075 mm copper cells whole, and the 4.7:1 jump
     # that made was then "smoothed" into a sawtooth running out across the cable air.
     if length <= max_res and length <= min(s_left, s_right) * ratio:
@@ -151,7 +151,7 @@ def _fill_gap(length: float, s_left: float, s_right: float,
     if under is None:  # the series happened to fit exactly
         under, under_total = over, over_total
 
-    # Shrinking is preferred, and only rejected when it would take a cell below the neighbour
+    # Shrinking is preferred, and only rejected when it would take a cell below the neighbor
     # it grew from -- which is the one thing that would cost timesteps for the whole run.
     smallest_neighbour = min(s_left, s_right)
     sizes, total = under, under_total
@@ -174,19 +174,19 @@ def _fill_gap(length: float, s_left: float, s_right: float,
 
 def _fill_all(lines: np.ndarray, max_res: float, ratio: float,
               max_rounds: int = 32) -> list[float]:
-    """Fill every gap between required lines, each graded from its neighbours' real cells.
+    """Fill every gap between required lines, each graded from its neighbors' real cells.
 
     **A gap has to grade from the cell it actually touches, not from the gap next door.** The
-    first version passed the neighbouring gap's *length* as the neighbour size. That is only
-    right when the neighbour stays one cell; once it is filled, the cell against the seam is
+    first version passed the neighboring gap's *length* as the neighbor size. That is only
+    right when the neighbor stays one cell; once it is filled, the cell against the seam is
     far smaller. On a board with a cable port that put a 0.35 mm gap (filled at ~0.1 mm) next
-    to 250 mm of cable air graded as if its neighbour were 0.35 mm, and the jump that left was
+    to 250 mm of cable air graded as if its neighbor were 0.35 mm, and the jump that left was
     4.8:1 at 300 um and 6.8:1 at 1000 um -- one of those grids diverged. _smooth_ratio could
     not repair it: grading one cell in place leaves the next one too big, so each pass only
     moved the jump outward.
 
     So fill, read back the boundary cells each gap ended up with, and fill again with those,
-    until nothing changes. Neighbour sizes only ever decrease, and each is a cell the mesh
+    until nothing changes. Neighbor sizes only ever decrease, and each is a cell the mesh
     already has, so this converges and never shortens the timestep.
     """
     gaps = [float(g) for g in np.diff(lines)]
@@ -232,7 +232,7 @@ def _smooth_ratio(lines: np.ndarray, ratio: float, min_res: float,
     together than a quarter of min_res. Measured on the fixture board, that left ratios of
     2.0-4.5 at every preset against a stated bound of 1.4.
 
-    Nothing here can shorten the timestep: _fill_gap grows from the smaller neighbour, so the
+    Nothing here can shorten the timestep: _fill_gap grows from the smaller neighbor, so the
     cells it inserts are never smaller than a cell the mesh already had.
     """
     lines = np.asarray(lines, dtype=np.float64)
@@ -244,7 +244,7 @@ def _smooth_ratio(lines: np.ndarray, ratio: float, min_res: float,
         inserts: list[float] = []
         for i in range(len(sizes) - 1):
             a, b = sizes[i], sizes[i + 1]
-            # Grade from the *small* neighbour on both sides. Passing the large cell as
+            # Grade from the *small* neighbor on both sides. Passing the large cell as
             # its own reference makes _fill_gap decide the gap is already fine and return
             # nothing, which is how a 200:1 jump survived at the PML seam.
             if b > a * ratio:
@@ -341,13 +341,13 @@ def build_axis(
     if len(lines) < 2:
         raise MeshError("an axis needs at least two distinct required lines")
 
-    # Fill each gap between required lines, grading in from both neighbours so a dense
+    # Fill each gap between required lines, grading in from both neighbors so a dense
     # region hands over smoothly to a sparse one. The gap fill also enforces the wavelength
     # bound, since no generated cell exceeds max_res.
     lines = merge_close(np.asarray(_fill_all(lines, max_res, ratio)),
                         min_res * merge_fraction, pinned)
 
-    # A gap whose own neighbours were coarse can still exceed max_res after one pass, so
+    # A gap whose own neighbors were coarse can still exceed max_res after one pass, so
     # subdivide anything left over before smoothing the seams.
     lines = _subdivide(lines, max_res)
     lines = _smooth_ratio(lines, ratio, min_res)
@@ -419,7 +419,7 @@ class Mesh:
 
     @property
     def max_ratio(self) -> float:
-        """Largest step in cell size between neighbouring cells, over all three axes.
+        """Largest step in cell size between neighboring cells, over all three axes.
 
         Reported because a grid that violates its own grading bound is the leading suspect for
         a diverging run, and until this was measured nobody could tell that it did.
@@ -485,7 +485,7 @@ def build_mesh(
         return [v for v in values if lo <= v <= hi]
 
     # The lines no merge may remove are lines too, whether or not the copper list has them:
-    # two a few micrometres apart are kept as one, at their middle (model.narrow_trace_lines).
+    # two a few micrometers apart are kept as one, at their middle (model.narrow_trace_lines).
     x_req = [min_x, max_x] + inside(copper_x + list(spec.keep_x), min_x, max_x)
     y_req = [min_y, max_y] + inside(copper_y + list(spec.keep_y), min_y, max_y)
 

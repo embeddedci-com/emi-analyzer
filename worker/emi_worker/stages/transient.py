@@ -34,13 +34,13 @@ ASSUMPTIONS = [
     f"The discharge is the {waveforms.STANDARD} Table 3 contact-discharge current in parallel "
     f"with the generator's 330 Ω discharge resistor, so a clamped line takes almost all of it and "
     f"a high-impedance one sees about the charge voltage. Air discharge is not simulated.",
-    "IC pins are modelled generically — 5 pF, 1 Ω, a diode to each rail, the supply as 100 nF "
-    "behind 5 nH with 100 pF on-die — because an IC's internal protection is not published. "
+    "IC pins are modeled generically (5 pF, 1 Ω, a diode to each rail, the supply as 100 nF "
+    "behind 5 nH with 100 pF on-die) because an IC's internal protection is not published. "
     "Absolute voltages are estimates; compare the variants of a line with each other.",
     "Capacitors to ground on the IC's net are lumped at the IC pin with 1 nH each of mounting "
     "inductance; on a supply that is the decoupling, which is what absorbs a discharge there.",
     "Ground and planes are ideal: no ground bounce across the board, no coupling onto "
-    "neighbouring traces, no radiated field from the discharge.",
+    "neighboring traces, no radiated field from the discharge.",
     "Traces are lossless transmission lines with delay and impedance from the stackup; vias "
     "use L = 0.2·h·(ln(4h/d)+1) nH with h half the board thickness.",
     "A metal connector shell is where a contact discharge is applied in a test; injecting at a "

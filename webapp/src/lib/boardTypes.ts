@@ -162,7 +162,7 @@ export interface RulesDoc {
    * project file, unfilled zones. Plain sentences from the worker; see lib/notices.ts.
    */
   notes?: string[]
-  /** The settings the checks ran with. Absent on boards analysed before it existed. */
+  /** The settings the checks ran with. Absent on boards analyzed before it existed. */
   settings?: import('./rulesSettings').RulesSettingsReport
   format_version: number
   /** Per rail and IC, the supply impedance the capacitors present. See lib/decoupling.ts. */
@@ -217,6 +217,6 @@ export interface NetReport {
   clock_net: string
   epsilon_assumed: boolean
   rows: NetRow[]
-  /** Built in the browser from board.json for a board analysed before nets.json existed. */
+  /** Built in the browser from board.json for a board analyzed before nets.json existed. */
   partial?: boolean
 }

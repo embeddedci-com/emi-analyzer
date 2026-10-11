@@ -14,7 +14,7 @@ are called board A, B and C below.
 | Bond | moves the first resonance where a line over the plane resonates, both ways | within 3.3 % (1 m), 6.7 % (2 m) | ✅ (old claim was wrong) |
 | Choke | R + jX from a datasheet curve | built and tested; no library cable has one | ✅ model, not validated against a measured choke |
 | Tier B against a fully coupled solve, three real boards | ±6 dB below the first resonance | plate model, 100 ns: board A mean -7.6 dB, worst -20 dB from 30 MHz; from 80 MHz mean -4.1, worst -7.1, and with the measured V_oc offset mean -0.4, worst 2.8. Board C: no result (a 496 MHz board mode does not settle). Board B: not run | ❌ as stated; board A ✅ from 80 MHz with the V_oc offset |
-| Why Tier B read low (nec2c only) | account for the error | the board arm: a plate of the outline reads Z_ant 5-12 dB lower, about 7 of 8.9 dB (A) and 5.6 of 7.5 dB (C); the rest is V_oc changing when the cable is attached, 0-5 dB by where the source is. Tier B now uses the plate; openEMS confirms the plate is worth 7 dB on board A and measures V_oc +3.7 dB | ✅ found; V_oc offset not modelled |
+| Why Tier B read low (nec2c only) | account for the error | the board arm: a plate of the outline reads Z_ant 5-12 dB lower, about 7 of 8.9 dB (A) and 5.6 of 7.5 dB (C); the rest is V_oc changing when the cable is attached, 0-5 dB by where the source is. Tier B now uses the plate; openEMS confirms the plate is worth 7 dB on board A and measures V_oc +3.7 dB | ✅ found; V_oc offset not modeled |
 | Cables tab chart | same composition as the estimate | one function, shared fixtures | ✅ |
 | Uploaded waveform joins its envelope | within 1 dB | 0.22 dB worst | ✅ |
 | Assumed driver shown as assumed, including σ | end to end | worker result, σ, 80 % range, panel, pickers | ✅ |
@@ -26,7 +26,7 @@ are called board A, B and C below.
 
 **What is compared.** The product deck, `nec.Deck(feed="board")`: a cable along +x, 0.8 m
 over a perfect ground, fed on its first segment against a 0.1 m board arm, read on the scan ring
-3 m outside the arrangement at 1-4 m height, keeping the better polarisation at each point and
+3 m outside the arrangement at 1-4 m height, keeping the better polarization at each point and
 the worst point on the ring. Three lengths (0.3, 1, 2 m) and the three far ends the library uses
 (open; grounded by a drop wire; equipment, the drop carrying 150 ohm). 121 log-spaced points,
 30 MHz to 1.2 GHz. Script: `worker/research/verify_cable_tier_a.py`.
@@ -84,7 +84,7 @@ is worth a dB.
 
 **The radius matters more than the solver.** Between 0.5 mm (the product's) and 2.95 mm, nec2c's
 own e_per_amp below resonance moves 0.5-3.0 dB, most for the equipment far end. A real USB or
-Ethernet cable is 4-6 mm across, so the product's 0.5 mm is thin; that is a modelling choice to
+Ethernet cable is 4-6 mm across, so the product's 0.5 mm is thin; that is a modeling choice to
 revisit, not a solver error, and it is now measured.
 
 **The closed form is not a bound for a grounded cable.** Inside its window (cable under λ/10 and
@@ -138,7 +138,7 @@ and the line model does not hold; the test uses 1 m and 2 m.
 
 The strap is the table height long, about a microhenry by itself, so a bond inductance of tens
 of nanohenries changes little. That is what a bond to the floor plane can do; a bond to a
-chassis beside the board is not modelled.
+chassis beside the board is not modeled.
 
 `test_cable_3_a_bond_turns_the_cable_into_a_line_over_the_plane` asserts the direction and
 size of the move (more than 25 %) and the line-theory value (8 %) for both far ends; the old
@@ -215,9 +215,9 @@ runs above were not kept, so the openEMS side is compared through the summary nu
 
 **1. The board arm was a wire; the board is a plate. This is most of it.** Tier B's Z_ant came
 from a deck with the board as one thin wire as long as the board. The grid holds a strip of
-copper planes with several times the capacitance. Modelled as a plate (a wire grid of the
+copper planes with several times the capacitance. Modeled as a plate (a wire grid of the
 board's outline, pitch 2.5-12.5 mm, equal-area radius pitch/2π, the cable joining at the
-connector), nec2c reads a lower |Z_ant| below the first resonance, rising towards it, and a
+connector), nec2c reads a lower |Z_ant| below the first resonance, rising toward it, and a
 lower first resonance:
 
 | Structure | Thin wire over plate, \|Z_ant\| | First resonance, wire / plate |
@@ -226,7 +226,7 @@ lower first resonance:
 | Board C likewise (100 x 34 mm strip) | +4.9 dB at 45 MHz, +9.8 dB at 270 MHz, **mean +5.6 dB** | 346 / 301 MHz |
 | Product geometry, whole outline, 0.8 m over ground, 0.5 mm cable, 0.3-2 m, open or equipment far end, 60 x 40 to 200 x 150 mm | +0.5 to +16.6 dB below resonance, mostly 4-14 | lower with the plate |
 
-Same shape as what test 4 measured: several dB flat at the low end, growing towards the
+Same shape as what test 4 measured: several dB flat at the low end, growing toward the
 resonance, and no difference at it (at the wire's resonance the plate reads 1.4 dB lower; test 4
 measured 1.2 dB). The plate accounts for **about 7 of board A's 8.9 dB mean and 5.6 of board C's
 7.5 dB**, leaving about 2 dB on each. e_per_amp barely moves (under 0.5 dB from 37 MHz to
@@ -337,7 +337,7 @@ a run at 100 ns, about 85 minutes each) was stopped: its 40 ns run had not decay
 A, and boards B and C give no answer. From 80 MHz to the resonance the plate model is within
 7.1 dB on board A, 4 dB low on average, and with the cable's effect on V_oc added within 2.8 dB,
 0.4 dB low. Below 80 MHz Tier B reads 8-20 dB low and the study cannot say by exactly how much.
-Open: that low end, the V_oc offset (measured once, not modelled), and a reference that settles
+Open: that low end, the V_oc offset (measured once, not modeled), and a reference that settles
 on boards with plane modes.
 
 **The V_oc offset is left out of the model.** It is 3-5 dB on board A and always in the

@@ -36,7 +36,7 @@ export interface RuleSnapshot {
 
 /**
  * Overrides for the nets a pattern matches (emi.rules.yaml `groups`). Only the parameters a
- * rule reads per net can be set here; the catalogue marks them `per_net`.
+ * rule reads per net can be set here; the catalog marks them `per_net`.
  */
 export interface NetGroup {
   match?: string

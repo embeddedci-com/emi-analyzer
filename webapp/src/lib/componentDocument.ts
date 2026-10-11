@@ -98,7 +98,7 @@ export const isGeneric = (c: Component): boolean => c.provenance === 'generic'
 /** One line for the UI. Never names a manufacturer for a generic entry. */
 export function describeProvenance(c: Component): string {
   if (c.provenance === 'generic') {
-    return 'generic — typical for this package and value, not a specific part'
+    return 'generic: typical for this package and value, not a specific part'
   }
   if (c.provenance === 'vendor') {
     const s = cites(c, 'ESL') ?? cites(c, '')
@@ -194,7 +194,7 @@ export function parseComponent(doc: unknown): Component {
   if (version > COMPONENT_VERSION) {
     throw new ComponentError(
       `this component is version ${version} and this build understands version ` +
-        `${COMPONENT_VERSION}. Update the analyzer rather than reading the parts it recognises`,
+        `${COMPONENT_VERSION}. Update the analyzer rather than reading the parts it recognizes`,
     )
   }
   for (const required of ['id', 'kind', 'name'] as const) {
@@ -313,7 +313,7 @@ export function parseComponent(doc: unknown): Component {
       if (value !== null && cites(c, what) === null) {
         throw new ComponentError(
           `${c.id} gives an ${what} of ${value} but says nothing about where it came from. ` +
-            `Add a sources entry — for a generic figure that is simply what it is, and for a ` +
+            `Add a sources entry. For a generic figure that is simply what it is, and for a ` +
             `vendor part it is the datasheet`,
         )
       }

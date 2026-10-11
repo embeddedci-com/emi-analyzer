@@ -181,15 +181,15 @@ type Store interface {
 	ListDrivers(ctx context.Context, projectID string) ([]*Driver, error)
 	DeleteDriver(ctx context.Context, projectID, driverID string) error
 
-	// Components. Owned by a signed-in user, visible to their organisation when shared.
+	// Components. Owned by a signed-in user, visible to their organization when shared.
 	CreateComponent(ctx context.Context, c *Component) error
 	GetComponent(ctx context.Context, id string) (*Component, error)
 	ListComponents(ctx context.Context, orgID, userID string) ([]*Component, error)
 	UpdateComponent(ctx context.Context, c *Component) error
 	SetComponentShared(ctx context.Context, id string, shared bool) error
 	SoftDeleteComponent(ctx context.Context, id string) error
-	// FindBoardByContent answers "has this organisation already uploaded these bytes?".
-	// Returns ErrNotFound when it has not. Scoped to the organisation deliberately: the
+	// FindBoardByContent answers "has this organization already uploaded these bytes?".
+	// Returns ErrNotFound when it has not. Scoped to the organization deliberately: the
 	// hash is a fact about the file, but who has it is not.
 	FindBoardByContent(ctx context.Context, orgID, sha256 string) (*Board, *Project, error)
 

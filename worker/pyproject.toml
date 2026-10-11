@@ -7,7 +7,7 @@ license = "Apache-2.0"
 dependencies = [
     "httpx>=0.27",
     "websockets>=13.0",
-    # Board ingest. numpy carries the geometry and the reference-plane rasteriser;
+    # Board ingest. numpy carries the geometry and the reference-plane rasterizer;
     # mapbox_earcut is the polygon triangulator. Both ship manylinux wheels for x86_64 and
     # aarch64, so the worker image needs no compiler.
     "numpy>=1.26",

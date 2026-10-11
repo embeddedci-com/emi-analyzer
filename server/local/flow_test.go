@@ -29,7 +29,7 @@ type flow struct {
 }
 
 // newFlow mounts a Service under /api. The user middleware trusts an X-Test-Org header, which
-// is how a test acts as two organisations against one server.
+// is how a test acts as two organizations against one server.
 func newFlow(t *testing.T, features emi.Features, opts ...func(*emi.Deps)) *flow {
 	t.Helper()
 	ctx := context.Background()

@@ -5,12 +5,12 @@ invisible in a schematic review, because the schematic says a 100 nF capacitor i
 and only the layout says it is 12 mm away.
 
 What matters is the loop: pin -> capacitor -> ground via -> plane -> back to the IC's ground
-pin. Every millimetre of that loop is roughly a nanohenry, and a capacitor behind 10 nH of
+pin. Every millimeter of that loop is roughly a nanohenry, and a capacitor behind 10 nH of
 trace stops decoupling somewhere in the low tens of MHz -- exactly where a microcontroller's
 clock harmonics live. So the check measures both halves: pin to capacitor, and capacitor to
 its ground via.
 
-Components are recognised by reference designator (U/IC for ICs, C for capacitors), and a
+Components are recognized by reference designator (U/IC for ICs, C for capacitors), and a
 capacitor only counts when one pad is on a supply net and the other on ground. That is a
 heuristic; findings quote the parts they matched so a wrong guess is visible.
 """
@@ -22,13 +22,13 @@ import re
 from collections import defaultdict
 from typing import Iterator
 
-from .model import Finding, RuleContext, classify_net
+from .model import Finding, RuleContext, classify_net, is_supply_pin
 from .planes import severity
 
 IC_RE = re.compile(r"^(U|IC)\d", re.I)
 CAP_RE = re.compile(r"^C\d", re.I)
 
-#: Rough loop inductance per millimetre of pin-to-capacitor distance, counted twice (out and
+#: Rough loop inductance per millimeter of pin-to-capacitor distance, counted twice (out and
 #: back). An order-of-magnitude figure, used only to put a frequency on "too far" so the
 #: finding says why it matters.
 NH_PER_MM = 1.0
@@ -124,7 +124,9 @@ def check_decoupling(ctx: RuleContext) -> Iterator[Finding]:
             continue
         pins: dict[str, list] = defaultdict(list)
         for p in pads:
-            if p.net and classify_net(p.net) == "power":
+            # A pin on a supply net that does not draw from it -- a sense input, a GPIO on a
+            # net named like a rail -- needs no capacitor (see is_supply_pin).
+            if p.net and classify_net(p.net) == "power" and is_supply_pin(p):
                 pins[p.net].append(p)
 
         for net, supply_pins in sorted(pins.items()):
@@ -199,8 +201,8 @@ def check_decoupling(ctx: RuleContext) -> Iterator[Finding]:
                     f"{' (' + cap[1].value + ')' if getattr(cap[1], 'value', '') else ''}, "
                     f"{d:.1f} mm away (budget {max_d:g} mm). The loop through it is roughly "
                     f"{total_nh:.0f} nH, so it stops decoupling somewhere "
-                    f"around {_fmt_mhz(useful)}{' assuming 100 nF' if assumed else ''} — above "
-                    f"that the IC's switching current returns through the supply trace instead."
+                    f"around {_fmt_mhz(useful)}{' assuming 100 nF' if assumed else ''}. Above "
+                    f"that, the IC's switching current returns through the supply trace instead."
                     f"{srf_note} "
                     f"Move the capacitor to the pin, on the same side of the board."
                 ),

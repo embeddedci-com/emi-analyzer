@@ -11,7 +11,7 @@ import (
 	"github.com/coder/websocket"
 )
 
-// Hub tracks the EMI workers currently dialled in.
+// Hub tracks the EMI workers currently dialed in.
 //
 // Dispatch is capability-filtered. A CI job can go to any connected agent because such jobs
 // are roughly uniform. An EMI solve cannot, because a 12-million-cell run and a
@@ -102,7 +102,7 @@ func (wc *workerConn) shutdown() {
 	})
 }
 
-// send writes one JSON message. Writes are serialised per connection because
+// send writes one JSON message. Writes are serialized per connection because
 // coder/websocket permits only one concurrent writer.
 func (wc *workerConn) send(ctx context.Context, msg any) error {
 	b, err := json.Marshal(msg)
@@ -123,17 +123,17 @@ func (h *Hub) OnlineCount() int {
 	return len(h.conns)
 }
 
-// serves reports whether a connected worker will take work for an organisation.
+// serves reports whether a connected worker will take work for an organization.
 //
-// A worker whose key names no organisation is a shared worker: it serves every one of them.
+// A worker whose key names no organization is a shared worker: it serves every one of them.
 // That is the normal case for a hosted service: one pool doing the solving for everybody. A
-// key scoped to an organisation is for the other case: a customer running a worker on their
+// key scoped to an organization is for the other case: a customer running a worker on their
 // own hardware, which must only ever be handed their own boards.
 func (wc *workerConn) serves(orgID string) bool {
 	return wc.orgID == "" || wc.orgID == orgID
 }
 
-// OnlineWorkers returns a snapshot of the workers that would take work for one organisation.
+// OnlineWorkers returns a snapshot of the workers that would take work for one organization.
 func (h *Hub) OnlineWorkers(orgID string) []Worker {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
@@ -190,7 +190,7 @@ func (h *Hub) CanAccept(orgID string, kind RunKind, cells int64) (ok bool, bestM
 // DispatchRun pushes a new_run to one eligible worker chosen at random.
 //
 // If nobody is eligible this is a no-op and the run simply stays claimable: a worker that
-// connects later is sent everything outstanding. Push is an optimisation, never the delivery
+// connects later is sent everything outstanding. Push is an optimization, never the delivery
 // guarantee.
 func (h *Hub) DispatchRun(ctx context.Context, orgID string, r *Run) bool {
 	var cells int64

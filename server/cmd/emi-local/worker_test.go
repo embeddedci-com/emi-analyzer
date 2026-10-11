@@ -52,9 +52,9 @@ func TestExplainDocker(t *testing.T) {
 		}
 	}
 
-	// Anything unrecognised keeps the original text rather than being guessed at.
+	// Anything unrecognized keeps the original text rather than being guessed at.
 	msg, _ := explainDocker(image, "something new went wrong", nil)
 	if !strings.Contains(msg, "something new went wrong") {
-		t.Errorf("unrecognised error was swallowed: %q", msg)
+		t.Errorf("unrecognized error was swallowed: %q", msg)
 	}
 }

@@ -124,7 +124,7 @@
         "provenance": "generic",
         "generic": true,
         "model_type": "series_rlc",
-        "describe_provenance": "generic \u2014 typical for this package and value, not a specific part",
+        "describe_provenance": "generic: typical for this package and value, not a specific part",
         "manufacturer": "",
         "dc_bias": [],
         "self_resonance_hz": null,
@@ -183,7 +183,7 @@
         "provenance": "generic",
         "generic": true,
         "model_type": "mlcc_family",
-        "describe_provenance": "generic \u2014 typical for this package and value, not a specific part",
+        "describe_provenance": "generic: typical for this package and value, not a specific part",
         "manufacturer": "",
         "dc_bias": [],
         "family": {
@@ -421,7 +421,7 @@
         ]
       },
       "must_mention": "version 2",
-      "python_message": "this component is version 2 and this build understands version 1. Update the analyzer rather than reading the parts it recognises"
+      "python_message": "this component is version 2 and this build understands version 1. Update the analyzer rather than reading the parts it recognizes"
     },
     {
       "name": "no-name",
@@ -559,7 +559,7 @@
         "sources": []
       },
       "must_mention": "says nothing about where it came from",
-      "python_message": "mlcc-100n-0402-x7r gives an ESL of 6e-10 but says nothing about where it came from. Add a sources entry \u2014 for a generic figure that is simply what it is, and for a vendor part it is the datasheet"
+      "python_message": "mlcc-100n-0402-x7r gives an ESL of 6e-10 but says nothing about where it came from. Add a sources entry. For a generic figure that is simply what it is, and for a vendor part it is the datasheet"
     },
     {
       "name": "vendor-without-sources",

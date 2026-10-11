@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS emi.emi_boards (
     net_count     integer NOT NULL DEFAULT 0,
     outline_mm    jsonb,
     stackup       jsonb,
-    -- SHA-256 of the uploaded bytes, so the same board is recognised when it is offered
+    -- SHA-256 of the uploaded bytes, so the same board is recognized when it is offered
     -- again. Nullable: boards created before this existed, and clients that cannot hash.
     content_sha256 text,
     size_bytes     bigint NOT NULL DEFAULT 0,
@@ -47,7 +47,7 @@ ALTER TABLE emi.emi_boards ADD COLUMN IF NOT EXISTS size_bytes bigint NOT NULL D
 CREATE INDEX IF NOT EXISTS emi_boards_project_created_idx
     ON emi.emi_boards (project_id, created_at DESC);
 
--- Finding "has this organisation already got this board?" is the whole point of the hash,
+-- Finding "has this organization already got this board?" is the whole point of the hash,
 -- and it is asked once per file the user picks.
 CREATE INDEX IF NOT EXISTS emi_boards_content_idx
     ON emi.emi_boards (content_sha256)
@@ -228,7 +228,7 @@ CREATE TABLE IF NOT EXISTS emi.emi_components (
 ALTER TABLE emi.emi_components
     ADD COLUMN IF NOT EXISTS provenance text NOT NULL DEFAULT 'user';
 
--- The list query is "mine, plus anything shared with my organisation", and it never wants a
+-- The list query is "mine, plus anything shared with my organization", and it never wants a
 -- soft-deleted row.
 CREATE INDEX IF NOT EXISTS emi_components_org_idx
     ON emi.emi_components (organization_id, updated_at DESC)

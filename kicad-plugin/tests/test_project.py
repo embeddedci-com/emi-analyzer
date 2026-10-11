@@ -113,7 +113,7 @@ def test_a_project_deleted_in_the_app_is_replaced_rather_than_failing(tmp_path):
 
 
 def test_a_forgotten_project_falls_back_to_what_the_app_already_has(tmp_path):
-    """The remembered project is gone, but the board is there: show it, do not analyse it again."""
+    """The remembered project is gone, but the board is there: show it, do not analyze it again."""
     store = ProjectStore(tmp_path)
     store.save("demo.kicad_pcb", "gone")
     client = FakeClient(lookup={"found": True, "parsed": True, "project": {"id": "p7"}, "board": {"id": "b7"}})

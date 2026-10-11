@@ -198,7 +198,7 @@ class OpenEMSError(RuntimeError):
 
 
 class Stopped(RuntimeError):
-    """The run was cancelled."""
+    """The run was canceled."""
 
 
 def run_openems(
@@ -375,7 +375,7 @@ def run_openems(
             f"the simulation went unstable: after the excitation passed, its energy climbed "
             f"back by a factor of {rise:.3g} instead of decaying. Every number in this run is "
             f"noise, so it is refused rather than reported. This is a property of the mesh "
-            f"rather than of the board — try a finer preset, or a smaller region."
+            f"rather than of the board. Try a finer preset, or a smaller region."
         )
         err.log_text = log_text
         raise err

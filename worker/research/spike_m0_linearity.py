@@ -44,7 +44,7 @@ VARIANTS = [
     ("A_default", None, None),
     ("B_high", 1.5e9, 0.9e9),
     ("C_low", 200e6, 200e6),
-    # Same centre as A, but wide enough that 1 GHz is inside the band rather than on its
+    # Same center as A, but wide enough that 1 GHz is inside the band rather than on its
     # edge. If D agrees with B at 1 GHz while A does not, the residual is A's band edge.
     ("D_wide", 650e6, 600e6),
 ]

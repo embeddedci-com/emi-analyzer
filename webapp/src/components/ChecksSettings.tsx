@@ -3,7 +3,7 @@
  *
  * Until this existed the only way to change a threshold was an emi.rules.yaml zipped up with
  * the board. The file still wins over nothing and loses to nothing it did not already lose
- * to: edits here are the worker's "run" layer, on top of it, applied by analysing the board
+ * to: edits here are the worker's "run" layer, on top of it, applied by analyzing the board
  * again. Every value says where it came from, and the export writes the result as a rules
  * file to commit beside the board, which gives the same analysis without this app.
  */
@@ -38,7 +38,7 @@ export interface ChecksSettingsProps {
   rules: RulesDoc | null
   /** The app's layer the analysis on screen ran with. */
   saved: AppLayer
-  /** Analyse again with this layer. */
+  /** Analyze again with this layer. */
   onApply: (layer: AppLayer) => void
   applying: boolean
   /** Why applying is not possible right now, if it is not. */
@@ -108,14 +108,14 @@ export function ChecksSettings({
           : report?.file_error
             ? 'The rules file with this board could not be read, so defaults apply. '
             : 'No rules file came with this board. '}
-        Changes here apply when the board is analysed again.
+        Changes here apply when the board is analyzed again.
       </Text>
 
       {!report && (
         <Alert color="blue" variant="light" p="xs">
           <Text size="xs">
             This analysis predates settings in the app, so a rules file it used is not shown.
-            Analyse again to see where each value comes from.
+            Analyze again to see where each value comes from.
           </Text>
         </Alert>
       )}

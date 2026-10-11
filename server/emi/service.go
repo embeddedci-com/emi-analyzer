@@ -121,7 +121,7 @@ func noStore(h http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// StartSweeper runs the stale-run timeout loop until ctx is cancelled. It is the backstop
+// StartSweeper runs the stale-run timeout loop until ctx is canceled. It is the backstop
 // for a worker that dies mid-solve without ever completing its run.
 func (s *Service) StartSweeper(ctx context.Context, every time.Duration) {
 	if every <= 0 {

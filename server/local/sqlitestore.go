@@ -23,7 +23,7 @@ import (
 // SQLiteStore implements emi.Store over a single SQLite file.
 //
 // It is a port of emi.PGStore and keeps its semantics exactly -- the atomic claim, the
-// ownership reset on retry, the organisation scoping of lookups -- because the handlers were
+// ownership reset on retry, the organization scoping of lookups -- because the handlers were
 // written against those semantics, not against Postgres.
 type SQLiteStore struct {
 	db *sql.DB
@@ -43,7 +43,7 @@ func OpenSQLite(ctx context.Context, path string) (*SQLiteStore, error) {
 		return nil, fmt.Errorf("local: open %s: %w", path, err)
 	}
 	// One connection. SQLite has one writer anyway, and the control plane's queries are a few
-	// milliseconds each; serialising them here means no statement can ever see SQLITE_BUSY.
+	// milliseconds each; serializing them here means no statement can ever see SQLITE_BUSY.
 	db.SetMaxOpenConns(1)
 	if err := db.PingContext(ctx); err != nil {
 		db.Close()

@@ -3,9 +3,9 @@
 Two things from the original design document that are reference data rather than design
 argument, and so outlive it:
 
-- **the limits library** — what a standard's table looks like as the tool stores it, and where
+- **the limits library**: what a standard's table looks like as the tool stores it, and where
   each number came from;
-- **the decisions log** — what was settled, by whom, and what is still open.
+- **the decisions log**: what was settled, by whom, and what is still open.
 
 How the model works is in [`implementation.md`](implementation.md); what is missing is in
 [`known-issues.md`](known-issues.md).
@@ -103,7 +103,7 @@ See the table at the top:
 - the conducted common-mode term included;
 - relaxed wording, with a clear "not a full pre-compliance test";
 - **CISPR 32 / EN 55032 limits come from public secondary sources,** cross-checked between at
-  least two that agree and labelled `"verified": "secondary sources"` (not built yet). Buying a copy is
+  least two that agree and labeled `"verified": "secondary sources"` (not built yet). Buying a copy is
   not a prerequisite for shipping the tables; the label becomes `"standard text"` if one is ever
   bought, and no limit is ever typed from memory.
 
@@ -115,14 +115,14 @@ See the table at the top:
 
 ## Sources
 
-- 47 CFR §15.107, §15.109 (as amended 80 FR 33447, 12 Jun 2015), §15.33 — read 11 Sep 2026 via the
+- 47 CFR §15.107, §15.109 (as amended 80 FR 33447, 12 Jun 2015), §15.33: read 11 Sep 2026 via the
   LII mirror of the CFR (law.cornell.edu/cfr/text/47/15.109, …/15.107, …/15.33).
 - Debian bookworm `nec2c` 1.3-4; PyNEC / necpp, GPL-2.0.
 - T. Hockanson et al., "Investigation of fundamental EMI source mechanisms driving common-mode
   radiation from printed circuit boards with attached cables", IEEE Trans. EMC 38(4), 1996.
-- C. R. Paul, *Introduction to Electromagnetic Compatibility*, 2nd ed. — common-mode radiation from
+- C. R. Paul, *Introduction to Electromagnetic Compatibility*, 2nd ed.: common-mode radiation from
   short cables; spectra of trapezoidal waveforms.
-- CISPR 16-1-2, CISPR 32, ANSI C63.4 — sold by IEC and the standards bodies. Values are cited from
+- CISPR 16-1-2, CISPR 32, ANSI C63.4: sold by IEC and the standards bodies. Values are cited from
   public secondary sources until a copy is at hand.
-- 47 CFR §15.35 — to be read and cited before the above-1 GHz table ships.
-- IBIS specification — `[Package]` and `[Pin]` parasitics.
+- 47 CFR §15.35: to be read and cited before the above-1 GHz table ships.
+- IBIS specification: `[Package]` and `[Pin]` parasitics.

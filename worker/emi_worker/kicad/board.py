@@ -11,7 +11,7 @@ by version-switching. Two real examples from the boards in this repo:
   ``gr_poly`` depending on how the outline was drawn. The BenchPod board uses a single
   ``gr_rect``; the solar board uses lines.
 
-Everything is in millimetres, in KiCad's coordinate system (X right, Y *down*). The flip to
+Everything is in millimeters, in KiCad's coordinate system (X right, Y *down*). The flip to
 a viewer-friendly Y-up space happens once, in normalize.py, so that this module can be
 compared directly against the source file when something looks wrong.
 """
@@ -149,6 +149,13 @@ class Pad:
     #: number is the one thing on a board that says which part this is rather than what
     #: kind, so the component library tries it before value and package.
     part_numbers: dict[str, str] = field(default_factory=dict)
+    #: The symbol pin behind the pad, as KiCad writes it from the schematic: its name
+    #: ("VDD", "PG3", "IN+") and electrical type ("power_in", "input", "passive"). Empty when
+    #: the board was never updated from a schematic, and always for a Gerber set. They are
+    #: what says whether an IC pin on a supply-named net draws from it (see
+    #: rules.model.is_supply_pin): a current monitor's sense input on +5V does not.
+    pin_function: str = ""
+    pin_type: str = ""
 
     @property
     def is_through(self) -> bool:
@@ -243,7 +250,7 @@ def _at(node: Node) -> tuple[float, float, float]:
 
 def _name(v) -> str:
     """An atom that is conceptually a name. KiCad 5 leaves pad numbers unquoted, so the
-    tokeniser reads pad 1 as the number 1.0, and "U1.1.0" is not a pin anyone has."""
+    tokenizer reads pad 1 as the number 1.0, and "U1.1.0" is not a pin anyone has."""
     if isinstance(v, float):
         return str(int(v)) if v.is_integer() else str(v)
     return str(v)
@@ -361,7 +368,7 @@ def _parse_stackup(root: Node, copper: list[CopperLayer], warnings: list[str]) -
             ))
 
     if not any(s.is_copper for s in out):
-        # No stackup in the file: synthesise a plausible FR-4 one so the board can still be
+        # No stackup in the file: synthesize a plausible FR-4 one so the board can still be
         # viewed, and flag it loudly. Everything downstream keys off from_file=False to tell
         # the user these numbers are ours, not theirs.
         warnings.append(
@@ -580,6 +587,8 @@ def _parse_footprints(root: Node, nets: _NetResolver, warnings: list[str],
                 value=value,
                 footprint=footprint,
                 part_numbers=part_numbers,
+                pin_function=text(pad, "pinfunction", default=""),
+                pin_type=text(pad, "pintype", default=""),
             ))
     return pads
 
@@ -593,7 +602,7 @@ def _xy(node: Node, name: str) -> tuple[float, float] | None:
 
 def _legacy_arc(center: tuple[float, float], start: tuple[float, float],
                 angle_deg: float) -> list[tuple[float, float]]:
-    """A KiCad 5 arc: ``(start <centre>) (end <start point>) (angle <sweep>)``.
+    """A KiCad 5 arc: ``(start <center>) (end <start point>) (angle <sweep>)``.
 
     Same keywords as the three-point form KiCad 6 introduced, different meanings, so a
     KiCad 5 arc with no ``mid`` was dropped and the outline had a gap at every rounded

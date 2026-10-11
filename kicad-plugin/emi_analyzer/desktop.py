@@ -2,7 +2,8 @@
 
 The app publishes where it is listening in one file that never moves -- the user's config
 folder, ``emi-analyzer/endpoint.json`` -- because its port is not fixed and its data folder
-is not either (see server/cmd/emi-local/endpoint.go). That file is a hint and nothing more:
+is not either (see server/cmd/emi-local/endpoint.go). server/localapp is the Go twin of
+this module, for the MCP server; keep the two in step. That file is a hint and nothing more:
 it outlives a crash, a kill and a reboot, so it is never believed without asking the URL in
 it whether anything is there.
 
@@ -125,7 +126,7 @@ def probe(url: str, timeout: float = PROBE_TIMEOUT_S) -> Optional[Endpoint]:
 
 
 def running() -> Optional[Endpoint]:
-    """The app, if one is up. Honours EMI_ANALYZER_URL before looking anything up."""
+    """The app, if one is up. Honors EMI_ANALYZER_URL before looking anything up."""
     override = os.environ.get(URL_ENV)
     if override:
         return probe(override)

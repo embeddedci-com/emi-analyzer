@@ -11,7 +11,7 @@ server/        Go module
   emi/           the control plane: API, run lifecycle, worker protocol, cost estimate.
                  Knows nothing about where it runs; storage and keys come in through the
                  interfaces in emi/deps.go.
-  local/         SQLite store, file storage with signed URLs, worker keys — for the local app
+  local/         SQLite store, file storage with signed URLs, worker keys, for the local app
   cmd/emi-local  the local app: one binary with the webapp embedded; starts the worker
   cmd/emi-server a second host on Postgres + S3-compatible storage, for the integration stack
 webapp/        React + Mantine
@@ -69,6 +69,7 @@ make desktop-dev
 | `make desktop` | the installer for this machine, in `desktop/src-tauri/target/release/bundle/` |
 | `make worker-local EMBEDDEDCI_API_KEY=eci_...` | the worker from source, against `emi-local -worker none` |
 | `make smoke-local` | the end-to-end test against a running `emi-local` |
+| `make e2e-mcp` | the MCP server end to end: builds `emi-local`, starts it with a worker container in a temp folder, and drives `emi-local mcp` over stdio (needs Docker; seconds) |
 
 ### Working on the webapp
 
@@ -147,8 +148,8 @@ the cost model or the driver spectrum, regenerate them and run every suite: `mak
 
 ### Postgres integration stack
 
-`server/emi` also ships a Postgres store and S3 presigned URLs. To exercise those end to end —
-Postgres, MinIO, `emi-server` and a worker in compose:
+`server/emi` also ships a Postgres store and S3 presigned URLs. To exercise those end to end
+(Postgres, MinIO, `emi-server` and a worker in compose):
 
 ```bash
 make up
@@ -202,7 +203,7 @@ commands that publish it. The plugin needs an app that publishes where it is lis
 (`endpoint.json`, 0.2.0 and later), so it cannot be released ahead of one.
 
 A release build starts the worker image tagged with its own version, so the app and its worker
-always come from the same commit — which is why the image must exist before the release is
+always come from the same commit. That is why the image must exist before the release is
 published. The `emi-worker` package on GHCR must be **public**, or the app cannot pull it.
 
 ### The openEMS image

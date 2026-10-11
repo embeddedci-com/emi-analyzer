@@ -23,7 +23,7 @@ from .planes import severity
 
 RULE = "power-neck"
 
-#: Copper resistivity at 20 °C, ohm metres.
+#: Copper resistivity at 20 °C, ohm meters.
 RHO_CU = 1.72e-8
 #: IPC-2221 constants: I = k * dT^0.44 * A^0.725, A in square mils.
 K_OUTER = 0.048

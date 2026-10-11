@@ -6,7 +6,7 @@ reflects its field back, so the radiated power swings with frequency and directi
 makers all say the same thing: nothing under the antenna, on any layer, and a plane under
 it counts. Ground included, which is the difference from the crystal check.
 
-Three kinds of antenna are recognised:
+Three kinds of antenna are recognized:
 
   * A rule area in the part's own footprint. When the library drew one, it is the answer.
   * An RF module with a printed antenna (ESP32-WROOM, -MINI and the like). Its pads cover

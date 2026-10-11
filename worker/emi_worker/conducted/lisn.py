@@ -1,4 +1,4 @@
-"""The line impedance stabilisation network, one per supply line.
+"""The line impedance stabilization network, one per supply line.
 
 CISPR 16-1-2 (2003, 4.3) defines the 50 Ω/50 µH V-network for 0.15-30 MHz by its impedance
 (Figure 1b: 50 Ω in parallel with 50 µH) with a ±20 % tolerance on the magnitude, not by its

@@ -29,7 +29,7 @@ type endpoint struct {
 }
 
 // defaultEndpointFile is where a program looks for a running app. Keep it in step with
-// kicad-plugin/emi_analyzer/desktop.py, which reads it.
+// kicad-plugin/emi_analyzer/desktop.py and server/localapp, which read it.
 func defaultEndpointFile() string {
 	dir, err := os.UserConfigDir()
 	if err != nil {

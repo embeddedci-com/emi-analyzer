@@ -177,7 +177,7 @@ export function ComponentsPanel({ api, signedIn, deployment = 'hosted', frequenc
       {!signedIn && (
         <Alert color="yellow" variant="light" title="These components are not saved">
           <Text size="xs">
-            You can build a component and use it right away — it is sent with the run like any
+            You can build a component and use it right away: it is sent with the run like any
             other. It will not be kept: a component is a library entry that outlives a session,
             and there is no account here to file it under. Sign in to keep them.
           </Text>
@@ -209,7 +209,7 @@ export function ComponentsPanel({ api, signedIn, deployment = 'hosted', frequenc
               <Tooltip
                 label={local
                   ? 'Marks the model as shared. On this computer you are the only user, so it changes nothing.'
-                  : 'Members of your organisation can use it, read-only'}
+                  : 'Members of your organization can use it, read-only'}
                 withArrow
               >
                 <Switch
@@ -252,7 +252,7 @@ export function ComponentsPanel({ api, signedIn, deployment = 'hosted', frequenc
 
       {signedIn && saved.data?.length === 0 && unsaved.length === 0 && !adding && (
         <Text size="sm" c="dimmed">
-          No components yet. The built-in library still applies — these are for parts it does
+          No components yet. The built-in library still applies. These are for parts it does
           not cover, or where you know better than a class average.
         </Text>
       )}

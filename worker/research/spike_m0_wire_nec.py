@@ -109,7 +109,7 @@ def main() -> None:
         err, radius_mm, f_res, r_res = best
         print(f"\nclosest to FDTD: radius {radius_mm:.1f} mm -> {f_res/1e6:.1f} MHz "
               f"({err/1e6:+.1f} MHz off), R = {r_res:.1f} vs {target_r:.1f} ohm")
-        print("\nThe FDTD column is 5 mm across, so an equivalent radius of a few millimetres")
+        print("\nThe FDTD column is 5 mm across, so an equivalent radius of a few millimeters")
         print("is the expected order: a square conductor behaves like a round one of a")
         print("comparable size, not like the thin wire a naive comparison would assume.")
 

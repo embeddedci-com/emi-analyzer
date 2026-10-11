@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>EMI board renderer — dev harness</title>
+<title>EMI board renderer: dev harness</title>
 <style>
   :root {
     --bg: #0e1211; --panel: #161c1a; --rule: #2c3532;
@@ -196,7 +196,7 @@ const sel = document.getElementById('board')
 for (const b of boards) {
   const o = document.createElement('option')
   o.value = b.id
-  o.textContent = `${b.label} — ${b.layers}L, ${b.tris.toLocaleString()} tris`
+  o.textContent = `${b.label}: ${b.layers}L, ${b.tris.toLocaleString()} tris`
   sel.append(o)
 }
 sel.onchange = () => load(sel.value)

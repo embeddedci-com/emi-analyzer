@@ -9,7 +9,7 @@ openEMS's frequency-domain dump layout, verified against a real run:
     /FieldData/FD                     attrs: frequency = [f0, f1, ...]
     /FieldData/FD/f<N>_real           shape (3, nz, ny, nx), float32
     /FieldData/FD/f<N>_imag           same
-    /Mesh/x, /Mesh/y, /Mesh/z         line coordinates, in **metres**
+    /Mesh/x, /Mesh/y, /Mesh/z         line coordinates, in **meters**
 
 The mesh in the file is the *dump box's* subgrid, not the whole simulation grid. A current
 openEMS build writes ``/FieldData/FD/f<N>`` instead, one complex dataset of shape
@@ -30,7 +30,7 @@ import numpy as np
 log = logging.getLogger(__name__)
 
 #: Floor for the dB conversion, relative to the peak. Field magnitude spans many orders of
-#: magnitude and the bottom of that range is numerical noise; clamping keeps the colour
+#: magnitude and the bottom of that range is numerical noise; clamping keeps the color
 #: scale spent on the part of the map that means something.
 DYNAMIC_RANGE_DB = 60.0
 
@@ -105,7 +105,7 @@ def read_fd_dump(path: str, z_mm: float | None = None) -> list[FieldGrid]:
         if freqs.size == 0:
             raise ValueError(f"{os.path.basename(path)} names no frequencies")
 
-        # Metres in the file, millimetres everywhere in this system.
+        # Meters in the file, millimeters everywhere in this system.
         x_mm = np.asarray(f["Mesh/x"][:], dtype=np.float64) * 1000.0
         y_mm = np.asarray(f["Mesh/y"][:], dtype=np.float64) * 1000.0
         z_axis = np.asarray(f["Mesh/z"][:], dtype=np.float64) * 1000.0
@@ -352,7 +352,7 @@ def build_artifacts(
     layers: list[dict] = []
 
     # One shared dB reference across every layer and frequency, so the maps are comparable
-    # rather than each normalised to its own peak.
+    # rather than each normalized to its own peak.
     peak = 0.0
     collected: dict[str, list[FieldGrid]] = {}
     for layer, dump in dump_names.items():
@@ -487,8 +487,8 @@ def build_artifacts(
         "layers": layers,
         "has_sparams": bool(sparams),
         "has_port_spectra": bool(ports),
-        # §12: which parts were modelled rather than left as bare copper, and on whose
-        # authority. An empty list is the honest answer for a solve that modelled none, and
+        # §12: which parts were modeled rather than left as bare copper, and on whose
+        # authority. An empty list is the honest answer for a solve that modeled none, and
         # is what every result carried before this existed.
         "modelled_parts": modelled_parts or [],
         # §7: which connectors carry a gap port, so a result can be composed with a cable

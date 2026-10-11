@@ -66,7 +66,7 @@ def dipole(length_mm: float, width_mm: float, axis: int = 2) -> Wire:
 
 
 def loop(side_mm: float, width_mm: float) -> Wire:
-    """A square loop in the xy plane, side ``side_mm`` centre to centre, fed on the x = +a side."""
+    """A square loop in the xy plane, side ``side_mm`` center to center, fed on the x = +a side."""
     a, h = side_mm / 2, width_mm / 2
     g = width_mm / 2
     boxes = [
@@ -129,7 +129,7 @@ def build(setup: Setup, wd: Path) -> dict:
         csx.Box(p1=p1, p2=p2, priority=csx.PRIORITY_METAL) for p1, p2 in w.boxes]))
 
     # The port exactly as build_model draws one: R and a soft source in the gap, a voltage
-    # probe along the gap's centre line (weight -1, source toward "bottom"), and a current
+    # probe along the gap's center line (weight -1, source toward "bottom"), and a current
     # probe drawn 1.5x the port around it.
     p1, p2 = w.port
     doc.add(csx.LumpedElement(name="p1_res", direction=w.axis, resistance=setup.resistance,

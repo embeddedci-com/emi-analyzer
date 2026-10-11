@@ -59,7 +59,7 @@ def rotate(x: float, y: float, angle_deg: float) -> Point:
 
     KiCad stores angles counterclockwise as seen on screen, but its Y axis points down, so
     the transform is a rotation by *minus* the stored angle in ordinary maths terms. Getting
-    this backwards mirrors every rotated footprint about its own centre, which is subtle
+    this backwards mirrors every rotated footprint about its own center, which is subtle
     enough on a symmetric part and glaring on an SOT-23.
     """
     if angle_deg == 0.0:
@@ -136,7 +136,7 @@ def roundrect(cx: float, cy: float, w: float, h: float, radius: float,
     hw, hh = w / 2.0 - radius, h / 2.0 - radius
     n = _segments_for_radius(radius, math.pi / 2)
     ring: Ring = []
-    # Corner centres, counterclockwise, each with the angle its quarter-arc starts at.
+    # Corner centers, counterclockwise, each with the angle its quarter-arc starts at.
     for (ox, oy), start in (
         ((hw, hh), 0.0),
         ((-hw, hh), math.pi / 2),
@@ -172,8 +172,8 @@ def trapezoid(cx: float, cy: float, w: float, h: float, dx: float, dy: float,
 def arc_polyline(start: Point, mid: Point, end: Point) -> list[Point]:
     """Points along the circular arc through three points.
 
-    KiCad stores arcs by start/mid/end rather than centre and angles, so the centre has to
-    be recovered as the circumcentre. Three collinear points have none, which is not an
+    KiCad stores arcs by start/mid/end rather than center and angles, so the center has to
+    be recovered as the circumcenter. Three collinear points have none, which is not an
     error -- it is a degenerate arc, and a straight line is the right answer.
     """
     (x1, y1), (x2, y2), (x3, y3) = start, mid, end
@@ -220,8 +220,8 @@ def arc_polyline(start: Point, mid: Point, end: Point) -> list[Point]:
 def thick_polyline(pts: list[Point], width: float) -> list[Ring]:
     """A polyline with width, as one capsule per span.
 
-    Overlapping capsules rather than a single mitred outline: the union is identical for
-    rendering and meshing, and it sidesteps the self-intersection cases a mitre join
+    Overlapping capsules rather than a single mitered outline: the union is identical for
+    rendering and meshing, and it sidesteps the self-intersection cases a miter join
     produces at sharp corners.
     """
     return [capsule(pts[i], pts[i + 1], width) for i in range(len(pts) - 1)]

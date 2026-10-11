@@ -21,7 +21,7 @@ export interface NetsExportButtonProps {
   runId: string | undefined
   doc: BoardDoc
   projectName: string
-  /** Start a fresh analysis of this board, for one analysed before these columns existed. */
+  /** Start a fresh analysis of this board, for one analyzed before these columns existed. */
   onReanalyse?: () => void
   reanalysing?: boolean
 }
@@ -47,7 +47,7 @@ export function NetsExportButton({
       const report = (runId ? await api.fetchNets(runId) : null) ?? reportFromBoard(doc)
       setNote(
         report.partial
-          ? 'This board was analysed before paths, delays and skew were measured, so those columns are empty. Re-analyse it to fill them in; copper length is already accurate.'
+          ? 'This board was analyzed before paths, delays and skew were measured, so those columns are empty. Re-analyse it to fill them in; copper length is already accurate.'
           : null,
       )
       downloadText(csvFileName(projectName), buildNetsCsv(report, format))
@@ -75,7 +75,7 @@ export function NetsExportButton({
           </Menu.Item>
           <Menu.Item onClick={() => exportAs(PLAIN_CSV)}>
             <Text size="xs" fw={500}>Plain CSV</Text>
-            <Text size="xs" c="dimmed">comma separated, “.” decimals — for scripts</Text>
+            <Text size="xs" c="dimmed">comma separated, “.” decimals, for scripts</Text>
           </Menu.Item>
         </Menu.Dropdown>
       </Menu>

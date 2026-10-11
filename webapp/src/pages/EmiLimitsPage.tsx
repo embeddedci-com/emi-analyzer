@@ -106,7 +106,7 @@ function StandardCard({ std }: { std: Standard }) {
           <Text size="xs" c="dimmed">
             A segment written <Text span ff="monospace">66 → 56</Text> falls linearly with the{' '}
             <em>logarithm</em> of frequency. At the geometric mean of its endpoints the limit
-            is therefore the arithmetic mean of the two levels — 61 dBµV at 0.274 MHz, not at
+            is therefore the arithmetic mean of the two levels: 61 dBµV at 0.274 MHz, not at
             0.325.
           </Text>
         )}
@@ -140,9 +140,9 @@ export function EmiLimitsPage() {
 
         <Alert color="gray" variant="light" title="This is reference material, not a test">
           <Text size="sm">
-            Where a result can be compared with them — a cable's common-mode budget, or a
-            full-wave prediction where that is enabled — the analyzer shows the margin and how
-            confident it is. It is not a full pre-compliance test — see{' '}
+            Where a result can be compared with them (a cable's common-mode budget, or a
+            full-wave prediction where that is enabled), the analyzer shows the margin and how
+            confident it is. It is not a full pre-compliance test. See{' '}
             <Anchor component={Link} to={`${base}/limitations`}>
               what it cannot say
             </Anchor>
@@ -238,7 +238,7 @@ export function EmiLimitsPage() {
                 20·log₁₀(µV/m)
               </Text>
               . 100 µV/m is 40 dBµV/m. Conducted limits are voltages at the mains port in
-              dBµV, measured across a 50 µH / 50 Ω line impedance stabilisation network.
+              dBµV, measured across a 50 µH / 50 Ω line impedance stabilization network.
             </Text>
             <Text size="sm">
               Quasi-peak and average are different detectors, not different limits: a source

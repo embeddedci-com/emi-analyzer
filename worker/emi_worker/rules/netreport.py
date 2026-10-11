@@ -51,9 +51,9 @@ def build(
         return path.delay_ps(electrics) if (path and electrics) else None
 
     def dominant_ps_per_mm(net: str) -> float:
-        """The layer most of a net's route is on, for converting skew back to millimetres.
+        """The layer most of a net's route is on, for converting skew back to millimeters.
 
-        A skew in picoseconds is the truth; the millimetre figure is a convenience for
+        A skew in picoseconds is the truth; the millimeter figure is a convenience for
         someone about to add a meander, and it is only meaningful on the layer they would
         add it on.
         """
@@ -79,7 +79,7 @@ def build(
 
     # The DDR clock, for a column comparing every DDR net against it. Data is matched to
     # its strobe rather than to the clock, and the skew column does that -- but the spread
-    # between strobe and clock is what write levelling has to absorb, and people want to see
+    # between strobe and clock is what write leveling has to absorb, and people want to see
     # it. Only offered when an address/command group identified a clock, and the column
     # header carries the clock's name so nobody has to guess what it was measured against.
     clock = next((g.reference for g in groups if g.kind == "address-command"), "")

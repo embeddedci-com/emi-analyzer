@@ -19,7 +19,7 @@ Pass criteria, against that reference:
 
 The part is a public synthetic board (``clock_board``): a four-layer stackup like the real
 boards', a clock net from an 8-pin driver to a 2-pin load on the top layer with a bend,
-neighbouring traces the coupon leaves out, and ground and supply planes on the inner layers.
+neighboring traces the coupon leaves out, and ground and supply planes on the inner layers.
 Real boards are added with ``SETUPS`` (``folder:NET[|NET2]:label``, comma separated), read
 from ``/boards`` (a folder with one subfolder per board, mounted read-only). Their net names
 never leave the output folder.

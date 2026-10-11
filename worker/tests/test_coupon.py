@@ -134,7 +134,7 @@ def test_extract_keeps_the_net_its_plane_and_near_ground_only(board):
     assert {tr.net for tr in cut.tracks} == {"CLK"}
     # The ground via 1 mm from the trace is stitching; the one 10 mm away is not.
     assert [(v.x, v.y) for v in cut.vias] == [(15, 21)]
-    # U1's ground pin is 1 mm from the net and kept; the neighbour's pin is not.
+    # U1's ground pin is 1 mm from the net and kept; the neighbor's pin is not.
     assert {(p.ref, p.number) for p in cut.pads} == {("U1", "1"), ("U1", "2"), ("R1", "1"),
                                                      ("TP1", "1")}
     assert len(cut.zones) == 1 and cut.zones[0].layer == "In1.Cu"

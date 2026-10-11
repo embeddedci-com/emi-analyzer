@@ -38,7 +38,7 @@ def _near_ring(ring: list[tuple[float, float]], x: float, y: float, reach: float
     """Inside the pour, or close enough to its boundary to be joined to it.
 
     Close enough matters: a pad inside a pour sits in a thermal-relief void, joined only by
-    spokes, so its centre is *outside* the poured copper. Testing the centre alone would call
+    spokes, so its center is *outside* the poured copper. Testing the center alone would call
     every thermally relieved pour an island.
     """
     if point_in_ring(x, y, ring):
@@ -110,8 +110,8 @@ def check_copper_islands(ctx: RuleContext) -> Iterator[Finding]:
             detail=(
                 f"This is {what}, but no via, pad or track joins it to the rest of the net. "
                 f"Floating copper picks up and re-radiates whatever couples onto it, with no "
-                f"path to drain it to ground. Remove it — KiCad's zone setting 'Remove islands' "
-                f"does this on refill — or stitch it to ground with a via."
+                f"path to drain it to ground. Remove it (KiCad's zone setting 'Remove islands' "
+                f"does this on refill) or stitch it to ground with a via."
             ),
             net=z.net, layer=z.layer, x=x, y=y,
         )

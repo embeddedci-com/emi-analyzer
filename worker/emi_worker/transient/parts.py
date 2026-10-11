@@ -6,7 +6,7 @@ deliberately less than a vendor model and deliberately enough: at the currents o
 clamp is a breakdown knee and a slope, and the slope is what the datasheet's clamping voltage
 measures. A vendor model, when one is uploaded and passes validation, replaces it.
 
-The IC pin is the largest unknown and is modelled generically: capacitance, a series
+The IC pin is the largest unknown and is modeled generically: capacitance, a series
 resistance, and a diode to each rail, with the supply as a capacitor behind some inductance.
 Results therefore compare layouts; they do not predict whether a particular IC survives.
 """
@@ -104,13 +104,13 @@ def lookup(value: str) -> ClampSpec | None:
     return _from_entry(*best) if best else None
 
 
-#: Used for a recognised clamp with no table entry, and as "a clamp at the connector" on an
+#: Used for a recognized clamp with no table entry, and as "a clamp at the connector" on an
 #: unprotected line. Stated as illustrative everywhere it appears.
 def illustrative_clamp(part: str = "") -> ClampSpec:
     reference = parts_table.TABLE.get("PESD5V0S1BA")
     if reference:
         spec = _from_entry("PESD5V0S1BA", reference)
-        spec.assumptions.append("modelled as a PESD5V0S1BA-class clamp from its datasheet")
+        spec.assumptions.append("modeled as a PESD5V0S1BA-class clamp from its datasheet")
     else:
         spec = ClampSpec(part=part or "generic 5 V TVS", topology="tvs-uni", v_br_v=6.0,
                          i_t_a=1e-3, r_dyn_ohm=0.5, c_j_pf=20.0)

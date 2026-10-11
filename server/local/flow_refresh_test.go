@@ -82,7 +82,7 @@ func TestRefreshIsForTheHolderOnly(t *testing.T) {
 		t.Fatalf("another worker's mint: got %d, want 409", code)
 	}
 	if code := refresh(elsewhere); code != http.StatusNotFound {
-		t.Fatalf("a worker scoped to another organisation: got %d, want 404", code)
+		t.Fatalf("a worker scoped to another organization: got %d, want 404", code)
 	}
 	if code := refresh("eci_nope_nope"); code != http.StatusUnauthorized {
 		t.Fatalf("an unknown key: got %d, want 401", code)

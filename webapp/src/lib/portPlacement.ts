@@ -124,7 +124,7 @@ export function placePortOnNet(
 
   const note =
     withinRoi.length === 0 && roi
-      ? ` No pad on this net is inside the region, so the port sits outside it — widen the region or move the port.`
+      ? ` No pad on this net is inside the region, so the port sits outside it. Widen the region or move the port.`
       : ''
 
   return {
@@ -177,7 +177,7 @@ export type PortAnchor =
  * screen silently did nothing.
  *
  * The tolerance comes from the current zoom so the target stays a constant size on screen:
- * a fixed millimetre tolerance is unusable zoomed out and needlessly precise zoomed in.
+ * a fixed millimeter tolerance is unusable zoomed out and needlessly precise zoomed in.
  */
 export function anchorNear(
   doc: BoardDoc,

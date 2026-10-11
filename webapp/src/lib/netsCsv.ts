@@ -122,7 +122,7 @@ export function buildNetsCsv(report: NetReport, format: CsvFormat): string {
 }
 
 /**
- * A report from board.json alone, for boards analysed before nets.json existed.
+ * A report from board.json alone, for boards analyzed before nets.json existed.
  *
  * Copper length, vias and the net names are all there; paths, delays and skew are not, so
  * those columns are left empty rather than filled with something that looks like a value.

@@ -139,7 +139,7 @@ def parse(doc: dict, *, document_bytes: int | None = None) -> Driver:
     if version > VERSION:
         raise DriverError(
             f"this driver is version {version} and this build understands version {VERSION}. "
-            f"Update the analyzer rather than letting it read the parts it recognises"
+            f"Update the analyzer rather than letting it read the parts it recognizes"
         )
     if version < 1:
         raise DriverError(f"version must be at least 1, got {version}")

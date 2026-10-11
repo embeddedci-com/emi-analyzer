@@ -63,7 +63,7 @@ func TestVersionsOfABoard(t *testing.T) {
 		t.Fatalf("boards %v, want newest first [%s %s %s]", ids, v3, v2, v1)
 	}
 
-	// Another organisation cannot see or delete a version.
+	// Another organization cannot see or delete a version.
 	if code, _ := f.user("orgB", "DELETE", "/emi/projects/"+p+"/boards/"+v1, nil); code != http.StatusNotFound {
 		t.Fatalf("other org delete: got %d, want 404", code)
 	}

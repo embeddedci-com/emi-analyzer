@@ -1,6 +1,6 @@
 /**
  * Comparing two versions of a board. The finding matcher is the part that can be quietly
- * wrong: a finding that moved half a millimetre must not be reported as one fixed and one new.
+ * wrong: a finding that moved half a millimeter must not be reported as one fixed and one new.
  */
 
 import { describe, expect, it } from 'vitest'
@@ -12,6 +12,8 @@ import {
   defaultPair, diffCables, diffEsd, diffFindings, diffNets, findingsHeadline, groupByRule,
   latestDone, resample, versionsOf,
 } from './compare'
+// The Go port (server/compare, used by the MCP server) checks the same cases.
+import fixtures from '../../../server/compare/testdata/compare_fixtures.json'
 
 function finding(over: Partial<RuleFinding>): RuleFinding {
   return {
@@ -172,7 +174,7 @@ describe('diffCables', () => {
     format: 'emi-cables', format_version: 1, solver: 'nec2c', standard_id: 's', assumptions: [],
     cables: [], unassigned: [], notes: [], ...over,
   })
-  it('lists every connector either version has, and says why one is not modelled', () => {
+  it('lists every connector either version has, and says why one is not modeled', () => {
     const out = diffCables(
       doc({ cables: [{ ref: 'J2', cable_id: 'usb', cable_name: 'USB', length_m: 1, declared_none: false,
         tightest: { frequency_hz: 1e8, max_current_dbua: 20, limit_dbuv_per_m: 40 } }] }),
@@ -217,4 +219,36 @@ describe('resample', () => {
   it('interpolates linearly and holds the ends', () => {
     expect(resample([0, 1, 2], [0, 10, 20], [-1, 0.5, 1.5, 3])).toEqual([0, 5, 15, 20])
   })
+})
+
+
+describe('shared compare fixtures', () => {
+  for (const c of fixtures.findings) {
+    it(`findings: ${c.name}`, () => {
+      const d = diffFindings(c.before as RuleFinding[], c.after as RuleFinding[])
+      const ids = (s: string) => d.changes.filter((x) => x.status === s)
+      expect(ids('unchanged').map((x) => `${x.before!.id}>${x.after!.id}`).sort()).toEqual(c.expected.unchanged)
+      expect(ids('fixed').map((x) => x.before!.id).sort()).toEqual(c.expected.fixed)
+      expect(ids('new').map((x) => x.after!.id).sort()).toEqual(c.expected.new)
+      expect(findingsHeadline(d.counts)).toBe(c.expected.headline)
+      const e = c.expected as { counts?: unknown; groups?: { rule: string; changes: string[] }[] }
+      if (e.counts) expect(d.counts).toEqual(e.counts)
+      if (e.groups) {
+        expect(groupByRule(d.changes).map(([rule, list]) => ({
+          rule, changes: list.map((x) => `${x.status}:${(x.after ?? x.before)!.id}`),
+        }))).toEqual(e.groups)
+      }
+    })
+  }
+  for (const c of fixtures.nets) {
+    it(`nets: ${c.name}`, () => {
+      const rep = (rows: unknown[]) => ({ format_version: 1, clock_net: '', epsilon_assumed: false, rows }) as NetReport
+      const out = diffNets(rep(c.before), rep(c.after)).map((x) => ({
+        net: x.net, status: x.status, length_before_mm: x.lengthBefore, length_after_mm: x.lengthAfter,
+        vias_before: x.viasBefore, vias_after: x.viasAfter,
+      }))
+      // toEqual treats an undefined field as absent, like Go's omitempty.
+      expect(out).toEqual(c.expected)
+    })
+  }
 })

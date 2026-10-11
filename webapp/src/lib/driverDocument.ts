@@ -133,7 +133,7 @@ export function parseDriverDocument(doc: unknown, documentBytes?: number): Drive
     throw new DriverError(
       `this driver is version ${version} and this build understands version ` +
         `${DRIVER_VERSION}. Update the analyzer rather than letting it read the parts it ` +
-        `recognises`,
+        `recognizes`,
     )
   }
   if (version < 1) throw new DriverError(`version must be at least 1, got ${version}`)

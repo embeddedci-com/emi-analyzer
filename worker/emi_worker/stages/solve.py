@@ -32,7 +32,7 @@ log = logging.getLogger(__name__)
 #: attached, which is Tier C's job and not something to arrive at by typing a big number.
 MAX_CABLE_LENGTH_M = 5.0
 
-#: Where the far field is evaluated, in metres. FCC Part 15 Class B is measured at 3 m, and
+#: Where the far field is evaluated, in meters. FCC Part 15 Class B is measured at 3 m, and
 #: evaluating the transform there rather than at 1 m and scaling means the number in the
 #: artifact is directly comparable with a limit, with no 1/r correction living somewhere else.
 FAR_FIELD_DISTANCE_M = 3.0
@@ -70,7 +70,7 @@ def _params_from_run(ctx: StageContext) -> SolveParams:
     freqs = [float(f) for f in (p.get("frequencies_hz") or [])]
     if not freqs and not small_part.is_small_part(p):  # its band gives it maps
         raise StageError(
-            "no frequencies were requested. Name the clock harmonics you care about — the "
+            "no frequencies were requested. Name the clock harmonics you care about: the "
             "solver records a field map at each one."
         )
 
@@ -132,7 +132,7 @@ def _cable_ports(p: dict) -> dict:
 
     A cable that is not in the library is refused rather than skipped. Skipping would extend
     the region, mesh the stub, spend the extra cells and then produce a result with no
-    transfer function in it — a solve that looks like it modelled the cable and did not.
+    transfer function in it — a solve that looks like it modeled the cable and did not.
     """
     raw = p.get("cable_ports") or {}
     if not raw:
@@ -172,7 +172,7 @@ def _component_candidates(p: dict) -> list:
     signed-out visitor's unsaved components reach the solve: inline, with the run.
 
     A malformed component is refused rather than skipped. Silently dropping one would solve a
-    board the user thinks is modelled and report a result that looks the same as if it were.
+    board the user thinks is modeled and report a result that looks the same as if it were.
     """
     raw = p.get("components") or []
     if not raw:
@@ -309,7 +309,7 @@ def run_solve(ctx: StageContext) -> StageResult:
         frac = p.timestep / p.total_timesteps if p.total_timesteps else 0.0
         if small:
             # A small part ends on its energy long before its cap, so the step count alone
-            # would sit near 10 % and then jump to done. How far the energy has fallen towards
+            # would sit near 10 % and then jump to done. How far the energy has fallen toward
             # the end criterion is the better measure of how far along it is.
             frac = max(frac, small_part.decay_fraction(p.energy_db))
         ctx.progress(
@@ -526,7 +526,7 @@ def _add_far_field(ctx, params, built, artifacts, workdir: str) -> None:
     and its image 1.6 m apart are not at any frequency: on a dipole it read up to 7.6 dB high.
     And its PEC mirror images horizontal currents wrongly: on a horizontal dipole it read 19 dB
     high at 30 MHz, and on a board, where every current is horizontal, it left the quasi-static
-    field uncancelled and made the far field rise about 20 dB/decade per volt where physics says
+    field uncanceled and made the far field rise about 20 dB/decade per volt where physics says
     40. docs/verification/far-field.md has the numbers.
 
     `nf2ff` still runs, without a mirror, as a guard: in the far-field limit it must agree with
@@ -626,7 +626,7 @@ def check_against_nf2ff(workdir: str, freqs: list[float], surface, meta: dict) -
     dirs = np.array([[np.sin(t) * np.cos(p), np.sin(t) * np.sin(p), np.cos(t)]
                      for p in ph for t in th])
     e = scan.field(surface, freqs, c + r * dirs)
-    # The better of the two polarisations as nf2ff defines them, theta and phi.
+    # The better of the two polarizations as nf2ff defines them, theta and phi.
     t_hat = np.array([[np.cos(t) * np.cos(p), np.cos(t) * np.sin(p), -np.sin(t)]
                       for p in ph for t in th])
     p_hat = np.array([[-np.sin(p), np.cos(p), 0.0] for p in ph for t in th])

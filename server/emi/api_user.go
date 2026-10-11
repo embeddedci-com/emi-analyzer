@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-// User-facing endpoints. Every one of them checks that the caller's organisation owns the
+// User-facing endpoints. Every one of them checks that the caller's organization owns the
 // object being touched: an EMI project is somebody's unreleased PCB layout, and org
 // scoping is the only thing standing between two customers.
 
@@ -157,12 +157,12 @@ func (s *Service) handleCreateUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Content-addressed and scoped to the organisation, not the project: the same board
+	// Content-addressed and scoped to the organization, not the project: the same board
 	// uploaded into two projects is one object, and a second upload of it is no upload at
-	// all. Without a hash we fall back to a random key, which is simply the old behaviour.
+	// all. Without a hash we fall back to a random key, which is simply the old behavior.
 	//
 	// The hash is the client's claim, so an object merely existing at the hashed key proves
-	// nothing: in a shared organisation one user could have put other bytes there. Only a
+	// nothing: in a shared organization one user could have put other bytes there. Only a
 	// board whose ingest worker hashed the bytes itself counts as "already uploaded".
 	key := "uploads/" + p.OrganizationID + "/" + newID() + "/" + name
 	if sha != "" {
@@ -248,12 +248,12 @@ func (s *Service) handleCreateBoard(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &body) {
 		return
 	}
-	// Scoped to the organisation rather than the project, because an upload is now shared
-	// across the projects of one organisation. It still stops a caller naming an upload
+	// Scoped to the organization rather than the project, because an upload is now shared
+	// across the projects of one organization. It still stops a caller naming an upload
 	// belonging to somebody else and having a worker parse it for them -- including by way of
 	// "..", which a prefix check alone lets through (see objectkeys.go).
 	if !uploadKeyAllowed(body.InputKey, p.OrganizationID) {
-		writeErr(w, http.StatusBadRequest, "input_key must be an upload key for this organisation")
+		writeErr(w, http.StatusBadRequest, "input_key must be an upload key for this organization")
 		return
 	}
 	size, _, err := s.deps.Blob.Stat(r.Context(), body.InputKey)
@@ -341,7 +341,7 @@ func (s *Service) handleLookupBoard(w http.ResponseWriter, r *http.Request) {
 // handleWhoami reports the identity the host's middleware resolved for this request.
 //
 // The page is public, so "who am I" has a real answer either way and the UI needs it: a
-// signed-in user's boards are filed under their organisation and will still be there
+// signed-in user's boards are filed under their organization and will still be there
 // tomorrow, an anonymous visitor's are filed in a shared one. Telling them which is
 // happening is the difference between a feature and a surprise.
 func (s *Service) handleWhoami(w http.ResponseWriter, r *http.Request) {

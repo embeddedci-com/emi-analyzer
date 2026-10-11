@@ -288,9 +288,9 @@ ${m.gridTooCoarse ? '<p class="muted">The frequency grid is too coarse to resolv
 </div>`).join('')
   return `<section class="page" id="cables"><h2>Cable budgets</h2>
 <p>How much common-mode current each connector's cable may carry before it reaches the ${esc(c.standard)} limit. A budget, not a prediction: compare cables and layouts with it.</p>
-${cards || '<p class="muted">No connector has a cable modelled.</p>'}
+${cards || '<p class="muted">No connector has a cable modeled.</p>'}
 ${c.neverCabled.length ? `<p>Declared as never cabled: ${esc(c.neverCabled.join(', '))}.</p>` : ''}
-${c.unassigned.length ? `<h3>Not modelled</h3><p class="muted">No cable was set for these connectors, so they are not covered by this section.</p><ul>${
+${c.unassigned.length ? `<h3>Not modeled</h3><p class="muted">No cable was set for these connectors, so they are not covered by this section.</p><ul>${
     c.unassigned.map((u) => `<li>${esc(u.ref)}${u.footprint ? ` (${esc(u.footprint)})` : ''}${u.reason ? `: ${esc(u.reason)}` : ''}</li>`).join('')}</ul>` : ''}
 ${c.assumptions.length ? `<h3>Assumptions</h3>${list(c.assumptions)}` : ''}
 ${c.notes.length ? `<h3>Notes</h3>${list(c.notes)}` : ''}
@@ -427,7 +427,7 @@ ${c.caps.length ? `<h3>Capacitors on the input</h3><table><thead><tr><th>Part</t
   }</tbody></table>` : ''}
 ${c.skipped.length ? `<h3>Not scanned</h3><ul>${c.skipped.map((s) => `<li>${esc(s.ref)}: ${esc(s.why)}</li>`).join('')}</ul>` : ''}
 ${c.assumptions.length || c.notes.length ? `<h3>Assumptions</h3>${list([...c.assumptions, ...c.notes])}` : ''}
-${c.notModelled.length ? `<h3>Not modelled</h3>${list(c.notModelled)}` : ''}
+${c.notModelled.length ? `<h3>Not modeled</h3>${list(c.notModelled)}` : ''}
 </section>`
 }
 

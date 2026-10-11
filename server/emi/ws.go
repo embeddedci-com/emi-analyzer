@@ -13,7 +13,7 @@ import (
 // The worker WebSocket. The worker always dials out, which is the property that lets it run
 // on a laptop behind NAT or on an office workstation with no inbound firewall rule.
 //
-// Push is an optimisation and never the delivery guarantee: everything sent here is also
+// Push is an optimization and never the delivery guarantee: everything sent here is also
 // discoverable through GET /emi-agent/runs, so a worker that misses a message because it
 // was reconnecting still picks the work up.
 
@@ -158,7 +158,7 @@ func (s *Service) pendingFor(ctx context.Context, orgID string, caps Capabilitie
 
 // handleWorkerMessage handles the few things a worker says over the socket. Everything with
 // a side effect — claiming, progress, completion — goes over REST with a run token instead,
-// so that the audit trail and the authorisation checks live in one place.
+// so that the audit trail and the authorization checks live in one place.
 func (s *Service) handleWorkerMessage(ctx context.Context, wc *workerConn, data []byte) {
 	var msg struct {
 		Type         string        `json:"type"`

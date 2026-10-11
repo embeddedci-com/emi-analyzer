@@ -6,7 +6,7 @@
  * a cable's resonances depend on the cable, so the answer arrives in seconds.
  *
  * The rule the UI has to hold onto is that **unassigned is not zero**. A connector nobody has
- * decided about is not modelled at all, and compliance treats that as incomplete. Showing it
+ * decided about is not modeled at all, and compliance treats that as incomplete. Showing it
  * the same as a connector declared "never cabled" would tell someone their board is covered
  * when it is not.
  */
@@ -175,7 +175,7 @@ export function CablesPanel({
   const resultRanWith = JSON.stringify(
     (run.data?.params as { connectors?: Record<string, Assignment> } | undefined)?.connectors ?? {})
   const changedSinceRun = !!d && (ranWith.current ?? resultRanWith) !== JSON.stringify(assignments)
-  // A result with no cable modelled is only the connector list: nothing to call out of date.
+  // A result with no cable modeled is only the connector list: nothing to call out of date.
   const needsBudgets = changedSinceRun && Object.values(assignments).some((a) => a.type !== 'none')
 
   return (
@@ -286,14 +286,14 @@ export function CablesPanel({
                     </Tooltip>
                   )}
                   {!chosen && !c.suggested && (
-                    <Badge size="xs" variant="light" color="yellow">not modelled</Badge>
+                    <Badge size="xs" variant="light" color="yellow">not modeled</Badge>
                   )}
                 </Group>
                 <Group gap={6} wrap="nowrap" align="flex-end">
                   <Select
                     size="xs"
                     style={{ flex: 1, minWidth: 0 }}
-                    placeholder="not modelled"
+                    placeholder="not modeled"
                     clearable
                     data={[
                       { value: 'none', label: 'never cabled' },
@@ -335,7 +335,7 @@ export function CablesPanel({
           <Text size="xs">
             {stillUnassigned.map((u) => u.ref).join(', ')}{' '}
             {stillUnassigned.length === 1 ? 'has' : 'have'} no cable, so{' '}
-            {stillUnassigned.length === 1 ? 'it is' : 'they are'} not modelled. Pick a cable, or{' '}
+            {stillUnassigned.length === 1 ? 'it is' : 'they are'} not modeled. Pick a cable, or{' '}
             <Text span fw={600}>never cabled</Text> for a header that stays inside.
           </Text>
         </Alert>

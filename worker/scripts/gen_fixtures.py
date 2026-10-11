@@ -54,7 +54,7 @@ CASES = [
         roi_x_mm=6, roi_y_mm=6, roi_z_mm=11.6,
         dx_um=150, dy_um=150, dz_um=100, f_min_hz=30e6, ports=1,
         fill_factor=MESH_MULTIPLIER_FLOOR["coarse"])),
-    # Extents that do not divide evenly, to pin the ceil() behaviour across languages.
+    # Extents that do not divide evenly, to pin the ceil() behavior across languages.
     ("non-integer-division", dict(
         roi_x_mm=7.3, roi_y_mm=4.1, roi_z_mm=1.55,
         dx_um=60, dy_um=60, dz_um=35, f_min_hz=250e6, ports=2,
