@@ -21,6 +21,7 @@ help:
 	@echo "  make local         build bin/emi-local: server + webapp in one binary"
 	@echo "  make run-local     build and run it (opens a browser; worker in Docker)"
 	@echo "  make smoke-local   end-to-end test against a running emi-local"
+	@echo "  make e2e-mcp       the MCP server end to end: emi-local, its worker, stdio (needs Docker)"
 	@echo "  make desktop       build the desktop app installer for this machine (needs Rust)"
 	@echo "  make desktop-dev   run the desktop app in development mode"
 	@echo "  make worker-image  build the worker image as $(WORKER_IMAGE)"
@@ -136,6 +137,12 @@ key:
 .PHONY: smoke-local
 smoke-local:
 	EMI_API=http://127.0.0.1:7465/api EMI_SMOKE_BOARD=worker/tests/fixtures/tiny.kicad_pcb python3 deploy/smoke.py
+
+# The MCP server as Claude Code runs it: builds emi-local, starts it with a worker container in
+# a temp folder, and drives `emi-local mcp` over stdio. Seconds, on the worker image below.
+.PHONY: e2e-mcp
+e2e-mcp:
+	cd server && EMI_WORKER_IMAGE=$(WORKER_IMAGE) go test -tags e2e -run TestMCPEndToEnd -v -timeout 15m ./mcpserver
 
 .PHONY: smoke
 smoke:
