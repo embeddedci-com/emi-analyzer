@@ -4,8 +4,8 @@
 
 A driver document says what a net actually carries. The EMI Analyzer solves a board with an
 arbitrary excitation, which makes its results *relative*: one layout is 8 dB quieter than
-another. Attaching a driver turns that into absolute units — dBµA/m on a near-field map,
-dBµV/m at three meters — without re-solving anything, because openEMS solves a linear
+another. Attaching a driver turns that into absolute units (dBµA/m on a near-field map,
+dBµV/m at three meters) without re-solving anything, because openEMS solves a linear
 structure and the response to any source inside the excitation band is already in the result.
 
 This is the interchange format. It is what **Export JSON** writes, what the analyzer's upload
@@ -65,8 +65,8 @@ never a bare number:
 | `datasheet` | taken from a part's datasheet | 3.0 dB |
 | `assumed` | a reasonable guess | 6.0 dB |
 
-**The weakest source in a document sets the driver's contribution to the uncertainty budget**
-— worst, never an average. One guessed number among four measured ones still makes the driver
+**The weakest source in a document sets the driver's contribution to the uncertainty budget**:
+the worst, never an average. One guessed number among four measured ones still makes the driver
 a guess, and averaging would hide exactly the case the budget exists to price. The σ values
 are engineering placeholders that get replaced with residuals from recorded lab results; the
 *ordering* is the part that is settled.
@@ -117,7 +117,7 @@ All six are required.
 - **`bandwidth_hz` is where the samples stop meaning anything.** Above it the analyzer
   continues with the envelope implied by `rise_s`, scaled to meet the transform at the join.
   **With no `rise_s` declared, those harmonics are not driven at all** and the result is
-  reported as incomplete there — which is honest, and is why declaring a rise time from a
+  reported as incomplete there. That is honest, and is why declaring a rise time from a
   datasheet is worth doing even when the capture cannot see it.
 
 ## 5. `kind: spectrum`
@@ -133,7 +133,7 @@ All six are required.
 }
 ```
 
-Points must be in **strictly increasing** frequency order — out-of-order points usually mean
+Points must be in **strictly increasing** frequency order. Out-of-order points usually mean
 the wrong column was read, so they are refused rather than sorted. Levels are interpolated in
 dB against log frequency. Outside the given range the driver drives nothing, and says so.
 
@@ -164,7 +164,7 @@ the wrong `source` is worse than a missing one.
 | `rise_s`, `fall_s` | — | **No** below about 100 ns: outside the capture bandwidth. |
 
 **The rise time is the one that matters most and the one the pod cannot see.** It sets the
-second corner, `1/(π·t_r)`, and therefore every harmonic above a few hundred megahertz —
+second corner, `1/(π·t_r)`, and therefore every harmonic above a few hundred megahertz,
 which is most of what a radiated scan cares about. A pod-written document should mark it
 `datasheet` when it comes from a part's specification, or `assumed` when it is a guess, and
 never `benchpod`.
@@ -181,5 +181,5 @@ Run a producer against
 - every document under `invalid` must be refused, and the message should mention the field
   named in `must_mention`.
 
-The fixtures are generated, never hand-edited —
+The fixtures are generated, never hand-edited:
 `worker/scripts/gen_driver_doc_fixtures.py`, via `make driver-fixtures`.

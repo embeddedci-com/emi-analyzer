@@ -8,7 +8,7 @@ Start with the [README](../README.md), which covers installing and using the app
 |---|---|
 | [known-issues.md](known-issues.md) | What is verified, what is experimental (and switched off), and what is not built yet. Read before relying on a number. |
 | [rules-file.md](rules-file.md) | `emi.rules.yaml`: tune the checks for a board by putting a rules file next to it. |
-| [running-a-worker.md](running-a-worker.md) | Run the worker yourself — on a bigger machine, or from source. |
+| [running-a-worker.md](running-a-worker.md) | Run the worker yourself, on a bigger machine, or from source. |
 | [emi-driver-format.md](emi-driver-format.md) | The driver file format: what a net carries. Used by full-wave simulation, which is experimental. |
 | [component-library.md](component-library.md) | The capacitor library: which named parts it has (JLCPCB Basic MLCCs), where their numbers came from, how parts are matched by part number, and how to add one. |
 

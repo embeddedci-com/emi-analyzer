@@ -88,7 +88,7 @@ other setting in a group is ignored with a warning; set it under `rules` instead
 - **Tolerances are in picoseconds.** An inner-layer millimeter and an outer-layer one differ
   by about 25% in delay, so millimeters would compare the wrong thing. See
   [length-matching-and-impedance.md](length-matching-and-impedance.md).
-- **Impedance targets default to 0, meaning "no target"** — only discontinuities along a net
+- **Impedance targets default to 0, meaning "no target"**: only discontinuities along a net
   are reported. A board-wide target is almost never right; scope it with `groups`.
 - **`version` is checked.** A document from a newer analyzer is refused rather than
   reinterpreted, because a silently changed threshold is worse than a rejected file.
@@ -100,12 +100,12 @@ other setting in a group is ignored with a warning; set it under `rules` instead
   suppress an edge header you never expose by its nets (`net: "/SWD*"`).
 - **EMC checks recognize parts by reference, value and footprint.** A clamp is a part number
   such as USBLC6, PESD, SRV05 or SMAJ on any reference, or a diode from the line to ground. A
-  protection part the analyzer does not recognize is reported as missing — suppress the net
+  protection part the analyzer does not recognize is reported as missing. Suppress the net
   with a reason rather than switching the rule off.
 
 ## Rule ids
 
-Settings key off a rule's **id**, not its title — titles get reworded, ids do not. The current
+Settings key off a rule's **id**, not its title: titles get reworded, ids do not. The current
 list, with every parameter and its default, is
 [`webapp/src/lib/ruleCatalogue.json`](../webapp/src/lib/ruleCatalogue.json). It is generated
 from the worker's own catalog (`python scripts/export_rule_catalogue.py`) and a test fails when

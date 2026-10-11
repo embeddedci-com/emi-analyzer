@@ -4,8 +4,8 @@ What works, what is experimental, and what is not built yet. Read this before re
 number. [`implementation.md`](implementation.md) describes how the parts that exist work.
 
 **Status words.** *Built* means the code exists and its tests pass. *Verified* means the
-feature has been checked against an independent reference — a closed-form result, a second
-solver or a measurement — and passed. The gap between the two is most of this page.
+feature has been checked against an independent reference (a closed-form result, a second
+solver or a measurement) and passed. The gap between the two is most of this page.
 
 ---
 
@@ -18,23 +18,23 @@ solver or a measurement — and passed. The gap between the two is most of this 
 | Run-cost estimator | ✅ | ✅ | on |
 | Decoupling view (lumped supply impedance per rail and IC, Decoupling tab) | ✅ | ⚠️ closed forms and a published connection-inductance table pass; a very short via-in-pad mount reads 49 % high against openEMS ([verification/decoupling.md](verification/decoupling.md)) | on |
 | ESD transient simulation (ngspice) | ✅ | ⚠️ source, line and clamp models unit-checked; no bench comparison | on |
-| Cable budget, Tier A (`cable` run, nec2c) | ✅ | ✅ against openEMS on the product setup: 7 of 9 configurations within 1 dB below resonance, all within 2 dB at the peaks; the wire radius, not the solver, is the larger uncertainty — §3 | on |
+| Cable budget, Tier A (`cable` run, nec2c) | ✅ | ✅ against openEMS on the product setup: 7 of 9 configurations within 1 dB below resonance, all within 2 dB at the peaks; the wire radius, not the solver, is the larger uncertainty (§3) | on |
 | Limits library and Limits page | ✅ | ⚠️ FCC Part 15 only; there is no CISPR 32 table | on |
-| **Full-wave solve (openEMS)** | ✅ | ⚠️ **a 50 ohm microstrip within 1 % of theory on every preset; solves end to end on the fixture board; long records on whole boards are out of scope — §2** | **off** (`full-wave`) |
+| **Full-wave solve (openEMS)** | ✅ | ⚠️ **a 50 ohm microstrip within 1 % of theory on every preset; solves end to end on the fixture board; long records on whole boards are out of scope (§2)** | **off** (`full-wave`) |
 | Small-part solve (one net cut out over its planes, Part solve tab) | ✅ | ✅ microstrip, stripline and via within their closed forms; a synthetic coupon and three real coupons converge over the cut and the mesh; the sample board solves in minutes from the app. No far field, no compliance estimate, no coupling into neighboring nets, no component models; nothing against a measurement ([verification/small-part-solve.md](verification/small-part-solve.md)) | on |
 | Drivers (re-weighting a solve) | ✅ | ⚠️ every check in §3 passes; nothing against a measured source | off, with full-wave |
 | Component library (59 named JLCPCB Basic MLCCs, matched by MPN or LCSC field; generic by package otherwise) | ✅ | ✅ each named part reproduces its manufacturer model's notch, and \|Z\| within 2 dB from half to twice it; 332 of 499 capacitors on four private boards match by part number. DC bias recorded, not applied; FH and Yageo parts have no manufacturer model and stay generic ([component-library.md](component-library.md)) | on |
 | Components (MLCC models in a solve) | ✅ | ⚠️ upstream openEMS lost the capacitor to float rounding (SRF 17 % low); the image patches it, and a 100 pF and a 1 nF 0402 then match their series R-L-C within 0.01 % on SRF and 0.23 dB on \|Z\|, but only with a -70 dB record: at the solve's -40 dB a 100 pF part is 4.7 dB off (§3) | off, with full-wave |
 | Board far field (NF2FF) | ✅ | ⚠️ matches nec2c on dipoles over the ground plane as the product runs it, 30 MHz up (§3); no board checked against a measurement | off, with full-wave |
-| Cable emissions, Tier B | ✅ | ❌ its real-board gate is not met. Re-run with the board as a plate: on board A, 4 dB low on average from 80 MHz to resonance (worst 7.1), 0.4 dB low (worst 2.8) once V_oc's +3.7 dB rise with the cable attached is added; 8-20 dB low below 80 MHz. The V_oc offset is measured, not modeled. Boards B and C give no answer: their board modes do not settle in the record — §3 | off, with full-wave |
+| Cable emissions, Tier B | ✅ | ❌ its real-board gate is not met. Re-run with the board as a plate: on board A, 4 dB low on average from 80 MHz to resonance (worst 7.1), 0.4 dB low (worst 2.8) once V_oc's +3.7 dB rise with the cable attached is added; 8-20 dB low below 80 MHz. The V_oc offset is measured, not modeled. Boards B and C give no answer: their board modes do not settle in the record (§3) | off, with full-wave |
 | Compliance estimate | ✅ | ❌ runs end to end on the fixture board; never checked against a lab or a second solver (§3) | off, with full-wave |
 | Conducted emissions scan (`conducted` run, ngspice), differential mode | ✅ | ⚠️ the LISN within the CISPR 16-1-2 tolerance, a buck's and a boost's ripple and first harmonic, two phased bucks and an LC filter within 1 dB of closed forms; no board against a measurement; regulators found on all 4 private boards, each marked with how; regulator settings are assumed until entered ([verification/conducted-emissions.md](verification/conducted-emissions.md)) | **off** (`conducted`) |
-| Report export (HTML and JSON, built in the browser) | ✅ | — (nothing to verify: it restates results) | on |
+| Report export (HTML and JSON, built in the browser) | ✅ | Nothing to verify: it restates results. | on |
 
 Everything marked **off** is behind the `full-wave` experimental feature, except the conducted
 scan, which has its own, `conducted`. It is refused by the server, not merely
 hidden. It is off because none of it has been verified on a real board, not
-because it is known to be broken — see §2. To try it:
+because it is known to be broken (see §2). To try it:
 
 ```bash
 emi-local -experimental full-wave

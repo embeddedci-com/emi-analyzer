@@ -1,6 +1,6 @@
 # ESD and surge transient simulation
 
-**Status: phase 1 and vendor-model upload implemented — §11 records where the build differs
+**Status: phase 1 and vendor-model upload implemented. §11 records where the build differs
 from this plan.** Written before building, the way
 [length-matching-and-impedance.md](length-matching-and-impedance.md) was. It answers one
 question: can the analyzer say *how much* of a discharge reaches an IC pin, instead of only that
@@ -10,7 +10,7 @@ The short answer is yes, for the part that decides whether a board survives, by 
 on the lines the `esd-protection` check already finds. The layout becomes transmission lines
 using the stackup, impedance and topology code that already exists. The source reproduces the
 standard's waveform, and parts get generic models built from datasheet numbers. The output is a
-comparison — as laid out, and with the clamp moved to the connector — because the absolute volts
+comparison (as laid out, and with the clamp moved to the connector) because the absolute volts
 are an estimate and the difference between two layouts is not.
 
 ---
@@ -19,15 +19,15 @@ are an estimate and the difference between two layouts is not.
 
 | Need | Today | Good enough? |
 |---|---|---|
-| Which lines are exposed | `esd-protection` ([rules/emc.py](../worker/emi_worker/rules/emc.py)) finds edge connectors, the nets they carry off the board, clamps on those nets, and the first IC on each | **yes** — the simulation starts from exactly this set |
-| Routed pad-to-pad length | `NetTopology.path(a, b)` gives per-layer runs and a via count | **mostly** — runs are summed per layer, not kept in physical order (§3.3) |
+| Which lines are exposed | `esd-protection` ([rules/emc.py](../worker/emi_worker/rules/emc.py)) finds edge connectors, the nets they carry off the board, clamps on those nets, and the first IC on each | **yes**: the simulation starts from exactly this set |
+| Routed pad-to-pad length | `NetTopology.path(a, b)` gives per-layer runs and a via count | **mostly**: runs are summed per layer, not kept in physical order (§3.3) |
 | Where the clamp branches off | not stored | derivable from pairwise path lengths (§3.2) |
 | Delay per mm, per layer | `BoardElectrics.ps_per_mm(layer)` | yes |
 | Trace impedance | `impedance.single_ended(width_mm, LayerElectrics)` → `Impedance.ohm` ± uncertainty | yes (closed-form microstrip/stripline) |
-| Via inductance | nothing; only `via_ps` as a delay | **no** — add a closed form (§3.4) |
+| Via inductance | nothing; only `via_ps` as a delay | **no**: add a closed form (§3.4) |
 | Clamp ground path | `esd-protection` measures pad edge to the nearest ground via | yes as a length; needs converting to inductance |
-| Part electrical models | none — parts are *recognized*, never *characterized* | **no** — §4 |
-| Circuit simulator | none; the worker image has openEMS only | **no** — add ngspice (Debian bookworm ships 39.3, BSD-3-Clause) |
+| Part electrical models | none: parts are *recognized*, never *characterized* | **no**, see §4 |
+| Circuit simulator | none; the worker image has openEMS only | **no**: add ngspice (Debian bookworm ships 39.3, BSD-3-Clause) |
 | Run kinds | server accepted `ingest` and `solve` when this was written (`server/emi/types.go`); workers advertise `kinds` (`worker/emi_worker/config.py`) | needed a third kind (§6); there are five now |
 
 ---
@@ -36,7 +36,7 @@ are an estimate and the difference between two layouts is not.
 
 These are what the sources must reproduce, and what the tests in §7 pin.
 
-### 2.1 ESD — IEC 61000-4-2:2008, contact discharge
+### 2.1 ESD: IEC 61000-4-2:2008, contact discharge
 
 From the standard's Tables 1 and 3:
 
@@ -80,7 +80,7 @@ Three things in the standard shape what we simulate:
 calibration procedure. Before a result is shown as "per IEC 61000-4-2", confirm that the ideal
 waveform is unchanged. The tests pin the 2008 values.
 
-### 2.2 Surge — IEC 61000-4-5:2014 (phase 3)
+### 2.2 Surge: IEC 61000-4-5:2014 (phase 3)
 
 - **Levels:** line-to-line 0.5, 1 and 2 kV (levels 2–4); line-to-ground 0.5, 1, 2 and 4 kV
   (levels 1–4).
@@ -96,12 +96,12 @@ waveform is unchanged. The tests pin the 2008 values.
   be fitted until both waveforms and Tables 2, 3 and 6 are met, and the tests check that.
 - **Out of scope:** the 10/700 µs generator for outdoor symmetrical telecom lines.
 
-### 2.3 Burst — IEC 61000-4-4 (phase 2)
+### 2.3 Burst: IEC 61000-4-4 (phase 2)
 
 - **Pulse:** 5 ns rise and 50 ns width, into 50 Ω, from a 50 Ω generator.
 - **Bursts:** 15 ms long at 5 kHz (or at 100 kHz), repeated every 300 ms.
 
-**Not yet checked against the standard's text** — these come from test-equipment vendors.
+**Not yet checked against the standard's text**. These come from test-equipment vendors.
 Confirm them before implementing, including the capacitive coupling clamp used on signal
 lines. The repetition does not change the peak, so a single pulse is what gets simulated.
 
@@ -123,7 +123,7 @@ Each line the `esd-protection` check reports has:
                                                                                       ⏚ plane (ideal)
 ```
 
-For an R-clamp (a series resistor, then the clamp — the check already recognizes this), the
+For an R-clamp (a series resistor, then the clamp; the check already recognizes this), the
 circuit is T-line, then R, then T-line, split at the resistor's pad positions.
 
 ### 3.2 Finding the branch point
@@ -137,14 +137,14 @@ stub to clamp = L(C,D) − t
 stub to IC    = L(C,U) − t
 ```
 
-`topology.build` already computes all three pairs. If they do not form a tree — t or a stub
-negative beyond a tolerance, as happens with a loop through a pour — fall back to straight-line
+`topology.build` already computes all three pairs. If they do not form a tree (t or a stub
+negative beyond a tolerance, as happens with a loop through a pour), fall back to straight-line
 placement, and say so in the result.
 
 ### 3.3 Transmission lines, not lumped inductors
 
 - **Why lines.** A 0.8 ns rise has a knee around 0.35/tr ≈ 440 MHz, with content above that. At
-  about 6 ps/mm, a 40 mm trunk is 250 ps — a third of the rise. That is long enough for a lumped
+  about 6 ps/mm, a 40 mm trunk is 250 ps, a third of the rise. That is long enough for a lumped
   inductor to be wrong at the peak.
 - **ngspice's lossless `T` element** takes delay and impedance directly:
   - **TD** = Σ(run length × `ps_per_mm(layer)`) + vias × `via_ps`;
@@ -212,7 +212,7 @@ datasheet gives:
 **A built-in table** covers the parts found on the real boards: USBLC6-2SC6 and -4SC6,
 PESD5V0S1BA, PESD3V3L4UG, SRV05-4, SMAJ5.0A and SMBJ5.0A, SMF13CA, SMAJ36CA, and BAT54S.
 - **Every value is filled from that part's datasheet, with the datasheet revision cited in the
-  entry** — not from memory.
+  entry**, not from memory.
 - A recognized part that is not in the table is modeled as a generic 5 V TVS, and the result
   says so.
 
@@ -347,7 +347,7 @@ These tests must exist before a number is shown to anyone:
   radiated field from the discharge, and no discharge to the enclosure, cables or coupling
   planes. Phase 4 adds coupling and ground bounce through openEMS.
 - **Parts are recognized by value and footprint,** and a clamp the tool does not recognize is
-  simulated as absent — the same rule the checks use.
+  simulated as absent, the same rule the checks use.
 - **Metal-shell connectors are tested at the shell** (§2.1). Injecting at a pin is a worst case.
 - **Not a compliance prediction,** the same position the limitations page takes for emissions.
 
@@ -415,7 +415,7 @@ this section is the one that is true.
 
 A file is used only when every step passes, and every result is shown with the simulation:
 
-1. **Structure** (`transient/spice_model.py`): text under 2 MB, and an allowlist — `.subckt`,
+1. **Structure** (`transient/spice_model.py`): text under 2 MB, and an allowlist: `.subckt`,
    `.ends`, `.model`, `.param`, `.func`, and R C L K D Q M J V I E F G H B X T S W elements inside a
    subcircuit. Refused, with the reason: `.control` (runs commands, including `shell`),
    `.include` and `.lib` (read files), `.options`, `.global`, `.temp`, analysis and output
@@ -446,8 +446,8 @@ worker image on one laptop core; the 22-line board took 14 s.
 
 ### 11.5 Where it lives
 
-- Worker: `emi_worker/transient/` — `waveforms`, `lines`, `parts`, `parts_table`, `netlist`,
-  `ngspice`, `spice_model`, `models`, `simulate` — and `stages/transient.py`. A worker advertises
+- Worker: `emi_worker/transient/` (`waveforms`, `lines`, `parts`, `parts_table`, `netlist`,
+  `ngspice`, `spice_model`, `models`, `simulate`) and `stages/transient.py`. A worker advertises
   the `transient` kind only when `ngspice` resolves; the worker image installs it in the base
   stage, so an image built without a solver has it too.
 - Server: `emi/transient.go` (params, model-key checks), the `transient` run kind in `types.go`,

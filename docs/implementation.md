@@ -1,9 +1,9 @@
-# EMI Analyzer — how the model works, as built
+# EMI Analyzer: how the model works, as built
 
 This describes the tool that exists. It replaces `model-fidelity.md`, which was a design
 document: where that argued for choices, this records what those choices became, and why the
 code looks the way it does where the reason is not obvious from reading it. The parts of it that
-were reference data rather than argument — the limits tables and the decisions log — are in
+were reference data rather than argument (the limits tables and the decisions log) are in
 [`limits-and-decisions.md`](limits-and-decisions.md).
 
 **What is still missing, wrong or unproven is not here.** It is in
@@ -24,12 +24,12 @@ than about topic.
 | `ingest` | seconds | nothing | `board.json`, `geometry.bin`, rule findings |
 | `solve` | hours | openEMS, real cores | `manifest.json`, field maps, `ports.json`, optionally `cable_ports.json`, `cable_antenna.json`, `farfield.json` |
 | `transient` | seconds | ngspice | ESD waveforms |
-| `cable` | ~½ second | nec2c | `cables.json` — the Tier A current budget |
-| `compliance` | seconds | nothing | `compliance.json` — margin, confidence, contributions, recommendations |
+| `cable` | ~½ second | nec2c | `cables.json`: the Tier A current budget |
+| `compliance` | seconds | nothing | `compliance.json`: margin, confidence, contributions, recommendations |
 
 **Why `compliance` is a run kind and not a stage of `solve`.** It is arithmetic on artifacts
 other runs already produced. A user changing a cable length or swapping a driver wants the
-answer immediately, and none of that needs fields recomputed — so every worker advertises it,
+answer immediately, and none of that needs fields recomputed, so every worker advertises it,
 including the ingest-only one.
 
 **Why a solve is relative by default.** openEMS solves a linear structure, so a Gaussian
@@ -47,14 +47,14 @@ file). `openems/model.py` turns a board plus a `SolveParams` into a CSX document
 
 ### 2.1 The mesh, and the two things about it that surprise people
 
-`openems/mesh.py` builds each axis from required lines — copper edges, layer heights, port
-boundaries — then fills, grades and pads for the PML.
+`openems/mesh.py` builds each axis from required lines (copper edges, layer heights, port
+boundaries), then fills, grades and pads for the PML.
 
 - **`dx_um` is a floor on cell size, not the spacing.** The mesher puts a line at every copper
   edge, and a routed board has edges far closer together than any preset. The spikes measured the
   consequence: the in-plane axes come out 2.0–4.0× *denser* than a uniform grid over the same
-  box, not sparser. The cost estimator's "fill factor" is therefore greater than one — 4.67 to
-  8.65 at the coarse preset on four real boards (September 2026) — and the UI passes the
+  box, not sparser. The cost estimator's "fill factor" is therefore greater than one (4.67 to
+  8.65 at the coarse preset on four real boards, September 2026), and the UI passes the
   per-preset **minimum**, because the panel says "At least".
 - **`merge_close` collapses lines closer than `dx_um / 4`**, which makes the smallest in-plane
   cell `dx_um / 4` on any routed board. Since the timestep is set by the smallest cell anywhere,
@@ -161,11 +161,11 @@ finished solve with it.
 
 ## 5. Cables
 
-### 5.1 Tier A — the budget (`cable` run)
+### 5.1 Tier A: the budget (`cable` run)
 
 `cables/budget.py` asks nec2c how much common-mode current this cable may carry before it
 reaches the limit, at 48 log-spaced frequencies. **The closed form is not the engine:** it is
-valid below λ/10, which for a 1 m cable is 30 MHz — the bottom of the radiated range — so a
+valid below λ/10, which for a 1 m cable is 30 MHz (the bottom of the radiated range), so a
 closed-form budget would be an extrapolation everywhere it is used. It survives as a sanity
 bound only.
 
@@ -180,11 +180,11 @@ and the table was 1 m high: the antenna sat 1 m from the end of a 2 m cable and 
 repeated.
 
 **How far the closed form is from the solver, measured.** Inside the window where both are
-entitled to an opinion — the wire electrically short *and* the observation point in the far
-field, which for a 1 m cable at 3 m is 16–30 MHz — the closed form sits **3.5–4 dB above** a
+entitled to an opinion (the wire electrically short *and* the observation point in the far
+field, which for a 1 m cable at 3 m is 16–30 MHz), the closed form sits **3.5–4 dB above** a
 solved fed wire, with a constant offset across the band. That gap is the current distribution: a
 fed wire tapers toward its open end, and a perfectly triangular taper would be 6 dB. The
-direction is the useful one — the closed form predicts more field per amp, so the budget it
+direction is the useful one: the closed form predicts more field per amp, so the budget it
 computes is tighter. Below the far-field boundary the two diverge without limit (25 dB at 5 MHz),
 because 1/r² and 1/r³ terms dominate there and no far-field formula contains them. That holds
 for an open far end only: with a grounded or equipment far end the drop wire radiates as a
@@ -195,12 +195,12 @@ over a PEC ground, current integrated to the same ring, within 1 dB below the fi
 most cases and 2 dB and 3 % around the peaks; the numbers and the exceptions are in
 [`verification/cables-and-drivers.md`](verification/cables-and-drivers.md).
 
-Radiation peaks are marked by comparing each point against a **window** — ±25 % of its own
+Radiation peaks are marked by comparing each point against a **window**: ±25 % of its own
 frequency, capped at ⅓ of `c/2L`. Both bounds were measured into existence: neighbour-based
 detection made a *finer* grid find *fewer* peaks, and a purely fractional window let the top
 peak wander between 632 and 796 MHz.
 
-### 5.2 Tier B — what this layout drives (`solve` + `compliance`)
+### 5.2 Tier B: what this layout drives (`solve` + `compliance`)
 
 A 10 mm PEC stub leaves the board along the connector's exit normal; a one-cell gap with a 1 MΩ
 element across it measures the open-circuit voltage. Then
@@ -217,7 +217,7 @@ E(f)    = I_cm · E_per_amp
   which was most of why Tier B read low. What remains is that V_oc rises by 0-5 dB when a
   cable is attached, which the solve cannot see
   ([`verification/cables-and-drivers.md`](verification/cables-and-drivers.md) §4).
-- **`V_src` is the solve's Thévenin source**, `V_port + I_port·Z_s` — not the port voltage,
+- **`V_src` is the solve's Thévenin source**, `V_port + I_port·Z_s`, not the port voltage,
   which would fold the port's own input impedance into a number meant to be independent of it.
 - **The grid is extended only on the sides a stub leaves from.** Growing all four costs +46 %
   cells on one real board; per-side is +0.6 %.
@@ -225,14 +225,14 @@ E(f)    = I_cm · E_per_amp
   instead of in air. Exact for a rectangular board, which all four fixtures are.
 - **An edge connector is one whose nearest *pad* is within 12 mm of the outline**, not its
   centroid: an RJ45 on one real board is 14 mm out by centroid and 2 mm by pad.
-- **A gap port is refused, never approximated** — for a mid-board connector, a diagonal exit, or
+- **A gap port is refused, never approximated**: for a mid-board connector, a diagonal exit, or
   one outside the region. Each says which.
 - **The antenna terms are computed beside the solve**, not in the browser, so a driver can still
   be attached afterwards: the result carries everything except the driver's own voltage.
 
 **This path is marked experimental, and is off unless `full-wave` is enabled.** See [`known-issues.md`](known-issues.md).
 
-### 5.3 Tier C — the reference
+### 5.3 Tier C: the reference
 
 The cable meshed in the FDTD grid. The spikes established it is not a product mode: placing a radiating
 resonance needs about λ/90, not the λ/20 a near-field map needs, and the cable region is most of
@@ -368,7 +368,7 @@ share**.
 | Far-field interpolation | board path | 1 |
 
 These are **engineering placeholders**, conservative by choice, shown in the result, and
-replaced by residuals as the verification tests produce them — not tuned. Component coverage is
+replaced by residuals as the verification tests produce them, not tuned. Component coverage is
 not in the budget: the solve does not yet record how many parts on the path matched nothing.
 
 ### 7.4 Confidence
@@ -376,7 +376,7 @@ not in the budget: the solve does not yet record how many parts on the path matc
 `Φ(margin / σ)`: the probability the true margin is positive *under the model's own budget*. Not
 a pass probability. It exists in the payload, the run summary, the TypeScript types and the
 fixtures **only** as `confidence_uncalibrated`; a plain `confidence` key used to travel beside it.
-Evaluated at the worst frequency alone, which makes it **optimistic when several sit close** —
+Evaluated at the worst frequency alone, which makes it **optimistic when several sit close**,
 hence the near-miss list.
 
 ### 7.5 The completeness gate
@@ -432,7 +432,7 @@ whose tooltip is the explanation, and **`why` is required**: a bare "experimenta
 saying what about, which is the wrong hedge for a tool whose claim is that numbers arrive with an
 account of how far to trust them.
 
-The reason is written for someone deciding whether to act on the number — it names the
+The reason is written for someone deciding whether to act on the number. It names the
 measurement that would settle the question and says which way the error runs when that is known.
 Reasons live together in `EXPERIMENTAL` so the set of things the tool is unsure about can be read
 in one go.
@@ -463,12 +463,12 @@ worker does means a run is rejected at the mesh stage after they already committ
 
 ## 10. Verification, and the failure mode it is built around
 
-**Every solver step asserts twice** — that what came back is what was asked for, separately from
+**Every solver step asserts twice**: that what came back is what was asked for, separately from
 whether the value is right. The spikes met four tools that completed successfully and computed nothing:
 
 - a NEC deck with no execution card (no output, exit 0);
 - a `DUMP_J_FREQ` map of an all-zero conduction current on PEC;
-- an `nf2ff` job whose angles were read as radians — it echoed them back, so the output agreed
+- an `nf2ff` job whose angles were read as radians; it echoed them back, so the output agreed
   with the bad input;
 - an openEMS run diverging by twenty orders of magnitude, reporting `- 0.0 dB` throughout.
 

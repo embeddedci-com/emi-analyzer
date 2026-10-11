@@ -5,10 +5,10 @@ what the code looked like before. For the settings file itself see
 [rules-file.md](rules-file.md). Three things are asked for here and they turn out to
 share a spine:
 
-1. **DDR length matching** — find lanes that are skewed against their clock or strobe,
+1. **DDR length matching**: find lanes that are skewed against their clock or strobe,
    within a tolerance somebody can set.
-2. **Rule settings** — a general way to turn checks on and off and to set their thresholds.
-3. **Impedance** — compute it from the stackup and check it against a target.
+2. **Rule settings**: a general way to turn checks on and off and to set their thresholds.
+3. **Impedance**: compute it from the stackup and check it against a target.
 
 The spine is that all three need something the analyzer does not currently have: a model of
 *how long a signal takes*, not how much copper is on a net. Everything below builds from
@@ -23,14 +23,14 @@ one of them is answered wrongly.
 
 | | today | good enough for this? |
 |---|---|---|
-| Stackup parsing | per-layer type, thickness, material, `epsilon_r`, `loss_tangent`, each flagged `from_file` | **yes** — this is the foundation and it is sound |
+| Stackup parsing | per-layer type, thickness, material, `epsilon_r`, `loss_tangent`, each flagged `from_file` | **yes**: this is the foundation and it is sound |
 | Stackup fallback | synthesizes a symmetric FR-4 stack, εr 4.4, `from_file=False`, warns | yes, but see §5 on what "assumed" must mean downstream |
-| Gerber path | thicknesses from the job file; **εr never available**, warned | no — impedance is not computable from Gerbers alone |
-| Reference plane | `check_plane_gaps` finds the nearest plane by z-order, falling back to largest pour | **yes** — reusable as-is for impedance |
+| Gerber path | thicknesses from the job file; **εr never available**, warned | no: impedance is not computable from Gerbers alone |
+| Reference plane | `check_plane_gaps` finds the nearest plane by z-order, falling back to largest pour | **yes**: reusable as-is for impedance |
 | Layer role | `plane_net` + `plane_coverage`, measured from pours | yes |
 | Track width | parsed and kept per segment | kept, but **never used for anything electrical** |
-| Net length | `length_mm` = **sum of all copper on the net** | **no — this is the wrong measurement**, see §2 |
-| Velocity | one global constant, `velocity_factor = 0.5` | **no** — not per-layer, not from the stackup |
+| Net length | `length_mm` = **sum of all copper on the net** | **no: this is the wrong measurement**, see §2 |
+| Velocity | one global constant, `velocity_factor = 0.5` | **no**: not per-layer, not from the stackup |
 | Netclasses | **not parsed at all** | no |
 | Differential pairs | **no concept of them** | no |
 | Impedance | **nothing, anywhere** | no |
@@ -64,19 +64,19 @@ everything else in this document.
 We need, for a net, the **path from a driver pad to each receiver pad**, as an ordered list
 of (layer, length) runs plus the vias crossed.
 
-The data is already there — tracks with endpoints, vias with layer spans, pads with
-positions — it has never been assembled into a graph. Sketch:
+The data is already there (tracks with endpoints, vias with layer spans, pads with
+positions), but it has never been assembled into a graph. Sketch:
 
 - Nodes: pad centers, via centers, and track endpoints, merged when within a tolerance
   (the same 0.08 mm the Gerber net reconstruction settled on).
 - Edges: track segments (weight = length, tagged with layer), vias (weight = z-distance,
   tagged as a via).
 - Shortest path between two pads gives the routed path; the graph also reveals the
-  topology — a net whose pads are leaves off a trunk is fly-by, one with exactly two pads
+  topology: a net whose pads are leaves off a trunk is fly-by, one with exactly two pads
   is point-to-point.
 
 **Which pad is the driver** is not in the board file. Options, in order of preference:
-(a) the user says so in settings, (b) infer from the component — the net's pad on the
+(a) the user says so in settings, (b) infer from the component: the net's pad on the
 controller/SoC rather than on the memory, identified by which reference designator carries
 the most nets of the group, (c) fall back to the longest path in the net and say so.
 
@@ -97,7 +97,7 @@ t_pd = √(ε_eff) / c            c = 299.792 mm/ns
 
 That is a **~25% difference**. Concretely: DDR4 at 3200 MT/s has a 312 ps unit interval and
 an intra-byte skew budget of a few ps. A 20 mm section moved from an inner to an outer layer
-changes that net's delay by ~28 ps — an order of magnitude more than the budget — while its
+changes that net's delay by ~28 ps (an order of magnitude more than the budget) while its
 length in millimeters is unchanged. A length-matching check that reports millimeters would
 call that board matched. It is not.
 
@@ -107,7 +107,7 @@ but the comparison is in time.
 
 Also to account for:
 
-- **Via delay.** Small but not zero — roughly 1–3 ps for a through via in a 1.6 mm board,
+- **Via delay.** Small but not zero: roughly 1–3 ps for a through via in a 1.6 mm board,
   plus the layer transition. A net with three more vias than its neighbor is skewed.
 - **Covered microstrip.** Solder mask over an outer trace raises ε_eff by ~0.1–0.3, worth a
   few ps over a long run. Second-order; note it and move on.
@@ -152,7 +152,7 @@ In order of confidence:
 Bit swapping within a byte lane and byte-lane swapping are both legal and common, so lane
 membership must come from the grouping, never from assuming DQ0–7 is lane 0.
 
-Whichever route identified a group must be **stated in the finding** — "grouped by netclass
+Whichever route identified a group must be **stated in the finding**: "grouped by netclass
 `DDR_DQ0`" versus "grouped by name pattern" is the difference between a user trusting the
 result and dismissing it.
 
@@ -167,7 +167,7 @@ that is the extra inner-layer run at (72.1, 40.3)" is actionable. "Net too long"
 
 Fly-by nets have several receivers, so the check runs per receiver and reports the worst.
 
-### 3.4 Tolerances — the settings this needs
+### 3.4 Tolerances: the settings this needs
 
 Defaults have to be *defaults*, not gospel; every board has its own budget. As a starting
 point, expressed in time:
@@ -179,7 +179,7 @@ point, expressed in time:
 | address/command/control, to CK | ±25 ps | ±3.6 mm |
 | byte lane to byte lane | disabled | — |
 
-Per-group overrides are essential — a 1600 MT/s design and a 3200 MT/s design do not share
+Per-group overrides are essential: a 1600 MT/s design and a 3200 MT/s design do not share
 a budget, and someone will always have a reason to loosen one lane.
 
 ---
@@ -194,12 +194,12 @@ To compute the characteristic impedance of a trace:
 |---|---|
 | trace width | **yes**, per segment |
 | copper thickness | **yes**, from the stackup |
-| height to the reference plane | **yes** — stackup thicknesses plus the existing nearest-plane logic |
-| which plane is the reference | **yes** — `check_plane_gaps` already resolves this |
-| dielectric εr | **sometimes** — from the file, or assumed 4.4 and flagged |
+| height to the reference plane | **yes**: stackup thicknesses plus the existing nearest-plane logic |
+| which plane is the reference | **yes**: `check_plane_gaps` already resolves this |
+| dielectric εr | **sometimes**: from the file, or assumed 4.4 and flagged |
 | whether it is microstrip or stripline | derivable: is there a plane on both sides? |
-| differential spacing | **no** — needs pair identification and a per-segment gap measurement |
-| solder mask coverage | partially — mask layers are in the stackup |
+| differential spacing | **no**: needs pair identification and a per-segment gap measurement |
+| solder mask coverage | partially: mask layers are in the stackup |
 
 So single-ended impedance is **mostly computable today** and simply is not computed.
 Differential needs pair awareness first.
@@ -216,8 +216,8 @@ error means the check cannot honestly flag a 44 Ω trace. Two consequences:
 
 - The check should report **impedance with an uncertainty**, and only flag what is outside
   tolerance *including* that uncertainty.
-- When εr was assumed rather than read from the file, uncertainty rises sharply — εr 4.2 vs
-  4.6 moves impedance by several ohms — and the finding must say the number rests on an
+- When εr was assumed rather than read from the file, uncertainty rises sharply (εr 4.2 vs
+  4.6 moves impedance by several ohms), and the finding must say the number rests on an
   assumption.
 
 A 2D quasi-static field solver would remove most of the model error and is the natural
@@ -244,7 +244,7 @@ The parsing is sound. What is missing sits around it:
 2. **No copper roughness.** Affects loss, not impedance much. Matters for the solve, not for
    these checks. Worth a settings field for completeness.
 3. **The Gerber path has no εr at all.** Impedance checks must be disabled, not guessed, on
-   a Gerber-only board — with a message saying why and what to supply.
+   a Gerber-only board, with a message saying why and what to supply.
 4. **Prepreg vs core is not distinguished** where the file gives it. Different εr, and it
    changes which dielectric height applies to which layer pair.
 
@@ -272,20 +272,20 @@ always run, thresholds are module constants, and the one parameter that exists
 Two homes, because they serve different needs:
 
 - **Project settings**, in the database, edited in the UI. Convenient, immediate.
-- **A file committed with the board** — `emi.rules.yaml` beside the `.kicad_pcb`. This is
+- **A file committed with the board**: `emi.rules.yaml` beside the `.kicad_pcb`. This is
   what makes the tool usable in CI: the rules travel with the design, change under review,
   and a regression is a diff. Given there is already an EMI CI path being built, this
   matters more than the UI copy.
 
 Precedence, most specific last: built-in defaults → project settings → committed file → run
 parameters. Every effective value should carry **where it came from**, and findings should
-be able to say "threshold 25 ps, from emi.rules.yaml" — otherwise a surprising result costs
+be able to say "threshold 25 ps, from emi.rules.yaml". Otherwise a surprising result costs
 an hour of hunting.
 
 ### 5.3 Shape
 
 Rules need **stable ids** (`plane-gap`, `ddr-skew`, `impedance-target`) that settings key
-off, decoupled from their titles — the existing rule names are already suitable. A rule
+off, decoupled from their titles; the existing rule names are already suitable. A rule
 catalog endpoint listing id, title, what it checks, its parameters and their defaults lets
 the UI build a settings page without hard-coding any of it, and gives the docs one source.
 
@@ -303,7 +303,7 @@ Each step is useful on its own, and each is a prerequisite for the next.
    is already shipped: the net list's length column currently means something other than what
    users assume.*
 2. **Per-layer delay from the stackup.** Microstrip vs stripline, ε_eff, via delay. Replaces
-   the global `velocity_factor = 0.5` — which also silently affects the existing
+   the global `velocity_factor = 0.5`, which also silently affects the existing
    wavelength-based `radiator` check, so this makes a shipped rule more accurate too.
 3. **Settings framework.** Needed before any rule with a tolerance ships, or the tolerances
    become constants that have to be dug out later.

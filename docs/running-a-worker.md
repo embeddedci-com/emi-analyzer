@@ -1,7 +1,7 @@
 # Running a worker yourself
 
 The app starts its own worker in Docker, and most people never need this page. Read on if you
-want the analysis to run somewhere else — a bigger machine, a machine without Docker, or the
+want the analysis to run somewhere else: a bigger machine, a machine without Docker, or the
 worker's source code while you change it.
 
 ## What a worker is
@@ -14,7 +14,7 @@ It **dials out**. The app never connects to a worker: the worker opens a WebSock
 says what it can do, and is handed runs over that connection.
 
 It **keeps nothing**. Its identity is a key in its environment, and its disk is one scratch
-directory per run, deleted when the run ends. Stop it, restart it, run two — there is no state to
+directory per run, deleted when the run ends. Stop it, restart it, run two; there is no state to
 migrate.
 
 ## 1. Start the app without its own worker
@@ -162,7 +162,7 @@ revoked. Issue a new one with `emi-local -issue-key` against the data folder the
 **It registers but never gets work.** Check what it advertised in the worker log. A worker
 without openEMS is not offered solves; a worker whose memory is too small for a solve is skipped
 rather than handed a run it would die on. Full-wave solves are also refused entirely unless the
-app was started with `-experimental full-wave` — see [known-issues.md](known-issues.md).
+app was started with `-experimental full-wave` (see [known-issues.md](known-issues.md)).
 
 **A solve places no capacitors.** The worker log says "openEMS does not model a series lumped
 R-L-C": the worker runs openEMS 0.0.35 (an `apt` image or a distribution package). Use the
