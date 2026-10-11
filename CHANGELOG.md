@@ -14,6 +14,28 @@ The KiCad plugin is versioned and released separately; see
 - Homebrew cask for macOS: `brew install --cask embeddedci-com/tap/emi-analyzer` installs the
   app without the Gatekeeper steps the `.dmg` needs. Updated on every release.
 
+### Changed
+
+Findings now weigh what a net carries and what a pin is, so a board's critical list opens with
+its real problems. On a 4-layer reference board (BenchPod digital) the criticals went from 27 to
+4, every one of them on a fast net; on its analog board from 20 to 1.
+
+- Long nets, return vias and plane gaps follow what a net's name says it carries: clocks and
+  fast buses (SPI, RMII, USB, Ethernet, DDR, PSRAM) as before; slow or static lines (I2C,
+  resets, enables, status, sense and LED lines, boot straps, MDIO, UART flow control) are
+  advisory; a net whose name says nothing is at most a warning for its length.
+- On a board with reference planes, a long fast net is critical only where its return path is
+  also broken (a wide plane gap or a layer change far from a return via); over an intact plane
+  its loop stays small.
+- Decoupling reads the pin types and names KiCad writes from the schematic: a current monitor's
+  sense input, an LDO's enable, an op-amp input, an analog switch pin or a GPIO on a net named
+  like a rail no longer needs a capacitor. Boards without pin data behave as before.
+- A net joining only pins of one part (a USB charging port's D+ to D- strap) is not checked as
+  a signal; chassis and shield nets (CHSGND, CGND, SHIELD) count as ground.
+- Length matching: no address/command group without a DRAM on the board (A0 and CS0 are also
+  mux and SPI pins), and no picosecond skew budget for CAN, RS-485, RS-422 or LIN pairs.
+- When a check has more findings than it lists, the most severe are kept.
+
 ## [0.3.0] - 2026-09-30
 
 ### Added

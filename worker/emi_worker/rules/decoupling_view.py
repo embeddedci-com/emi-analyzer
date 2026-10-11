@@ -34,7 +34,7 @@ from ..kicad.board import BoardModel, Pad
 from ..kicad.geometry import ring_area
 from . import pdn
 from .decoupling import CAP_RE, IC_RE, cap_farads
-from .model import RuleContext, classify_net
+from .model import RuleContext, classify_net, is_supply_pin
 from .planes import plane_layers
 
 log = logging.getLogger(__name__)
@@ -427,7 +427,7 @@ def build(ctx: RuleContext) -> dict:
             continue
         pins: dict[str, list[Pad]] = defaultdict(list)
         for p in pads:
-            if p.net and classify_net(p.net) == "power":
+            if p.net and classify_net(p.net) == "power" and is_supply_pin(p):
                 pins[p.net].append(p)
         ic_nets = {p.net for p in pads if p.net}
         for rail, supply_pins in sorted(pins.items()):

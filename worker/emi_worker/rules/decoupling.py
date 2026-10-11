@@ -22,7 +22,7 @@ import re
 from collections import defaultdict
 from typing import Iterator
 
-from .model import Finding, RuleContext, classify_net
+from .model import Finding, RuleContext, classify_net, is_supply_pin
 from .planes import severity
 
 IC_RE = re.compile(r"^(U|IC)\d", re.I)
@@ -124,7 +124,9 @@ def check_decoupling(ctx: RuleContext) -> Iterator[Finding]:
             continue
         pins: dict[str, list] = defaultdict(list)
         for p in pads:
-            if p.net and classify_net(p.net) == "power":
+            # A pin on a supply net that does not draw from it -- a sense input, a GPIO on a
+            # net named like a rail -- needs no capacitor (see is_supply_pin).
+            if p.net and classify_net(p.net) == "power" and is_supply_pin(p):
                 pins[p.net].append(p)
 
         for net, supply_pins in sorted(pins.items()):

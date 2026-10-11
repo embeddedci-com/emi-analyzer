@@ -149,6 +149,13 @@ class Pad:
     #: number is the one thing on a board that says which part this is rather than what
     #: kind, so the component library tries it before value and package.
     part_numbers: dict[str, str] = field(default_factory=dict)
+    #: The symbol pin behind the pad, as KiCad writes it from the schematic: its name
+    #: ("VDD", "PG3", "IN+") and electrical type ("power_in", "input", "passive"). Empty when
+    #: the board was never updated from a schematic, and always for a Gerber set. They are
+    #: what says whether an IC pin on a supply-named net draws from it (see
+    #: rules.model.is_supply_pin): a current monitor's sense input on +5V does not.
+    pin_function: str = ""
+    pin_type: str = ""
 
     @property
     def is_through(self) -> bool:
@@ -580,6 +587,8 @@ def _parse_footprints(root: Node, nets: _NetResolver, warnings: list[str],
                 value=value,
                 footprint=footprint,
                 part_numbers=part_numbers,
+                pin_function=text(pad, "pinfunction", default=""),
+                pin_type=text(pad, "pintype", default=""),
             ))
     return pads
 

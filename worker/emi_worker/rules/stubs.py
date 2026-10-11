@@ -18,24 +18,13 @@ import re
 from itertools import combinations
 from typing import Iterator
 
-from .model import Finding, RuleContext, classify_net
+from .model import FAST_NET, Finding, RuleContext, classify_net
 from .planes import severity
 
 RULE = "test-point-stub"
 
 TP_REF = re.compile(r"^TP\d", re.I)
 TP_HINT = re.compile(r"test_?point|testpad|test_?pad", re.I)
-#: Names that say a net carries fast edges. Word-ish matching: "SCK" in "/SPI1_SCK", not in
-#: "/BACKLIGHT".
-FAST_NET = re.compile(
-    r"(^|[/_.-])(clk\w*|\w*clk|sck|sclk|mclk|bclk|lrclk|mosi|miso|copi|cipo|sdo|sdi|spi\w*|"
-    r"qspi\w*|ospi\w*|sdio\w*|sd_\w*|mmc\w*|emmc\w*|cmd|dat[0-7]|usb\w*|d[+-]|dp|dm|"
-    r"eth\w*|rgmii\w*|rmii\w*|mdi\w*|tx_en|rx_dv|tx_clk|rx_clk|ref_clk|hdmi\w*|"
-    r"lvds\w*|mipi\w*|csi\w*|dsi\w*|pcie\w*|sata\w*|ddr\w*|dq\w*|dqs\w*)($|[/_.+-])",
-    re.I,
-)
-
-
 def _is_test_point(pads) -> bool:
     p = pads[0]
     return bool(TP_REF.match(p.ref) or TP_HINT.search(f"{p.footprint} {p.value}"))
