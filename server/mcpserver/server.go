@@ -198,4 +198,6 @@ func (s *Server) register(srv *mcp.Server) {
 			"the findings marked on the board. open=true also opens it in their browser.",
 		Annotations: &mcp.ToolAnnotations{Title: "Open in the app", OpenWorldHint: &no, DestructiveHint: &no, IdempotentHint: true},
 	}, s.openInApp)
+
+	s.registerESDCables(srv)
 }

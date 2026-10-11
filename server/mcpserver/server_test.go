@@ -234,7 +234,7 @@ func TestToolsAndInstructions(t *testing.T) {
 		}
 	}
 	sort.Strings(names)
-	want := "analyze_board checks compare decoupling finding findings list_projects list_versions nets open_in_app run_status status"
+	want := "analyze_board cables checks compare decoupling esd finding findings list_projects list_versions nets open_in_app run_cables run_esd run_status status"
 	if strings.Join(names, " ") != want {
 		t.Errorf("tools = %v, want %s", names, want)
 	}

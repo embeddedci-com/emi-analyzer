@@ -304,3 +304,107 @@ func TestCatalogueMatchesTheWebapps(t *testing.T) {
 		t.Fatal("server/mcpserver/ruleCatalogue.json differs from the webapp's: run python worker/scripts/export_rule_catalogue.py")
 	}
 }
+
+// The cable types offered are the worker's library, unchanged.
+func TestCableLibraryMatchesTheWorkers(t *testing.T) {
+	worker, err := os.ReadFile("../../worker/emi_worker/cables/library.json")
+	if err != nil {
+		t.Skip("no worker checkout beside the server:", err)
+	}
+	if !bytes.Equal(worker, cableLibraryJSON) {
+		t.Fatal("server/mcpserver/cableLibrary.json differs from worker/emi_worker/cables/library.json: copy it")
+	}
+}
+
+// run adds a finished run of a kind on a board, with artifacts.
+func (a *fakeApp) run(projectID, boardID string, kind emi.RunKind, artifacts map[string]any) string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.n++
+	r := &emi.Run{ID: fmt.Sprintf("k%d", a.n), ProjectID: projectID, BoardID: boardID, Kind: kind, Status: emi.StatusDone,
+		CreatedAt: time.Date(2026, 10, 2, 0, 0, 0, 0, time.UTC).Add(time.Duration(a.n) * time.Hour)}
+	a.runs[r.ID] = r
+	a.artifacts[r.ID] = map[string][]byte{}
+	for name, v := range artifacts {
+		raw, _ := json.Marshal(v)
+		a.artifacts[r.ID][name] = raw
+	}
+	return r.ID
+}
+
+func esdLineJSON(net, conn string, pin *float64, connector float64, ic bool, clamp bool) map[string]any {
+	l := map[string]any{"net": net, "connector": map[string]any{"ref": conn, "pad": "1"},
+		"geometry": map[string]any{"routed": true, "clamp_ground_mm": 0.5, "clamp_ground_nh": 0.65},
+		"variants": []any{
+			map[string]any{"id": "as_laid_out", "v_pin_peak_v": pin, "v_connector_peak_v": connector, "unclamped": !clamp},
+			map[string]any{"id": "clamp_at_connector", "v_pin_peak_v": pin, "v_connector_peak_v": connector / 2},
+		}}
+	if ic {
+		l["ic"] = map[string]any{"ref": "U1", "pad": "3", "supply_v": 3.3}
+	}
+	if clamp {
+		l["clamp"] = map[string]any{"ref": "D1", "part": "USBLC6", "model": "table"}
+	}
+	return l
+}
+
+func TestESDAndCables(t *testing.T) {
+	app := newFakeApp(t)
+	p := app.project("amp")
+	board, _ := app.version(p, emi.StatusDone, map[string]any{"rules.json": rulesJSON()})
+	v := func(x float64) *float64 { return &x }
+	app.run(p, board, emi.RunKindTransient, map[string]any{"transient.json": map[string]any{
+		"level": 4, "kv": 8, "lines": []any{
+			esdLineJSON("SHIELDED", "J1", v(12), 30, true, true),
+			esdLineJSON("NOIC", "J2", nil, 9000, false, false),
+			esdLineJSON("SDA", "J3", v(120), 8000, true, false),
+		}}})
+	app.run(p, board, emi.RunKindCable, map[string]any{"cables.json": map[string]any{
+		"cables": []any{
+			map[string]any{"ref": "J7", "cable_id": "ethernet-utp", "cable_name": "Ethernet, unshielded", "length_m": 2,
+				"declared_none": false, "radiation_peaks_hz": []float64{3.6e7},
+				"tightest": map[string]any{"frequency_hz": 3.6e7, "max_current_dbua": 9.5, "limit_dbuv_per_m": 40}},
+			map[string]any{"ref": "H1", "cable_id": nil, "declared_none": true},
+		},
+		"unassigned": []any{map[string]any{"ref": "USB1", "footprint": "USB-A", "suggested": "usb2-shielded", "reason": "contains 'usb'"}},
+	}})
+	cs := connect(t, finder{e: localapp.Endpoint{URL: app.srv.URL}})
+
+	var e esdOut
+	if msg := call(t, cs, "esd", map[string]any{"project_id": p}, &e); msg != "" {
+		t.Fatal(msg)
+	}
+	var order []string
+	for _, l := range e.Worst {
+		order = append(order, l.Net)
+	}
+	// An IC pin far over its supply first, then the highest peak elsewhere.
+	if strings.Join(order, " ") != "SDA SHIELDED NOIC" || e.Unclamped != 2 || e.Level != "level 4, 8 kV contact" {
+		t.Fatalf("esd = %+v", e)
+	}
+	if w := e.Worst[0]; w.Peak != "120 V at the pin" || w.OverPinV != 116.7 || w.IC != "U1.3 (3.3 V supply)" || !w.Unclamped {
+		t.Errorf("worst = %+v", w)
+	}
+	if w := e.Worst[1]; w.Clamp != "D1 USBLC6 (table model)" || w.Layout != "ground path 0.5 mm (0.65 nH)" {
+		t.Errorf("clamped = %+v", w)
+	}
+
+	var c cablesOut
+	if msg := call(t, cs, "cables", map[string]any{"project_id": p}, &c); msg != "" {
+		t.Fatal(msg)
+	}
+	if len(c.Cables) != 2 || c.Cables[0].Connector != "J7" || c.Cables[0].Tightest != "9.5 dBuA (2.99 uA) at 36 MHz" ||
+		c.Cables[1].Note != "never cabled" || len(c.Unassigned) != 1 || !strings.Contains(c.Unassigned[0], "suggested usb2-shielded") {
+		t.Errorf("cables = %+v", c)
+	}
+	var types cablesOut
+	call(t, cs, "cables", nil, &types)
+	if len(types.Types) != 9 || types.Cables != nil {
+		t.Errorf("types only = %+v", types)
+	}
+	empty := app.project("empty")
+	app.version(empty, emi.StatusDone, map[string]any{"rules.json": rulesJSON()})
+	if msg := call(t, cs, "esd", map[string]any{"project_id": empty}, &esdOut{}); !strings.Contains(msg, "start one with run_esd") {
+		t.Errorf("no esd run: %q", msg)
+	}
+}

@@ -189,6 +189,15 @@ func (c *Client) ListRuns(ctx context.Context, projectID string) ([]emi.Run, err
 	return got.Runs, err
 }
 
+// CreateRun starts a run of a kind on a version of a project: an ESD simulation
+// ("transient") or a cable budget ("cable"), with the params that kind takes.
+func (c *Client) CreateRun(ctx context.Context, projectID, boardID string, kind emi.RunKind, params any) (emi.Run, error) {
+	var r emi.Run
+	err := c.post(ctx, "/emi/projects/"+esc(projectID)+"/runs",
+		map[string]any{"board_id": boardID, "kind": kind, "params": params}, &r, defaultTimeout)
+	return r, err
+}
+
 // GetRun is one run, with its progress while it works.
 func (c *Client) GetRun(ctx context.Context, id string) (emi.Run, error) {
 	var r emi.Run
