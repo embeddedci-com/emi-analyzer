@@ -36,9 +36,16 @@ type Server struct {
 	// poll is how often a wait asks the app about a run.
 	poll time.Duration
 
-	mu  sync.Mutex
-	app *localapp.Endpoint
+	mu    sync.Mutex
+	app   *localapp.Endpoint
+	cache artifactCache
 }
+
+// The tool handlers' request and result types, shortened.
+type (
+	mcpRequest = mcp.CallToolRequest
+	mcpResult  = mcp.CallToolResult
+)
 
 // Finder finds the app, starting it when it is not up. *localapp.Finder is one.
 type Finder interface {
@@ -140,4 +147,55 @@ func (s *Server) register(srv *mcp.Server) {
 			"and every other run made on it.",
 		Annotations: readOnly("List versions"),
 	}, s.listVersions)
+
+	mcp.AddTool(srv, &mcp.Tool{
+		Name: "findings",
+		Description: "What the checks found in an analysis, worst first, paginated: counts by severity and by check, then " +
+			"one page of findings (id, check, severity, title, net, layer, board x/y in mm, suggested action). Filter by " +
+			"severity, check, net, layer or a point on the board. Name the analysis with run_id, or project_id for its " +
+			"newest analysed version.",
+		Annotations: readOnly("Findings"),
+	}, s.findings)
+
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:        "finding",
+		Description: "One finding in full: its explanation, what the check looks for, and how to suppress it on purpose in emi.rules.yaml.",
+		Annotations: readOnly("Finding detail"),
+	}, s.finding)
+
+	mcp.AddTool(srv, &mcp.Tool{
+		Name: "decoupling",
+		Description: "Supply decoupling per rail and IC: the impedance the capacitors give against a target, where it falls " +
+			"short, and the worker's recommended changes. Without rail or ic: one line per rail. With rail or ic: each IC's " +
+			"capacitors (distance, ground vias, useful frequency), gaps and recommendations.",
+		Annotations: readOnly("Decoupling"),
+	}, s.decoupling)
+
+	mcp.AddTool(srv, &mcp.Tool{
+		Name: "nets",
+		Description: "Per-net routing from the analysis: copper and pad-to-pad length, vias, delay, widths, differential " +
+			"partner, and skew against its length-matching group's reference and tolerance. Filter by name, group, or out of tolerance.",
+		Annotations: readOnly("Nets"),
+	}, s.nets)
+
+	mcp.AddTool(srv, &mcp.Tool{
+		Name: "compare",
+		Description: "What changed between two analysed versions of a project: findings fixed, new and unchanged, grouped " +
+			"by check (a finding that moved a little is the same finding), and the nets whose length or vias changed. " +
+			"Defaults to the two newest analysed versions.",
+		Annotations: readOnly("Compare versions"),
+	}, s.compareVersions)
+
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:        "checks",
+		Description: "The checks the analyzer runs, with their settings and defaults, and how to change them in emi.rules.yaml.",
+		Annotations: readOnly("Checks"),
+	}, s.checks)
+
+	mcp.AddTool(srv, &mcp.Tool{
+		Name: "open_in_app",
+		Description: "A link to a project in the EMI Analyzer app (a version, or the comparison of two), where the user sees " +
+			"the findings marked on the board. open=true also opens it in their browser.",
+		Annotations: &mcp.ToolAnnotations{Title: "Open in the app", OpenWorldHint: &no, DestructiveHint: &no, IdempotentHint: true},
+	}, s.openInApp)
 }

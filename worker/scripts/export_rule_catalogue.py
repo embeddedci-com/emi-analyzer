@@ -3,7 +3,8 @@
 The front page lists what the analyzer checks, and the findings panel names each rule. Both
 read webapp/src/lib/ruleCatalogue.json, generated from the worker's own catalogue so that the
 list a user reads cannot drift from the checks that actually run -- tests/test_rules_config.py
-fails if the file is stale.
+fails if the file is stale. The MCP server embeds a copy, server/mcpserver/ruleCatalogue.json
+(Go cannot embed a file outside its module); its test fails if the copy differs.
 
     python scripts/export_rule_catalogue.py
 """
@@ -20,6 +21,7 @@ from emi_worker.rules.settings import board_catalogue, catalogue  # noqa: E402
 OUT = HERE.parents[2] / "webapp" / "src" / "lib" / "ruleCatalogue.json"
 #: The board-wide settings, for the settings view in the app.
 BOARD_OUT = OUT.with_name("boardSettings.json")
+MCP_OUT = HERE.parents[2] / "server" / "mcpserver" / "ruleCatalogue.json"
 
 
 def render(data: list | None = None) -> str:
@@ -28,5 +30,6 @@ def render(data: list | None = None) -> str:
 
 if __name__ == "__main__":
     OUT.write_text(render(), encoding="utf-8")
+    MCP_OUT.write_text(render(), encoding="utf-8")
     BOARD_OUT.write_text(render(board_catalogue()), encoding="utf-8")
-    print(f"wrote {OUT} and {BOARD_OUT.name}")
+    print(f"wrote {OUT}, {BOARD_OUT.name} and {MCP_OUT}")

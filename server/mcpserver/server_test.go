@@ -33,11 +33,13 @@ type fakeApp struct {
 	reads    map[string]int
 	polls    int
 	n        int
+	// artifacts by run id, then name.
+	artifacts map[string]map[string][]byte
 }
 
 func newFakeApp(t *testing.T) *fakeApp {
 	t.Helper()
-	a := &fakeApp{runs: map[string]*emi.Run{}, reads: map[string]int{}, polls: 2}
+	a := &fakeApp{runs: map[string]*emi.Run{}, reads: map[string]int{}, polls: 2, artifacts: map[string]map[string][]byte{}}
 	mux := http.NewServeMux()
 	j := func(w http.ResponseWriter, code int, v any) {
 		w.WriteHeader(code)
@@ -121,6 +123,10 @@ func newFakeApp(t *testing.T) *fakeApp {
 			return
 		}
 		a.reads[run.ID]++
+		if run.Status == emi.StatusDone || run.Status == emi.StatusFailed {
+			j(w, 200, run)
+			return
+		}
 		if a.reads[run.ID] > a.polls {
 			run.Status = emi.StatusDone
 			run.Progress = &emi.Progress{Stage: "done", Pct: 100}
@@ -130,6 +136,21 @@ func newFakeApp(t *testing.T) *fakeApp {
 			run.Progress = &emi.Progress{Stage: "parse", Pct: 40, Message: "reading the board"}
 		}
 		j(w, 200, run)
+	})
+	mux.HandleFunc("GET /api/emi/runs/{id}/artifacts/{name...}", func(w http.ResponseWriter, r *http.Request) {
+		a.mu.Lock()
+		_, ok := a.artifacts[r.PathValue("id")][r.PathValue("name")]
+		a.mu.Unlock()
+		if !ok {
+			j(w, 404, map[string]string{"error": "artifact not found"})
+			return
+		}
+		j(w, 200, map[string]any{"url": "/blob/art/" + r.PathValue("id") + "/" + r.PathValue("name")})
+	})
+	mux.HandleFunc("GET /blob/art/{id}/{name...}", func(w http.ResponseWriter, r *http.Request) {
+		a.mu.Lock()
+		defer a.mu.Unlock()
+		_, _ = w.Write(a.artifacts[r.PathValue("id")][r.PathValue("name")])
 	})
 	a.srv = httptest.NewServer(mux)
 	t.Cleanup(a.srv.Close)
@@ -213,7 +234,7 @@ func TestToolsAndInstructions(t *testing.T) {
 		}
 	}
 	sort.Strings(names)
-	want := "analyze_board list_projects list_versions run_status status"
+	want := "analyze_board checks compare decoupling finding findings list_projects list_versions nets open_in_app run_status status"
 	if strings.Join(names, " ") != want {
 		t.Errorf("tools = %v, want %s", names, want)
 	}
