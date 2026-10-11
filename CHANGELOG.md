@@ -14,6 +14,11 @@ The KiCad plugin is versioned and released separately; see
 - Homebrew cask for macOS: `brew install --cask embeddedci-com/tap/emi-analyzer` installs the
   app without the Gatekeeper steps the `.dmg` needs. Updated on every release.
 
+- An MCP server for coding agents, `emi-local mcp`: analyze a board from disk, read the findings,
+  decoupling, nets, ESD and cable results, and compare versions, against the app on your
+  computer. The `emi-analyzer` plugin for Claude Code (in the `embeddedci-com/benchpod-mcp`
+  marketplace) runs it and adds a review skill. See "Using it from Claude Code" in the README.
+
 ### Changed
 
 Findings now weigh what a net carries and what a pin is, so a board's critical list opens with

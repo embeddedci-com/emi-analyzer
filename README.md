@@ -33,13 +33,14 @@ Full-wave simulation of a whole region (openEMS) and conducted emissions are bui
 5. [Step 4: Analyze a board](#step-4-analyze-a-board)
    - [Sharing results](#sharing-results)
 6. [Using it from KiCad](#using-it-from-kicad)
-7. [Running without the desktop app](#running-without-the-desktop-app)
-8. [Running in the background](#running-in-the-background)
-9. [Where your data is](#where-your-data-is)
-10. [Updating and uninstalling](#updating-and-uninstalling)
-11. [Troubleshooting](#troubleshooting)
-12. [Experimental features](#experimental-features)
-13. [More documentation](#more-documentation)
+7. [Using it from Claude Code](#using-it-from-claude-code)
+8. [Running without the desktop app](#running-without-the-desktop-app)
+9. [Running in the background](#running-in-the-background)
+10. [Where your data is](#where-your-data-is)
+11. [Updating and uninstalling](#updating-and-uninstalling)
+12. [Troubleshooting](#troubleshooting)
+13. [Experimental features](#experimental-features)
+14. [More documentation](#more-documentation)
 
 ---
 
@@ -247,18 +248,18 @@ running in the background.
    one of:
    - a `.kicad_pcb` file;
    - a zipped KiCad project;
-   - a zip of Gerber files **including the drill file and an IPC-D-356 netlist** — Gerbers carry
+   - a zip of Gerber files **including the drill file and an IPC-D-356 netlist**: Gerbers carry
      no net names on their own.
 
    No board to hand? Click **Try the sample board**.
 2. The board appears within a few seconds, with each finding marked and numbered on it and the
    **Findings** tab on the right. Click a marker to open its finding, or a finding to zoom to it.
 3. Look at the other tabs:
-   - **ESD** — simulate a discharge into a connector's lines, and compare the voltage at the IC pin
+   - **ESD**: simulate a discharge into a connector's lines, and compare the voltage at the IC pin
      with the clamp where it is against the clamp moved to the connector.
-   - **Cables** — the board's connectors, each with a suggested cable. Click **Get budgets** to
+   - **Cables**: the board's connectors, each with a suggested cable. Click **Get budgets** to
      see each cable's common-mode budget.
-   - **Board** — stackup, nets and layer settings.
+   - **Board**: stackup, nets and layer settings.
 4. Opening the same file again takes you to the existing project instead of creating a new one.
 5. Changed the layout? In the **⋯** menu, click **Upload a new version** and pick the changed file.
    It becomes version 2 of the same board, and a version picker appears in the header.
@@ -311,6 +312,47 @@ then install **EMI Analyzer** from it. Details and troubleshooting:
 (**Minimize to tray** on Windows and Linux), or close its window, and it carries on serving the
 plugin with your boards, results and worker untouched. Open it again, or quit it, from that
 icon's menu. The plugin also starts the app by itself when it is not running.
+
+## Using it from Claude Code
+
+The app includes an MCP server, `emi-local mcp`, so a coding agent can review a board for you:
+analyze it, read what the checks found, judge each finding against the board, and compare two
+versions after a fix. It talks to the app on your computer (starting it when it is not up), so
+the boards it analyzes show up in the app's window too. Nothing leaves your computer.
+
+For Claude Code, add the EmbeddedCI plugin marketplace and install the plugin:
+
+```bash
+claude plugin marketplace add embeddedci-com/benchpod-mcp
+```
+
+```bash
+claude plugin install emi-analyzer@benchpod-mcp
+```
+
+Then ask, for example, "review ~/boards/amp/amp.kicad_pcb for EMI problems". The plugin's
+`emi-review` skill has the agent check each finding against the board (what a net carries, what
+a pin is, whether a connector leaves the enclosure) and report the real problems with fixes.
+
+Any other MCP client can run the server directly: the command is `emi-local mcp`, on macOS
+`"/Applications/EMI Analyzer.app/Contents/MacOS/emi-local" mcp`. It reads two environment
+variables: `EMI_ANALYZER_URL` to use an app you started yourself (and never start one), and
+`EMI_ANALYZER_MCP_STATE` to keep its memory of which project each board file became somewhere
+other than the app's config folder.
+
+| Tool | What it does |
+|---|---|
+| `status` | The app, its version and data folder, and how its Docker worker is doing |
+| `analyze_board` | Analyze a `.kicad_pcb` (with its `.kicad_pro` and `emi.rules.yaml`), a project folder, a Gerber folder or a `.zip`; each new upload is a version of the board's project |
+| `run_status` | A run's progress, waiting for it when asked |
+| `list_projects`, `list_versions` | Projects, and a project's versions with their analyses |
+| `findings`, `finding` | What the checks found, filtered and paginated, and one finding in full |
+| `decoupling`, `nets` | Supply impedance per rail and IC, and per-net lengths, delays and skew |
+| `compare` | What changed between two versions: findings fixed and new, nets whose length changed |
+| `checks` | The checks, their settings, and the `emi.rules.yaml` format |
+| `run_esd`, `esd` | Start and read an ESD simulation of the lines that leave the board |
+| `run_cables`, `cables` | Start and read a cable budget for the board's connectors |
+| `open_in_app` | A link to a version or a comparison in the app |
 
 ---
 
@@ -448,7 +490,7 @@ run them, not just that the buttons are hidden.
 
 | Name | What it enables | Why it is off |
 |---|---|---|
-| `full-wave` | openEMS full-wave simulation of a board region, hotspot maps, the far field, cable emissions and the compliance estimate — the Solve, Drivers, Components, Results and Compliance tabs | It runs, and a test board solves end to end. What has not been done is verifying any of it on a real board, or at the record length a radiated result needs. Treat anything it produces as unchecked. See [known issues](docs/known-issues.md). |
+| `full-wave` | openEMS full-wave simulation of a board region, hotspot maps, the far field, cable emissions and the compliance estimate: the Solve, Drivers, Components, Results and Compliance tabs | It runs, and a test board solves end to end. What has not been done is verifying any of it on a real board, or at the record length a radiated result needs. Treat anything it produces as unchecked. See [known issues](docs/known-issues.md). |
 | `conducted` | A conducted-emissions scan of the power input with ngspice, on the Conducted tab: two LISNs, the input filter as laid out and each buck regulator as a current source, against FCC 15.107. Differential mode only | The LISN, a buck's input ripple and an LC filter match closed forms, but no board has been compared with a measurement, and regulator settings are assumed until you enter them. See [verification](docs/verification/conducted-emissions.md). |
 
 To try one anyway, set `EMI_EXPERIMENTAL` to its name where the app is started (a
