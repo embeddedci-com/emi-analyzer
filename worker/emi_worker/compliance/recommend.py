@@ -61,7 +61,7 @@ GENERAL: dict[str, tuple[str, ...]] = {
     "conducted": (
         "A filter at the power entry is what the conducted scan measures through; without one, "
         "the converter's switching current reaches the supply line directly.",
-        "Reduce the switch node's copper area to what the thermal design needs — it is the "
+        "Reduce the switch node's copper area to what the thermal design needs: it is the "
         "capacitance to everything else that carries common-mode current.",
     ),
 }

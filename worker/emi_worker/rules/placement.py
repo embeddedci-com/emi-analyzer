@@ -110,8 +110,8 @@ def check_copper_islands(ctx: RuleContext) -> Iterator[Finding]:
             detail=(
                 f"This is {what}, but no via, pad or track joins it to the rest of the net. "
                 f"Floating copper picks up and re-radiates whatever couples onto it, with no "
-                f"path to drain it to ground. Remove it — KiCad's zone setting 'Remove islands' "
-                f"does this on refill — or stitch it to ground with a via."
+                f"path to drain it to ground. Remove it (KiCad's zone setting 'Remove islands' "
+                f"does this on refill) or stitch it to ground with a via."
             ),
             net=z.net, layer=z.layer, x=x, y=y,
         )

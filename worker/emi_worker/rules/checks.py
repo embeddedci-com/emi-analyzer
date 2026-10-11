@@ -686,7 +686,7 @@ def check_length_matching(ctx: RuleContext) -> Iterator[Finding]:
                 title=f"{net} is {abs(skew):.0f} ps {longer} than {group.reference}",
                 detail=(
                     f"In {group.name}, {net} arrives {abs(skew):.0f} ps {longer} than its "
-                    f"reference {group.reference} — about {abs(mm):.1f} mm of trace. The "
+                    f"reference {group.reference}, about {abs(mm):.1f} mm of trace. The "
                     f"budget is ±{tol:.0f} ps ({_describe_tolerance(ctx, group)}). "
                     f"{_path_summary(ctx, net)} "
                     f"Group identified by {group.source}."

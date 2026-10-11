@@ -117,12 +117,12 @@ class Cable:
         if self.shield == "none":
             return "unshielded"
         if self.shield_bond == "none":
-            return f"{self.shield} shield, not bonded — electrically an unshielded cable"
+            return f"{self.shield} shield, not bonded, so electrically an unshielded cable"
         if self.shield_bond == "pigtail":
             return (
                 f"{self.shield} shield, pigtail bonded"
                 + (f" ({self.pigtail_mm:g} mm)" if self.pigtail_mm else "")
-                + " — the pigtail's inductance is what limits it"
+                + "; the pigtail's inductance is what limits it"
             )
         return f"{self.shield} shield, 360° bonded"
 

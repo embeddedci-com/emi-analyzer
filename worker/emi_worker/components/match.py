@@ -53,7 +53,7 @@ class PackageMatch:
         if not self.ambiguous:
             return f"{self.imperial} (imperial), {self.metric} metric"
         return (
-            f"{self.imperial} — read as imperial. The footprint name carries one code and "
+            f"{self.imperial}, read as imperial. The footprint name carries one code and "
             f"no system, and metric {self.imperial} would be imperial "
             f"{_METRIC_TO_IMPERIAL.get(self.imperial, '?')} instead"
         )

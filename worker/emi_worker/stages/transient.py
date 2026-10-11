@@ -34,8 +34,8 @@ ASSUMPTIONS = [
     f"The discharge is the {waveforms.STANDARD} Table 3 contact-discharge current in parallel "
     f"with the generator's 330 Ω discharge resistor, so a clamped line takes almost all of it and "
     f"a high-impedance one sees about the charge voltage. Air discharge is not simulated.",
-    "IC pins are modeled generically — 5 pF, 1 Ω, a diode to each rail, the supply as 100 nF "
-    "behind 5 nH with 100 pF on-die — because an IC's internal protection is not published. "
+    "IC pins are modeled generically (5 pF, 1 Ω, a diode to each rail, the supply as 100 nF "
+    "behind 5 nH with 100 pF on-die) because an IC's internal protection is not published. "
     "Absolute voltages are estimates; compare the variants of a line with each other.",
     "Capacitors to ground on the IC's net are lumped at the IC pin with 1 nH each of mounting "
     "inductance; on a supply that is the decoupling, which is what absorbs a discharge there.",

@@ -389,7 +389,7 @@
   {
     "id": "cable-resonance",
     "title": "Cable resonance",
-    "about": "Cables assigned to connectors that are at their best as antennas at a frequency this board produces. A cable's resonances depend on the cable, not the layout, so this needs no solve — and it decides more about a radiated result than the board does.",
+    "about": "Cables assigned to connectors that are at their best as antennas at a frequency this board produces. A cable's resonances depend on the cable, not the layout, so this needs no solve, and it decides more about a radiated result than the board does.",
     "category": "Radiated emissions",
     "params": [
       {

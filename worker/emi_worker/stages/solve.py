@@ -70,7 +70,7 @@ def _params_from_run(ctx: StageContext) -> SolveParams:
     freqs = [float(f) for f in (p.get("frequencies_hz") or [])]
     if not freqs and not small_part.is_small_part(p):  # its band gives it maps
         raise StageError(
-            "no frequencies were requested. Name the clock harmonics you care about — the "
+            "no frequencies were requested. Name the clock harmonics you care about: the "
             "solver records a field map at each one."
         )
 

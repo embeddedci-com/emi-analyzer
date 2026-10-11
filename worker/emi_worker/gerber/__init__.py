@@ -35,7 +35,7 @@ def load_gerber_board(files: dict[str, bytes]) -> BoardModel:
     if not gset.copper:
         raise GerberError(
             "no copper layers were found. Upload the Gerber files together with the drill "
-            "file, the job file (.gbrjob) and an IPC-D-356 netlist — a zip of your "
+            "file, the job file (.gbrjob) and an IPC-D-356 netlist. A zip of your "
             "fabrication output folder is the easiest way."
         )
 

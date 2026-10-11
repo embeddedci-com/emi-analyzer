@@ -114,7 +114,7 @@ def wait_for_run(run_id: str, label: str) -> dict:
 
 
 def main() -> int:
-    print("\nEMI Analyzer — end-to-end smoke test")
+    print("\nEMI Analyzer: end-to-end smoke test")
     print(f"API: {API}\n")
 
     step(1, "waiting for a worker to dial in")
@@ -127,7 +127,7 @@ def main() -> int:
             break
         time.sleep(1.0)
     if not workers:
-        raise Fail("no worker connected — check `make logs-worker`")
+        raise Fail("no worker connected. Check `make logs-worker`")
     w = workers[0]
     caps = w.get("capabilities") or {}
     print(f"     worker {w['name']!r}: {caps.get('cores')} cores, "
@@ -298,7 +298,7 @@ def main() -> int:
     print(f"     converged to {run_info['final_energy_db']:.1f} dB in "
           f"{run_info['timesteps']:,} timesteps, {run_info['cells']:,} cells")
 
-    print("\n  PASS — worker dial-in, claim, progress, artifacts and presigned "
+    print("\n  PASS: worker dial-in, claim, progress, artifacts and presigned "
           "round-trip all work.\n")
     return 0
 

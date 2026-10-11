@@ -557,7 +557,7 @@ def check_reset_filter(ctx: RuleContext) -> Iterator[Finding]:
                 detail=(
                     f"{net} reaches only one IC, {ics[0]}, so nothing drives it: it is held by "
                     f"{_others(parts, net, ics[0]) or 'nothing else'}. A fast transient coupling onto "
-                    f"the trace — a burst on a cable, a discharge nearby — resets the board. Put a "
+                    f"the trace (a burst on a cable, a discharge nearby) resets the board. Put a "
                     f"capacitor to ground at the pin, typically 100 nF, or check the IC's datasheet "
                     f"for its recommended reset filter."
                 ),

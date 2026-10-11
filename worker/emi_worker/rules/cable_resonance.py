@@ -109,7 +109,7 @@ def check_cable_resonance(ctx: RuleContext) -> Iterator[Finding]:
                 rule="cable-resonance",
                 severity=severity(ctx, "cable-resonance", "warning"),
                 title=(
-                    f"{ref} — {cable.name} radiates best at {worst[1] / 1e6:.0f} MHz, where "
+                    f"{ref}: {cable.name} radiates best at {worst[1] / 1e6:.0f} MHz, where "
                     f"harmonic {round(worst[0] / fundamental)} lands"
                 ),
                 detail=(
@@ -118,7 +118,7 @@ def check_cable_resonance(ctx: RuleContext) -> Iterator[Finding]:
                     f"{round(worst[0] / fundamental)} of the {fundamental / 1e6:g} MHz clock "
                     f"is {worst[0] / 1e6:.0f} MHz, which lands on the {worst[1] / 1e6:.0f} MHz "
                     f"peak. There the cable may carry no more than {at_hit:.0f} dBµA of "
-                    f"common-mode current before it reaches the {budget.standard_id} limit — "
+                    f"common-mode current before it reaches the {budget.standard_id} limit, "
                     f"against {tightest.max_current_dbua:.0f} dBµA at its tightest point "
                     f"overall. Changing the cable length moves the peak; a common-mode choke "
                     f"at the connector moves the current."
@@ -129,7 +129,7 @@ def check_cable_resonance(ctx: RuleContext) -> Iterator[Finding]:
             yield Finding(
                 rule="cable-resonance",
                 severity=severity(ctx, "cable-resonance", "info"),
-                title=f"{ref} — {cable.name} radiates best near {peaks[0] / 1e6:.0f} MHz",
+                title=f"{ref}: {cable.name} radiates best near {peaks[0] / 1e6:.0f} MHz",
                 detail=(
                     f"A {cable.length_m:g} m {cable.name} on {ref} peaks at "
                     f"{peak_text}. Nothing declared on this board lands there, which is the "

@@ -201,8 +201,8 @@ def check_decoupling(ctx: RuleContext) -> Iterator[Finding]:
                     f"{' (' + cap[1].value + ')' if getattr(cap[1], 'value', '') else ''}, "
                     f"{d:.1f} mm away (budget {max_d:g} mm). The loop through it is roughly "
                     f"{total_nh:.0f} nH, so it stops decoupling somewhere "
-                    f"around {_fmt_mhz(useful)}{' assuming 100 nF' if assumed else ''} — above "
-                    f"that the IC's switching current returns through the supply trace instead."
+                    f"around {_fmt_mhz(useful)}{' assuming 100 nF' if assumed else ''}. Above "
+                    f"that, the IC's switching current returns through the supply trace instead."
                     f"{srf_note} "
                     f"Move the capacitor to the pin, on the same side of the board."
                 ),

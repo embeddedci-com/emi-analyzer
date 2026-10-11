@@ -335,7 +335,7 @@ RULE_CATALOGUE["cable-resonance"] = {
     "category": "Radiated emissions",
     "about": "Cables assigned to connectors that are at their best as antennas at a frequency "
              "this board produces. A cable's resonances depend on the cable, not the layout, so "
-             "this needs no solve — and it decides more about a radiated result than the board "
+             "this needs no solve, and it decides more about a radiated result than the board "
              "does.",
     "params": {
         # The clock whose harmonics are checked against the peaks. Zero means no clock is

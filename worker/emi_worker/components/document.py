@@ -172,7 +172,7 @@ class Component:
         """One line for the UI. Never names a manufacturer for a generic entry, because a
         generic entry does not describe one."""
         if self.provenance == "generic":
-            return "generic — typical for this package and value, not a specific part"
+            return "generic: typical for this package and value, not a specific part"
         if self.provenance == "vendor":
             cited = self.cites("ESL") or self.cites("")
             return f"from the part datasheet{f' ({cited.describe()})' if cited else ''}"
@@ -351,7 +351,7 @@ def parse(doc: dict) -> Component:
             if value is not None and component.cites(what) is None:
                 raise ComponentError(
                     f"{component.id} gives an {what} of {value} but says nothing about where "
-                    f"it came from. Add a sources entry — for a generic figure that is simply "
+                    f"it came from. Add a sources entry. For a generic figure that is simply "
                     f"what it is, and for a vendor part it is the datasheet"
                 )
     if model_type == "mlcc_family":

@@ -226,7 +226,7 @@ def load(entries: list[dict], files: dict[str, bytes], board_parts: dict[str, li
             "clamps a discharge", ok,
             f"a 2 kV contact discharge (7.5 A) peaks at {peaks['p']:.1f} V positive and "
             f"{peaks['n']:.1f} V negative on {ref} pin {line_pad.number}"
-            + ("" if ok else f" — above {SANITY_LIMIT_V:g} V, so it is not clamping"),
+            + ("" if ok else f", above {SANITY_LIMIT_V:g} V, so it is not clamping"),
         ))
         if not ok:
             vm.reasons.append(f"it does not clamp: the line pin reaches {worst:.0f} V")

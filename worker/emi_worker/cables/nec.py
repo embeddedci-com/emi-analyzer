@@ -375,7 +375,7 @@ def parse_output(text: str, frequency_hz: float) -> NecResult:
     if "ANTENNA INPUT PARAMETERS" not in text:
         raise NecError(
             "nec2c produced no results block. NEC computes only when it reaches an execution "
-            "card, and reports nothing at all when it does not — check the deck has an XQ"
+            "card, and reports nothing at all when it does not. Check the deck has an XQ"
         )
     z = _IMPEDANCE.search(text.split("ANTENNA INPUT PARAMETERS", 1)[1])
     if not z:
@@ -398,7 +398,7 @@ def parse_output(text: str, frequency_hz: float) -> NecResult:
     if not fields:
         raise NecError(
             "nec2c reported no near-field points. The deck asked for them, so this means the "
-            "NE cards were not reached — check the execution card"
+            "NE cards were not reached. Check the execution card"
         )
     return NecResult(frequency_hz=frequency_hz, z_in=z_in, e_v_per_m=fields)
 
