@@ -108,7 +108,7 @@ class Discovery:
     rail_nets: list[str] = field(default_factory=list)
     network: Network = field(default_factory=Network)
     regulators: list[Regulator] = field(default_factory=list)
-    #: (ref, why) for switching parts found and not modelled.
+    #: (ref, why) for switching parts found and not modeled.
     skipped: list[tuple[str, str]] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
     routed: bool = True
@@ -240,10 +240,10 @@ def _series_element(ref: str, pad, kind: str) -> tuple[Series, str | None]:
         return Series("", "", 0.0, ASSUMED_FUSE_OHM, kind, ref, value, True), None
     if kind == "switch":
         return (Series("", "", 0.0, ASSUMED_SWITCH_OHM, kind, ref, value, True),
-                f"{ref} ({value}) passes the supply through; modelled as {ASSUMED_SWITCH_OHM * 1e3:g} mΩ")
+                f"{ref} ({value}) passes the supply through; modeled as {ASSUMED_SWITCH_OHM * 1e3:g} mΩ")
     if kind == "pass":
         return (Series("", "", 0.0, ASSUMED_SWITCH_OHM, kind, ref, value, True),
-                f"{ref} ({value}) passes the supply to a regulator behind it; modelled as a "
+                f"{ref} ({value}) passes the supply to a regulator behind it; modeled as a "
                 f"{ASSUMED_SWITCH_OHM * 1e3:g} mΩ switch, the worst case: a linear regulator or charger "
                 f"passes less of the ripple back")
     return Series("", "", 0.0, ASSUMED_DIODE_OHM, kind, ref, value, True), None
@@ -315,7 +315,7 @@ def discover(ctx: RuleContext, choice: str | None = None, edge_mm: float = 5.0) 
         frontier = nxt
     d.rail_nets = list(rail)
 
-    # Regulators: what the rail feeds, each with how it was recognised.
+    # Regulators: what the rail feeds, each with how it was recognized.
     others = {e.net for e in d.entries if e.net != d.entry.net}
     found, skipped = regs.attach(cands, set(rail), d.entry.net, others, parts)
     d.regulators = [Regulator(**vars(f)) for f in found]

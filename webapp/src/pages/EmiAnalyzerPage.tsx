@@ -54,7 +54,7 @@ export function EmiAnalyzerPage({ api, deployment = 'hosted', host }: EmiAnalyze
     // `as` names the project regardless of the name field: the sample board is always the
     // sample board, whatever was typed before it was chosen.
     mutationFn: async ({ file, as }: { file: File; as?: string }) => {
-      // Hash before anything else. If this organisation has already uploaded these exact
+      // Hash before anything else. If this organization has already uploaded these exact
       // bytes, the board is here — parsed, with its findings and any solves — and the
       // right answer is to open it rather than send it again.
       setStage('Checking for a copy already here…')
@@ -165,7 +165,7 @@ export function EmiAnalyzerPage({ api, deployment = 'hosted', host }: EmiAnalyze
               title={
                 me.data.anonymous
                   ? copy.signIn
-                  : `Boards are filed under organisation ${me.data.organization_id}`
+                  : `Boards are filed under organization ${me.data.organization_id}`
               }
             >
               {me.data.anonymous ? 'Not signed in' : (me.data.login || me.data.user_id)}

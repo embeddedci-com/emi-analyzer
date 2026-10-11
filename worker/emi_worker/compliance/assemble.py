@@ -1,7 +1,7 @@
 """From a finished solve and a driver to the radiating paths compliance combines (§7, §16.2).
 
 The compliance run used to take its paths from the request, already composed, and the browser
-sent none -- so every estimate came back "nothing radiating has been modelled". The paths are
+sent none -- so every estimate came back "nothing radiating has been modeled". The paths are
 built here instead, in the worker, from what the solve itself wrote:
 
 * ``farfield.json`` -- the board's own field at 3 m, per volt of the solve's source;
@@ -123,7 +123,7 @@ def interp_db(fs: list[float], mags: list[float], f: float) -> float | None:
     a, c = mags[i], mags[j]
     if a <= 0 or c <= 0:
         # No logarithm of a zero. At a point it is that point; between, the larger
-        # neighbour is the conservative read.
+        # neighbor is the conservative read.
         return a if t == 0.0 else c if t == 1.0 else max(a, c)
     return math.exp((1 - t) * math.log(a) + t * math.log(c))
 
@@ -344,7 +344,7 @@ def assemble(art: SolveArtifacts, attached: AttachedDriver | None,
             kind="cable", label=label, driver_id=attached.id,
             points=[PathPoint(p.frequency_hz, p.field_v_per_m) for p in comp.points],
             line=comp.line, covered_hz=comp.band,
-            sigma_terms={"cable idealisation": SIGMA_CABLE_DB,
+            sigma_terms={"cable idealization": SIGMA_CABLE_DB,
                          "transfer-function interpolation": SIGMA_FAR_FIELD_INTERP_DB},
         ))
         asm.path_meta[label] = {"ref": ref}
@@ -434,7 +434,7 @@ def compose_cable(transfer: dict, antenna: dict, port: dict, z_s: float,
     The compliance estimate and the Cables tab's chart both compose through this function (the
     chart through its TypeScript copy, ``composeCable`` in ``cableEmission.ts``, pinned by
     ``cable_emission_fixtures.json``). The chart used to compose on the solve's grid and to
-    assume the driver's source impedance equalled the port's; it now shows the numbers the
+    assume the driver's source impedance equaled the port's; it now shows the numbers the
     estimate combines.
     """
     comp = CableComposition()

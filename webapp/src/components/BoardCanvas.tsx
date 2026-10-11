@@ -46,7 +46,7 @@ export interface BoardCanvasProps {
   /** Layer name -> visible. Layers absent from the map are visible. */
   layerVisibility?: Record<string, boolean>
   highlightNet?: string | null
-  /** Board-space mm to centre on, e.g. when a rule finding is clicked. */
+  /** Board-space mm to center on, e.g. when a rule finding is clicked. */
   focus?: { x: number; y: number; zoom?: number } | null
   onCursorMove?: (pt: { x: number; y: number } | null) => void
   onReady?: (renderer: BoardRenderer) => void
@@ -349,11 +349,11 @@ export function BoardCanvas({
       const p = boardPointFromEvent(e)
       if (p && renderer) {
         // A constant on-screen target: 14 device pixels converted to mm at the current
-        // zoom. A fixed millimetre tolerance would be unusable zoomed out and needlessly
+        // zoom. A fixed millimeter tolerance would be unusable zoomed out and needlessly
         // precise zoomed in.
         const tol = 14 / renderer.getView().scale
         // Report misses too: clicking into silence is how a user concludes the tool is
-        // broken rather than that they missed by two millimetres.
+        // broken rather than that they missed by two millimeters.
         onPadPick(anchorNear(currentDoc, p.x, p.y, tol))
       }
     }
@@ -426,7 +426,7 @@ export function BoardCanvas({
     return () => canvas.removeEventListener('wheel', onWheel)
   }, [markDirty])
 
-  // The keyboard does what the mouse does: arrows pan, + and - zoom about the centre, 0 fits.
+  // The keyboard does what the mouse does: arrows pan, + and - zoom about the center, 0 fits.
   const handleKeyDown = (e: React.KeyboardEvent<HTMLCanvasElement>) => {
     if (e.ctrlKey || e.metaKey || e.altKey) return
     const action = keyAction(e.key, e.shiftKey)

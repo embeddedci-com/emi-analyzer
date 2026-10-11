@@ -72,7 +72,7 @@ def _refuse_unsupported(std) -> None:
         raise StageError(
             f"{std.name} is measured at {std.distance_m:g} m. This estimate computes fields at "
             f"{COMPUTED_DISTANCE_M:g} m, and scaling across a different antenna height scan is "
-            f"not modelled. Use a {COMPUTED_DISTANCE_M:g} m standard."
+            f"not modeled. Use a {COMPUTED_DISTANCE_M:g} m standard."
         )
 
 
@@ -272,7 +272,7 @@ def run_compliance(ctx: StageContext) -> StageResult:
     else:
         document["spectrum"] = []
         document["no_paths"] = (
-            "Nothing radiating could be modelled: this needs a finished solve with the far "
+            "Nothing radiating could be modeled: this needs a finished solve with the far "
             "field or a cable gap port, and a driver attached to give it a level."
         )
 

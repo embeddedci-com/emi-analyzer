@@ -60,10 +60,10 @@ RADIATOR_MAX_REPORTED = 12
 
 
 def copper_z(ctx: RuleContext) -> dict[str, float]:
-    """Height of each copper layer's centre above the bottom of the stack, in mm.
+    """Height of each copper layer's center above the bottom of the stack, in mm.
 
     From the stackup's thicknesses. A board file with no stackup falls back to the layer
-    order, one unit apart, which still ranks neighbours correctly.
+    order, one unit apart, which still ranks neighbors correctly.
     """
     z: dict[str, float] = {}
     running = 0.0
@@ -82,7 +82,7 @@ def _layer_pairs(ctx: RuleContext) -> dict[str, str]:
 
     The planes are the ones ingest decided from pour coverage, which the viewer labels and
     the impedance model uses, so the plane checks and the electrical model agree on which
-    layer is whose reference. With the stackup analysed, its answer is used directly: it
+    layer is whose reference. With the stackup analyzed, its answer is used directly: it
     already knows which plane is physically nearest and that a signal layer in between
     blocks it. Without one, the nearest plane layer by stackup height stands in.
     """
@@ -114,7 +114,7 @@ def check_return_vias(ctx: RuleContext) -> Iterator[Finding]:
 
     When a signal changes layer, its return current has to change reference plane too. The
     only path for that is a via tying the planes together. Without one within a couple of
-    millimetres, the return detours around the nearest stitching point, and the loop that
+    millimeters, the return detours around the nearest stitching point, and the loop that
     detour encloses is what radiates.
     """
     ground = [v for v in ctx.model.vias if classify_net(v.net) == "ground"]
@@ -376,7 +376,7 @@ def check_edge_proximity(ctx: RuleContext) -> Iterator[Finding]:
 def _rasterize_layer(ctx: RuleContext, layer: str) -> tuple[np.ndarray, float, float, float] | None:
     """Boolean copper mask for one layer, plus its origin and resolution.
 
-    Rasterised from the layer's zone fills only. A reference plane *is* its pours; the
+    Rasterized from the layer's zone fills only. A reference plane *is* its pours; the
     tracks on a plane layer are incidental and including them would fill in the very gaps
     this check is looking for.
     """
@@ -396,7 +396,7 @@ def _rasterize_layer(ctx: RuleContext, layer: str) -> tuple[np.ndarray, float, f
 
     mask = np.zeros((h, w), dtype=bool)
 
-    # Scanline fill, vectorised per row.
+    # Scanline fill, vectorized per row.
     #
     # Even-odd *within* one polygon, OR *across* polygons. Both halves matter. KiCad emits
     # a pour's voids by letting a single outline travel into the void and back out along a
@@ -453,7 +453,7 @@ def check_plane_gaps(ctx: RuleContext) -> Iterator[Finding]:
             rasters[plane] = r
 
     # A plane with no filled copper in the file (pours never filled, or too large to
-    # rasterise) is unknown, not a gap: flagging every trace over it would report the
+    # rasterize) is unknown, not a gap: flagging every trace over it would report the
     # whole layer as missing.
     unknown = sorted(p for p in set(pairs.values()) if p not in rasters)
     if unknown:
@@ -608,7 +608,7 @@ def _weigh_radiators(ctx: RuleContext, findings: list[Finding]) -> None:
     dielectric is thin, whatever its length; it radiates where that return is interrupted --
     a gap under it, a layer change with no return via. So on a board with planes a long fast
     net stays critical only when the same net has a critical plane-gap or return-via finding
-    (a real break, not a return via a few millimetres off), and the finding says which;
+    (a real break, not a return via a few millimeters off), and the finding says which;
     otherwise it is a warning. A board without planes keeps the length
     rule, since nothing there holds the return under the trace.
     """
@@ -639,7 +639,7 @@ def _weigh_radiators(ctx: RuleContext, findings: list[Finding]) -> None:
 def check_length_matching(ctx: RuleContext) -> Iterator[Finding]:
     """Members of a matched group whose delay differs from their reference by too much.
 
-    In picoseconds, not millimetres. On a four-layer board an inner-layer millimetre costs
+    In picoseconds, not millimeters. On a four-layer board an inner-layer millimeter costs
     about 6.9 ps and an outer-layer one about 5.5 -- so 20 mm moved between layers shifts a
     net by nearly 30 ps while its length does not change at all. For a DDR4-3200 byte lane,
     whose whole budget is around 10 ps, a millimetre-based check would call that matched.
@@ -701,10 +701,10 @@ def check_length_matching(ctx: RuleContext) -> Iterator[Finding]:
 def _lane_to_lane(ctx: RuleContext) -> Iterator[Finding]:
     """Byte lanes against each other, compared by their strobes. Off unless lane_to_lane_ps > 0.
 
-    A controller with write levelling absorbs the difference between lanes, so by default this
+    A controller with write leveling absorbs the difference between lanes, so by default this
     compares nothing: on a correct DDR3/DDR4 board it would be a wall of findings. It is for
-    parts without levelling (DDR2, some LPDDR and FPGA soft controllers). The parameter was in
-    the catalogue and the docs for a release before anything read it, so setting it silently
+    parts without leveling (DDR2, some LPDDR and FPGA soft controllers). The parameter was in
+    the catalog and the docs for a release before anything read it, so setting it silently
     did nothing.
 
     Each lane is compared with the median lane rather than the fastest, so one outlier is
@@ -733,7 +733,7 @@ def _lane_to_lane(ctx: RuleContext) -> Iterator[Finding]:
             detail=(
                 f"Its strobe {group.reference} is {abs(skew):.0f} ps {later} than the median of "
                 f"{len(lanes)} byte lanes. The lane-to-lane budget is ±{tol:.0f} ps. Only set "
-                "this budget for a memory controller without write levelling; one with it "
+                "this budget for a memory controller without write leveling; one with it "
                 "absorbs the difference."
             ),
             net=group.reference,

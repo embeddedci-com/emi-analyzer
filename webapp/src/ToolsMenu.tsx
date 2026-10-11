@@ -15,7 +15,7 @@ export interface ToolEntry {
   description?: string
   to: string
   icon?: ReactNode
-  /** False hides the entry, e.g. a tool the signed-in organisation has no access to. */
+  /** False hides the entry, e.g. a tool the signed-in organization has no access to. */
   enabled?: boolean
   /**
    * Load a new document instead of navigating client-side. For a host whose router on the

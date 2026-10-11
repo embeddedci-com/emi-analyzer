@@ -38,7 +38,7 @@ def _near_ring(ring: list[tuple[float, float]], x: float, y: float, reach: float
     """Inside the pour, or close enough to its boundary to be joined to it.
 
     Close enough matters: a pad inside a pour sits in a thermal-relief void, joined only by
-    spokes, so its centre is *outside* the poured copper. Testing the centre alone would call
+    spokes, so its center is *outside* the poured copper. Testing the center alone would call
     every thermally relieved pour an island.
     """
     if point_in_ring(x, y, ring):

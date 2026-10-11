@@ -7,7 +7,7 @@ describe('classifyNotice', () => {
     for (const n of [
       '3 zones not filled, so plane checks skip them. Refill zones in KiCad (B) and save before exporting.',
       'No filled copper on In1.Cu, so traces over it were not checked for plane gaps. Refill zones in KiCad (B) and save.',
-      // The wording on boards analysed before the notes were rewritten.
+      // The wording on boards analyzed before the notes were rewritten.
       'no filled copper was found on In1.Cu, so traces over it were not checked for plane gaps',
       'the stitching check failed to run; other checks are unaffected',
       'emi.rules.yaml could not be read (expected a mapping on line 2), so built-in defaults were used. Fix the file and upload again.',

@@ -162,7 +162,7 @@ class Component:
         return str((self.match or {}).get("mpn") or "")
 
     def part_numbers(self) -> frozenset[str]:
-        """Every part number this component answers to, normalised for comparison: the MPN,
+        """Every part number this component answers to, normalized for comparison: the MPN,
         its aliases (packaging variants, the base number) and the LCSC number."""
         m = self.match or {}
         raw = [m.get("mpn"), m.get("lcsc"), *(m.get("mpn_aliases") or [])]
@@ -251,7 +251,7 @@ def parse(doc: dict) -> Component:
     if version > VERSION:
         raise ComponentError(
             f"this component is version {version} and this build understands version "
-            f"{VERSION}. Update the analyzer rather than reading the parts it recognises"
+            f"{VERSION}. Update the analyzer rather than reading the parts it recognizes"
         )
     for required in ("id", "kind", "name"):
         if not isinstance(doc.get(required), str) or not doc[required].strip():

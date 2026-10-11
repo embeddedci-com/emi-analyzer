@@ -2,7 +2,7 @@
 
 Responsibilities, in order of importance:
 
-1. Stay connected. A worker that silently stops dialling in looks identical, from the
+1. Stay connected. A worker that silently stops dialing in looks identical, from the
    user's side, to a queue that never drains.
 2. Never claim work it cannot finish. Capabilities are declared up front, but the
    stages re-check at mesh time where the real numbers are known.
@@ -186,7 +186,7 @@ class Worker:
     def _poll_loop(self) -> None:
         """REST fallback for the WebSocket push.
 
-        Push is an optimisation, never the delivery guarantee: a run created while this
+        Push is an optimization, never the delivery guarantee: a run created while this
         worker was reconnecting arrives here instead.
         """
         while not self._shutdown.wait(self.cfg.poll_interval):

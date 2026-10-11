@@ -188,7 +188,7 @@ def peak_limit_at(standard_id: str, frequency_hz: float) -> float | None:
     For a steady harmonic the peak, quasi-peak and average detectors all read the same level
     (an analyser is calibrated to the RMS of a sine), so the governing limit is the tighter
     average one and this never decides a margin. It is here so the limit line can draw it and
-    so a pulsed source, when one is modelled, has the number it needs.
+    so a pulsed source, when one is modeled, has the number it needs.
     """
     std = standard(standard_id)
     peaks = [s.peak_level_db for s in std.segments

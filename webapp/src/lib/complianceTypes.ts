@@ -93,7 +93,7 @@ export interface ComplianceDoc {
   /** What the result says about itself that is not a gap. */
   notes?: string[]
   uncertainty_note: string
-  /** Present only when nothing radiating has been modelled at all. */
+  /** Present only when nothing radiating has been modeled at all. */
   no_paths?: string
 
   // ---- present only when `complete` ----

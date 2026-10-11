@@ -123,14 +123,14 @@ func TestDeleteAndRenameRespectTheOrganisation(t *testing.T) {
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, httptest.NewRequest(http.MethodDelete, "/api/emi/projects/other-org", nil))
 	if w.Code != http.StatusNotFound || len(store.deleted) != 0 {
-		t.Fatalf("another organisation's project: got %d, deletions %v", w.Code, store.deleted)
+		t.Fatalf("another organization's project: got %d, deletions %v", w.Code, store.deleted)
 	}
 
 	w = httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodPatch, "/api/emi/projects/other-org", strings.NewReader(`{"name":"mine now"}`))
 	mux.ServeHTTP(w, r)
 	if w.Code != http.StatusNotFound || store.renamed != "" {
-		t.Fatalf("rename across organisations: got %d, renamed %q", w.Code, store.renamed)
+		t.Fatalf("rename across organizations: got %d, renamed %q", w.Code, store.renamed)
 	}
 }
 

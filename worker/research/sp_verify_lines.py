@@ -14,7 +14,7 @@ References and pass criteria:
 
 * microstrip: Hammerstad and Jensen (1980), zero-thickness strip, which is what the model draws;
   Z0 and delay within 5 %. IPC-2141 printed as a sanity bound, not a criterion.
-* stripline: Cohn (1954), exact for a zero-thickness strip centred between two planes; Z0 and
+* stripline: Cohn (1954), exact for a zero-thickness strip centered between two planes; Z0 and
   delay within 5 %.
 * S21 of the matched microstrip within 0.5 dB of the closed form, 100 MHz to 1 GHz.
 
@@ -180,7 +180,7 @@ def by_difference(short: dict, long: dict, e_ref: float) -> dict:
     """eps_eff from the phase two line lengths differ by, which is what the line alone adds.
 
     A single run's delay is port to port, and the ports are 0.4 mm boxes whose reference plane
-    need not be their centre; anything the ends add is the same on both lengths and cancels.
+    need not be their center; anything the ends add is the same on both lengths and cancels.
     """
     dl = (long["length_mm"] - short["length_mm"]) / 1000.0
     beta = (np.asarray(long["gl_imag"]) - np.asarray(short["gl_imag"])) / dl

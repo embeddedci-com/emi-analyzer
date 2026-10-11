@@ -7,9 +7,9 @@ import (
 	"github.com/embeddedci-com/emi-analyzer/server/emi"
 )
 
-// A board may only be recorded from an upload in the caller's own organisation, and ".." must
+// A board may only be recorded from an upload in the caller's own organization, and ".." must
 // not get around that. Both blob backends clean a key before using it, so
-// "uploads/orgA/../orgB/..." used to read organisation B's file -- and deleting the project
+// "uploads/orgA/../orgB/..." used to read organization B's file -- and deleting the project
 // that recorded it deleted B's file too.
 func TestCreateBoardRefusesKeysThatLeaveTheOrganisation(t *testing.T) {
 	f := newFlow(t, emi.Features{})

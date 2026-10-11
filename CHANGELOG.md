@@ -94,7 +94,7 @@ its real problems. On a 4-layer reference board (BenchPod digital) the criticals
   margin, which capacitor carries the ripple, what adding a capacitor or an LC filter would
   change, and what each input capacitor is worth. Differential mode only; see
   [docs/verification/conducted-emissions.md](docs/verification/conducted-emissions.md).
-- The conducted scan finds more regulators: boosts (modelled by their inductor ripple, not as
+- The conducted scan finds more regulators: boosts (modeled by their inductor ripple, not as
   pulses), inverting stages, controllers with external FETs (drawing through the high-side
   drain), buck modules by part number, and each output of a PMIC as its own source with its own
   frequency and phase. The rail also follows a charger or LDO a regulator draws from, and a
@@ -114,7 +114,7 @@ its real problems. On a 4-layer reference board (BenchPod digital) the criticals
 - Deleting and renaming boards; cable settings are kept per board.
 - The worker reads `emi.rules.yaml` (PyYAML is now in the image; YAML also reads JSON). A file
   whose top level is not a mapping is an error rather than a silent fallback to the defaults.
-- A licence notice in the worker image (`/usr/share/doc/emi-worker/NOTICE`) with the Debian
+- A license notice in the worker image (`/usr/share/doc/emi-worker/NOTICE`) with the Debian
   and Python package lists it refers to.
 - SHA256SUMS on every release, and a security policy, code of conduct and issue templates.
 - Rule settings in the app: a Checks view under Findings switches checks on and off and sets
@@ -148,7 +148,7 @@ its real problems. On a 4-layer reference board (BenchPod digital) the criticals
 
 ### Fixed
 
-- Modelled capacitors (full-wave, experimental): upstream openEMS keeps its series lumped
+- Modeled capacitors (full-wave, experimental): upstream openEMS keeps its series lumped
   element's state in float and lost the capacitor to rounding at a board's timestep, so a
   100 pF 0402 resonated 17 % low. The worker image's openEMS is now patched for it
   (`worker/openems-image/lumped-rlc-double.patch`; NOTICE says so), and a worker whose openEMS

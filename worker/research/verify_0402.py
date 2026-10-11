@@ -1,4 +1,4 @@
-"""Phase 2 · Does a modelled 0402 capacitor behave like a capacitor?
+"""Phase 2 · Does a modeled 0402 capacitor behave like a capacitor?
 
 The only check that the component construction is a series R-L-C and not something else: one
 0402 capacitor on a two-layer board, its first pad driven by a production port against the

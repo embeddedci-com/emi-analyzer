@@ -1,4 +1,4 @@
-# Run an EMI worker yourself, dialling into the EMI Analyzer app.
+# Run an EMI worker yourself, dialing into the EMI Analyzer app.
 #
 #   cp .env.example .env      # the app's URL and a key from `emi-local -issue-key`
 #   docker compose -f docker-compose.worker.yaml up -d

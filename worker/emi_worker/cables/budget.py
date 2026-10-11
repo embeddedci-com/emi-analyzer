@@ -89,7 +89,7 @@ class BudgetPoint:
     #: meaningful for a closed-form budget; a solver budget has no such restriction, which is
     #: the reason it exists.
     beyond_uniform_current: bool
-    #: Volts per metre, at the standard's distance, per amp of common-mode current. This is
+    #: Volts per meter, at the standard's distance, per amp of common-mode current. This is
     #: the quantity the budget is really made of; the current is it divided into the limit.
     e_per_amp: float = 0.0
     #: True at a local peak in radiation per amp — where this cable is at its best as an

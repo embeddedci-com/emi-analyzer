@@ -145,7 +145,7 @@ func ownerTestService(c *Component) *Service {
 func TestComponentOwnerRefusesANonOwnerInTheSameOrganisation(t *testing.T) {
 	// A colleague can see a shared component and use it. Editing, sharing and deleting stay
 	// with whoever made it, because an edit silently changes what every future run of every
-	// colleague's board is modelled with.
+	// colleague's board is modeled with.
 	c := &Component{ID: "c-1", OwnerUserID: "u-1", OrganizationID: "org-1", Shared: true}
 	w := httptest.NewRecorder()
 	r := requestAs(member("u-2", "org-1"), "PUT", "/emi/components/c-1", "{}")
@@ -159,14 +159,14 @@ func TestComponentOwnerRefusesANonOwnerInTheSameOrganisation(t *testing.T) {
 }
 
 func TestComponentOwnerHidesAnotherOrganisationsComponent(t *testing.T) {
-	// 404 rather than 403: outside the organisation it does not exist as far as this caller
+	// 404 rather than 403: outside the organization it does not exist as far as this caller
 	// is concerned, and a 403 would confirm the id for them.
 	c := &Component{ID: "c-1", OwnerUserID: "u-1", OrganizationID: "org-1"}
 	w := httptest.NewRecorder()
 	r := requestAs(member("u-9", "org-2"), "DELETE", "/emi/components/c-1", "")
 	r.SetPathValue("component_id", "c-1")
 	if _, ok := ownerTestService(c).componentOwner(w, r); ok {
-		t.Fatal("a component from another organisation was reachable")
+		t.Fatal("a component from another organization was reachable")
 	}
 	if w.Code != http.StatusNotFound {
 		t.Errorf("status = %d, want %d", w.Code, http.StatusNotFound)
@@ -193,7 +193,7 @@ func TestComponentOwnerRefusesAVisitorReachingForSomebodyElsesComponent(t *testi
 	r := requestAs(visitor(), "DELETE", "/emi/components/c-1", "")
 	r.SetPathValue("component_id", "c-1")
 	if _, ok := ownerTestService(c).componentOwner(w, r); ok {
-		t.Fatal("a visitor reached another organisation's component")
+		t.Fatal("a visitor reached another organization's component")
 	}
 	if w.Code != http.StatusNotFound {
 		t.Errorf("status = %d, want %d", w.Code, http.StatusNotFound)

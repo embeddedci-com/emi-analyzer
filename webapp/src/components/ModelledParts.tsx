@@ -1,11 +1,11 @@
 /**
- * Which parts a solve modelled, and on whose authority (docs/implementation.md §3).
+ * Which parts a solve modeled, and on whose authority (docs/implementation.md §3).
  *
  * A result that models some capacitors and not others is two different results in one
  * picture, and the difference is invisible in the field map. This says which is which.
  *
  * The provenance column is the point of it. A generic figure is a class average and is
- * labelled as one — never attributed to a manufacturer, because it describes none — while a
+ * labeled as one — never attributed to a manufacturer, because it describes none — while a
  * component from a datasheet or from the user's own library says so. Someone acting on a
  * self-resonance deserves to know whether it came from a part or from a category.
  */
@@ -28,13 +28,13 @@ const fmtFarads = (f: number): string => {
 
 export function ModelledParts({ parts }: { parts?: ModelledPart[] }) {
   if (parts === undefined) {
-    // Not the same as "none were modelled": this result was produced before the list existed.
+    // Not the same as "none were modeled": this result was produced before the list existed.
     return null
   }
   if (parts.length === 0) {
     return (
       <Text size="xs" c="dimmed">
-        No components were modelled in this solve — every part is bare copper, as it was
+        No components were modeled in this solve — every part is bare copper, as it was
         before component models existed.
       </Text>
     )
@@ -46,7 +46,7 @@ export function ModelledParts({ parts }: { parts?: ModelledPart[] }) {
     <Card withBorder padding="sm">
       <Stack gap="xs">
         <Group justify="space-between" align="baseline">
-          <Title order={6}>Modelled parts</Title>
+          <Title order={6}>Modeled parts</Title>
           <Text size="xs" c="dimmed">
             {parts.length} placed
             {generic > 0 && `, ${generic} from generic figures`}

@@ -3,7 +3,7 @@
 What a user filters and sorts in a spreadsheet has to agree with what the findings say, and
 the skew columns have to be measured against the right thing: data against its strobe,
 address and command against the clock -- with a separate column against the clock for every
-DDR net, because that spread is what write levelling has to absorb.
+DDR net, because that spread is what write leveling has to absorb.
 """
 
 from __future__ import annotations

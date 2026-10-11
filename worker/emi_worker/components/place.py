@@ -24,11 +24,11 @@ from dataclasses import dataclass, field
 from emi_worker.components.document import Resolved
 
 #: The gap has to be at least this wide, in mm, to hold three cells that the mesher will
-#: honour. Below it the cells collapse into each other and openEMS applies one element where
+#: honor. Below it the cells collapse into each other and openEMS applies one element where
 #: three were meant.
 MIN_GAP_MM = 0.06
 
-#: How far a pad centre may be from the axis before the part counts as rotated off-axis. A
+#: How far a pad center may be from the axis before the part counts as rotated off-axis. A
 #: capacitor at 45 degrees has no in-plane axis to bridge along, and guessing one would place
 #: the element across the wrong pair of edges.
 OFF_AXIS_TOLERANCE_MM = 0.05
@@ -36,7 +36,7 @@ OFF_AXIS_TOLERANCE_MM = 0.05
 
 @dataclass(frozen=True)
 class Placement:
-    """Where one component's elements go, in board millimetres."""
+    """Where one component's elements go, in board millimeters."""
 
     ref: str
     resolved: Resolved
@@ -125,7 +125,7 @@ def plan_placement(
         axis, off_axis = 1, dx
     if off_axis > OFF_AXIS_TOLERANCE_MM:
         return None, (
-            f"{ref} is rotated off-axis (pad centres differ by {off_axis:.2f} mm across the "
+            f"{ref} is rotated off-axis (pad centers differ by {off_axis:.2f} mm across the "
             f"part), so there is no single in-plane axis to bridge along")
 
     # The facing edges: the inner edge of each pad along the axis.
@@ -150,7 +150,7 @@ def plan_placement(
     for cx, cy in corners:
         if not (min_x <= cx <= max_x and min_y <= cy <= max_y):
             return None, (
-                f"{ref} straddles the region boundary, so only part of it would be modelled")
+                f"{ref} straddles the region boundary, so only part of it would be modeled")
 
     return Placement(ref=ref, resolved=resolved, axis=axis, lo=lo, hi=hi,
                      across_lo=across_lo, across_hi=across_hi, layer=layer), None

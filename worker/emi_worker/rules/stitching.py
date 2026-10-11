@@ -69,7 +69,7 @@ def _stitch_points(ctx: RuleContext) -> np.ndarray:
 
 
 def _nearest(points: np.ndarray, xs: np.ndarray, ys: np.ndarray) -> np.ndarray:
-    """Distance from every (ys x xs) cell centre to the nearest point, in chunks."""
+    """Distance from every (ys x xs) cell center to the nearest point, in chunks."""
     out = np.full((len(ys), len(xs)), np.inf)
     if len(points) == 0:
         return out

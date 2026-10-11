@@ -1,5 +1,5 @@
 /**
- * WebGL2 renderer for a normalised PCB.
+ * WebGL2 renderer for a normalized PCB.
  *
  * Framework-free on purpose: React owns the canvas element's lifecycle, this owns
  * everything inside it. That split keeps the renderer testable in a plain HTML harness
@@ -51,7 +51,7 @@ void main() {
 }`
 
 export interface LayerStyle {
-  /** Base colour, as 0..1 RGB. */
+  /** Base color, as 0..1 RGB. */
   color: [number, number, number]
   visible: boolean
   /** 0..1. Lower layers are usually drawn faded so the top layer stays readable. */
@@ -69,9 +69,9 @@ export interface ViewState {
 export interface RendererOptions {
   /** Background, as 0..1 RGBA. */
   background?: [number, number, number, number]
-  /** Colour used for the highlighted net, as 0..1 RGB. */
+  /** Color used for the highlighted net, as 0..1 RGB. */
   highlightColor?: [number, number, number]
-  /** Board outline colour. */
+  /** Board outline color. */
   outlineColor?: [number, number, number, number]
 }
 
@@ -328,7 +328,7 @@ export class BoardRenderer {
     if (w === 0 || h === 0 || width_mm <= 0 || height_mm <= 0) return
 
     const scale = Math.min(w / width_mm, h / height_mm) * (1 - marginFraction * 2)
-    // Centre the board: translate is applied before scaling, so it is in mm.
+    // Center the board: translate is applied before scaling, so it is in mm.
     this.view = {
       scale,
       tx: (w / scale - width_mm) / 2,

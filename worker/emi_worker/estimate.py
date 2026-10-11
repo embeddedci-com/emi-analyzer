@@ -49,8 +49,8 @@ IN_PLANE_MIN_CELL_FRACTION = 0.25
 class EstimateInput:
     """Everything the cost model needs.
 
-    Extents are in millimetres and include the air box above and below the board.
-    Resolutions are in micrometres.
+    Extents are in millimeters and include the air box above and below the board.
+    Resolutions are in micrometers.
 
     The Courant limit keys off the smallest cell in *any* axis, and in plane that is a
     quarter of the requested resolution (``IN_PLANE_MIN_CELL_FRACTION``), because copper edges

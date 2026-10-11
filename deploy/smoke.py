@@ -11,7 +11,7 @@ Drives the full path a user takes, using only the public API:
       -> watch it stream timesteps and energy decay
       -> read a result artifact back through a presigned GET
 
-If this passes, the P0 contract holds: a worker that dialled in from somewhere else did
+If this passes, the P0 contract holds: a worker that dialed in from somewhere else did
 real work, and no bulk bytes went through the control plane.
 
 Run it inside the compose network so that presigned URLs and service names resolve:

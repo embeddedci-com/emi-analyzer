@@ -146,7 +146,7 @@ def test_coverage_counts_both_sides():
     assert cov.total == 2
     assert len(cov.modelled) == 1 and len(cov.unmatched) == 1
     assert cov.fraction == pytest.approx(0.5)
-    assert "1 of 2 capacitors modelled" in cov.summary()
+    assert "1 of 2 capacitors modeled" in cov.summary()
     assert "bare copper" in cov.summary()
 
 
@@ -159,7 +159,7 @@ def test_coverage_of_nothing_says_so_rather_than_dividing_by_zero():
 # ---- against the real boards -----------------------------------------------------------
 
 def test_coverage_on_the_real_boards():
-    """Measured when this runs: 425 of 429 capacitors modelled, 99 %.
+    """Measured when this runs: 425 of 429 capacitors modeled, 99 %.
 
     The four that are not are the three BD10 electrolytics and one STC3MD20, both on custom
     LCSC footprints — precisely the cases §12 leaves out of this phase. Enumerated

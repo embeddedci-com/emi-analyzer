@@ -8,7 +8,7 @@
 /** A vendor SPICE model attached to one part value for a run. */
 export interface TransientModelRef {
   part: string
-  /** Object key from the upload endpoint; the server only accepts this organisation's uploads. */
+  /** Object key from the upload endpoint; the server only accepts this organization's uploads. */
   key: string
   filename: string
   subckt?: string

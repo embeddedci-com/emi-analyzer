@@ -421,7 +421,7 @@
         ]
       },
       "must_mention": "version 2",
-      "python_message": "this component is version 2 and this build understands version 1. Update the analyzer rather than reading the parts it recognises"
+      "python_message": "this component is version 2 and this build understands version 1. Update the analyzer rather than reading the parts it recognizes"
     },
     {
       "name": "no-name",

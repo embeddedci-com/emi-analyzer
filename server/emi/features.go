@@ -45,7 +45,7 @@ type Features struct {
 	// of the power input with ngspice (a LISN, the input filter from the layout, the switching
 	// regulators as trapezoidal current sources). It needs no solver and runs in seconds, but
 	// its sources are assumed until the user describes them, its common-mode term is not
-	// modelled, and it has not been compared with a measured board. Independent of FullWave.
+	// modeled, and it has not been compared with a measured board. Independent of FullWave.
 	// docs/verification/conducted-emissions.md has what was checked.
 	Conducted bool `json:"conducted"`
 }

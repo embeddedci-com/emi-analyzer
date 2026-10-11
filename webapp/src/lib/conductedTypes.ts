@@ -20,11 +20,11 @@ export type ConductedParamName = keyof ConductedRegulatorValues
 
 /** What the user says about one regulator, keyed by its id. */
 export interface ConductedRegulatorParams extends ConductedRegulatorValues {
-  /** Replaces the topology the scan recognised. */
+  /** Replaces the topology the scan recognized. */
   topology?: ConductedTopology
   /** Leaves the regulator out of the scan. */
   removed?: boolean
-  /** The user checked what the scan recognised. */
+  /** The user checked what the scan recognized. */
   confirmed?: boolean
 }
 
@@ -52,9 +52,9 @@ export interface ConductedRegulator {
   topology: ConductedTopology
   /** Where the topology came from: the layout, the part number, the user, or a default. */
   topology_from: 'layout' | 'part number' | 'user' | 'assumed'
-  /** The topology the scan recognised, before any change by the user. */
+  /** The topology the scan recognized, before any change by the user. */
   found_as: ConductedTopology
-  /** How it was recognised, cue by cue. */
+  /** How it was recognized, cue by cue. */
   found_by: string
   confidence: 'high' | 'medium' | 'low'
   confirmed: boolean

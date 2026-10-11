@@ -72,8 +72,8 @@ class Netlist:
 
 #: Units are declared by a parameter line, e.g. "P  UNITS CUST 0".
 #:
-#:   0 -> inches, 4 decimal places        1 -> millimetres, 3 decimal places
-#:   2 -> inches, 5 decimal places        3 -> millimetres, 4 decimal places
+#:   0 -> inches, 4 decimal places        1 -> millimeters, 3 decimal places
+#:   2 -> inches, 5 decimal places        3 -> millimeters, 4 decimal places
 #:
 #: Getting this wrong scales the whole board by 25.4, which is obvious. Getting the number
 #: of decimal places wrong scales it by 10, which is not.

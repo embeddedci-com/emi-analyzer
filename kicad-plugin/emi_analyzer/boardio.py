@@ -70,7 +70,7 @@ class BoardFiles:
 def read_board(board) -> BoardFiles:
     """The board as it is in the editor, unsaved edits included, plus its project file.
 
-    The board comes from pcbnew itself rather than from disk, so what is analysed is what the
+    The board comes from pcbnew itself rather than from disk, so what is analyzed is what the
     user is looking at, and their file is never saved on their behalf.
     """
     filename = Path(board.name).name or "board.kicad_pcb"

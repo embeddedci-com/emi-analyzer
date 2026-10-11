@@ -194,7 +194,7 @@ export function parseComponent(doc: unknown): Component {
   if (version > COMPONENT_VERSION) {
     throw new ComponentError(
       `this component is version ${version} and this build understands version ` +
-        `${COMPONENT_VERSION}. Update the analyzer rather than reading the parts it recognises`,
+        `${COMPONENT_VERSION}. Update the analyzer rather than reading the parts it recognizes`,
     )
   }
   for (const required of ['id', 'kind', 'name'] as const) {

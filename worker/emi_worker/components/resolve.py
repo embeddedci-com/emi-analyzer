@@ -5,7 +5,7 @@ The order is fixed and first match wins:
   1. part number: a footprint field (MPN, LCSC and the like) naming a component's MPN, one
      of its aliases or its LCSC number, searched in the order of 2 to 5
   2. the user's own component
-  3. a component shared with their organisation
+  3. a component shared with their organization
   4. an unsaved component from the browser tab
   5. the built-in generic family
   6. otherwise bare copper, listed by reference
@@ -172,11 +172,11 @@ def _disagreements(c: Component, part: PartMatch) -> list[str]:
     want = cap_farads(str((c.match or {}).get("value") or ""))
     if want is not None and part.farads is not None and abs(part.farads - want) > want * 1e-6:
         notes.append(f"the board's value {part.value!r} disagrees with {c.mpn or c.name}; "
-                     f"modelled as the part number says")
+                     f"modeled as the part number says")
     pkg = (c.match or {}).get("package")
     if pkg and part.package is not None and part.package.imperial != pkg:
         notes.append(f"the footprint is {part.package.imperial} but {c.mpn or c.name} is {pkg}; "
-                     f"modelled as the part number says")
+                     f"modeled as the part number says")
     return notes
 
 
@@ -237,9 +237,9 @@ class Coverage:
         if not self.total:
             return "no two-pad capacitors found"
         if not self.unmatched:
-            return f"all {self.total} capacitors modelled"
+            return f"all {self.total} capacitors modeled"
         return (
-            f"{len(self.modelled)} of {self.total} capacitors modelled; "
+            f"{len(self.modelled)} of {self.total} capacitors modeled; "
             f"{len(self.unmatched)} left as bare copper"
         )
 

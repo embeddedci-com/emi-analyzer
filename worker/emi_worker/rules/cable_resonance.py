@@ -50,7 +50,7 @@ def check_cable_resonance(ctx: RuleContext) -> Iterator[Finding]:
     settings = getattr(ctx, "settings", None)
     assignments = getattr(settings, "cables", None) or {}
     if not assignments:
-        # Nothing declared. An unassigned connector is not modelled, and guessing one here
+        # Nothing declared. An unassigned connector is not modeled, and guessing one here
         # would put a finding on a cable the user never said existed.
         return
 

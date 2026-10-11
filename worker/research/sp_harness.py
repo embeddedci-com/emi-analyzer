@@ -190,7 +190,7 @@ def _ellipk(k: float) -> float:
 
 
 def stripline_cohn(w: float, b: float, er: float) -> float:
-    """Z0 of a zero-thickness strip centred between planes ``b`` apart (Cohn, 1954). Exact."""
+    """Z0 of a zero-thickness strip centered between planes ``b`` apart (Cohn, 1954). Exact."""
     k = 1.0 / math.cosh(math.pi * w / (2.0 * b))
     kp = math.tanh(math.pi * w / (2.0 * b))
     return ETA0 / (4.0 * math.sqrt(er)) * _ellipk(k) / _ellipk(kp)

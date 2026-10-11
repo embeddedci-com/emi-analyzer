@@ -68,7 +68,7 @@ DEFAULT_PITCH_MM = 1.6
 ADD_VALUES_F = (1e-9, 2.2e-9, 4.7e-9, 10e-9, 22e-9, 47e-9, 100e-9, 220e-9, 470e-9,
                 1e-6, 2.2e-6, 4.7e-6, 10e-6, 22e-6)
 ADD_PACKAGES = ("0402", "0603", "0805")
-#: Where an added part is assumed to go: one pad pitch plus half a millimetre to its via.
+#: Where an added part is assumed to go: one pad pitch plus half a millimeter to its via.
 ADD_VIA_MM = 0.5
 MAX_RECOMMENDATIONS = 4
 
@@ -689,7 +689,7 @@ def _recommend(e: _Entry, before: np.ndarray, target: float, ranked, branches, m
             if part.source != "library":
                 continue
             # At the distance the check asks for, with one ground via and one supply via
-            # half a millimetre from its pads: the same formula as every existing part.
+            # half a millimeter from its pads: the same formula as every existing part.
             conn, _ = mount(part, max_d, ground_vias=1, via_mm=ADD_VIA_MM, rail_via_mm=ADD_VIA_MM)
             new = pdn.Branch(id="new", c_f=c_f, l_h=part.esl_h + conn, r_ohm=part.esr_ohm)
             after = e.swap(None, new)[:e.kb]

@@ -122,7 +122,7 @@ def test_textbook_pdn_landmarks():
     total_c = sum(b.c_f for b in branches)
     z_low = net.mag(np.array([1e5]))[0]
     assert z_low == pytest.approx(1 / (2 * math.pi * 1e5 * total_c), rel=0.01)
-    # 3. The 100 nF bank's dip: a quarter of one part's ESR, within 1 dB (its neighbours
+    # 3. The 100 nF bank's dip: a quarter of one part's ESR, within 1 dB (its neighbors
     #    pull it a little).
     bank_srf = 1 / (2 * math.pi * math.sqrt(1.5e-9 * 100e-9))
     z_bank = net.mag(np.array([bank_srf]))[0]

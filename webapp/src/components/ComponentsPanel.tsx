@@ -209,7 +209,7 @@ export function ComponentsPanel({ api, signedIn, deployment = 'hosted', frequenc
               <Tooltip
                 label={local
                   ? 'Marks the model as shared. On this computer you are the only user, so it changes nothing.'
-                  : 'Members of your organisation can use it, read-only'}
+                  : 'Members of your organization can use it, read-only'}
                 withArrow
               >
                 <Switch

@@ -172,7 +172,7 @@ def test_net_lengths_agree(gerber_board, kicad_board):
 
     It depends on the geometry and the net assignment being right *together*: copper in the
     wrong place, or the right copper on the wrong net, both move these numbers. Counts of
-    nets and tracks can match while every net is mislabelled.
+    nets and tracks can match while every net is mislabeled.
     """
     gdoc, _ = normalize(gerber_board, {})
     kdoc, _ = normalize(kicad_board, {})

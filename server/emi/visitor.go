@@ -10,13 +10,13 @@ import (
 	"time"
 )
 
-// Signed-out visitors get an organisation of their own.
+// Signed-out visitors get an organization of their own.
 //
 // The tool is public: you can open it, upload a board and read the findings without an
 // account, and that is deliberate. What is not acceptable is doing that in a space shared
 // with every other signed-out visitor, because a board is somebody's unreleased layout. So
 // the first request without a credential is given a random visitor id in a cookie, and that
-// id is the organisation.
+// id is the organization.
 //
 // The cookie is signed. Unsigned it would be a header by another name: a visitor could type
 // in somebody else's id and read their boards. Signed, the only ids that verify are ones
@@ -31,8 +31,8 @@ import (
 // "signed out" means one thing.
 const (
 	VisitorCookieName = "emi_visitor"
-	// VisitorOrgPrefix marks an organisation id as belonging to a signed-out visitor rather
-	// than to a real organisation. Real ids are opaque, so the prefix is what makes the two
+	// VisitorOrgPrefix marks an organization id as belonging to a signed-out visitor rather
+	// than to a real organization. Real ids are opaque, so the prefix is what makes the two
 	// distinguishable in logs and in the database.
 	VisitorOrgPrefix = "anon-"
 	visitorTTL       = 365 * 24 * time.Hour

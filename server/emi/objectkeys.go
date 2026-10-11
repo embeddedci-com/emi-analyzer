@@ -10,7 +10,7 @@ import (
 //
 // A prefix check alone is not enough. Both blob backends clean a key before they use it, so
 // "uploads/orgA/../orgB/board.kicad_pcb" passes a HasPrefix("uploads/orgA/") test and then
-// reads organisation B's file. Deleting the project that recorded it deleted B's file too,
+// reads organization B's file. Deleting the project that recorded it deleted B's file too,
 // because the sharing check compares keys as raw strings. So a key must already be in its
 // clean form: what is checked is then exactly what storage will touch.
 
@@ -31,12 +31,12 @@ func cleanKey(key string) bool {
 	return true
 }
 
-// uploadKeyPrefix is where everything a user of an organisation uploads lives.
+// uploadKeyPrefix is where everything a user of an organization uploads lives.
 func uploadKeyPrefix(orgID string) string {
 	return "uploads/" + orgID + "/"
 }
 
-// uploadKeyAllowed reports whether key names an object in this organisation's uploads.
+// uploadKeyAllowed reports whether key names an object in this organization's uploads.
 func uploadKeyAllowed(key, orgID string) bool {
 	return orgID != "" && cleanKey(key) && strings.HasPrefix(key, uploadKeyPrefix(orgID))
 }

@@ -1,7 +1,7 @@
 """Phase 2 · Does the installed openEMS model a lumped inductor?
 
 CSXCAD reads ``L`` on a LumpedElement, and the writer here emits it, but reading an attribute
-is not the same as modelling it. openEMS 0.0.35's ``Operator::Calc_LumpedElements`` knows R and
+is not the same as modeling it. openEMS 0.0.35's ``Operator::Calc_LumpedElements`` knows R and
 C; an element with neither is skipped with a warning (``R or C not specified! skipping``) and
 the cell is left as whatever material is there. If that is what happens, the middle cell of
 ``csx.series_rlc`` is an open gap and every capacitor model is an open circuit.
@@ -46,7 +46,7 @@ OUT = Path(os.environ.get("OUT", "/spike/spike_out")) / "lumped_rlc"
 THREADS = int(os.environ.get("THREADS", "3"))
 FREQS = [100e6, 200e6, 300e6, 500e6, 700e6, 1e9]
 
-#: The loop: port at x = -2 mm, strip at z = 1 mm, element at x = +2 mm. Millimetres.
+#: The loop: port at x = -2 mm, strip at z = 1 mm, element at x = +2 mm. Millimeters.
 H = 1.0
 PORT_X = -2.0
 ELEM_X = 2.0
@@ -82,7 +82,7 @@ if CAPS:
     OUT = OUT.with_name(f"lumped_rlc_caps_fine{os.environ.get('FINE_UM', '0')}")
 #: A comma-separated subset of case names to run; the short always runs.
 ONLY = [n for n in os.environ.get("ONLY", "").split(",") if n]
-#: One cell of this size on each axis, in micrometres, away from the loop: a shorter timestep.
+#: One cell of this size on each axis, in micrometers, away from the loop: a shorter timestep.
 FINE_UM = float(os.environ.get("FINE_UM", "0"))
 
 

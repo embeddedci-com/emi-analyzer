@@ -75,7 +75,7 @@
   {
     "id": "ddr-skew",
     "title": "Length matching",
-    "about": "Members of a matched group whose delay differs from their reference by more than the budget. Measured in time, not millimetres: an inner-layer millimetre and an outer-layer one are about 25% apart.",
+    "about": "Members of a matched group whose delay differs from their reference by more than the budget. Measured in time, not millimeters: an inner-layer millimeter and an outer-layer one are about 25% apart.",
     "category": "Signal integrity",
     "params": [
       {

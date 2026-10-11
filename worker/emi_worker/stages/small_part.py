@@ -16,10 +16,10 @@ This mode removes each of those on purpose:
   energy has decayed ``END_CRITERIA`` below its peak, and with both ends of the net terminated
   in 50 ohm that is a few round trips of the coupon, not the 100 ns 30 MHz would ask for. The
   lower edge is what the excitation has to reach and what the timestep cap is sized from
-  (three periods, 30 ns), so it sets the worst case; below 100 MHz a part a few centimetres
+  (three periods, 30 ns), so it sets the worst case; below 100 MHz a part a few centimeters
   across is quasi-static, and the answer is a lumped L or C a circuit tool gives cheaper. The
   upper edge keeps the coarsest cell under 3.4 mm in FR-4, which the default air and a coupon
-  margin of a few millimetres hold without special meshing.
+  margin of a few millimeters hold without special meshing.
 * **A lower end criterion**: -50 dB, where a solve otherwise stops at -40. A port read from a
   record cut at -40 dB is where the far field's negative resistances came from.
 * **A budget checked against the real mesh**: cells times the timestep cap. A run that would
@@ -55,14 +55,14 @@ MAX_HZ = 6e9
 #: The energy decay a run stops at: -50 dB of its peak.
 END_CRITERIA = 1e-5
 
-#: The excitation's half-width as a fraction of its centre, at most. The default band spans
-#: 20:1, where ``model.excitation_band`` sets the half-width to the centre and so puts the
+#: The excitation's half-width as a fraction of its center, at most. The default band spans
+#: 20:1, where ``model.excitation_band`` sets the half-width to the center and so puts the
 #: pulse's 20 dB point at DC. Everything below the band is then driven nearly as hard as the
 #: band's lower edge, and a part with a slow mode down there rings in it long after the band
 #: has settled: the sample board's clock net, over a split plane, swung at about 30 MHz and was
 #: still at -43 dB after 15.7 ns, its whole budget, while its ports had been quiet since 7 ns.
 #: At 0.71 the pulse is 38 dB down at 30 MHz instead of 19, and the same net settled at 6.1 ns.
-#: What it costs: the band's own edges are driven 33 dB below the centre instead of 16, and the
+#: What it costs: the band's own edges are driven 33 dB below the center instead of 16, and the
 #: pulse is 1.4 times longer. Every output here is a ratio (a port's V/I, a map per volt of the
 #: source), so a weaker edge moves nothing while the run settles; the line checks were re-run
 #: with it (docs/verification/small-part-solve.md).
@@ -294,7 +294,7 @@ def admit(cells: int, needed_steps: int, dt_seconds: float) -> int:
 
 
 def decay_fraction(energy_db: float) -> float:
-    """How far a run's energy has fallen towards the end criterion, 0 to 1, for progress."""
+    """How far a run's energy has fallen toward the end criterion, 0 to 1, for progress."""
     target = 10.0 * math.log10(END_CRITERIA)
     return min(1.0, max(0.0, energy_db / target))
 

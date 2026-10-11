@@ -294,7 +294,7 @@ func TestChecksAndOpenInApp(t *testing.T) {
 	}
 }
 
-// The MCP server's copy of the rule catalogue is the worker's export, unchanged.
+// The MCP server's copy of the rule catalog is the worker's export, unchanged.
 func TestCatalogueMatchesTheWebapps(t *testing.T) {
 	web, err := os.ReadFile("../../webapp/src/lib/ruleCatalogue.json")
 	if err != nil {

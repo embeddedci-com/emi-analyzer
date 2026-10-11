@@ -18,10 +18,10 @@ type ConductedRegulator struct {
 	RiseS         *float64 `json:"rise_s,omitempty"`
 	PhaseDeg      *float64 `json:"phase_deg,omitempty"`
 	InductanceH   *float64 `json:"inductance_h,omitempty"`
-	// Topology replaces the one the scan recognised: one of conductedTopologies.
+	// Topology replaces the one the scan recognized: one of conductedTopologies.
 	Topology string `json:"topology,omitempty"`
 	// Removed leaves the regulator out of the scan; Confirmed says the user checked what the
-	// scan recognised. Neither changes a number.
+	// scan recognized. Neither changes a number.
 	Removed   bool `json:"removed,omitempty"`
 	Confirmed bool `json:"confirmed,omitempty"`
 }
@@ -69,7 +69,7 @@ func printable(s string, max int) bool {
 	return true
 }
 
-// validateConductedParams checks a conducted run's parameters and returns them normalised.
+// validateConductedParams checks a conducted run's parameters and returns them normalized.
 func validateConductedParams(raw json.RawMessage) (ConductedParams, error) {
 	var p ConductedParams
 	if len(raw) > 0 && string(raw) != "null" {

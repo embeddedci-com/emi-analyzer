@@ -41,7 +41,7 @@ describe('scanToOverlay', () => {
     expect(r.peakAt).toEqual({ x: 1, y: 1 })
   })
 
-  it('covers the scan cells, not only their centres', () => {
+  it('covers the scan cells, not only their centers', () => {
     expect(scanToOverlay(scan, place).overlay.extent).toEqual([-0.5, -0.5, 1.5, 1.5])
   })
 

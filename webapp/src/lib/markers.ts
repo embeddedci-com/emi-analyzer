@@ -66,7 +66,7 @@ export function severityMarkerColor(severity: RuleFinding['severity']): Rgb {
 }
 
 /**
- * One marker per finding that has a place on the board, labelled with its number in the list
+ * One marker per finding that has a place on the board, labeled with its number in the list
  * and colored by severity. A finding with no position (a board-wide count) has no marker.
  */
 export function findingMarkers(findings: RuleFinding[], numbers: Map<string, number>): BoardMarker[] {

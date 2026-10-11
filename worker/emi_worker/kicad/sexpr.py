@@ -4,9 +4,9 @@ KiCad's ``.kicad_pcb`` is one big s-expression. The format is stable in shape bu
 detail -- keys come and go between major versions, and the same value is quoted in one
 release and bare in the next -- so this reader is deliberately permissive: it builds a
 generic tree and lets the extraction layer ask for what it needs and shrug at what it does
-not recognise. A strict schema here would break on every KiCad release.
+not recognize. A strict schema here would break on every KiCad release.
 
-Files run to tens of megabytes, so the tokeniser is a single compiled regex rather than a
+Files run to tens of megabytes, so the tokenizer is a single compiled regex rather than a
 character loop; the difference is roughly two orders of magnitude.
 """
 
@@ -159,7 +159,7 @@ def text(node: Node, name: str, index: int = 0, default: str = "") -> str:
     if v is None:
         return default
     if isinstance(v, float):
-        # Reverse the tokeniser's number coercion for values that are conceptually names.
+        # Reverse the tokenizer's number coercion for values that are conceptually names.
         return str(int(v)) if v.is_integer() else str(v)
     return str(v)
 

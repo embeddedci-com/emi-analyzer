@@ -5,12 +5,12 @@ invisible in a schematic review, because the schematic says a 100 nF capacitor i
 and only the layout says it is 12 mm away.
 
 What matters is the loop: pin -> capacitor -> ground via -> plane -> back to the IC's ground
-pin. Every millimetre of that loop is roughly a nanohenry, and a capacitor behind 10 nH of
+pin. Every millimeter of that loop is roughly a nanohenry, and a capacitor behind 10 nH of
 trace stops decoupling somewhere in the low tens of MHz -- exactly where a microcontroller's
 clock harmonics live. So the check measures both halves: pin to capacitor, and capacitor to
 its ground via.
 
-Components are recognised by reference designator (U/IC for ICs, C for capacitors), and a
+Components are recognized by reference designator (U/IC for ICs, C for capacitors), and a
 capacitor only counts when one pad is on a supply net and the other on ground. That is a
 heuristic; findings quote the parts they matched so a wrong guess is visible.
 """
@@ -28,7 +28,7 @@ from .planes import severity
 IC_RE = re.compile(r"^(U|IC)\d", re.I)
 CAP_RE = re.compile(r"^C\d", re.I)
 
-#: Rough loop inductance per millimetre of pin-to-capacitor distance, counted twice (out and
+#: Rough loop inductance per millimeter of pin-to-capacitor distance, counted twice (out and
 #: back). An order-of-magnitude figure, used only to put a frequency on "too far" so the
 #: finding says why it matters.
 NH_PER_MM = 1.0

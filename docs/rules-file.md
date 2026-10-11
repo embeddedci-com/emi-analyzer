@@ -85,8 +85,8 @@ other setting in a group is ignored with a warning; set it under `rules` instead
 
 ## Notes
 
-- **Tolerances are in picoseconds.** An inner-layer millimetre and an outer-layer one differ
-  by about 25% in delay, so millimetres would compare the wrong thing. See
+- **Tolerances are in picoseconds.** An inner-layer millimeter and an outer-layer one differ
+  by about 25% in delay, so millimeters would compare the wrong thing. See
   [length-matching-and-impedance.md](length-matching-and-impedance.md).
 - **Impedance targets default to 0, meaning "no target"** — only discontinuities along a net
   are reported. A board-wide target is almost never right; scope it with `groups`.
@@ -98,9 +98,9 @@ other setting in a group is ignored with a warning; set it under `rules` instead
   look at connectors within `edge_mm` of the outline, because a debug header in the middle of
   the board is not where a cable plugs in. Set `edge_mm: 0` to check every connector, or
   suppress an edge header you never expose by its nets (`net: "/SWD*"`).
-- **EMC checks recognise parts by reference, value and footprint.** A clamp is a part number
+- **EMC checks recognize parts by reference, value and footprint.** A clamp is a part number
   such as USBLC6, PESD, SRV05 or SMAJ on any reference, or a diode from the line to ground. A
-  protection part the analyzer does not recognise is reported as missing — suppress the net
+  protection part the analyzer does not recognize is reported as missing — suppress the net
   with a reason rather than switching the rule off.
 
 ## Rule ids
@@ -108,7 +108,7 @@ other setting in a group is ignored with a warning; set it under `rules` instead
 Settings key off a rule's **id**, not its title — titles get reworded, ids do not. The current
 list, with every parameter and its default, is
 [`webapp/src/lib/ruleCatalogue.json`](../webapp/src/lib/ruleCatalogue.json). It is generated
-from the worker's own catalogue (`python scripts/export_rule_catalogue.py`) and a test fails when
+from the worker's own catalog (`python scripts/export_rule_catalogue.py`) and a test fails when
 it is stale, so it is always the set of checks that actually runs. The tool's front page shows the
 same checks by title.
 

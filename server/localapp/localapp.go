@@ -194,7 +194,7 @@ func (f *Finder) Probe(ctx context.Context, base string) (Endpoint, bool) {
 	return e, true
 }
 
-// Running is the app, if one is up. EMI_ANALYZER_URL is honoured before the file.
+// Running is the app, if one is up. EMI_ANALYZER_URL is honored before the file.
 func (f *Finder) Running(ctx context.Context) (Endpoint, bool) {
 	if u := f.o.Getenv(URLEnv); u != "" {
 		return f.Probe(ctx, u)

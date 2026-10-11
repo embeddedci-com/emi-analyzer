@@ -100,7 +100,7 @@ def test_the_generic_label_names_the_dielectric_when_the_value_does(parts):
 
 
 def test_no_named_part_answers_for_value_and_package_alone():
-    """A 100 nF 0402 with no part number must never be modelled as a Samsung part."""
+    """A 100 nF 0402 with no part number must never be modeled as a Samsung part."""
     got = resolve_part(match_part("C9", "100nF", C0402))
     assert got.generic
 

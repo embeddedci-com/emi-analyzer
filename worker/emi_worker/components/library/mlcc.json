@@ -1,7 +1,7 @@
 {
   "format": "emi-component-library",
   "version": 1,
-  "_comment": "The built-in GENERIC MLCC library: typical figures for a package and value class, not measurements of any specific part. They exist so a board with no library behind it still gets a self-resonance in roughly the right decade, and they are labelled generic everywhere they surface so nobody mistakes them for a datasheet number. A named part belongs in vendor.json with its datasheet cited. ESL EXCLUDES the mounting loop (esl_includes_mount: false) because the solve models pads, vias and planes itself, and counting that twice would put every SRF low. The family entry at the end is the catch-all: ESL is very nearly a property of the package, so one entry per package covers every value, and the specific entries above it exist only where a class average is not good enough.",
+  "_comment": "The built-in GENERIC MLCC library: typical figures for a package and value class, not measurements of any specific part. They exist so a board with no library behind it still gets a self-resonance in roughly the right decade, and they are labeled generic everywhere they surface so nobody mistakes them for a datasheet number. A named part belongs in vendor.json with its datasheet cited. ESL EXCLUDES the mounting loop (esl_includes_mount: false) because the solve models pads, vias and planes itself, and counting that twice would put every SRF low. The family entry at the end is the catch-all: ESL is very nearly a property of the package, so one entry per package covers every value, and the specific entries above it exist only where a class average is not good enough.",
   "components": [
     {
       "format": "emi-component",

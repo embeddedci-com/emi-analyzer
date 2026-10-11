@@ -1,9 +1,9 @@
 /**
  * Solve results: which layer, which frequency, and how loud.
  *
- * The map is normalised against one reference shared across every layer and frequency, so
+ * The map is normalized against one reference shared across every layer and frequency, so
  * switching between them shows a real difference rather than each view being stretched to
- * fill the colour scale. That is what makes "this trace is the loud one" a claim the
+ * fill the color scale. That is what makes "this trace is the loud one" a claim the
  * picture actually supports.
  */
 
@@ -67,7 +67,7 @@ export interface SolveManifest {
   has_port_spectra?: boolean
   dense_frequencies_hz?: number[]
   /**
-   * Which parts were modelled rather than left as bare copper (docs/implementation.md §3). Empty
+   * Which parts were modeled rather than left as bare copper (docs/implementation.md §3). Empty
    * means none were; absent means the result predates the list. Those are different answers.
    */
   modelled_parts?: ModelledPart[]
@@ -393,7 +393,7 @@ export function HotspotResults({
             The loudest point on {layer} is {quality.peakDb.toFixed(1)} dB and the region boundary
             still reaches {quality.edgeDb.toFixed(1)} dB, so copper carrying current continues
             past the edge. The structure is cut where the region ends, and values within a
-            millimetre or two of that edge are partly an artefact of the cut. Enlarge the region
+            millimeter or two of that edge are partly an artifact of the cut. Enlarge the region
             to take in where the current goes.
           </Text>
         </Alert>

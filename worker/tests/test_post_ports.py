@@ -170,7 +170,7 @@ def test_the_manifest_carries_the_modelled_parts_list(solved):
 
 
 def test_a_solve_that_modelled_nothing_says_so_with_an_empty_list(solved):
-    """Not absent: a reader must be able to tell 'nothing was modelled' from 'this result
+    """Not absent: a reader must be able to tell 'nothing was modeled' from 'this result
     predates the list', and format_version already answers the second question."""
     art = post.build_artifacts(str(solved), {"F.Cu": "Hf_F_Cu"}, [200e6, 400e6], ["p1"])
     assert art.manifest["modelled_parts"] == []

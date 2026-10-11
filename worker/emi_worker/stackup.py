@@ -11,7 +11,7 @@ Two facts drive everything here:
     below, the field is entirely in the dielectric and the effective permittivity is the
     material's. On an outer layer, half the field is in air, so it is markedly lower --
     about 6.9 ps/mm against 5.5 ps/mm for ordinary FR-4. That 25% difference is why length
-    matching has to be done in time and not in millimetres.
+    matching has to be done in time and not in millimeters.
 
   * A trace's impedance depends on how far it is from its reference plane, and which plane
     that is. The plane checks already answer "which"; this adds "how far".
@@ -87,7 +87,7 @@ class BoardElectrics:
     layers: dict[str, LayerElectrics]
     #: Vias are not free. A through via in a 1.6 mm board is a couple of picoseconds, which
     #: is inside the budget of a DDR byte lane -- so a net with three more vias than its
-    #: neighbour is skewed, and saying otherwise would be a rounding error with consequences.
+    #: neighbor is skewed, and saying otherwise would be a rounding error with consequences.
     via_ps: float = 2.0
     #: True when no dielectric permittivity came from the board file at all.
     epsilon_assumed: bool = True
@@ -153,7 +153,7 @@ def analyse(
 
         # A plane on both sides is stripline; one side, microstrip. A plane layer itself is
         # not a signal layer, but it can still carry traces, and treating it as stripline
-        # when it has a neighbour plane is the right approximation.
+        # when it has a neighbor plane is the right approximation.
         if below and above:
             kind = "stripline"
             near, far = (below, above) if below[1] <= above[1] else (above, below)

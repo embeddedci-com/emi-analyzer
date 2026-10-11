@@ -19,7 +19,7 @@ if TYPE_CHECKING:  # annotations only; importing these at run time would be circ
 
 FORMAT_VERSION = 1
 
-#: Ground and power net names are recognised word by word, never by substring: "+10V" holds
+#: Ground and power net names are recognized word by word, never by substring: "+10V" holds
 #: "0v" and "/SIGNDIR" holds "gnd", and neither is a ground. A name splits into words at
 #: anything but a letter, a digit or a decimal point, so "+3.3V" is the one word "3.3v" and
 #: "VBUS_20V" is "vbus" and "20v".

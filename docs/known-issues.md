@@ -26,7 +26,7 @@ solver or a measurement — and passed. The gap between the two is most of this 
 | Component library (59 named JLCPCB Basic MLCCs, matched by MPN or LCSC field; generic by package otherwise) | ✅ | ✅ each named part reproduces its manufacturer model's notch, and \|Z\| within 2 dB from half to twice it; 332 of 499 capacitors on four private boards match by part number. DC bias recorded, not applied; FH and Yageo parts have no manufacturer model and stay generic ([component-library.md](component-library.md)) | on |
 | Components (MLCC models in a solve) | ✅ | ⚠️ upstream openEMS lost the capacitor to float rounding (SRF 17 % low); the image patches it, and a 100 pF and a 1 nF 0402 then match their series R-L-C within 0.01 % on SRF and 0.23 dB on \|Z\|, but only with a -70 dB record: at the solve's -40 dB a 100 pF part is 4.7 dB off (§3) | off, with full-wave |
 | Board far field (NF2FF) | ✅ | ⚠️ matches nec2c on dipoles over the ground plane as the product runs it, 30 MHz up (§3); no board checked against a measurement | off, with full-wave |
-| Cable emissions, Tier B | ✅ | ❌ its real-board gate is not met. Re-run with the board as a plate: on board A, 4 dB low on average from 80 MHz to resonance (worst 7.1), 0.4 dB low (worst 2.8) once V_oc's +3.7 dB rise with the cable attached is added; 8-20 dB low below 80 MHz. The V_oc offset is measured, not modelled. Boards B and C give no answer: their board modes do not settle in the record — §3 | off, with full-wave |
+| Cable emissions, Tier B | ✅ | ❌ its real-board gate is not met. Re-run with the board as a plate: on board A, 4 dB low on average from 80 MHz to resonance (worst 7.1), 0.4 dB low (worst 2.8) once V_oc's +3.7 dB rise with the cable attached is added; 8-20 dB low below 80 MHz. The V_oc offset is measured, not modeled. Boards B and C give no answer: their board modes do not settle in the record — §3 | off, with full-wave |
 | Compliance estimate | ✅ | ❌ runs end to end on the fixture board; never checked against a lab or a second solver (§3) | off, with full-wave |
 | Conducted emissions scan (`conducted` run, ngspice), differential mode | ✅ | ⚠️ the LISN within the CISPR 16-1-2 tolerance, a buck's and a boost's ripple and first harmonic, two phased bucks and an LC filter within 1 dB of closed forms; no board against a measurement; regulators found on all 4 private boards, each marked with how; regulator settings are assumed until entered ([verification/conducted-emissions.md](verification/conducted-emissions.md)) | **off** (`conducted`) |
 | Report export (HTML and JSON, built in the browser) | ✅ | — (nothing to verify: it restates results) | on |
@@ -65,7 +65,7 @@ end-criterion after 84,987 of a possible 358,695 timesteps, converged to -41.1 d
 field maps come back through the API. A run of this shape used to fail at about step 79,000.
 
 **The mesher really did violate its own grading bound**, which is what the divergence was
-attributed to. Its stated maximum step between neighbouring cells is 1.4; on a real board it
+attributed to. Its stated maximum step between neighboring cells is 1.4; on a real board it
 produced 2.0, 2.6 and 4.5 at the three presets. Three rules were at fault: two were written in
 terms of the preset's minimum cell size, and copper puts grid lines far closer together than
 any preset, so both misfired where the mesh is finest; the third stretched a graded series to
@@ -119,7 +119,7 @@ after the energy has fallen 20 dB.
 | A choke from a datasheet curve is R + jX | ✅ built and tested; no library cable has one, none compared with a measured choke |
 | A bond moves the first resonance where a line over the plane resonates | ✅ within 3.3 % (1 m), 6.7 % (2 m). The old check ("never lengthens") could not fail and was wrong for an open far end |
 | **Tier B against a fully coupled simulation on three real boards, ±6 dB below resonance** | ❌ re-run with the plate at 100 ns. Board A: mean -7.6 dB, worst -20 dB from 30 MHz; from 80 MHz mean -4.1, worst -7.1; with the measured V_oc offset, mean -0.4, worst 2.8 (passes from 80 MHz). Board C: no result, a 496 MHz board mode (Q about 110) rings through the record. Board B: not run, expected the same. The 40 ns thin-wire runs read -8.9 (A) and -7.5 dB (C) |
-| Why Tier B read low | ✅ found with nec2c: Tier B modelled the board as a thin wire. A plate of the board's outline reads Z_ant 5-12 dB lower below resonance, about 7 of board A's 8.9 dB and 5.6 of board C's 7.5 dB. Tier B now uses the plate. The rest is V_oc: attaching a cable raises it by 0-5 dB depending on how far the source is from the connector, which the solve cannot see. openEMS on board A: the plate is worth 7 dB, and V_oc rises a flat 3.7 dB (3.0-5.1) with the cable, where nec2c predicted 0 dB for a source this near. Not modelled: one board is not a model. The 1 m runs were not done |
+| Why Tier B read low | ✅ found with nec2c: Tier B modeled the board as a thin wire. A plate of the board's outline reads Z_ant 5-12 dB lower below resonance, about 7 of board A's 8.9 dB and 5.6 of board C's 7.5 dB. Tier B now uses the plate. The rest is V_oc: attaching a cable raises it by 0-5 dB depending on how far the source is from the connector, which the solve cannot see. openEMS on board A: the plate is worth 7 dB, and V_oc rises a flat 3.7 dB (3.0-5.1) with the cable, where nec2c predicted 0 dB for a source this near. Not modeled: one board is not a model. The 1 m runs were not done |
 | Tier A with the board as a plate | ⏳ not changed: e_per_amp moves 0.1-1 dB below resonance but 2-8 dB around the peaks, which shift down. Needs its own openEMS check first |
 | No diode package is mistaken for a connector | ✅ |
 | `nec2c` and a second antenna solver agree within 1 dB | ✅ openEMS, 9 configurations: 7 within 1 dB below resonance, 1.14 and 2.48 dB for the other two (the second record-limited) |
@@ -144,7 +144,7 @@ Details and the full list: [`verification/small-part-solve.md`](verification/sma
 
 ### Conducted emissions
 
-Experimental (`conducted`). What is modelled: two CISPR 16-1-2 50 Ω/50 µH LISNs on the board's
+Experimental (`conducted`). What is modeled: two CISPR 16-1-2 50 Ω/50 µH LISNs on the board's
 power input; the input rail as laid out, through ferrites, inductors, fuses, series diodes,
 low-value resistors, eFuses and a charger or LDO a regulator draws from, with each capacitor's
 library ESR and ESL, its via and the trace inductance between them; each switching regulator on
@@ -158,7 +158,7 @@ duty, edge, inductance and phase are what the user enters or assumed defaults ma
 Differential mode only, against the FCC 15.107 quasi-peak and average limits; every harmonic is
 a steady tone, so the average limit decides.
 
-Not modelled: common-mode current (through the switch node's and the board's capacitance to the
+Not modeled: common-mode current (through the switch node's and the board's capacitance to the
 test bench's reference plane, which depends on the setup); spread spectrum, burst and
 pulse-skipping modes; flyback, SEPIC and charge-pump input currents; a buck-boost in boost mode;
 discontinuous conduction; a power input on a connector with a U reference or an unnamed net;
@@ -171,8 +171,8 @@ inductor and ferrite self-resonance; DC-bias derating; the external power supply
 | Its first harmonic at the LISN against the closed form and a transient FFT | ✅ both within 0.01 dB |
 | An LC filter's attenuation against its closed form | ✅ within 0.012 dB, 150 kHz-30 MHz |
 | A boost's input ripple against ΔI/(8·f·C), its first harmonic against the closed form and a transient FFT | ✅ -0.34 dB; within 0.01 dB |
-| Two bucks on one clock: in phase, 90° and 180° apart, against \|1 + e^(-jnφ)\| | ✅ within 0.02 dB; cancelled lines over 250 dB down |
-| Real boards: the input, filter and regulators found | ⚠️ 4 private boards: a regulator on each (a boost; seven PMIC bucks; a boost, an inverting stage and a buck module; an external-FET buck-boost controller); a second input on one is not recognised |
+| Two bucks on one clock: in phase, 90° and 180° apart, against \|1 + e^(-jnφ)\| | ✅ within 0.02 dB; canceled lines over 250 dB down |
+| Real boards: the input, filter and regulators found | ⚠️ 4 private boards: a regulator on each (a boost; seven PMIC bucks; a boost, an inverting stage and a buck module; an external-FET buck-boost controller); a second input on one is not recognized |
 | One board against a LISN measurement | ❌ |
 
 Details: [`verification/conducted-emissions.md`](verification/conducted-emissions.md).
@@ -203,7 +203,7 @@ Details and numbers: [`verification/cables-and-drivers.md`](verification/cables-
 The first of these is the only check that the series R-L-C construction behaves like a
 capacitor. It found that the construction used until September 2026 (R, L and C elements in three
 adjacent cells) was an open circuit on openEMS 0.0.35, which the image shipped until then and which skips an
-element with only L; every solve with components on had modelled its capacitors as missing. Capacitors are
+element with only L; every solve with components on had modeled its capacitors as missing. Capacitors are
 now one series element, placed only on a solver that models an inductor. A rerun then found that
 upstream openEMS keeps that element's state in float and loses the capacitor to rounding at a
 board's timestep; the image patches openEMS for it, and the solve's probe checks.
@@ -276,7 +276,7 @@ Details: [`verification/decoupling.md`](verification/decoupling.md).
   closer together than the cell beside them, the step between those two cells stays: closing it
   would mean a cell smaller than the mesh's smallest, which costs timesteps everywhere.
 - **The image's openEMS is now built from source** (a pinned upstream commit) instead of
-  Debian's 0.0.35, so components can be modelled. They need a run to -70 dB to be right (§3),
+  Debian's 0.0.35, so components can be modeled. They need a run to -70 dB to be right (§3),
   which the solve does not ask for. Every other full-wave check on these pages ran on 0.0.35
   and has not been rerun on the new solver; it writes field dumps in a layout only the
   near-field reader has been taught, and its nf2ff output is untested. An `OPENEMS_SOURCE=apt`
@@ -323,7 +323,7 @@ Details: [`verification/decoupling.md`](verification/decoupling.md).
 - **There is no CISPR 32 table.** Only FCC Part 15 limits exist. When CISPR 32 is added its values
   will come from cross-checked secondary sources, not the standard itself.
 - **Capacitance is nominal**: no DC-bias or temperature derating.
-- **Shielding and enclosures are not modelled.** A shielded and an unshielded cable are the same
+- **Shielding and enclosures are not modeled.** A shielded and an unshielded cable are the same
   antenna.
 - **Spread-spectrum clocking is ignored**, which errs on the conservative side.
 - **Runs do not survive closing the app.** A run that was in progress is marked failed on the

@@ -1,4 +1,4 @@
-"""Turn a BoardModel into the normalised pair everything downstream reads.
+"""Turn a BoardModel into the normalized pair everything downstream reads.
 
 ``board.json``   metadata: stackup with z heights, layers, nets, vias, outline, warnings,
                  and a byte index into the triangle buffer
@@ -10,8 +10,8 @@ Two decisions worth stating.
 vertex buffer and then highlights a net or hides a layer by changing a uniform and a draw
 range -- no re-fetch, no re-upload, no geometry library in the frontend.
 
-*One coordinate system, converted once.* KiCad works in millimetres with Y pointing down
-and an arbitrary page origin. Everything downstream of this module works in millimetres
+*One coordinate system, converted once.* KiCad works in millimeters with Y pointing down
+and an arbitrary page origin. Everything downstream of this module works in millimeters
 with Y up and the origin at the board's bottom-left corner. Doing the flip here, exactly
 once, is what stops a sign error from appearing in the viewer, the rules and the mesher
 independently.

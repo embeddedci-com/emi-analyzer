@@ -14,7 +14,7 @@
 # changes a released worker. The tag is the commit's first 12 characters, then "-" and the
 # first 8 of the SHA-256 of this folder's *.patch files in name order, when there are any.
 #
-# Licences: openEMS and nf2ff are GPL-3.0-or-later, CSXCAD LGPL-3.0-or-later. The exact
+# Licenses: openEMS and nf2ff are GPL-3.0-or-later, CSXCAD LGPL-3.0-or-later. The exact
 # source is the upstream commit below plus the patches in this folder; worker/NOTICE says so
 # inside the worker image.
 

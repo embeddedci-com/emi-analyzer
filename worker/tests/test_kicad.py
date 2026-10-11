@@ -160,7 +160,7 @@ def test_circle_never_loses_copper():
     """
     r = 0.3
     ring = g.circle(0, 0, r)
-    # Every edge midpoint must still be at least r from the centre.
+    # Every edge midpoint must still be at least r from the center.
     for i in range(len(ring)):
         ax, ay = ring[i]
         bx, by = ring[(i + 1) % len(ring)]
@@ -185,7 +185,7 @@ def test_simplify_keeps_the_shape():
     assert out[0] == ring[0] and out[-1] == ring[-1]
 
 
-# ---- normalisation -------------------------------------------------------------------
+# ---- normalization -------------------------------------------------------------------
 
 def test_coordinates_are_flipped_to_y_up(normalized, model):
     doc, _ = normalized
@@ -213,7 +213,7 @@ def test_copper_z_heights_come_from_the_stackup(normalized):
     doc, _ = normalized
     z = {layer["name"]: layer["z_mm"] for layer in doc["layers"]}
     assert z["F.Cu"] > z["B.Cu"]
-    # 0.035 + 1.53 + 0.035 = 1.6 total; F.Cu centre sits half its thickness below the top.
+    # 0.035 + 1.53 + 0.035 = 1.6 total; F.Cu center sits half its thickness below the top.
     assert z["F.Cu"] == pytest.approx(1.6 - 0.035 / 2, abs=1e-6)
     assert z["B.Cu"] == pytest.approx(0.035 / 2, abs=1e-6)
 

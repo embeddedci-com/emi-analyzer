@@ -248,7 +248,7 @@ export interface CableChange {
 
 export interface CableSide {
   cable?: string
-  /** Not modelled: nothing declared, or declared as never cabled. */
+  /** Not modeled: nothing declared, or declared as never cabled. */
   note?: string
   tightest?: { frequency_hz: number; max_current_dbua: number } | null
   points?: CableBudgetPoint[]

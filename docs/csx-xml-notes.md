@@ -41,7 +41,7 @@ That is the signal to look at.
 </openEMS>
 ```
 
-- `DeltaUnit="0.001"` means every coordinate in the file is in **millimetres**, which is
+- `DeltaUnit="0.001"` means every coordinate in the file is in **millimeters**, which is
   what board.json already uses. No unit conversion anywhere.
 - `<FDTD><Excitation>` defines the *signal*. It is unrelated to the `<Excitation>`
   *property* below, which defines *where* that signal is applied. Same word, two jobs.
@@ -134,7 +134,7 @@ density at named frequencies, which shows *which trace* is acting as the antenna
 `FileType="1"` selects HDF5.
 
 **`DumpMode` matters more than it looks.** 0 is raw grid values, 1 is node interpolation,
-2 is cell interpolation. Cell interpolation reports at cell *centres*, so a dump plane
+2 is cell interpolation. Cell interpolation reports at cell *centers*, so a dump plane
 placed on a copper layer is sampled half a cell away from the metal — and since surface
 current exists only on the conductor, the entire map comes back zero. Measured on a real
 board: with `DumpMode="2"` a layer at z = 1.5825 mm was sampled at 1.5336 mm and every cell
@@ -166,7 +166,7 @@ in megabytes.
 copper layer). `Elevation` is its position along that axis. Vertices use `X1`/`X2` for the
 two in-plane coordinates, **not** X/Y.
 
-`Polygon` is infinitely thin; `LinPoly` extrudes by `Length`. Copper is modelled as a
+`Polygon` is infinitely thin; `LinPoly` extrudes by `Length`. Copper is modeled as a
 zero-thickness `Polygon` — 35 µm of copper thickness would force the vertical mesh finer
 than the copper, multiplying the timestep cost for a detail that barely moves the answer.
 

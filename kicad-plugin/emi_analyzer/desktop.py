@@ -126,7 +126,7 @@ def probe(url: str, timeout: float = PROBE_TIMEOUT_S) -> Optional[Endpoint]:
 
 
 def running() -> Optional[Endpoint]:
-    """The app, if one is up. Honours EMI_ANALYZER_URL before looking anything up."""
+    """The app, if one is up. Honors EMI_ANALYZER_URL before looking anything up."""
     override = os.environ.get(URL_ENV)
     if override:
         return probe(override)

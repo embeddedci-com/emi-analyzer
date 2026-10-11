@@ -8,7 +8,7 @@ number is an estimate with several decibels of stated uncertainty. A finding, by
 something specific about this board that someone can look at.
 
 When nothing on the dominant path has a finding, the view says so in those words and gives
-general guidance for that path type — labelled as general, so it is not mistaken for something
+general guidance for that path type — labeled as general, so it is not mistaken for something
 the tool noticed.
 """
 
@@ -119,7 +119,7 @@ def gather(
 
     A finding qualifies by **rule and (net or proximity)**. Rule alone would pull in every
     plane gap on the board; net alone would miss a stitching finding that has no net at all but
-    sits two millimetres from the connector.
+    sits two millimeters from the connector.
     """
     rules = PATH_RULES.get(path_kind, ())
     wanted_nets = {n for n in nets if n}

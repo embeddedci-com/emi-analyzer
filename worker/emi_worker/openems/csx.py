@@ -15,7 +15,7 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from typing import Iterable, Sequence
 
-#: Every coordinate in the document is in millimetres, matching board.json, so nothing
+#: Every coordinate in the document is in millimeters, matching board.json, so nothing
 #: converts units anywhere between the KiCad file and the solver.
 DELTA_UNIT_MM = 0.001
 
@@ -105,7 +105,7 @@ class Box(Primitive):
 class Polygon(Primitive):
     """A flat polygon on a plane normal to one axis.
 
-    Copper is modelled with zero thickness. Extruding 35 um of copper would force the
+    Copper is modeled with zero thickness. Extruding 35 um of copper would force the
     vertical mesh finer than the copper itself, and since the timestep is pinned by the
     smallest cell in any axis, that multiplies the cost of the whole run for a detail that
     barely moves the answer.
@@ -348,7 +348,7 @@ class DumpBox(Property):
     #: 0 = raw grid values, 1 = node interpolation, 2 = cell interpolation.
     #:
     #: **Node interpolation for anything sampled on copper.** Cell interpolation reports at
-    #: cell *centres*, which for a plane placed on a copper layer means sampling half a cell
+    #: cell *centers*, which for a plane placed on a copper layer means sampling half a cell
     #: away from the metal — and surface current exists only on the conductor, so the map
     #: comes back all zeros. Measured on a real board: mode 2 sampled 1.5336 mm for a layer
     #: at 1.5825 mm; mode 1 sampled 1.5825 mm exactly.

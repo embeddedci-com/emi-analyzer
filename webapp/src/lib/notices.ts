@@ -1,12 +1,12 @@
 /**
- * What the worker said about a board while analysing it, sorted by how much it matters.
+ * What the worker said about a board while analyzing it, sorted by how much it matters.
  *
  * The notes come from three places: rules.json `notes` (sidecar files, the stackup, checks
  * that could not run), rules.json `settings_warnings` (a rules file with a typo), and
  * board.json `warnings` (what the parser had to guess). They are plain sentences, so the
  * level is read from the wording. Patterns match both today's sentences and the older ones
- * still in rules.json on boards analysed before they were rewritten, and anything
- * unrecognised is a warning: a note nobody classified is never hidden.
+ * still in rules.json on boards analyzed before they were rewritten, and anything
+ * unrecognized is a warning: a note nobody classified is never hidden.
  */
 
 import type { BoardDoc, RulesDoc } from './boardTypes'

@@ -1,6 +1,6 @@
 """The board's far field: near-field to far-field transform, with the ground reflection (§16.2).
 
-A solve produces fields on copper. A radiated scan measures volts per metre at three metres,
+A solve produces fields on copper. A radiated scan measures volts per meter at three meters,
 from an antenna that sees the whole board at once. Surface equivalence is what connects them:
 the tangential E and H on any closed surface around the structure determine the field
 everywhere outside it, exactly. openEMS writes those six faces as frequency-domain dumps. This
@@ -15,8 +15,8 @@ M0 measured that the transform works in free space — a half-wave dipole's dire
 case the mirror gets right) — and it also met three ways to get a confident wrong answer out of
 it. Each has a guard here rather than a comment:
 
-* **`nf2ff` takes radians and metres.** Degrees are accepted silently and produce a plausible
-  pattern; so is a mirror position in millimetres, which puts the image plane a thousand
+* **`nf2ff` takes radians and meters.** Degrees are accepted silently and produce a plausible
+  pattern; so is a mirror position in millimeters, which puts the image plane a thousand
   wavelengths away. It echoes the angles it was given straight back into `/Mesh/theta`, so the
   output file agrees with the bad input and confirms nothing.
 * **A box placed close to the structure reads the reactive near field,** where the six faces
@@ -65,7 +65,7 @@ MIN_LINES_OUTSIDE = 10
 #: How far apart the recorded samples on a face are, at most, in mm.
 #:
 #: The transform needs the surface sampled against the field, not against the copper: the
-#: board mesh packs lines tens of micrometres apart that the box, 25 mm or more away, has no use
+#: board mesh packs lines tens of micrometers apart that the box, 25 mm or more away, has no use
 #: for. The faces used to be recorded every 4th grid line, which had two faults. It kept the
 #: packed lines packed and left 60 mm between samples in the coarse air; and openEMS strides
 #: from a box's first line, so whatever did not fit the stride at the far end was dropped and
@@ -86,7 +86,7 @@ THETA_DEG = np.arange(30.0, 90.1, 2.5)
 #: Azimuths the guard compares at, in degrees.
 PHI_DEG = np.arange(0.0, 360.0, 15.0)
 
-#: Where the table top is, in metres, relative to the board. The measurement standards put the
+#: Where the table top is, in meters, relative to the board. The measurement standards put the
 #: product on a 0.8 m table over a ground plane; ``scan`` images the box in it.
 TABLE_HEIGHT_M = 0.8
 
@@ -97,7 +97,7 @@ class NF2FFError(RuntimeError):
 
 @dataclass(frozen=True)
 class Faces:
-    """Where the six dump faces sit, in the model's millimetres."""
+    """Where the six dump faces sit, in the model's millimeters."""
 
     x0: float
     y0: float
@@ -142,7 +142,7 @@ def plan_faces(mesh, copper: tuple[float, float, float, float, float, float],
     for axis, (lines, (lo, hi)) in enumerate(zip((mesh.x, mesh.y, mesh.z), want)):
         lines = np.asarray(lines, dtype=float)
         # Outward to the nearest line, so the clearance is at least what was asked for. A
-        # micrometre of slack: the mesh writes positions to a handful of places.
+        # micrometer of slack: the mesh writes positions to a handful of places.
         i0 = int(np.searchsorted(lines, lo + 1e-6, side="right")) - 1
         i1 = int(np.searchsorted(lines, hi - 1e-6, side="left"))
         below, above = i0, len(lines) - 1 - i1
@@ -198,18 +198,18 @@ def write_job(
     **The lower face is kept unless the mirror lies on it.** The job used to drop it whenever a
     mirror was set, on the reasoning that the image replaces it. That is true only for the case
     M0 measured, where the mirror sat exactly on the lower face (openEMS's own symmetry-plane
-    use). The solve puts the plane 0.8 m below a board whose box ends a few centimetres down,
+    use). The solve puts the plane 0.8 m below a board whose box ends a few centimeters down,
     so dropping the face left the surface open: surface equivalence no longer held, and the
     far field was computed from five sixths of the currents that carry it. The image of a
     closed box is a second closed box, and both are needed.
 
-    ``lower_face_z_m`` is where that face is, in metres. With it, a mirror on the face drops
+    ``lower_face_z_m`` is where that face is, in meters. With it, a mirror on the face drops
     the face (the M0 case), and a mirror *above* it is refused: the box would then reach
     through the ground plane, which is not a configuration images describe.
     """
     drop_lower = False
     if mirror_z_m is not None and lower_face_z_m is not None:
-        # A micrometre: the mesh writes positions in millimetres to a handful of places.
+        # A micrometer: the mesh writes positions in millimeters to a handful of places.
         if abs(mirror_z_m - lower_face_z_m) <= 1e-6:
             drop_lower = True
         elif mirror_z_m > lower_face_z_m:
@@ -223,11 +223,11 @@ def write_job(
         "Eps_r": "1", "Mue_r": "1", "Verbose": "0",
         # Written exactly as the dumps' FD_Samples were (9 significant figures), because nf2ff
         # looks each frequency up in the dump by value and refuses the plane when it is not
-        # there: "Error, analysing Plane". repr() wrote 31837045.556580506 for a dump that
+        # there: "Error, analyzing Plane". repr() wrote 31837045.556580506 for a dump that
         # recorded 31837045.6, and every far field on a derived grid failed that way.
         "freq": csx._lines([float(f) for f in frequencies]),
         "Outfile": str(out_h5),
-        # Metres. The dump meshes are in metres whatever the model's drawing unit is.
+        # Meters. The dump meshes are in meters whatever the model's drawing unit is.
         "Center": ",".join(repr(v / 1000.0) for v in centre_mm),
         "Radius": repr(float(radius_m)),
     })
@@ -309,7 +309,7 @@ def read_field(
 ) -> dict:
     """Read the transform back, and check it answered the question that was asked.
 
-    Returns the **maximum** |E| over every observation angle and both polarisations at each
+    Returns the **maximum** |E| over every observation angle and both polarizations at each
     frequency, which is what a scan reports: the turntable and the height sweep exist to find
     the worst direction, and the number written on a test report is that worst one.
     """
@@ -340,8 +340,8 @@ def read_field(
                 raise NF2FFError(
                     f"nf2ff wrote no field for frequency {k} ({frequencies[k] / 1e6:g} MHz)"
                 ) from exc
-            # Per polarisation, because a scan measures one at a time with a linearly
-            # polarised antenna and reports the better of the two -- not their vector sum,
+            # Per polarization, because a scan measures one at a time with a linearly
+            # polarized antenna and reports the better of the two -- not their vector sum,
             # which no single antenna can read at once.
             mag = np.maximum(np.abs(e_theta), np.abs(e_phi))
             peaks.append(float(mag.max()))

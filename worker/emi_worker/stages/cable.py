@@ -8,7 +8,7 @@ Reads the original upload the way ingest and transient do, so a cable run works 
 whether or not it has ever been solved. Produces ``cables.json``.
 
 **Assumptions, which the result carries** — see ASSUMPTIONS below and §6.2 in the design doc.
-The one that matters most is the height: a cable is modelled 0.8 m above the ground plane,
+The one that matters most is the height: a cable is modeled 0.8 m above the ground plane,
 because that is the table height the measurement standards specify, and the height sets both
 the resonance and the radiation.
 """
@@ -37,11 +37,11 @@ GRID_MIN_HZ = 30e6
 GRID_MAX_HZ = 1.2e9
 
 ASSUMPTIONS = [
-    "The cable is modelled 0.8 m above a perfect ground plane, which is the table height the "
+    "The cable is modeled 0.8 m above a perfect ground plane, which is the table height the "
     "measurement standards specify. It lies straight, and the field is read 3 m outside the "
     "circle around the board and cable, as a turntable scan does. Height sets both where the cable resonates and how well "
     "it radiates, so a cable that will be run along a metal chassis behaves differently.",
-    "The board is the other arm of the antenna, modelled as a 0.1 m wire rather than as its "
+    "The board is the other arm of the antenna, modeled as a 0.1 m wire rather than as its "
     "real outline. Below about 300 MHz the cable dominates and this matters little; above it, "
     "the board's own dimensions start to count and this is optimistic.",
     "The far end is whatever the cable library says — open, grounded, or 150 Ω to ground for "
@@ -50,7 +50,7 @@ ASSUMPTIONS = [
     "The budget is a current limit, not a prediction. It says how much common-mode current "
     "this cable may carry before it reaches the limit; how much it actually carries needs a "
     "solve with a driver attached (Tier B).",
-    "Shielding is not modelled. Without an enclosure a shielded and an unshielded cable are "
+    "Shielding is not modeled. Without an enclosure a shielded and an unshielded cable are "
     "the same antenna: the common-mode current flows on the outside of the shield either way.",
 ]
 
@@ -101,7 +101,7 @@ def run_cable(ctx: StageContext) -> StageResult:
     except ValueError as exc:
         raise StageError(f"the board file could not be read: {exc}") from exc
     transform = _board_extent(board)
-    # Sidecars read the same upload, not a separate fetch: a settings document travelling
+    # Sidecars read the same upload, not a separate fetch: a settings document traveling
     # inside the archive is where a project's committed cable assignments live, and it is what
     # makes a cable run reproducible in CI.
     sidecars = load_sidecars(data)
@@ -152,7 +152,7 @@ def run_cable(ctx: StageContext) -> StageResult:
         if cable.cm_choke and not cable.cm_choke.from_curve:
             notes.append(
                 f"{suggestion.ref}: the choke on {cable.name} is described by one number, so it "
-                f"is modelled as a resistance of {cable.cm_choke.z_ohm_at_100mhz:g} ohm at "
+                f"is modeled as a resistance of {cable.cm_choke.z_ohm_at_100mhz:g} ohm at "
                 f"100 MHz rising with frequency. Above the ferrite's peak that overstates it. "
                 f"Give its datasheet impedance curve for R and X."
             )
@@ -192,7 +192,7 @@ def run_cable(ctx: StageContext) -> StageResult:
         document["notes"].append(
             f"{len(unassigned)} connector{'s' if len(unassigned) != 1 else ''} "
             f"{'have' if len(unassigned) != 1 else 'has'} no cable assigned, so "
-            f"{'they are' if len(unassigned) != 1 else 'it is'} not modelled at all. "
+            f"{'they are' if len(unassigned) != 1 else 'it is'} not modeled at all. "
             f"Compliance treats that as incomplete rather than as zero."
         )
 
@@ -214,5 +214,5 @@ def run_cable(ctx: StageContext) -> StageResult:
             default=None,
         ),
     }
-    log.info("cable %s: %d modelled, %d unassigned", filename, len(modelled), len(unassigned))
+    log.info("cable %s: %d modeled, %d unassigned", filename, len(modelled), len(unassigned))
     return StageResult(summary=summary, artifacts=[artifact])

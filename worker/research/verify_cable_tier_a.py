@@ -77,7 +77,7 @@ EQUIVALENT_RADIUS = 0.59
 
 def _dipole_field(points: np.ndarray, centres: np.ndarray, moments: np.ndarray,
                   k: float, omega: float) -> np.ndarray:
-    """E at ``points`` from short current elements (I·dl, A·m) at ``centres``.
+    """E at ``points`` from short current elements (I·dl, A·m) at ``centers``.
 
     The complete field of a Hertzian dipole, not its far-field part: at 30 MHz and 3 m the
     1/r² and 1/r³ terms are most of it. Summing elements with piecewise-constant current puts
@@ -99,8 +99,8 @@ def _dipole_field(points: np.ndarray, centres: np.ndarray, moments: np.ndarray,
 
 def ring_field(path: np.ndarray, current: np.ndarray, f: float, ring: list, *,
                step_m: float = 0.004) -> float:
-    """The scan's reading for a current along ``path`` (N×3, metres): max over the ring of
-    the better polarisation, exactly as ``nec.parse_output`` reads nec2c's near field."""
+    """The scan's reading for a current along ``path`` (N×3, meters): max over the ring of
+    the better polarization, exactly as ``nec.parse_output`` reads nec2c's near field."""
     s = np.concatenate([[0.0], np.cumsum(np.linalg.norm(np.diff(path, axis=0), axis=1))])
     fine = np.linspace(0.0, s[-1], max(2, int(math.ceil(s[-1] / step_m)) + 1))
     pts = np.stack([np.interp(fine, s, path[:, j]) for j in range(3)], axis=1)
@@ -391,7 +391,7 @@ def main() -> None:
                                 radius_m=r_eq)
                 res, path, cur = nec_solve(deck)
                 nec_eq.append(res)
-                # The integrator on nec2c's own current, normalised the way e_per_amp is.
+                # The integrator on nec2c's own current, normalized the way e_per_amp is.
                 integ.append(ring_field(path, cur, float(f), ring) * abs(res.z_in))
                 nec_prod.append(nec.run(nec.Deck(length_m=length_m, frequency_hz=float(f),
                                                  far_end=far_end)))

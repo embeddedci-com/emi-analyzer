@@ -198,7 +198,7 @@ class OpenEMSError(RuntimeError):
 
 
 class Stopped(RuntimeError):
-    """The run was cancelled."""
+    """The run was canceled."""
 
 
 def run_openems(

@@ -146,7 +146,7 @@ def test_the_job_is_written_in_radians_and_metres(tmp_path):
     phi = [float(v) for v in root.find("phi").text.split(",")]
     assert np.allclose(np.rad2deg(phi), PHI_DEG)
 
-    # Metres, not the model's millimetres. mm moves the image plane a thousand wavelengths.
+    # Meters, not the model's millimeters. mm moves the image plane a thousand wavelengths.
     assert root.get("Center") == "0.01,0.02,0.0"
     assert root.find("Mirror").get("Pos") == "-0.8"
     assert root.find("Mirror").get("Type") == "PEC"
@@ -154,7 +154,7 @@ def test_the_job_is_written_in_radians_and_metres(tmp_path):
 
 
 def test_a_mirror_below_the_box_keeps_every_face():
-    """The ground plane sits 0.8 m under a box that ends millimetres below the board.
+    """The ground plane sits 0.8 m under a box that ends millimeters below the board.
 
     Dropping the lower face there left the surface open, so the transform integrated five of
     the six faces the field crosses. Only a mirror lying *on* the lower face replaces it.
@@ -439,7 +439,7 @@ def test_a_port_reading_negative_resistance_is_truncation_not_a_result():
 def test_the_job_names_frequencies_exactly_as_the_dumps_recorded_them(tmp_path):
     """nf2ff looks each frequency up in the dump by value. The dumps record FD_Samples at nine
     significant figures, and a job written with repr() asked for 31837045.556580506 where the
-    dump held 31837045.6 -- "Error, analysing Plane" on the first real far field."""
+    dump held 31837045.6 -- "Error, analyzing Plane" on the first real far field."""
     from emi_worker.openems.model import far_field_grid
 
     _stub_dumps(tmp_path)

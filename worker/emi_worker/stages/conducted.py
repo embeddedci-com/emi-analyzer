@@ -37,7 +37,7 @@ ASSUMPTIONS = [
     "detectors, so one level is compared with both limits and the average limit decides.",
     "A buck's input current is a trapezoid: I_in / D high for D of each period, with the given "
     "edges and a 30 % ripple on its top. An inverting converter draws the same shape, and a "
-    "four-switch buck-boost is modelled in buck mode, which draws it too.",
+    "four-switch buck-boost is modeled in buck mode, which draws it too.",
     "A boost's input current is its inductor current: I_in with a triangle on top, V_in·D/(f·L) "
     "peak to peak from the inductor's value, or 30 % of I_in when that cannot be worked out.",
     "Sources that share a clock (the outputs of one PMIC) add as if in phase until their phases "
@@ -173,7 +173,7 @@ def run_conducted(ctx: StageContext) -> StageResult:
             s.ripple_pp()
         if s.capped:
             notes.append(f"{s.ref}: the inductor ripple worked out from its inductance is more than twice "
-                         f"the input current, so it runs in discontinuous mode, which is not modelled; the "
+                         f"the input current, so it runs in discontinuous mode, which is not modeled; the "
                          f"ripple was capped at twice the input current")
 
     def progress(i: int, n: int, ref: str) -> None:

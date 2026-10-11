@@ -133,9 +133,9 @@ def _quasi_static_netlist(text: str, subckt: str, roles: list[str], amps: float)
 
 def load(entries: list[dict], files: dict[str, bytes], board_parts: dict[str, list[tuple[str, list]]],
          kind) -> dict[str, VendorModel]:
-    """Vet every uploaded model. Returns {normalised part value: model}, accepted or not.
+    """Vet every uploaded model. Returns {normalized part value: model}, accepted or not.
 
-    ``board_parts`` maps a normalised part value to [(ref, pads), ...] on this board.
+    ``board_parts`` maps a normalized part value to [(ref, pads), ...] on this board.
     """
     out: dict[str, VendorModel] = {}
     for entry in entries[:MAX_MODELS]:

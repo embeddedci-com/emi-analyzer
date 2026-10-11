@@ -22,7 +22,7 @@ export function createCursorStore(): CursorStore {
   return {
     get: () => current,
     set(p) {
-      // The readout shows hundredths of a millimetre; a move smaller than that is no change.
+      // The readout shows hundredths of a millimeter; a move smaller than that is no change.
       if (p === current) return
       if (p && current && Math.abs(p.x - current.x) < 0.005 && Math.abs(p.y - current.y) < 0.005) return
       current = p

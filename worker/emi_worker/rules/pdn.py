@@ -83,7 +83,7 @@ def connection_nh(length_mm: float, height_mm: float, via_radius_mm: float,
     A second ground via only parallels one of the loop's two vertical legs, so it is modeled
     as halving that leg rather than the whole loop: n vias scale the loop by (1 + n) / 2n.
     Mutual inductance between the paralleled vias is ignored, which makes it slightly
-    optimistic for vias closer than about a millimetre.
+    optimistic for vias closer than about a millimeter.
     """
     loop = 0.5 * rectangle_loop_nh(length_mm, 2.0 * height_mm, via_radius_mm)
     n = max(1, ground_vias)
@@ -171,7 +171,7 @@ def _refine_max(net: "Network", lo: float, hi: float) -> tuple[float, float]:
     The grid is 40 points a decade, a 6 % step, and a sharp anti-resonance between two good
     capacitors is narrower than that: sampling alone reads a 25 dB peak as 15. A golden-section
     search found it too, one frequency at a time, and was 70 % of the view's run time on a
-    busy board; two vectorised passes of 64 points land within 0.003 % of it.
+    busy board; two vectorized passes of 64 points land within 0.003 % of it.
     """
     for _ in range(2):
         fs = np.geomspace(lo, hi, 64)

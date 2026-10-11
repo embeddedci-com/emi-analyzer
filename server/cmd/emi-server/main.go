@@ -40,7 +40,7 @@ func main() {
 		dev      = flag.Bool("dev", envBool(os.Getenv, "EMI_DEV"), "development stack: allow the built-in development secrets and MinIO credentials")
 		dsn      = flag.String("dsn", env("DATABASE_URL", "postgres://emi:emi@localhost:5432/emi?sslmode=disable"), "postgres DSN")
 		issueKey = flag.Bool("issue-key", false, "issue an EMI worker key and exit")
-		keyOrg   = flag.String("org", "", "restrict an issued key to one organisation (default: serves all of them)")
+		keyOrg   = flag.String("org", "", "restrict an issued key to one organization (default: serves all of them)")
 		keyName  = flag.String("name", "worker key", "label stored with an issued key")
 		webapp   = flag.String("webapp", env("EMI_WEBAPP_DIR", ""), "directory holding the built webapp; empty serves the API only")
 		webBase  = flag.String("webapp-base", env("EMI_WEBAPP_BASE", "/tools/emi"), "path the webapp is served under")
@@ -84,7 +84,7 @@ func main() {
 
 	// One-shot mode for `make key`.
 	//
-	// No -org means a shared worker: one that takes runs from every organisation, which is
+	// No -org means a shared worker: one that takes runs from every organization, which is
 	// what a hosted service's own workers are. -org is for the other case -- a customer
 	// running a worker on their own hardware, which must only ever see their own boards.
 	if *issueKey {
@@ -94,9 +94,9 @@ func main() {
 			os.Exit(1)
 		}
 		if *keyOrg == "" {
-			fmt.Fprintln(os.Stderr, "issued a shared worker key: it serves every organisation")
+			fmt.Fprintln(os.Stderr, "issued a shared worker key: it serves every organization")
 		} else {
-			fmt.Fprintf(os.Stderr, "issued a worker key scoped to organisation %q\n", *keyOrg)
+			fmt.Fprintf(os.Stderr, "issued a worker key scoped to organization %q\n", *keyOrg)
 		}
 		fmt.Println(raw)
 		return

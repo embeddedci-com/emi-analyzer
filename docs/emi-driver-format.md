@@ -5,7 +5,7 @@
 A driver document says what a net actually carries. The EMI Analyzer solves a board with an
 arbitrary excitation, which makes its results *relative*: one layout is 8 dB quieter than
 another. Attaching a driver turns that into absolute units — dBµA/m on a near-field map,
-dBµV/m at three metres — without re-solving anything, because openEMS solves a linear
+dBµV/m at three meters — without re-solving anything, because openEMS solves a linear
 structure and the response to any source inside the excitation band is already in the result.
 
 This is the interchange format. It is what **Export JSON** writes, what the analyzer's upload
@@ -36,7 +36,7 @@ refused. A producer that agrees with them agrees with the analyzer.
 | Field | Required | Notes |
 |---|---|---|
 | `format` | yes | Always `emi-driver`. |
-| `version` | yes | Integer. A reader refuses anything **newer** than it understands rather than reading the parts it recognises. |
+| `version` | yes | Integer. A reader refuses anything **newer** than it understands rather than reading the parts it recognizes. |
 | `name` | yes | Non-blank after trimming. |
 | `kind` | yes | `trapezoid` · `waveform` · `spectrum`. |
 | `role` | no | `signal` (default) or `switching-regulator`. |

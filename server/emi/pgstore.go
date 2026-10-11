@@ -198,10 +198,10 @@ func (s *PGStore) scanBoard(row rowScanner) (*Board, error) {
 	return &b, nil
 }
 
-// FindBoardByContent looks for a board this organisation has already uploaded, by hash.
+// FindBoardByContent looks for a board this organization has already uploaded, by hash.
 //
-// Scoped to the organisation on purpose: the hash is a global fact about the bytes, but
-// "have *you* uploaded this" is not, and answering across organisations would tell one
+// Scoped to the organization on purpose: the hash is a global fact about the bytes, but
+// "have *you* uploaded this" is not, and answering across organizations would tell one
 // customer that another has the same board.
 //
 // The newest match wins, and a parsed one beats an unparsed one -- re-offering a board
@@ -395,7 +395,7 @@ func (s *PGStore) GetComponent(ctx context.Context, id string) (*Component, erro
 		 WHERE id = $1 AND deleted_at IS NULL`, id))
 }
 
-// ListComponents answers "mine, plus anything my organisation has shared". A component
+// ListComponents answers "mine, plus anything my organization has shared". A component
 // belonging to a colleague who has not shared it is not listed: sharing is the deliberate
 // act, and an org-wide default would leak half-finished models between engineers.
 func (s *PGStore) ListComponents(ctx context.Context, orgID, userID string) ([]*Component, error) {
@@ -543,9 +543,9 @@ func (s *PGStore) ListRuns(ctx context.Context, projectID string, limit int) ([]
 
 // ListClaimableRuns returns runs waiting for a worker.
 //
-// An empty orgID means a shared worker, which serves every organisation -- the $1 = ” test
-// short-circuits the organisation filter rather than there being two queries to keep in
-// step. Ordering is oldest-first across whatever set that leaves, so one organisation's
+// An empty orgID means a shared worker, which serves every organization -- the $1 = ” test
+// short-circuits the organization filter rather than there being two queries to keep in
+// step. Ordering is oldest-first across whatever set that leaves, so one organization's
 // backlog cannot starve another's beyond its place in the queue.
 func (s *PGStore) ListClaimableRuns(ctx context.Context, orgID string, limit int) ([]*Run, error) {
 	rows, err := s.pool.Query(ctx, `
@@ -816,10 +816,10 @@ func (s *PGStore) GetWorker(ctx context.Context, keyKid string) (*Worker, error)
 	return &w, nil
 }
 
-// ListWorkers returns the workers that would take work for this organisation.
+// ListWorkers returns the workers that would take work for this organization.
 //
 // An empty organization_id on the row is a shared worker -- one whose key names no
-// organisation -- and it serves everybody, so it belongs in every organisation's list. It
+// organization -- and it serves everybody, so it belongs in every organization's list. It
 // has to match Hub.serves exactly: the two are read together by the workers endpoint, and
 // when they disagreed a shared worker was counted as online while being absent from the
 // list, which reads as "0 workers" to anyone looking at the page.

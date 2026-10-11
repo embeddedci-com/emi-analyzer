@@ -8,7 +8,7 @@
 //	Keys   a worker key issued at startup          (local.Keys)
 //
 // plus the webapp, embedded in the binary, and a supervisor for the worker, which is the
-// published Docker image dialling back into this process exactly as it would dial into a
+// published Docker image dialing back into this process exactly as it would dial into a
 // hosted server.
 //
 // There is no sign-in. Every request is one fixed local identity, which is only safe because

@@ -173,7 +173,7 @@ func packZip(path string) (*Packed, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%s is not a zip archive: %w", filepath.Base(path), err)
 	}
-	// Labelled by what is inside, as the worker decides it; the label is only the project's.
+	// Labeled by what is inside, as the worker decides it; the label is only the project's.
 	kind := emi.SourceGerber
 	var names []string
 	for _, f := range zr.File {

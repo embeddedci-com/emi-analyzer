@@ -68,7 +68,7 @@ boundaries — then fills, grades and pads for the PML.
 
 ### 2.2 Excitation band
 
-`excitation_band()` centres the Gaussian so requested frequencies sit inside it rather than on
+`excitation_band()` centers the Gaussian so requested frequencies sit inside it rather than on
 the −20 dB edge. **This was a production bug the spikes found:** a transfer function at 1 GHz moved
 3–4 dB between two sources that agreed to 0.01 dB everywhere inside the band. `BAND_FILL = 0.8`
 leaves about 7 dB of source amplitude at each requested end.
@@ -174,7 +174,7 @@ tabletop height of ANSI C63.4 and CISPR 16-2-3, and the same height the far fiel
 board is a 0.1 m wire on the other side of the feed. The receiving antenna sweeps a ring 3 m
 outside the smallest circle around board and cable, as a turntable scan does, at 1-4 m. Cables
 are limited to 10 m and segmented at λ/20 or 12.5 mm, whichever is shorter, up to 800
-segments. The 12.5 mm cap is what makes nec2c agree with openEMS on the same wire (below). Before September 2026 the ring was centred on the feed with a 3 m radius
+segments. The 12.5 mm cap is what makes nec2c agree with openEMS on the same wire (below). Before September 2026 the ring was centered on the feed with a 3 m radius
 and the table was 1 m high: the antenna sat 1 m from the end of a 2 m cable and on the wire of a
 3 m one. The closed-form comparison below was measured with that geometry and has not been
 repeated.
@@ -183,7 +183,7 @@ repeated.
 entitled to an opinion — the wire electrically short *and* the observation point in the far
 field, which for a 1 m cable at 3 m is 16–30 MHz — the closed form sits **3.5–4 dB above** a
 solved fed wire, with a constant offset across the band. That gap is the current distribution: a
-fed wire tapers towards its open end, and a perfectly triangular taper would be 6 dB. The
+fed wire tapers toward its open end, and a perfectly triangular taper would be 6 dB. The
 direction is the useful one — the closed form predicts more field per amp, so the budget it
 computes is tighter. Below the far-field boundary the two diverge without limit (25 dB at 5 MHz),
 because 1/r² and 1/r³ terms dominate there and no far-field formula contains them. That holds
@@ -265,7 +265,7 @@ positions with the full free-space Green's function, plus their image in the gro
   than 0.5 dB is refused rather than published.
 - **The box must be closed, and is checked.** openEMS sub-samples a dump by striding from the
   box's first grid line, so the old every-4th-line faces lost their last lines wherever the count
-  did not fit the stride: on the fixture board every face stopped 14 mm short of its neighbours.
+  did not fit the stride: on the fixture board every face stopped 14 mm short of its neighbors.
   Faces are now thinned with `OptResolution` (5 mm, or λ/20 at the top of the band if finer),
   which keeps both ends, and `scan.read_surface` refuses a box whose faces do not meet. On a
   short dipole 5 mm agrees with the full grid to 0.03 dB; the 4th-line stride read 0.35 dB high.
@@ -292,7 +292,7 @@ positions with the full free-space Green's function, plus their image in the gro
   have one; when `Re(Z_in) < -5 % |Z_in|` the run stopped on its end criterion while the board
   was still ringing, and the frequency is marked unusable and listed in `truncated_hz`. A real
   4-layer board at the default -40 dB lost 57 of 60 frequencies this way.
-- **Radians and metres, checked**, for the `nf2ff` guard job: it echoes its input angles into
+- **Radians and meters, checked**, for the `nf2ff` guard job: it echoes its input angles into
   `/Mesh/theta`, so a job written in degrees produces an output file that agrees with itself.
 - **A missing face is refused.** Surface equivalence needs the surface closed.
 
@@ -300,7 +300,7 @@ positions with the full free-space Green's function, plus their image in the gro
 
 ## 7. Compliance
 
-`compliance/` plus `stages/compliance.py`. Behind `full-wave`, labelled experimental, and
+`compliance/` plus `stages/compliance.py`. Behind `full-wave`, labeled experimental, and
 uncalibrated.
 
 ### 7.1 Where the inputs come from
@@ -360,7 +360,7 @@ share**.
 
 | Term | Applies to | σ (dB) |
 |---|---|---|
-| Cable idealisation | cable paths | 4.5 |
+| Cable idealization | cable paths | 4.5 |
 | Transfer-function interpolation | cable paths | 1 |
 | Driver provenance | every path | 1 / 1.5 / 3 / 6 by source |
 | Mesh preset | board path | fine 1 · normal 2 · coarse 4 (coarse when not recorded) |
@@ -387,7 +387,7 @@ still drawn, greyed. Every gap names the tab that fixes it.
 **The gate's inputs are derived, not sent**: the band each path covers (from the artifacts), the
 scan it must cover (30 MHz to `scan_to_hz` of the driver's fundamental, §15.33(b)), the solve's
 excited ports and which have a far field, the board's connectors (found in the upload, as the
-cable run finds them), which cables the solve modelled, and whether power enters through a
+cable run finds them), which cables the solve modeled, and whether power enters through a
 connector. What the user may still say is what only they know, and each can only add a
 requirement or record a decision the result names: a connector that carries no cable, the nets
 that are sources, a higher frequency in the product, the enclosure and the power. The result's
@@ -402,7 +402,7 @@ outside the scan are not scored (asking for a limit there used to raise an uncau
 
 Gathered from rule findings, **never invented**. A finding qualifies by rule *and* (net *or*
 proximity ≤ 25 mm). A board path uses the driver's net; a cable path uses the connector's pad
-nets and position from the board. With nothing specific found, general guidance, labelled
+nets and position from the board. With nothing specific found, general guidance, labeled
 general. The findings come with the request and only ever change this list.
 
 ### 7.7 Conducted emissions (`conducted` run, experimental)

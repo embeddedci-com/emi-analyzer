@@ -9,7 +9,7 @@
  * names the tab that fixes it. Showing a margin with a warning would be worse than showing
  * nothing: the warning is what gets dropped when someone screenshots the number.
  *
- * **Confidence is not a pass probability**, and is labelled uncalibrated until real test results
+ * **Confidence is not a pass probability**, and is labeled uncalibrated until real test results
  * have been recorded against the budget (§17.4). It is stated as what it is — the probability the
  * true margin is positive *under the model's own assumptions* — rather than as a percentage with
  * a tooltip.
@@ -86,7 +86,7 @@ export function CompliancePanel({ doc }: { doc: ComplianceDoc }) {
       </Group>
 
       {doc.no_paths && (
-        <Alert color="gray" variant="light" title="Nothing radiating is modelled yet">
+        <Alert color="gray" variant="light" title="Nothing radiating is modeled yet">
           <Text size="xs">{doc.no_paths}</Text>
         </Alert>
       )}

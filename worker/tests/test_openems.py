@@ -4,12 +4,12 @@ These do not run the solver — they check the things that, when wrong, produce 
 completes successfully and returns nothing. Every failure mode encoded here was hit for
 real while building this:
 
-* a dump plane sampled at cell centres instead of grid nodes, missing the copper entirely
+* a dump plane sampled at cell centers instead of grid nodes, missing the copper entirely
 * a port that fell between grid lines and excited nothing
 * a timestep cap below the excitation length, so the source never finished
 * an ``Excite`` attribute written as a child element, silently parsed as ``Unknown``
 
-openEMS reports all four as warnings and then exits zero. The only defence is to check the
+openEMS reports all four as warnings and then exits zero. The only defense is to check the
 model before handing it over.
 """
 
@@ -72,7 +72,7 @@ def test_required_lines_survive():
 
 
 def test_grading_is_bounded():
-    """A sudden jump in cell size reflects energy — a numerical artefact that looks real."""
+    """A sudden jump in cell size reflects energy — a numerical artifact that looks real."""
     lines = meshmod.build_axis([0.0, 0.05, 0.1, 40.0], min_res=0.02, max_res=4.0)
     d = np.diff(lines)
     ratio = np.maximum(d[1:] / d[:-1], d[:-1] / d[1:])
@@ -183,7 +183,7 @@ def test_grading_never_shrinks_the_smallest_cell():
 
     dt comes from the smallest cell anywhere in the grid, so an inserted line that undercuts
     the finest copper spacing would slow every step of a run that may be hours long. The
-    filler grows from its neighbour for exactly this reason.
+    filler grows from its neighbor for exactly this reason.
     """
     required = [0.0, 0.05, 0.09, 6.0, 12.0]
     finest = min(b - a for a, b in zip(required, required[1:]))
@@ -208,7 +208,7 @@ def test_a_long_empty_span_is_graded_up_to_the_coarse_cell(dx_um, roi_end_mm):
     Measured on a real board with a USB cable port: that air was filled with ~2.4 mm cells for
     250 mm and then jumped to 11.5 mm (4.8:1; 6.8:1 at 1000 um), and the openEMS run on that
     grid diverged. The cause was a small gap next to fine copper being left as one cell, then
-    graded from as if its neighbour were that big; smoothing it afterwards only pushed the jump
+    graded from as if its neighbor were that big; smoothing it afterwards only pushed the jump
     outward. Past the last required line there is nothing forcing any cell size, so the grading
     bound has to hold there exactly, all the way through the PML padding.
     """
@@ -371,7 +371,7 @@ def test_too_small_a_cap_is_called_out(board, transform):
 # ---- model correctness -----------------------------------------------------------------
 
 def test_dumps_use_node_interpolation(board, transform):
-    """Cell interpolation samples at cell centres and misses the copper entirely."""
+    """Cell interpolation samples at cell centers and misses the copper entirely."""
     built = build_model(board, transform, _params())
     dumps = [p for p in built.doc.properties if isinstance(p, csx.DumpBox)]
     assert dumps
@@ -513,7 +513,7 @@ def test_generated_document_parses_as_xml(board, transform):
     assert root.find("FDTD/Excitation") is not None
     assert root.find("FDTD/BoundaryCond") is not None
     grid = root.find("ContinuousStructure/RectilinearGrid")
-    assert grid.get("DeltaUnit") == "0.001", "coordinates are millimetres throughout"
+    assert grid.get("DeltaUnit") == "0.001", "coordinates are millimeters throughout"
     assert len(grid.find("XLines").text.split(",")) == len(built.mesh.x)
     # Metal must outrank the dielectric it sits on, or the copper is overwritten.
     props = root.find("ContinuousStructure/Properties")
@@ -535,7 +535,7 @@ def test_k2_a_solve_without_component_modelling_is_unchanged(board, transform):
     """§19's K2: with no matched parts the result equals today's exactly.
 
     Asserted on the XML rather than on a flag, because the claim is about what the solver
-    receives. Component modelling is off by default, so this is also what every existing
+    receives. Component modeling is off by default, so this is also what every existing
     caller gets.
     """
     plain = build_model(board, transform, _params())
@@ -553,7 +553,7 @@ def test_turning_component_modelling_on_changes_nothing_without_matches(board, t
 
 
 def test_the_modelled_parts_list_names_a_placed_component(board, transform):
-    """What a result reports for a part it modelled. Placement itself is pinned by
+    """What a result reports for a part it modeled. Placement itself is pinned by
     test_a_capacitor_is_one_series_element_across_the_gap below."""
     from emi_worker.components.document import Resolved, SeriesRLC
     from emi_worker.components.place import Placement, PlacementPlan
@@ -802,7 +802,7 @@ def test_a_kept_line_is_never_the_one_merged_away():
 
 
 def test_the_excitation_half_width_can_be_held_below_its_centre():
-    """A small part holds it to 0.71 of the centre, so less of the pulse falls below the band:
+    """A small part holds it to 0.71 of the center, so less of the pulse falls below the band:
     at fc = f0 the sample board's clock rang at 30 MHz past its budget."""
     board = _microstrip_board()
 

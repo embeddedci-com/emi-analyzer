@@ -85,12 +85,12 @@ def single_ended(width_mm: float, layer: LayerElectrics) -> Impedance | None:
         z = (60.0 / math.sqrt(layer.epsilon_r)) * math.log(
             4.0 * b / (0.67 * math.pi * (0.8 * width_mm + t))
         )
-        # The symmetric formula assumes the trace is centred. Real stacks are rarely exactly
-        # symmetric, and the further off centre, the worse it fits.
+        # The symmetric formula assumes the trace is centered. Real stacks are rarely exactly
+        # symmetric, and the further off center, the worse it fits.
         offset = abs(h - layer.height_above_mm) / b
         if offset > 0.2:
             unc += 5.0
-            notes.append("the trace is well off centre between its planes; asymmetric stripline is approximated here")
+            notes.append("the trace is well off center between its planes; asymmetric stripline is approximated here")
     else:
         w_over_h = width_mm / h
         z = (87.0 / math.sqrt(layer.epsilon_r + 1.41)) * math.log(

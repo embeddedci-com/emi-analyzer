@@ -71,7 +71,7 @@ def test_a_newer_settings_version_is_refused_rather_than_guessed_at():
 
 
 def test_the_catalogue_covers_every_rule_that_runs():
-    """The UI builds its settings page from the catalogue, so a rule missing from it is a
+    """The UI builds its settings page from the catalog, so a rule missing from it is a
     rule nobody can configure."""
     from emi_worker.rules.checks import RULES
 

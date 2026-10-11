@@ -266,7 +266,7 @@ running in the background.
    and which are new, which nets changed length or via count, and, when both versions have run
    them, the cable budgets and the ESD peak at each pin. A version without a cable or ESD run
    offers to run it with the other version's settings.
-7. The header also has **Runs**, which lists what has been analysed and lets you retry anything
+7. The header also has **Runs**, which lists what has been analyzed and lets you retry anything
    that failed, and the **⋯** menu can rename the board, delete one version, or delete the board
    with every version. Deleting removes the files and results from this computer.
 8. To share results, see [Sharing results](#sharing-results).
@@ -499,5 +499,5 @@ minutes; and gives the worker a key that is revoked when the app stops. To repor
 ## License
 
 [Apache License 2.0](LICENSE). The worker image also contains third-party programs under their own
-licences, notably openEMS (GPL-3.0), nec2c (GPL-2.0) and ngspice (BSD), which it runs as separate
+licenses, notably openEMS (GPL-3.0), nec2c (GPL-2.0) and ngspice (BSD), which it runs as separate
 programs. [worker/NOTICE](worker/NOTICE) lists them and says where their source code is.

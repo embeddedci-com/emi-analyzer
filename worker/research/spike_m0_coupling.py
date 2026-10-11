@@ -96,7 +96,7 @@ def model(cable_mm: float, gap: str, drive: str) -> csx.CSXDocument:
     but is *not* the same geometry the other two runs solve. 'short' keeps the lumped
     element and sets it to 0.1 ohm — negligible against a Z_ant of 80 ohm and up — so the
     three runs differ only in the value of one element. The pair separates a coupling error
-    from a port-modelling artefact.
+    from a port-modelling artifact.
     """
     x, y, z = axes()
     doc = csx.CSXDocument(
@@ -149,7 +149,7 @@ def model(cable_mm: float, gap: str, drive: str) -> csx.CSXDocument:
                                        primitives=[gap_box]))
 
     # Gap probes. The voltage integrates E across the gap; the current takes an H loop at
-    # the gap centre, which is a grid line, the same placement the dipole spike validated.
+    # the gap center, which is a grid line, the same placement the dipole spike validated.
     doc.add(csx.ProbeBox(name="gap_ut", type=0, norm_dir=0, weight=-1.0, primitives=[
         csx.Box(p1=(PLANE_X1, 0.0, 0.0), p2=(WIRE_X0, 0.0, 0.0)),
     ]))

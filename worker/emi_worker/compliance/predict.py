@@ -8,7 +8,7 @@ Three things happen here, and keeping them apart matters more than any one of th
   worst case is the honest one. Different drivers are unrelated sources and add in **power**.
 * **Margin.** Limit minus level, in dB, positive meaning under.
 * **Confidence.** The probability the true margin is positive *under the model's own uncertainty
-  budget* — not a pass probability, and labelled uncalibrated until real test results have been
+  budget* — not a pass probability, and labeled uncalibrated until real test results have been
   recorded against it (§17.4).
 
 The budget's σ values are engineering placeholders, chosen conservatively and carried in the
@@ -21,7 +21,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 
-#: One microvolt per metre, the reference for dBµV/m.
+#: One microvolt per meter, the reference for dBµV/m.
 MICRO = 1e-6
 
 
@@ -117,7 +117,7 @@ class Path:
         for a, b in zip(pts, pts[1:]):
             if a.frequency_hz <= frequency_hz <= b.frequency_hz:
                 if a.field_v_per_m <= 0 or b.field_v_per_m <= 0:
-                    # No logarithm of a zero; the larger neighbour is the conservative read.
+                    # No logarithm of a zero; the larger neighbor is the conservative read.
                     return max(a.field_v_per_m, b.field_v_per_m)
                 along = (math.log(frequency_hz / a.frequency_hz)
                          / math.log(b.frequency_hz / a.frequency_hz))
@@ -230,7 +230,7 @@ def combine(paths: list[Path], frequencies: list[float], standard_id: str) -> li
 
 # ---- the uncertainty budget (§17.2) ---------------------------------------------------
 
-#: σ for the cable idealisation, radiated cable paths. Deliberately conservative: M0's
+#: σ for the cable idealization, radiated cable paths. Deliberately conservative: M0's
 #: synthetic-board residual was 1.2 dB median and 2.2 dB worst, and cable test 4 has not yet
 #: run on a real board, so this stays where it is until real residuals replace it.
 SIGMA_CABLE_DB = 4.5
@@ -245,7 +245,7 @@ SIGMA_ASSUMED_EPSILON_DB = 1.5
 #: σ for interpolating the far-field transfer function in dB between grid points.
 SIGMA_FAR_FIELD_INTERP_DB = 1.0
 
-#: σ for unmodelled components, scaled by the fraction of capacitors on the path that matched
+#: σ for unmodeled components, scaled by the fraction of capacitors on the path that matched
 #: nothing in the library. All matched is zero, none matched is the full term.
 SIGMA_COMPONENT_COVERAGE_DB = 3.0
 

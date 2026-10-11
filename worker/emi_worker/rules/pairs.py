@@ -131,7 +131,7 @@ def check_pair_coupling(ctx: RuleContext) -> Iterator[Finding]:
         if not per_layer:
             continue
 
-        # The pair's pitch (centre to centre): the netclass's when it has one, else the closest
+        # The pair's pitch (center to center): the netclass's when it has one, else the closest
         # the halves routinely run anywhere on the board, which is what they were routed at.
         pitch = (pair.gap_mm + pair.width_mm) if pair.gap_mm and pair.width_mm else 0.0
         if not pitch:
@@ -144,7 +144,7 @@ def check_pair_coupling(ctx: RuleContext) -> Iterator[Finding]:
         width = float(np.median(widths)) if len(widths) else 0.0
         gap = max(pitch - width, 0.05)
         # Loose enough that a length-tuning bump on one half is not a split: those rise a few
-        # tenths of a millimetre, and a real DDR4 strobe pair was flagged for its bumps at 2x.
+        # tenths of a millimeter, and a real DDR4 strobe pair was flagged for its bumps at 2x.
         apart = max(3.0 * pitch, pitch + 0.5)
 
         for layer, samples, d_partner in per_layer:

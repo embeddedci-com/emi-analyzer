@@ -3,7 +3,7 @@
 Same shape as test_layout_checks: the smallest board that shows the problem, then the smallest
 change that fixes it. The "is not" cases each come from a false finding on a real board -- a
 locating peg read as a floating shell, a BAT54S counted as clamping its +5V rail, a +1V8 header
-pin taken for a supply input, a big TVS pad measured from its centre, a SoC reset that fans out
+pin taken for a supply input, a big TVS pad measured from its center, a SoC reset that fans out
 to the PMIC -- because those are where a naive check drowns people in noise.
 """
 
@@ -124,10 +124,10 @@ def test_the_clamp_needs_its_own_ground_via():
 
 
 def test_the_ground_via_is_measured_from_the_pad_edge():
-    """A via at the edge of a big SMB pad is beside it, even though the pad centre is 2 mm off."""
+    """A via at the edge of a big SMB pad is beside it, even though the pad center is 2 mm off."""
     m = _io(clamp_x=3.0, ground_via=False)
     m.pads[-1] = pad("D1", "2", "GND", 3.0, 18.5, value="SMBJ5.0A", half=1.1)
-    m.vias = [via(3.0, 15.9)]  # 2.6 mm from the centre, 1.5 mm from the pad edge
+    m.vias = [via(3.0, 15.9)]  # 2.6 mm from the center, 1.5 mm from the pad edge
     assert run(emc.check_esd_protection, m) == []
 
 

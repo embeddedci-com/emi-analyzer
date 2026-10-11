@@ -93,7 +93,7 @@ export interface Board {
  * Who the server resolved this request to be.
  *
  * The page is public, so this has an answer either way and the difference matters to the
- * user: signed in, their boards are filed under their own organisation and will be there
+ * user: signed in, their boards are filed under their own organization and will be there
  * next week; anonymous, they go to a space of this visitor's own, which lasts only as long
  * as the browser keeps its visitor cookie.
  */
@@ -138,7 +138,7 @@ export interface BoardLookup {
  * Reads the whole file into memory, which is what `File.arrayBuffer()` does anyway on the
  * upload path that follows. Returns undefined rather than throwing when SubtleCrypto is
  * unavailable — it needs a secure context, so plain http on a LAN address has none, and
- * the right behaviour there is to upload as before rather than to fail.
+ * the right behavior there is to upload as before rather than to fail.
  */
 export async function hashFile(file: File): Promise<string | undefined> {
   if (!globalThis.crypto?.subtle) return undefined
@@ -376,7 +376,7 @@ export class EmiApi {
   // ---- upload ----
 
   /**
-   * Look for a board this organisation has already uploaded, by content hash.
+   * Look for a board this organization has already uploaded, by content hash.
    *
    * Asked before any bytes move, so the common case of re-opening a board you worked on
    * last week costs one small GET instead of a 12 MB upload and a re-parse.
@@ -442,11 +442,11 @@ export class EmiApi {
   retryRun = (runId: string) => this.call<Run>('POST', `/emi/runs/${runId}/retry`, {})
 
   /**
-   * Analyse an existing board again, as a new ingest run.
+   * Analyze an existing board again, as a new ingest run.
    *
    * Needed whenever the worker learns to measure something new. The retry endpoint only
-   * re-runs failed runs, and uploading the same file again is recognised by its hash and
-   * opens the existing project — so without this, a board analysed last week could never
+   * re-runs failed runs, and uploading the same file again is recognized by its hash and
+   * opens the existing project — so without this, a board analyzed last week could never
    * gain this week's columns.
    */
   reanalyse = (projectId: string, boardId: string, settings?: Record<string, unknown> | null) =>
@@ -512,7 +512,7 @@ export class EmiApi {
 
   /**
    * Upload a vendor SPICE model file. Through the same content-addressed endpoint as boards,
-   * so the key stays inside this organisation's uploads — the only place the server lets a
+   * so the key stays inside this organization's uploads — the only place the server lets a
    * transient run point at. The bytes are not inspected here; the worker vets the file before
    * ngspice sees it.
    */
@@ -594,7 +594,7 @@ export class EmiApi {
   }
 
   /**
-   * The net report behind the CSV export. Null for a board analysed before the worker wrote
+   * The net report behind the CSV export. Null for a board analyzed before the worker wrote
    * one, so the caller can fall back to what board.json has rather than failing.
    */
   async fetchNets(runId: string): Promise<NetReport | null> {

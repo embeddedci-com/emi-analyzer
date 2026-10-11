@@ -294,12 +294,12 @@ var cableTypes = func() []cableType {
 
 type cableSpec struct {
 	Type    string  `json:"type" jsonschema:"a cable type id from cables (e.g. usb2-shielded), or none for a connector that is never cabled"`
-	LengthM float64 `json:"length_m,omitempty" jsonschema:"cable length in metres; default the type's"`
+	LengthM float64 `json:"length_m,omitempty" jsonschema:"cable length in meters; default the type's"`
 }
 
 type runCablesIn struct {
 	target
-	Connectors map[string]cableSpec `json:"connectors,omitempty" jsonschema:"connector ref to its cable, e.g. {\"J1\": {\"type\": \"usb2-shielded\", \"length_m\": 1}}; connectors left out are listed with a suggestion and not modelled"`
+	Connectors map[string]cableSpec `json:"connectors,omitempty" jsonschema:"connector ref to its cable, e.g. {\"J1\": {\"type\": \"usb2-shielded\", \"length_m\": 1}}; connectors left out are listed with a suggestion and not modeled"`
 	Standard   string               `json:"standard_id,omitempty" jsonschema:"radiated limit to budget against; default fcc-15b-radiated-3m"`
 	WaitS      int                  `json:"wait_s,omitempty"`
 }
@@ -356,11 +356,11 @@ type cablesOut struct {
 	analysis
 	Types      []cableType `json:"cable_types" jsonschema:"what run_cables accepts"`
 	Cables     []cableOut  `json:"cables,omitempty" jsonschema:"tightest budget first"`
-	Unassigned []string    `json:"unassigned,omitempty" jsonschema:"connectors with no cable declared: not modelled, with the suggested type"`
+	Unassigned []string    `json:"unassigned,omitempty" jsonschema:"connectors with no cable declared: not modeled, with the suggested type"`
 	Caveat     string      `json:"caveat"`
 }
 
-const cablesCaveat = "The common-mode current each cable can carry before its radiation alone reaches the limit, from an antenna model of the cable (nec2c). It ranks connectors and versions; how much current the board actually puts on a cable is not modelled here."
+const cablesCaveat = "The common-mode current each cable can carry before its radiation alone reaches the limit, from an antenna model of the cable (nec2c). It ranks connectors and versions; how much current the board actually puts on a cable is not modeled here."
 
 func (s *Server) cables(ctx context.Context, _ *mcpRequest, in cablesIn) (*mcpResult, cablesOut, error) {
 	out := cablesOut{Types: cableTypes, Caveat: cablesCaveat}

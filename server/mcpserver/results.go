@@ -195,7 +195,7 @@ func (s *Server) rules(ctx context.Context, t target) (*emiclient.Client, analys
 	return c, a, &d, nil
 }
 
-// ---- the rule catalogue ----
+// ---- the rule catalog ----
 
 //go:embed ruleCatalogue.json
 var catalogueJSON []byte

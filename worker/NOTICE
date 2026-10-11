@@ -4,8 +4,8 @@ Copyright EmbeddedCI contributors
 The worker's own code (the emi_worker package) is licensed under the Apache License 2.0.
 See LICENSE at https://github.com/embeddedci-com/emi-analyzer.
 
-The image also contains third-party programs, each under its own licence. The worker runs
-them as separate programs and does not link them, so their licences do not extend to the
+The image also contains third-party programs, each under its own license. The worker runs
+them as separate programs and does not link them, so their licenses do not extend to the
 worker's code, and the Apache License does not extend to them.
 
 Programs the worker runs
@@ -48,7 +48,7 @@ Python packages
 The base system
 ---------------
 
-The image is built on Debian 12 (bookworm). Every Debian package in it carries its licence
+The image is built on Debian 12 (bookworm). Every Debian package in it carries its license
 and copyright notice in /usr/share/doc/<package>/copyright. The exact package versions are in
 /usr/share/doc/emi-worker/debian-packages.txt.
 

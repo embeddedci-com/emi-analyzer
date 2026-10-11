@@ -238,7 +238,7 @@ export function EmiLimitsPage() {
                 20·log₁₀(µV/m)
               </Text>
               . 100 µV/m is 40 dBµV/m. Conducted limits are voltages at the mains port in
-              dBµV, measured across a 50 µH / 50 Ω line impedance stabilisation network.
+              dBµV, measured across a 50 µH / 50 Ω line impedance stabilization network.
             </Text>
             <Text size="sm">
               Quasi-peak and average are different detectors, not different limits: a source

@@ -159,7 +159,7 @@ def test_a_long_net_is_critical_only_where_its_return_is_broken():
     _weigh_radiators(ctx_for(m), findings)
     sck, rmii = findings[0], findings[1]
     assert sck.severity == "critical" and "a layer change with no return via" in sck.detail
-    # A return via a few millimetres off is a warning of its own, not a broken return path.
+    # A return via a few millimeters off is a warning of its own, not a broken return path.
     assert rmii.severity == "warning" and "no serious break" in rmii.detail
 
     # Without a plane, length alone stays the rule.

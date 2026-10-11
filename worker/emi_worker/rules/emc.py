@@ -7,7 +7,7 @@ the supply. Boards fail those for layout reasons that are just as visible in the
 
   * An I/O line with no clamp at the connector hands the whole discharge to the first IC pin it
     reaches. A clamp placed after the IC, or far from the connector, protects much less than
-    the schematic suggests: an ESD pulse rises in under a nanosecond, where every millimetre of
+    the schematic suggests: an ESD pulse rises in under a nanosecond, where every millimeter of
     trace in front of the clamp is roughly a nanohenry and tens of volts.
   * A connector shell or chassis net that is not tied to the board's ground has nowhere to put a
     discharge except through the circuit.
@@ -16,7 +16,7 @@ the supply. Boards fail those for layout reasons that are just as visible in the
     along the cable, and a sprawling switch node is the strongest electric-field antenna on a
     board with a regulator.
 
-Parts are recognised by reference designator, value and footprint, the way the decoupling check
+Parts are recognized by reference designator, value and footprint, the way the decoupling check
 does it, and every finding names the parts it matched so a wrong guess is visible. The
 heuristics were tuned against real boards; each place one of them was wrong there is called out
 where the fix lives. These are layout checks, not an immunity test: they cannot say what level
@@ -75,7 +75,7 @@ SW_NET = re.compile(r"(^|[/_.(-])(sw\d*|lx\d*|vlx\d*|ph\d*|phase\d*)(\)|$)", re.
 FERRITE_HINT = re.compile(r"ferrite|bead|Ω|ohm|@\s*\d+\s*mhz|pcmf|choke", re.I)
 
 #: Peak current of an 8 kV contact discharge (IEC 61000-4-2 level 4) over its sub-nanosecond
-#: rise, as volts per nanohenry. Order of magnitude only, to say why a millimetre matters.
+#: rise, as volts per nanohenry. Order of magnitude only, to say why a millimeter matters.
 ESD_V_PER_NH = 35.0
 
 
@@ -129,9 +129,9 @@ def _plated(p) -> bool:
 
 
 def _pad_gap(p, point: tuple[float, float]) -> float:
-    """Distance from a point to the edge of a pad, not its centre.
+    """Distance from a point to the edge of a pad, not its center.
 
-    Measured to the centre, a via at the edge of an SMB TVS's ground pad reads as 2 mm away, and
+    Measured to the center, a via at the edge of an SMB TVS's ground pad reads as 2 mm away, and
     every large clamp on a real board was flagged for a via that was right beside it.
     """
     if not p.ring:
@@ -305,7 +305,7 @@ def check_esd_protection(ctx: RuleContext) -> Iterator[Finding]:
             continue
         for net, cpad in sorted(parts.lines_leaving(pads).items()):
             if _kind(net) == "power" and not _power_entry(net):
-                continue  # a rail passing through, such as a transformer centre tap
+                continue  # a rail passing through, such as a transformer center tap
             clamps = parts.clamps.get(net, [])
             if not clamps:
                 if any(parts.clamps.get(other) for _, other in parts.behind(parts.series_r, net)):
@@ -375,7 +375,7 @@ def check_esd_protection(ctx: RuleContext) -> Iterator[Finding]:
             detail=(
                 f"{cref} protects {', '.join(nets)}, but sits {d:.1f} mm from {ref} "
                 f"{'along the routing' if routed else 'in a straight line'} (budget {max_d:g} mm). "
-                f"A discharge rises in under a nanosecond, where each millimetre of trace is roughly "
+                f"A discharge rises in under a nanosecond, where each millimeter of trace is roughly "
                 f"a nanohenry: that is on the order of {ESD_V_PER_NH * d:.0f} V across the trace "
                 f"before the clamp takes the current. Move {cref} against the connector."
             ),
@@ -646,7 +646,7 @@ def check_input_filter(ctx: RuleContext) -> Iterator[Finding]:
 # ---------------------------------------------------------------------------------------
 
 def switch_nodes(ctx: RuleContext) -> dict[str, str]:
-    """Every regulator switch node on the board, with how it was recognised.
+    """Every regulator switch node on the board, with how it was recognized.
 
     The conducted-emissions scan starts from the same set, so a regulator this check reports is
     one that scan models.
@@ -716,11 +716,11 @@ def check_switch_node(ctx: RuleContext) -> Iterator[Finding]:
             severity=severity(ctx, rule, "warning"),
             title=f"Switch node {net} has {what}",
             detail=(
-                f"{net} (recognised by {how}) is the switching side of a regulator at {pin.ref}: it "
+                f"{net} (recognized by {how}) is the switching side of a regulator at {pin.ref}: it "
                 f"swings between ground and the input voltage with edges of a few nanoseconds. Its "
                 f"{area:.0f} mm² of copper and {length:.0f} mm of track (budgets {max_area:g} mm² and "
                 f"{max_len:g} mm) couple those edges capacitively into everything nearby, which is "
-                f"how regulator noise reaches cables and neighbouring traces. Put the inductor "
+                f"how regulator noise reaches cables and neighboring traces. Put the inductor "
                 f"against the switch pin, keep only as much copper as the current needs, keep a solid "
                 f"ground plane directly beneath it, and route feedback and analog traces away."
             ),

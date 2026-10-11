@@ -1,7 +1,7 @@
 /**
  * What every board is checked for, as a table on the front page.
  *
- * Built from ruleCatalogue.json, which the worker exports from its own rule catalogue. A
+ * Built from ruleCatalogue.json, which the worker exports from its own rule catalog. A
  * worker test fails when the file is stale, so this list cannot drift from what actually
  * runs — it is the same source the findings panel takes its rule names from.
  */

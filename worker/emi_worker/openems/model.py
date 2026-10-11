@@ -83,7 +83,7 @@ class SolveParams:
     #: every result already reported, keeps solving bare copper exactly as before.
     model_components: bool = False
     #: Whether the solver models a series lumped R-L-C (``run.solver_has_series_rlc``). Without
-    #: it no capacitor can be modelled, and none is placed. The solve stage asks the binary.
+    #: it no capacitor can be modeled, and none is placed. The solve stage asks the binary.
     solver_series_rlc: bool = False
     #: Components offered ahead of the built-in library, already in precedence order. The
     #: server knows who owns what; this does not need to.
@@ -112,8 +112,8 @@ class SolveParams:
     #: Say so when the band's ends sit near the edge of the excitation (``excitation_band``).
     #: A small-part solve turns it off: see stages/small_part.py.
     band_edge_note: bool = True
-    #: Hold the excitation's half-width to this fraction of its centre (0: the band's own, up
-    #: to the centre). Less of the pulse then falls below the band. A small-part solve sets it:
+    #: Hold the excitation's half-width to this fraction of its center (0: the band's own, up
+    #: to the center). Less of the pulse then falls below the band. A small-part solve sets it:
     #: see stages/small_part.py.
     excitation_fc_over_f0: float = 0.0
 
@@ -175,9 +175,9 @@ NOTE_ABOVE = 0.9
 
 
 def excitation_band(f_min: float, f_max: float) -> tuple[float, float, str | None]:
-    """Centre and half-width of the Gaussian excitation, in Hz, and a note if it is tight.
+    """Center and half-width of the Gaussian excitation, in Hz, and a note if it is tight.
 
-    The obvious choice — centre on the requested band and set the half-width to reach both
+    The obvious choice — center on the requested band and set the half-width to reach both
     ends — puts f_min and f_max exactly on the 20 dB points. That was the original code, and
     it is wrong at both edges of every solve: see BAND_FILL.
 
@@ -248,7 +248,7 @@ def kappa_from_loss_tangent(epsilon_r: float, loss_tangent: float, frequency: fl
 
     openEMS models loss as a conductivity, which is frequency-independent, while a real
     loss tangent is not. Evaluating at one frequency is therefore an approximation that is
-    exact at that frequency and drifts either side of it — so it is evaluated at the centre
+    exact at that frequency and drifts either side of it — so it is evaluated at the center
     of the band of interest rather than at the top.
     """
     return 2 * math.pi * frequency * EPSILON_0 * epsilon_r * loss_tangent
@@ -257,7 +257,7 @@ def kappa_from_loss_tangent(epsilon_r: float, loss_tangent: float, frequency: fl
 def _plan_components(model: BoardModel, transform, params: "SolveParams", notes: list[str]):
     """Which matched components go into this solve, and where (§12).
 
-    Returns an empty plan when component modelling is off, which is the default — a board
+    Returns an empty plan when component modeling is off, which is the default — a board
     with no matched parts must solve bit-for-bit as it did before this existed, and the
     cheapest way to guarantee that is for the whole path to produce nothing.
     """
@@ -302,7 +302,7 @@ def _plan_components(model: BoardModel, transform, params: "SolveParams", notes:
     plan = plan_all(resolved, pads_by_ref, transform, params.roi)
     if plan.placements:
         notes.append(
-            f"{len(plan.placements)} capacitors modelled as series R-L-C"
+            f"{len(plan.placements)} capacitors modeled as series R-L-C"
             + (f"; {len(plan.skipped)} matched but not placed" if plan.skipped else "")
             + (f"; {unmatched} left as bare copper" if unmatched else "")
         )
@@ -363,7 +363,7 @@ def _plan_cable_ports(model: BoardModel, transform, params: "SolveParams",
 #:
 #: The reason is the current crowding at a strip's edge. With a line exactly on the edge, the
 #: strip behaves as if it were about half a cell wider on each side, and the cell beside a
-#: lone trace is set by its width and its neighbours, not by the preset: a 50 ohm microstrip
+#: lone trace is set by its width and its neighbors, not by the preset: a 50 ohm microstrip
 #: meshed that way came out at 40 ohm on every preset (research/verify_microstrip.py).
 #: False keeps a line on every edge, as before.
 #:
@@ -528,7 +528,7 @@ def narrow_trace_lines(ruled: dict[float, tuple[float, float]], cell_mm: float
     """The thirds-rule lines of traces narrower than two cells, which no merge may remove.
 
     Two of them closer than half their rule's cell are one line, at their middle. A routed
-    trace often jogs by a few micrometres (board C's pair has segments 20 um and 10 um off each
+    trace often jogs by a few micrometers (board C's pair has segments 20 um and 10 um off each
     other), each jog is an edge of its own, and kept apart their lines set cells of 10 um: the
     coarse mesh of that pair came out at 1.4 M cells and a timestep five times shorter, over
     budget. Half a cell moves no line by more than a quarter of one.
@@ -762,7 +762,7 @@ def build_model(model: BoardModel, transform, params: SolveParams) -> BuiltModel
     if max_steps <= 0:
         max_steps = needed
     elif max_steps < needed:
-        # Worth stating plainly rather than silently honouring: a run capped below the
+        # Worth stating plainly rather than silently honoring: a run capped below the
         # excitation length returns zeros, and a user who set this by hand deserves to know
         # what it will cost them.
         notes.append(
@@ -804,7 +804,7 @@ def build_model(model: BoardModel, transform, params: SolveParams) -> BuiltModel
         dy0 = max(gy0, min(p[1] for p in outline_pts))
         dy1 = min(gy1, max(p[1] for p in outline_pts))
         if dx1 <= dx0 or dy1 <= dy0:
-            # The region does not overlap the outline at all. Keep the old behaviour rather
+            # The region does not overlap the outline at all. Keep the old behavior rather
             # than emitting an inside-out box, and say so.
             dx0, dy0, dx1, dy1 = gx0, gy0, gx1, gy1
             notes.append(
@@ -832,7 +832,7 @@ def build_model(model: BoardModel, transform, params: SolveParams) -> BuiltModel
             )
 
     # Copper. Filtered by bounding box rather than clipped: primitives outside the grid are
-    # simply not discretised, and clipping a trace at the region boundary would create an
+    # simply not discretized, and clipping a trace at the region boundary would create an
     # open stub that radiates like something that is not on the board.
     lo_x, hi_x = x0 - COPPER_MARGIN_MM, x1 + COPPER_MARGIN_MM
     lo_y, hi_y = y0 - COPPER_MARGIN_MM, y1 + COPPER_MARGIN_MM
@@ -1130,10 +1130,10 @@ def build_model(model: BoardModel, transform, params: SolveParams) -> BuiltModel
             ))
         modelled = modelled_parts(plan)
     for ref, why in plan.skipped:
-        notes.append(f"{ref} matched a component but was not modelled: {why}")
+        notes.append(f"{ref} matched a component but was not modeled: {why}")
 
     # §16.2's NF2FF box, last: it is placed from the finished mesh, because the grid is what
-    # actually exists -- a cable port extends the domain on one side only, and a box centred on
+    # actually exists -- a cable port extends the domain on one side only, and a box centered on
     # the region would sit outside the grid there and inside the structure opposite.
     far_field_meta = None
     if params.far_field:

@@ -3,7 +3,7 @@
 Gerbers say where copper is; the IPC-D-356 netlist says where connection points are and
 what they are called. Neither alone gives you a net-aware board. Together they do:
 
-1. Rasterise each copper layer and label its connected islands.
+1. Rasterize each copper layer and label its connected islands.
 2. Drop each netlist point onto its layer. The island it lands in takes that net's name.
 3. Tie islands together through plated holes. This is what names an inner plane, which
    typically has no netlist point of its own — it is reached through the vias that stitch
@@ -40,7 +40,7 @@ RESOLUTION_MM = 0.05
 #: a 0.35 mm tolerance collapsed 39 nets into 12, with every through-hole signal absorbed
 #: into +5V or GND.
 #:
-#: The raster draws via pads as solid discs, so a via centre is already copper and needs no
+#: The raster draws via pads as solid discs, so a via center is already copper and needs no
 #: tolerance at all. What remains is rounding: one or two pixels.
 POINT_TOLERANCE_MM = 0.08
 
@@ -108,7 +108,7 @@ class Connectivity:
         netlist's through-hole records describe the same physical vias, so the difference of
         the two centroids is the offset, to full precision. Aligning by bounding boxes
         instead is off by however much the two sets differ at their extremes — a fraction of
-        a millimetre, which is enough to drop a pad's netlist point onto the ground pour
+        a millimeter, which is enough to drop a pad's netlist point onto the ground pour
         beside it and hand that pad's net to the pour.
 
         Without a drill file, fall back to bounding boxes and then refine by local search.
@@ -260,7 +260,7 @@ class Connectivity:
 def rings_for_geometry(
     tracks: list[Track], pads: list[Pad], zones: list[ZonePolygon], layer: str,
 ) -> list[list[tuple[float, float]]]:
-    """Every closed outline on one layer, for rasterising."""
+    """Every closed outline on one layer, for rasterizing."""
     rings: list[list[tuple[float, float]]] = []
     for t in tracks:
         if t.layer == layer and t.width_mm > 0 and len(t.pts) >= 2:
@@ -315,13 +315,13 @@ def summarise(conn: Connectivity) -> dict[str, int]:
     return dict(counts)
 
 
-#: How far a component's netlist point may sit from a pad's centre and still name it, in mm.
-#: IPC-D-356 records a surface pad's centre and a through-hole's drill centre, so the two
+#: How far a component's netlist point may sit from a pad's center and still name it, in mm.
+#: IPC-D-356 records a surface pad's center and a through-hole's drill center, so the two
 #: agree to rounding; the point-in-pad test covers exporters that record an offset access
 #: point instead.
 REF_TOLERANCE_MM = 0.1
 
-#: Grid cell for finding pads near a point, in mm. A point inside a pad whose centre is more
+#: Grid cell for finding pads near a point, in mm. A point inside a pad whose center is more
 #: than a cell away is not found, which only a very large pad with an offset access point
 #: could do.
 _PAD_CELL_MM = 1.0

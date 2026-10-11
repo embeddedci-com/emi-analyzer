@@ -57,7 +57,7 @@ func (s *Service) handleWorkerRegister(w http.ResponseWriter, r *http.Request) {
 	}
 	scope := key.OrganizationID
 	if scope == "" {
-		scope = "all organisations"
+		scope = "all organizations"
 	}
 	s.deps.log().Info("emi: worker registered",
 		"name", wk.Name, "kid", key.Kid, "serves", scope,
@@ -66,7 +66,7 @@ func (s *Service) handleWorkerRegister(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"worker_id": wk.ID,
 		"name":      wk.Name,
-		// Empty means a shared worker: it takes runs from every organisation. Echoed so a
+		// Empty means a shared worker: it takes runs from every organization. Echoed so a
 		// worker can log what it is actually serving rather than what was intended.
 		"org_id": key.OrganizationID,
 		"shared": key.OrganizationID == "",
@@ -85,7 +85,7 @@ func (s *Service) handleWorkerDeregister(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deregistered"})
 }
 
-// handleWorkerListRuns is the REST fallback for the WebSocket push. Push is an optimisation;
+// handleWorkerListRuns is the REST fallback for the WebSocket push. Push is an optimization;
 // polling is the guarantee.
 func (s *Service) handleWorkerListRuns(w http.ResponseWriter, r *http.Request) {
 	key, _ := agentFrom(r.Context())
@@ -131,8 +131,8 @@ func (s *Service) handleMintRunToken(w http.ResponseWriter, r *http.Request) {
 		writeStoreErr(w, err)
 		return
 	}
-	// A key naming no organisation is a shared worker and may take anyone's run; a scoped
-	// key may take only its own organisation's.
+	// A key naming no organization is a shared worker and may take anyone's run; a scoped
+	// key may take only its own organization's.
 	if key.OrganizationID != "" && proj.OrganizationID != key.OrganizationID {
 		// 404 rather than 403: a worker scoped to another org should not learn that this
 		// run id exists at all.
@@ -345,7 +345,7 @@ func (s *Service) handleRunInputURL(w http.ResponseWriter, r *http.Request) {
 		out["input_url"] = u
 		out["input_key"] = board.InputKey
 	}
-	// A solve run also needs the normalised board produced by the earlier ingest run.
+	// A solve run also needs the normalized board produced by the earlier ingest run.
 	if board.BoardKey != "" {
 		u, err := s.deps.Blob.PresignGet(r.Context(), board.BoardKey, presignTTL)
 		if err != nil {
@@ -355,7 +355,7 @@ func (s *Service) handleRunInputURL(w http.ResponseWriter, r *http.Request) {
 		out["board_url"] = u
 		out["board_key"] = board.BoardKey
 	}
-	// Vendor SPICE models a transient run uses. The keys were checked against the organisation
+	// Vendor SPICE models a transient run uses. The keys were checked against the organization
 	// when the run was created; they are checked again here, against the project the run belongs
 	// to, because this is the moment a worker is actually handed something to download.
 	if run.Kind == RunKindTransient && len(run.Params) > 0 {

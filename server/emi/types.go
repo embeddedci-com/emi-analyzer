@@ -140,7 +140,7 @@ func (c Capabilities) Accepts(kind RunKind, cells int64) bool {
 	return true
 }
 
-// Project groups the boards and runs for one PCB under one organisation.
+// Project groups the boards and runs for one PCB under one organization.
 type Project struct {
 	ID             string     `json:"id"`
 	OrganizationID string     `json:"organization_id"`
@@ -188,7 +188,7 @@ type Component struct {
 	UpdatedAt  time.Time `json:"updated_at"`
 }
 
-// Board is one normalised parse of an upload: the board.json + geometry.bin pair that
+// Board is one normalized parse of an upload: the board.json + geometry.bin pair that
 // everything downstream (viewer, rules, mesher) reads instead of the original format.
 type Board struct {
 	ID          string `json:"id"`
@@ -246,8 +246,8 @@ type Run struct {
 	// Ownership, assigned when a worker mints a run token: the id of the worker key that holds
 	// the run, and the jti its current run token must carry.
 	//
-	// Never serialised. A Run is what the browser receives, and neither field is any of its
-	// business: the kid names a credential, and the jti is half of what authorises writes to
+	// Never serialized. A Run is what the browser receives, and neither field is any of its
+	// business: the kid names a credential, and the jti is half of what authorizes writes to
 	// the run. Workers get runEnvelope, which leaves them out as well.
 	OwnerAPIKeyKid string `json:"-"`
 	JTIKey         string `json:"-"`
@@ -310,7 +310,7 @@ type Worker struct {
 	ID        string `json:"id"`
 	APIKeyKid string `json:"api_key_kid"`
 	// OrganizationID is whose runs this worker may take, copied from the verified agent key.
-	// Empty means a shared worker that serves every organisation.
+	// Empty means a shared worker that serves every organization.
 	//
 	// It travels on the Worker rather than being looked up in the store, because only the
 	// host knows where keys live: the Postgres stack keeps them in emi.emi_dev_api_keys, and a

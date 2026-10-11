@@ -39,7 +39,7 @@ def _one(**over):
 def test_an_undeclared_unmodelled_connector_blocks_the_number():
     c = _one(connectors=["J1", "J2"])
     assert any(g.key == "cable:J2" for g in c.gaps)
-    assert any("not modelled" in g.message for g in c.gaps)
+    assert any("not modeled" in g.message for g in c.gaps)
 
 
 def test_a_connector_declared_as_carrying_nothing_is_an_answer():
@@ -124,7 +124,7 @@ def test_artifact_problems_are_gaps():
 def test_a_metal_enclosure_keeps_radiated_incomplete_with_that_reason():
     c = _one(enclosure="metal")
     g = next(g for g in c.gaps if g.key == "metal-enclosure")
-    assert "not modelled" in g.message
+    assert "not modeled" in g.message
     assert g.fixed_on == "product"
 
 

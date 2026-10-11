@@ -1,4 +1,4 @@
-"""Ingest: turn an upload into the normalised board the rest of the system reads.
+"""Ingest: turn an upload into the normalized board the rest of the system reads.
 
 Produces three artifacts:
 
@@ -144,7 +144,7 @@ class Sidecars:
     notes: list[str] = field(default_factory=list)
 
 
-#: Names recognised as a committed rules document, in preference order.
+#: Names recognized as a committed rules document, in preference order.
 SETTINGS_NAMES = ("emi.rules.yaml", "emi.rules.yml", "emi.rules.json", ".emi.yaml")
 
 
@@ -257,7 +257,7 @@ def load_board(data: bytes) -> tuple[object, str, str]:
 
     Returns ``(model, filename, source_kind)``. A bare file is KiCad; an archive is
     whichever of the two it turns out to hold, decided by what is actually inside rather
-    than by what the project was labelled — a user who picks the wrong one in the UI should
+    than by what the project was labeled — a user who picks the wrong one in the UI should
     still get their board.
     """
     if data[:2] != b"PK":
@@ -440,7 +440,7 @@ def run_ingest(ctx: StageContext) -> StageResult:
             f"{len(hidden)} finding{'s' if len(hidden) != 1 else ''} hidden by suppressions."
         )
 
-    ctx.progress("upload", 80, "uploading normalised board")
+    ctx.progress("upload", 80, "uploading normalized board")
 
     artifacts = [
         ctx.client.upload_artifact(ctx.token, "board.json", to_json(doc), "application/json"),

@@ -1,4 +1,4 @@
-"""KiCad board reading: s-expressions in, normalised geometry out."""
+"""KiCad board reading: s-expressions in, normalized geometry out."""
 
 from .board import BoardModel, parse_board
 from .sexpr import parse

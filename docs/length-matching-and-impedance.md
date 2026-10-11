@@ -24,7 +24,7 @@ one of them is answered wrongly.
 | | today | good enough for this? |
 |---|---|---|
 | Stackup parsing | per-layer type, thickness, material, `epsilon_r`, `loss_tangent`, each flagged `from_file` | **yes** — this is the foundation and it is sound |
-| Stackup fallback | synthesises a symmetric FR-4 stack, εr 4.4, `from_file=False`, warns | yes, but see §5 on what "assumed" must mean downstream |
+| Stackup fallback | synthesizes a symmetric FR-4 stack, εr 4.4, `from_file=False`, warns | yes, but see §5 on what "assumed" must mean downstream |
 | Gerber path | thicknesses from the job file; **εr never available**, warned | no — impedance is not computable from Gerbers alone |
 | Reference plane | `check_plane_gaps` finds the nearest plane by z-order, falling back to largest pour | **yes** — reusable as-is for impedance |
 | Layer role | `plane_net` + `plane_coverage`, measured from pours | yes |
@@ -67,7 +67,7 @@ of (layer, length) runs plus the vias crossed.
 The data is already there — tracks with endpoints, vias with layer spans, pads with
 positions — it has never been assembled into a graph. Sketch:
 
-- Nodes: pad centres, via centres, and track endpoints, merged when within a tolerance
+- Nodes: pad centers, via centers, and track endpoints, merged when within a tolerance
   (the same 0.08 mm the Gerber net reconstruction settled on).
 - Edges: track segments (weight = length, tagged with layer), vias (weight = z-distance,
   tagged as a via).
@@ -80,7 +80,7 @@ positions — it has never been assembled into a graph. Sketch:
 controller/SoC rather than on the memory, identified by which reference designator carries
 the most nets of the group, (c) fall back to the longest path in the net and say so.
 
-### 2.2 Delay, not millimetres
+### 2.2 Delay, not millimeters
 
 Matching physical length across a layer change is wrong, and wrong by enough to matter.
 
@@ -98,20 +98,20 @@ t_pd = √(ε_eff) / c            c = 299.792 mm/ns
 That is a **~25% difference**. Concretely: DDR4 at 3200 MT/s has a 312 ps unit interval and
 an intra-byte skew budget of a few ps. A 20 mm section moved from an inner to an outer layer
 changes that net's delay by ~28 ps — an order of magnitude more than the budget — while its
-length in millimetres is unchanged. A length-matching check that reports millimetres would
+length in millimeters is unchanged. A length-matching check that reports millimeters would
 call that board matched. It is not.
 
-**So the unit of the check is picoseconds.** Millimetres can be shown alongside as a
+**So the unit of the check is picoseconds.** Millimeters can be shown alongside as a
 convenience, and the tolerance can be *entered* in mm or mil for people who think that way,
 but the comparison is in time.
 
 Also to account for:
 
 - **Via delay.** Small but not zero — roughly 1–3 ps for a through via in a 1.6 mm board,
-  plus the layer transition. A net with three more vias than its neighbour is skewed.
+  plus the layer transition. A net with three more vias than its neighbor is skewed.
 - **Covered microstrip.** Solder mask over an outer trace raises ε_eff by ~0.1–0.3, worth a
   few ps over a long run. Second-order; note it and move on.
-- **Fibre weave.** Real, direction-dependent, and not computable from what we have. Out of
+- **Fiber weave.** Real, direction-dependent, and not computable from what we have. Out of
   scope, but worth stating in the limitations page so nobody reads ±2 ps as truth.
 
 ---
@@ -129,8 +129,8 @@ DDR works:
 | DQS± | its own complement (intra-pair) | differential; tightest tolerance of all |
 | Address, command, control, CKE, ODT, CS | **CK±** | captured on the clock at each DRAM |
 | CK± | its own complement | as DQS |
-| byte lane ↔ byte lane | *nothing* | lanes are independent; write levelling absorbs it |
-| DQS ↔ CK | loosely, or not at all on fly-by | write levelling handles it by design |
+| byte lane ↔ byte lane | *nothing* | lanes are independent; write leveling absorbs it |
+| DQS ↔ CK | loosely, or not at all on fly-by | write leveling handles it by design |
 
 Getting this wrong in either direction is costly: matching lanes to each other produces a
 wall of findings nobody can act on, and matching DQ to CK instead of DQS misses the error
@@ -286,7 +286,7 @@ an hour of hunting.
 
 Rules need **stable ids** (`plane-gap`, `ddr-skew`, `impedance-target`) that settings key
 off, decoupled from their titles — the existing rule names are already suitable. A rule
-catalogue endpoint listing id, title, what it checks, its parameters and their defaults lets
+catalog endpoint listing id, title, what it checks, its parameters and their defaults lets
 the UI build a settings page without hard-coding any of it, and gives the docs one source.
 
 The settings document needs a schema version from day one; thresholds will change meaning

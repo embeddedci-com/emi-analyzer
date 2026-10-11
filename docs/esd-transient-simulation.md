@@ -26,7 +26,7 @@ are an estimate and the difference between two layouts is not.
 | Trace impedance | `impedance.single_ended(width_mm, LayerElectrics)` → `Impedance.ohm` ± uncertainty | yes (closed-form microstrip/stripline) |
 | Via inductance | nothing; only `via_ps` as a delay | **no** — add a closed form (§3.4) |
 | Clamp ground path | `esd-protection` measures pad edge to the nearest ground via | yes as a length; needs converting to inductance |
-| Part electrical models | none — parts are *recognised*, never *characterised* | **no** — §4 |
+| Part electrical models | none — parts are *recognized*, never *characterized* | **no** — §4 |
 | Circuit simulator | none; the worker image has openEMS only | **no** — add ngspice (Debian bookworm ships 39.3, BSD-3-Clause) |
 | Run kinds | server accepted `ingest` and `solve` when this was written (`server/emi/types.go`); workers advertise `kinds` (`worker/emi_worker/config.py`) | needed a third kind (§6); there are five now |
 
@@ -123,7 +123,7 @@ Each line the `esd-protection` check reports has:
                                                                                       ⏚ plane (ideal)
 ```
 
-For an R-clamp (a series resistor, then the clamp — the check already recognises this), the
+For an R-clamp (a series resistor, then the clamp — the check already recognizes this), the
 circuit is T-line, then R, then T-line, split at the resistor's pad positions.
 
 ### 3.2 Finding the branch point
@@ -186,7 +186,7 @@ The comparison is the product. Absolute values are estimates (§8).
 
 ### 4.1 Clamps: generic, from datasheet numbers
 
-Vendor SPICE models vary in quality and in licence, and shipping them in the image means
+Vendor SPICE models vary in quality and in license, and shipping them in the image means
 checking each vendor's terms. So the default is a generic model built from numbers every TVS
 datasheet gives:
 
@@ -206,14 +206,14 @@ datasheet gives:
   - a zener runs from the rail to ground;
   - the rail pin connects to the board supply when it is wired (USBLC6 pin 5).
 - **Rail clamp** (BAT54S): a diode to a named supply and one from ground. The clamp current then
-  flows into that supply, modelled as its nearest decoupling capacitor and that capacitor's
+  flows into that supply, modeled as its nearest decoupling capacitor and that capacitor's
   ground via.
 
 **A built-in table** covers the parts found on the real boards: USBLC6-2SC6 and -4SC6,
 PESD5V0S1BA, PESD3V3L4UG, SRV05-4, SMAJ5.0A and SMBJ5.0A, SMF13CA, SMAJ36CA, and BAT54S.
 - **Every value is filled from that part's datasheet, with the datasheet revision cited in the
   entry** — not from memory.
-- A recognised part that is not in the table is modelled as a generic 5 V TVS, and the result
+- A recognized part that is not in the table is modeled as a generic 5 V TVS, and the result
   says so.
 
 ### 4.2 Vendor models (phase 2)
@@ -240,7 +240,7 @@ This is the largest uncertainty, and the reason §8 exists.
 **Phase 1: a generic CMOS input.**
 - **Pin:** 5 pF of capacitance, a diode to the net on its supply pin, a diode from ground, and
   1 Ω in series.
-- **Supply:** modelled as its nearest decoupling capacitor and that capacitor's ground via. The
+- **Supply:** modeled as its nearest decoupling capacitor and that capacitor's ground via. The
   decoupling check already knows both.
 - **Results:** peak current into the pin's diodes and the energy dissipated there, not a pass or
   fail.
@@ -338,15 +338,15 @@ These tests must exist before a number is shown to anyone:
 
 ## 8. What it cannot say
 
-- **Contact discharge only.** Air discharge is an arc and is not modelled.
+- **Contact discharge only.** Air discharge is an arc and is not modeled.
 - **IC internal protection is unknown,** so absolute volts and energy are estimates. What to
   trust is the comparison between layouts.
 - **No failure prediction.** It predicts neither damage nor soft failures (resets, lock-ups), and
   an IC's HBM/CDM rating is a different test that cannot be compared with it.
-- **The plane is ideal.** It models no ground bounce, no coupling onto neighbouring traces, no
+- **The plane is ideal.** It models no ground bounce, no coupling onto neighboring traces, no
   radiated field from the discharge, and no discharge to the enclosure, cables or coupling
   planes. Phase 4 adds coupling and ground bounce through openEMS.
-- **Parts are recognised by value and footprint,** and a clamp the tool does not recognise is
+- **Parts are recognized by value and footprint,** and a clamp the tool does not recognize is
   simulated as absent — the same rule the checks use.
 - **Metal-shell connectors are tested at the shell** (§2.1). Injecting at a pin is a worst case.
 - **Not a compliance prediction,** the same position the limitations page takes for emissions.
@@ -360,7 +360,7 @@ These tests must exist before a number is shown to anyone:
 | 1 | ESD contact discharge on the lines `esd-protection` finds; generic and table clamp models; generic IC pin; T-lines from the stackup; what-ifs; `transient` run kind, `transient.json`, result panel | §7 tests 1–7 pass and the real boards run |
 | 2 | Vendor models from the project zip; IBIS pin capacitance; ordered runs in topology; burst as a single 5/50 ns pulse, after checking the 61000-4-4 text | vendor models validate against datasheets |
 | 3 | Surge 1.2/50–8/20 µs on the lines `input-filter` finds; coupling 18 µF and 9 µF + 10 Ω; TVS energy against its rated pulse power | the generator reproduces the waveforms and Tables 2, 3 and 6 |
-| 4 | openEMS extraction, scikit-rf vector fit to a SPICE subcircuit, then ground bounce and coupling to neighbours | §7 test 8 |
+| 4 | openEMS extraction, scikit-rf vector fit to a SPICE subcircuit, then ground bounce and coupling to neighbors | §7 test 8 |
 
 Physical injection on the bench, with BenchPod monitoring the board, is a separate plan.
 
@@ -388,7 +388,7 @@ this section is the one that is true.
   but schedules a breakpoint for every reflection; with a clamp stub and a nonlinear pin they
   multiplied until one line ran past two minutes. Pi sections of at most 12 ps (about 2 mm) put
   the cutoff above 20 GHz, far past a 0.8 ns rise, and a line takes about half a second.
-- **Every modelled node has the capacitance it physically has.** A supply node between the
+- **Every modeled node has the capacitance it physically has.** A supply node between the
   regulator's inductance and the decoupling capacitor's ESL, with nothing else on it, collapses
   the timestep in the first femtoseconds. The IC supply carries 100 pF of on-die capacitance, and
   pin-internal and clamp-ground nodes 0.5 pF.

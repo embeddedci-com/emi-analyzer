@@ -1,7 +1,7 @@
 """Which connectors get which cable (§5).
 
 The suggestion is a starting point, never a decision: the result names what it guessed and
-from what, and an unassigned connector is *not modelled at all* rather than modelled with a
+from what, and an unassigned connector is *not modeled at all* rather than modeled with a
 default. §5's rule is that an unassigned connector is named and compliance treats it as
 incomplete — a cable the user did not ask for is exactly the kind of invisible assumption this
 tool exists not to make.
@@ -99,7 +99,7 @@ class Anchor:
     """
 
     ref: str
-    #: The point on the board edge the cable leaves from, in board millimetres.
+    #: The point on the board edge the cable leaves from, in board millimeters.
     x_mm: float
     y_mm: float
     #: Unit vector, outward.
@@ -150,7 +150,7 @@ def anchor_for(ref: str, pads: list, transform, outline: list[list[tuple[float, 
     """Where this connector's cable leaves the board, or None when there is no outline.
 
     The exit point is the nearest point on the board outline and the normal points away from
-    the connector towards it — outward by construction, without needing to know which way the
+    the connector toward it — outward by construction, without needing to know which way the
     outline was wound. An outline whose winding is unknown is the usual case in a board file,
     and guessing it is how a stub ends up pointing inwards.
     """
@@ -183,7 +183,7 @@ def anchor_for(ref: str, pads: list, transform, outline: list[list[tuple[float, 
     dx, dy = ex - cx, ey - cy
     norm = math.hypot(dx, dy)
     if norm < 1e-9:
-        # The connector centre is exactly on the edge, so there is no direction to take from
+        # The connector center is exactly on the edge, so there is no direction to take from
         # it. Fall back to the segment's own normal rather than inventing one.
         (ax, ay), (bx, by) = min(
             board_segments,

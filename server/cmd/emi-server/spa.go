@@ -67,7 +67,7 @@ func spaHandler(dir, base string) (http.Handler, error) {
 // probeHealth is the container healthcheck, run as `emi-server -health-check`.
 //
 // addr is the listen address, so it is usually just ":8090" -- the host half is empty and
-// has to be filled in before it can be dialled.
+// has to be filled in before it can be dialed.
 func probeHealth(addr string) int {
 	host, port, err := net.SplitHostPort(addr)
 	if err != nil {

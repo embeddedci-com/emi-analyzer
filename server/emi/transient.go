@@ -11,7 +11,7 @@ import (
 // TransientModel is a vendor SPICE model a user uploaded for one part on the board.
 //
 // The file itself goes through the ordinary upload endpoint, so it lands content-addressed under
-// the organisation's uploads prefix. The server never reads it: deciding whether it is really a
+// the organization's uploads prefix. The server never reads it: deciding whether it is really a
 // SPICE model -- and not a netlist that runs shell commands -- is the worker's job, and the
 // worker does it before ngspice sees a byte. What the server enforces is where the key points.
 type TransientModel struct {
@@ -45,7 +45,7 @@ var modelSuffixes = []string{
 	".lib", ".cir", ".sub", ".subckt", ".mod", ".model", ".sp", ".spi", ".spice", ".ckt", ".txt", ".inc",
 }
 
-// modelKeyPrefix is the only place a model a run uses may live: this organisation's uploads.
+// modelKeyPrefix is the only place a model a run uses may live: this organization's uploads.
 // Without this a run could name any object in the bucket and have a worker download it.
 func modelKeyPrefix(orgID string) string {
 	return uploadKeyPrefix(orgID)
@@ -58,7 +58,7 @@ func modelKeyAllowed(key, orgID string) bool {
 type statFunc func(ctx context.Context, key string) (int64, string, error)
 
 // validateTransientParams checks a transient run's parameters before it is queued, and returns
-// them normalised: defaults filled in, so the worker and the UI read one shape.
+// them normalized: defaults filled in, so the worker and the UI read one shape.
 func validateTransientParams(ctx context.Context, raw json.RawMessage, orgID string, stat statFunc) (TransientParams, error) {
 	var p TransientParams
 	if len(raw) > 0 && string(raw) != "null" {

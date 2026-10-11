@@ -1,7 +1,7 @@
-"""Write the rule catalogue for the webapp.
+"""Write the rule catalog for the webapp.
 
 The front page lists what the analyzer checks, and the findings panel names each rule. Both
-read webapp/src/lib/ruleCatalogue.json, generated from the worker's own catalogue so that the
+read webapp/src/lib/ruleCatalogue.json, generated from the worker's own catalog so that the
 list a user reads cannot drift from the checks that actually run -- tests/test_rules_config.py
 fails if the file is stale. The MCP server embeds a copy, server/mcpserver/ruleCatalogue.json
 (Go cannot embed a file outside its module); its test fails if the copy differs.

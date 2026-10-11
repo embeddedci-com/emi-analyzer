@@ -1,4 +1,4 @@
-"""Rasterising copper, and finding what is connected to what.
+"""Rasterizing copper, and finding what is connected to what.
 
 Used by two things that look unrelated but need the same primitive: the reference-plane gap
 check, which asks "is there copper under this trace", and Gerber net reconstruction, which
@@ -152,9 +152,9 @@ class LayerRaster:
         self.labels, self.count = label_components(mask)
 
     def label_at(self, x_mm: float, y_mm: float, search_px: int = 0) -> int:
-        """Label at a point, optionally searching a small neighbourhood.
+        """Label at a point, optionally searching a small neighborhood.
 
-        The neighbourhood matters for netlist points: a pad centre is copper, but a via's
+        The neighborhood matters for netlist points: a pad center is copper, but a via's
         recorded position can land a pixel outside its own annular ring once the drill is
         subtracted, and a point that lands on background carries no net anywhere.
         """

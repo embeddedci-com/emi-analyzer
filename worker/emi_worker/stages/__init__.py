@@ -46,7 +46,7 @@ class StageContext:
         return self.run.get("params") or {}
 
     def check_stop(self) -> None:
-        """Call between units of work. A solve that ignores this cannot be cancelled."""
+        """Call between units of work. A solve that ignores this cannot be canceled."""
         if self.should_stop():
             raise Stopped()
 

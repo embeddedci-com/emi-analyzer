@@ -6,15 +6,15 @@ clock" is not how DDR works:
     DQ and DM within a byte lane   ->  their own DQS pair, not CK
     DQS+/-, CK+/-                  ->  their own complement (tightest of all)
     address, command, control      ->  CK
-    byte lane vs byte lane         ->  nothing; write levelling absorbs it
+    byte lane vs byte lane         ->  nothing; write leveling absorbs it
 
 Getting that backwards is costly in both directions. Matching lanes to each other produces a
 wall of findings on a correct board; matching DQ to CK instead of to DQS misses the error
 that actually stops the board working.
 
 Everything here is measured in **picoseconds**. See docs/length-matching-and-impedance.md:
-an inner-layer millimetre and an outer-layer millimetre differ by about 25% in delay, so a
-check that compared millimetres would pass a board whose lanes are skewed by ten times
+an inner-layer millimeter and an outer-layer millimeter differ by about 25% in delay, so a
+check that compared millimeters would pass a board whose lanes are skewed by ten times
 their budget.
 """
 

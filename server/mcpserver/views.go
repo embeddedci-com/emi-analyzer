@@ -118,7 +118,7 @@ func (s *Server) decoupling(ctx context.Context, _ *mcpRequest, in decouplingIn)
 	}
 	out := decouplingOut{analysis: a}
 	if d.Decoupling == nil || len(d.Decoupling.Rails) == 0 {
-		out.Missing = "This analysis has no decoupling view: no supply rail with ICs and capacitors was recognised, or the board was analyzed by an older version."
+		out.Missing = "This analysis has no decoupling view: no supply rail with ICs and capacitors was recognized, or the board was analyzed by an older version."
 		return nil, out, nil
 	}
 	out.Note = d.Decoupling.Note

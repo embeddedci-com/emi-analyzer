@@ -168,7 +168,7 @@ def test_a_pour_with_a_via_is_connected():
 
 
 def test_a_pad_in_a_thermal_relief_still_connects_the_pour():
-    """The pad centre sits in the relief void, outside the copper, joined by spokes."""
+    """The pad center sits in the relief void, outside the copper, joined by spokes."""
     m = board()
     m.zones = [ZonePolygon("F.Cu", "GND", square(5, 5, 15, 15))]
     m.pads = [pad("C1", "2", "GND", 15.4, 10)]
