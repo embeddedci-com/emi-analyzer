@@ -15,7 +15,9 @@ The KiCad plugin is versioned and released separately; see
   supply pins, at the frequencies the agent asks for (`impedance_hz`) or on a default log grid
   (`impedance`), as laid out and with each recommended change applied. It is the same lumped
   estimate the Decoupling tab draws, 100 kHz to 1 GHz, computed in Go from the worker's
-  branches and checked against the same fixture as the browser.
+  branches and checked against the same fixture as the browser. `impedance_hz` also takes
+  10 to 100 kHz, for charge pumps and switching regulators, with a warning that the
+  regulator's own output impedance is left out there.
 
 ## [0.4.0] - 2026-10-11
 

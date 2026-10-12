@@ -95,7 +95,7 @@ type decouplingIn struct {
 	IC   string `json:"ic,omitempty" jsonschema:"one IC by reference, e.g. U3, on whichever rails it has"`
 	// Experimental: see impedanceNote.
 	Impedance   bool      `json:"impedance,omitempty" jsonschema:"experimental: with rail or ic, also return each IC's supply impedance |Z| in ohms at its pins, as laid out and with each recommended change applied; a lumped estimate from the layout, 100 kHz to 1 GHz"`
-	ImpedanceHz []float64 `json:"impedance_hz,omitempty" jsonschema:"experimental: the frequencies in Hz for the impedance (implies impedance); default a log grid, 10 points per decade over the model's range"`
+	ImpedanceHz []float64 `json:"impedance_hz,omitempty" jsonschema:"experimental: the frequencies in Hz for the impedance (implies impedance), 10 kHz to 1 GHz; below 100 kHz the result carries a warning; default a log grid, 10 points per decade over the model's range"`
 }
 
 type railBrief struct {
@@ -143,11 +143,12 @@ func (s *Server) decoupling(ctx context.Context, _ *mcpRequest, in decouplingIn)
 	out.Note = d.Decoupling.Note
 	wantZ := in.Impedance || len(in.ImpedanceHz) > 0
 	var freqs []float64
+	var zWarning string
 	if wantZ {
 		if in.Rail == "" && in.IC == "" {
 			return nil, decouplingOut{}, fmt.Errorf("impedance needs a rail or an ic")
 		}
-		if freqs, err = impedanceGrid(d.Decoupling, in.ImpedanceHz); err != nil {
+		if freqs, zWarning, err = impedanceGrid(d.Decoupling, in.ImpedanceHz); err != nil {
 			return nil, decouplingOut{}, err
 		}
 	}
@@ -209,7 +210,7 @@ func (s *Server) decoupling(ctx context.Context, _ *mcpRequest, in decouplingIn)
 				o.Recommendations = append(o.Recommendations, fmt.Sprintf("%s (%.1f dB better at %s)", rec.Text, rec.ImprovementDB, hz(rec.AtHz)))
 			}
 			if wantZ {
-				o.Impedance = impedanceOf(ic, r.Parts, freqs, helps)
+				o.Impedance = impedanceOf(ic, r.Parts, freqs, zWarning, helps)
 			}
 			out.ICs = append(out.ICs, o)
 		}

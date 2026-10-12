@@ -347,7 +347,7 @@ other than the app's config folder.
 | `run_status` | A run's progress, waiting for it when asked |
 | `list_projects`, `list_versions` | Projects, and a project's versions with their analyses |
 | `findings`, `finding` | What the checks found, filtered and paginated, and one finding in full |
-| `decoupling`, `nets` | Supply impedance per rail and IC, and per-net lengths, delays and skew. Experimental: `decoupling` with `rail` or `ic` and `impedance` (or `impedance_hz` for chosen frequencies) also returns \|Z\| at the IC's supply pins, as laid out and with each recommended change applied: a lumped estimate from the layout, 100 kHz to 1 GHz |
+| `decoupling`, `nets` | Supply impedance per rail and IC, and per-net lengths, delays and skew. Experimental: `decoupling` with `rail` or `ic` and `impedance` (or `impedance_hz` for chosen frequencies) also returns \|Z\| at the IC's supply pins, as laid out and with each recommended change applied: a lumped estimate from the layout, 100 kHz to 1 GHz (`impedance_hz` also takes 10 to 100 kHz, with a warning) |
 | `compare` | What changed between two versions: findings fixed and new, nets whose length changed |
 | `checks` | The checks, their settings, and the `emi.rules.yaml` format |
 | `run_esd`, `esd` | Start and read an ESD simulation of the lines that leave the board |
