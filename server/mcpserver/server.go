@@ -167,7 +167,9 @@ func (s *Server) register(srv *mcp.Server) {
 		Name: "decoupling",
 		Description: "Supply decoupling per rail and IC: the impedance the capacitors give against a target, where it falls " +
 			"short, and the worker's recommended changes. Without rail or ic: one line per rail. With rail or ic: each IC's " +
-			"capacitors (distance, ground vias, useful frequency), gaps and recommendations.",
+			"capacitors (distance, ground vias, useful frequency), gaps and recommendations. Experimental: with rail or ic plus " +
+			"impedance or impedance_hz, also the supply impedance |Z| in ohms at the IC's pins at those frequencies, as laid out " +
+			"and with each recommended change applied (a lumped estimate from the layout, 100 kHz to 1 GHz).",
 		Annotations: readOnly("Decoupling"),
 	}, s.decoupling)
 
