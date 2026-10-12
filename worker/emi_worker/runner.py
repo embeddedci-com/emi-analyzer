@@ -19,6 +19,7 @@ Responsibilities, in order of importance:
 
 from __future__ import annotations
 
+import errno
 import json
 import logging
 import os
@@ -249,6 +250,17 @@ class Worker:
         except RunReassigned:
             return
 
+        # From here on the run is ours, so whatever goes wrong has to end it as failed.
+        # Left in_progress, it waits for the sweeper and every client waits with it.
+        try:
+            self._run_claimed(job, tok, started)
+        except RunReassigned:
+            log.info("run %s was reassigned mid-flight; abandoning", job.run_id)
+        except Exception as exc:  # noqa: BLE001
+            log.error("run %s crashed:\n%s", job.run_id, traceback.format_exc())
+            self._fail(tok, _user_error(exc))
+
+    def _run_claimed(self, job: _Job, tok: RunToken, started: float) -> None:
         ctx = StageContext(
             client=self.client,
             token=tok,
@@ -281,7 +293,7 @@ class Worker:
             return
         except Exception as exc:  # noqa: BLE001
             log.error("run %s errored:\n%s", job.run_id, traceback.format_exc())
-            self._fail(tok, f"internal worker error: {exc}")
+            self._fail(tok, _user_error(exc))
             return
         finally:
             self._stop_requested.discard(job.run_id)
@@ -310,6 +322,13 @@ class Worker:
     def _fail(self, tok: RunToken, message: str) -> None:
         try:
             self.client.complete(tok, "failed", error=message)
-        except ServerError as exc:
+        except Exception as exc:  # noqa: BLE001 -- best effort, the sweeper is the backstop
             # Nothing more we can do; the server's sweeper will time the run out.
             log.error("could not record failure of %s: %s", tok.run_id, exc)
+
+
+def _user_error(exc: BaseException) -> str:
+    """A failure message for the user from an unexpected exception."""
+    if isinstance(exc, OSError) and exc.errno == errno.ENOSPC:
+        return "the worker ran out of disk space"
+    return f"internal worker error: {str(exc) or type(exc).__name__}"

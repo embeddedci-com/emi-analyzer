@@ -9,6 +9,8 @@ The KiCad plugin is versioned and released separately; see
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-11
+
 ### Added
 
 - Homebrew cask for macOS: `brew install --cask embeddedci-com/tap/emi-analyzer` installs the
@@ -40,6 +42,12 @@ its real problems. On a 4-layer reference board (BenchPod digital) the criticals
 - Length matching: no address/command group without a DRAM on the board (A0 and CS0 are also
   mux and SPI pins), and no picosecond skew budget for CAN, RS-485, RS-422 or LIN pairs.
 - When a check has more findings than it lists, the most severe are kept.
+- Everything the app shows and the docs are in American English, without em dashes.
+
+### Fixed
+
+- A run the worker crashed on after taking it (a full Docker disk, for one) now ends as failed
+  with a readable reason, instead of staying in progress until the server times it out.
 
 ## [0.3.0] - 2026-09-30
 
@@ -199,6 +207,7 @@ its real problems. On a 4-layer reference board (BenchPod digital) the criticals
 First public release: the desktop app for macOS, Windows and Linux, the standalone `emi-local`
 binary and the worker image.
 
-[Unreleased]: https://github.com/embeddedci-com/emi-analyzer/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/embeddedci-com/emi-analyzer/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/embeddedci-com/emi-analyzer/releases/tag/v0.4.0
 [0.3.0]: https://github.com/embeddedci-com/emi-analyzer/releases/tag/v0.3.0
 [0.1.0]: https://github.com/embeddedci-com/emi-analyzer/releases/tag/v0.1.0
