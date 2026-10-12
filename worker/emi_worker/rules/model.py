@@ -123,13 +123,15 @@ _SUPPLY_PIN = re.compile(
     re.I,
 )
 #: Pin names that are clearly not a supply: GPIO port pins and the sense, control and status
-#: pins that sit on a supply-named net (a current monitor's IN+, a power mux's ST).
+#: pins that sit on a supply-named net (a current monitor's IN+, a power mux's ST, an
+#: amplifier's power-down PD# tied to its supply, a fully differential amplifier's VOCM input
+#: on a net named for its voltage, "2.05V").
 _SIGNAL_PIN = re.compile(
     r"^(?:p[a-k]\d+|pio\d*_?\d+|gpio\w*|io\w*|iob_\w+|[+-]?in[a-d]?[+-]|[+-]in[a-d]?|inp|inn|"
     r"s[+-]|s\d+[ab]?|d[ab]?|[+-]?out[a-d][+-]?|sense\w*|sns\w*|"
     r"fb|adj|n?en\w*|st|stat\w*|pr\d*|pg\w*|n?flt\w*|fault|alert|n?int\w*|irq|scl|sda|"
     r"ilim\w*|imon\w*|adc\w*|mode|sel\w*|n?cs\w*|set|n?rst\w*|reset\w*|mon\w*|det\w*|"
-    r"dvdt|ss|tr|nc|ctrl\w*)$",
+    r"dvdt|ss|tr|nc|ctrl\w*|v?ocm|n?pd#?|n?shdn\w*#?)$",
     re.I,
 )
 _SIGNAL_PIN_TYPES = frozenset({"input", "output", "bidirectional", "tri_state",

@@ -9,6 +9,13 @@ The KiCad plugin is versioned and released separately; see
 
 ## [Unreleased]
 
+### Fixed
+
+- Decoupling no longer treats a fully differential amplifier's VOCM input or an amplifier's
+  power-down pin (PD#, SHDN) as a supply pin when they sit on a net named like a rail. On the
+  BenchPod analog board the THS4551's VOCM on "2.05V" was reported as a supply with a 0.2 ohm
+  target.
+
 ## [0.4.0] - 2026-10-11
 
 ### Added

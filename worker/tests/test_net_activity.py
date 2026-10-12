@@ -64,6 +64,10 @@ def _p(function="", kind=""):
     ("D", "", False),
     ("OUTA", "", False),
     ("VS\u2013_5", "unspecified", True),  # THS4551 negative supply, with an en dash
+    ("VOCM_7", "unspecified", False),  # THS4551 output common-mode input on "2.05V"
+    ("PD#_3", "unspecified", False),   # THS4551 power-down, tied to its supply
+    ("SHDN", "", False),
+    ("PD3", "unspecified", False),     # still a GPIO, not a power-down
     ("V-", "", True),
     ("VREF", "input", True),           # a reference input needs its capacitor
     ("REF", "", True),
