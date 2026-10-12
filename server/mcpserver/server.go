@@ -169,7 +169,8 @@ func (s *Server) register(srv *mcp.Server) {
 			"short, and the worker's recommended changes. Without rail or ic: one line per rail. With rail or ic: each IC's " +
 			"capacitors (distance, ground vias, useful frequency), gaps and recommendations. Experimental: with rail or ic plus " +
 			"impedance or impedance_hz, also the supply impedance |Z| in ohms at the IC's pins at those frequencies, as laid out " +
-			"and with each recommended change applied (a lumped estimate from the layout, 100 kHz to 1 GHz).",
+			"and with each recommended change applied (a lumped estimate from the layout, 100 kHz to 1 GHz; impedance_hz also takes " +
+			"10 to 100 kHz, with a warning that the regulator's own output impedance is left out).",
 		Annotations: readOnly("Decoupling"),
 	}, s.decoupling)
 

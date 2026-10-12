@@ -229,8 +229,16 @@ func TestDecoupling(t *testing.T) {
 	if e := call(t, cs, "decoupling", map[string]any{"project_id": p, "impedance": true}, &decouplingOut{}); !strings.Contains(e, "needs a rail or an ic") {
 		t.Errorf("impedance without an IC: %q", e)
 	}
-	if e := call(t, cs, "decoupling", map[string]any{"project_id": p, "ic": "U5", "impedance_hz": []float64{5e9}}, &decouplingOut{}); !strings.Contains(e, "outside the model's range") {
+	if e := call(t, cs, "decoupling", map[string]any{"project_id": p, "ic": "U5", "impedance_hz": []float64{5e9}}, &decouplingOut{}); !strings.Contains(e, "outside the range") {
 		t.Errorf("5 GHz: %q", e)
+	}
+	// Below the worker's grid: computed, with the warning.
+	var low decouplingOut
+	if e := call(t, cs, "decoupling", map[string]any{"project_id": p, "ic": "U5", "impedance_hz": []float64{5e4}}, &low); e != "" {
+		t.Fatal(e)
+	}
+	if z := low.ICs[0].Impedance; z == nil || z.Warning == "" || z.AsLaidOut[0] < 30 {
+		t.Errorf("50 kHz: %+v", z)
 	}
 }
 

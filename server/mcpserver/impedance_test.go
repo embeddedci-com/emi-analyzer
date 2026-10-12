@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"math"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -135,13 +136,20 @@ func TestApplyChangeLeavesTheRest(t *testing.T) {
 
 func TestImpedanceGridChecksTheRange(t *testing.T) {
 	d := loadDecouplingFixture(t)
-	if g, err := impedanceGrid(d, nil); err != nil || len(g) != 41 {
-		t.Errorf("default grid: %d points, %v", len(g), err)
+	if g, w, err := impedanceGrid(d, nil); err != nil || len(g) != 41 || w != "" {
+		t.Errorf("default grid: %d points, %q, %v", len(g), w, err)
 	}
-	if _, err := impedanceGrid(d, []float64{4e5, 1e6}); err != nil {
-		t.Error(err)
+	if _, w, err := impedanceGrid(d, []float64{4e5, 1e6}); err != nil || w != "" {
+		t.Errorf("in range: %q, %v", w, err)
 	}
-	if _, err := impedanceGrid(d, []float64{1e4}); err == nil {
-		t.Error("10 kHz is below the model and was accepted")
+	// A charge pump at 92 kHz: accepted, with the warning that the regulator is left out.
+	if _, w, err := impedanceGrid(d, []float64{92e3, 4e5}); err != nil || !strings.Contains(w, "regulator") {
+		t.Errorf("92 kHz: %q, %v", w, err)
+	}
+	if _, _, err := impedanceGrid(d, []float64{5e3}); err == nil {
+		t.Error("5 kHz is below the lowest frequency and was accepted")
+	}
+	if _, _, err := impedanceGrid(d, []float64{2e9}); err == nil {
+		t.Error("2 GHz is above the model and was accepted")
 	}
 }
