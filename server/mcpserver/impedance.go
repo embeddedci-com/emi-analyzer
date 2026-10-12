@@ -132,31 +132,45 @@ type impedanceCurve struct {
 
 type impedanceOut struct {
 	Note      string           `json:"note"`
+	Warning   string           `json:"warning,omitempty" jsonschema:"set when some frequencies are below the model's range"`
 	Hz        []float64        `json:"hz"`
 	AsLaidOut []float64        `json:"as_laid_out_ohm"`
 	Changes   []impedanceCurve `json:"with_change,omitempty" jsonschema:"the same frequencies with each recommended change applied, one at a time"`
 }
 
+// impedanceLowestHz is how far below the worker's grid the capacitor model is still worth
+// reading: charge pumps and switching regulators run from a few tens of kHz.
+const impedanceLowestHz = 10e3
+
+const impedanceLowWarning = "Below %s the regulator's own output impedance, which this model leaves out, " +
+	"usually sets the supply impedance: read these values as the capacitors alone."
+
 // impedanceGrid checks the asked frequencies against the model's range, or returns the
-// default grid.
-func impedanceGrid(d *decouplingDoc, asked []float64) ([]float64, error) {
+// default grid. Frequencies down to impedanceLowestHz are accepted with a warning.
+func impedanceGrid(d *decouplingDoc, asked []float64) ([]float64, string, error) {
 	if len(asked) == 0 {
-		return frequencies(d.FMinHz, d.FMaxHz, impedancePerDecade), nil
+		return frequencies(d.FMinHz, d.FMaxHz, impedancePerDecade), "", nil
 	}
+	lowest := math.Min(impedanceLowestHz, d.FMinHz)
+	warning := ""
 	for _, f := range asked {
-		if !(f >= d.FMinHz*(1-1e-9) && f <= d.FMaxHz*(1+1e-9)) {
-			return nil, fmt.Errorf("impedance_hz %g is outside the model's range, %s to %s", f, hz(d.FMinHz), hz(d.FMaxHz))
+		if !(f >= lowest*(1-1e-9) && f <= d.FMaxHz*(1+1e-9)) {
+			return nil, "", fmt.Errorf("impedance_hz %g is outside the range, %s to %s", f, hz(lowest), hz(d.FMaxHz))
+		}
+		if f < d.FMinHz*(1-1e-9) {
+			warning = fmt.Sprintf(impedanceLowWarning, hz(d.FMinHz))
 		}
 	}
-	return asked, nil
+	return asked, warning, nil
 }
 
-func impedanceOf(ic decIC, parts map[string]decPart, freqs []float64, recs []decRecommendation) *impedanceOut {
+func impedanceOf(ic decIC, parts map[string]decPart, freqs []float64, warning string, recs []decRecommendation) *impedanceOut {
 	base := branchesOf(ic, parts)
 	if len(base) == 0 {
 		return nil
 	}
-	out := &impedanceOut{Note: impedanceNote, Hz: roundAll(freqs), AsLaidOut: roundAll(curve(base, ic.SeriesLH, freqs))}
+	out := &impedanceOut{Note: impedanceNote, Warning: warning, Hz: roundAll(freqs),
+		AsLaidOut: roundAll(curve(base, ic.SeriesLH, freqs))}
 	for _, r := range recs {
 		if r.Change == nil {
 			continue
