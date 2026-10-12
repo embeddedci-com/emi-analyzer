@@ -16,14 +16,15 @@ import (
 // ---- decoupling ----
 
 // decouplingDoc is rules.json's decoupling view (webapp/src/lib/decoupling.ts). The worker
-// has already judged it -- status, gaps, worst point, recommendations -- so nothing is
-// recomputed here.
+// has already judged it -- status, gaps, worst point, recommendations -- so nothing of that is
+// recomputed here; only the impedance curves are rebuilt from its branches (impedance.go).
 type decouplingDoc struct {
-	FMinHz         float64   `json:"f_min_hz"`
-	FMaxHz         float64   `json:"f_max_hz"`
-	StackupAssumed bool      `json:"stackup_assumed"`
-	Note           string    `json:"note"`
-	Rails          []decRail `json:"rails"`
+	FMinHz          float64   `json:"f_min_hz"`
+	FMaxHz          float64   `json:"f_max_hz"`
+	PointsPerDecade int       `json:"points_per_decade"`
+	StackupAssumed  bool      `json:"stackup_assumed"`
+	Note            string    `json:"note"`
+	Rails           []decRail `json:"rails"`
 }
 
 type decRail struct {
@@ -36,48 +37,65 @@ type decRail struct {
 		CF          float64 `json:"c_f"`
 		ResonanceHz float64 `json:"resonance_hz"`
 	} `json:"plane"`
-	Status string `json:"status"`
-	Parts  map[string]struct {
-		Value   string `json:"value"`
-		Package string `json:"package"`
-		Basis   string `json:"basis"`
-		Source  string `json:"source"`
-	} `json:"parts"`
-	ICs []decIC `json:"ics"`
+	Status string             `json:"status"`
+	Parts  map[string]decPart `json:"parts"`
+	ICs    []decIC            `json:"ics"`
+}
+
+type decPart struct {
+	Value   string  `json:"value"`
+	Package string  `json:"package"`
+	Basis   string  `json:"basis"`
+	Source  string  `json:"source"`
+	CF      float64 `json:"c_f"`
+	ESROhm  float64 `json:"esr_ohm"`
 }
 
 type decIC struct {
-	Ref       string   `json:"ref"`
-	Pins      []string `json:"pins"`
-	TargetOhm float64  `json:"target_ohm"`
-	BandHz    float64  `json:"band_hz"`
-	Caps      []struct {
+	Ref         string     `json:"ref"`
+	Pins        []string   `json:"pins"`
+	TargetOhm   float64    `json:"target_ohm"`
+	BandHz      float64    `json:"band_hz"`
+	SeriesLH    float64    `json:"series_l_h"`
+	PlaneBranch *decBranch `json:"plane_branch"`
+	Caps        []struct {
 		Ref          string  `json:"ref"`
 		Pin          string  `json:"pin"`
+		LH           float64 `json:"l_h"`
 		DistanceMM   float64 `json:"distance_mm"`
 		UsefulUpToHz float64 `json:"useful_up_to_hz"`
 		GroundVias   int     `json:"ground_vias"`
 	} `json:"caps"`
-	Assumed         []string `json:"assumed"`
-	Recommendations []struct {
-		Kind          string  `json:"kind"`
-		Text          string  `json:"text"`
-		ImprovementDB float64 `json:"improvement_db"`
-		AtHz          float64 `json:"at_hz"`
-	} `json:"recommendations"`
-	Status string      `json:"status"`
-	Gaps   [][]float64 `json:"gaps"`
-	Worst  *struct {
+	Assumed         []string            `json:"assumed"`
+	Recommendations []decRecommendation `json:"recommendations"`
+	Status          string              `json:"status"`
+	Gaps            [][]float64         `json:"gaps"`
+	AntiResonances  []struct {
+		Hz  float64 `json:"hz"`
+		Ohm float64 `json:"ohm"`
+	} `json:"anti_resonances"`
+	Worst *struct {
 		Hz       float64 `json:"hz"`
 		Ohm      float64 `json:"ohm"`
 		ExcessDB float64 `json:"excess_db"`
 	} `json:"worst"`
 }
 
+type decRecommendation struct {
+	Kind          string     `json:"kind"`
+	Text          string     `json:"text"`
+	Change        *decChange `json:"change"`
+	ImprovementDB float64    `json:"improvement_db"`
+	AtHz          float64    `json:"at_hz"`
+}
+
 type decouplingIn struct {
 	target
 	Rail string `json:"rail,omitempty" jsonschema:"one supply net, e.g. +3V3: lists each IC on it with its capacitors"`
 	IC   string `json:"ic,omitempty" jsonschema:"one IC by reference, e.g. U3, on whichever rails it has"`
+	// Experimental: see impedanceNote.
+	Impedance   bool      `json:"impedance,omitempty" jsonschema:"experimental: with rail or ic, also return each IC's supply impedance |Z| in ohms at its pins, as laid out and with each recommended change applied; a lumped estimate from the layout, 100 kHz to 1 GHz"`
+	ImpedanceHz []float64 `json:"impedance_hz,omitempty" jsonschema:"experimental: the frequencies in Hz for the impedance (implies impedance); default a log grid, 10 points per decade over the model's range"`
 }
 
 type railBrief struct {
@@ -92,15 +110,16 @@ type railBrief struct {
 }
 
 type icOut struct {
-	Rail            string   `json:"rail"`
-	Ref             string   `json:"ref"`
-	Status          string   `json:"status"`
-	TargetOhm       float64  `json:"target_ohm"`
-	Worst           string   `json:"worst,omitempty"`
-	Gaps            []string `json:"gaps,omitempty" jsonschema:"frequency ranges above the target"`
-	Caps            []string `json:"caps" jsonschema:"each capacitor, how far from the pin, and up to where it helps"`
-	Recommendations []string `json:"recommendations,omitempty" jsonschema:"up to three changes that help, best first"`
-	Assumed         []string `json:"assumed,omitempty"`
+	Rail            string        `json:"rail"`
+	Ref             string        `json:"ref"`
+	Status          string        `json:"status"`
+	TargetOhm       float64       `json:"target_ohm"`
+	Worst           string        `json:"worst,omitempty"`
+	Gaps            []string      `json:"gaps,omitempty" jsonschema:"frequency ranges above the target"`
+	Caps            []string      `json:"caps" jsonschema:"each capacitor, how far from the pin, and up to where it helps"`
+	Recommendations []string      `json:"recommendations,omitempty" jsonschema:"up to three changes that help, best first"`
+	Assumed         []string      `json:"assumed,omitempty"`
+	Impedance       *impedanceOut `json:"impedance,omitempty" jsonschema:"experimental: only when asked for"`
 }
 
 type decouplingOut struct {
@@ -122,6 +141,16 @@ func (s *Server) decoupling(ctx context.Context, _ *mcpRequest, in decouplingIn)
 		return nil, out, nil
 	}
 	out.Note = d.Decoupling.Note
+	wantZ := in.Impedance || len(in.ImpedanceHz) > 0
+	var freqs []float64
+	if wantZ {
+		if in.Rail == "" && in.IC == "" {
+			return nil, decouplingOut{}, fmt.Errorf("impedance needs a rail or an ic")
+		}
+		if freqs, err = impedanceGrid(d.Decoupling, in.ImpedanceHz); err != nil {
+			return nil, decouplingOut{}, err
+		}
+	}
 	if in.Rail == "" && in.IC == "" {
 		for _, r := range d.Decoupling.Rails {
 			b := railBrief{Net: r.Net, V: r.V, VAssumed: r.VAssumed, Status: r.Status, ICs: len(r.ICs)}
@@ -171,11 +200,16 @@ func (s *Server) decoupling(ctx context.Context, _ *mcpRequest, in decouplingIn)
 			}
 			// The worker ranks every change it tried, including ones that make it worse; only
 			// the ones that help are advice.
+			var helps []decRecommendation
 			for _, rec := range ic.Recommendations {
-				if rec.ImprovementDB < 0.1 || len(o.Recommendations) == 3 {
+				if rec.ImprovementDB < 0.1 || len(helps) == 3 {
 					continue
 				}
+				helps = append(helps, rec)
 				o.Recommendations = append(o.Recommendations, fmt.Sprintf("%s (%.1f dB better at %s)", rec.Text, rec.ImprovementDB, hz(rec.AtHz)))
+			}
+			if wantZ {
+				o.Impedance = impedanceOf(ic, r.Parts, freqs, helps)
 			}
 			out.ICs = append(out.ICs, o)
 		}

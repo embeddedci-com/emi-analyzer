@@ -9,6 +9,14 @@ The KiCad plugin is versioned and released separately; see
 
 ## [Unreleased]
 
+### Added
+
+- MCP (experimental): the `decoupling` tool can return the supply impedance |Z| at an IC's
+  supply pins, at the frequencies the agent asks for (`impedance_hz`) or on a default log grid
+  (`impedance`), as laid out and with each recommended change applied. It is the same lumped
+  estimate the Decoupling tab draws, 100 kHz to 1 GHz, computed in Go from the worker's
+  branches and checked against the same fixture as the browser.
+
 ## [0.4.0] - 2026-10-11
 
 ### Added

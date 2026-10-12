@@ -60,14 +60,15 @@ func rulesJSON(findings ...map[string]any) map[string]any {
 			"note": "Estimate.", "f_min_hz": 1e5, "f_max_hz": 1e8, "points_per_decade": 20,
 			"rails": []any{
 				map[string]any{"net": "+1V8", "v": 1.8, "status": "gaps",
-					"parts": map[string]any{"C1": map[string]any{"value": "100n", "package": "0402"}},
+					"parts": map[string]any{"C1": map[string]any{"value": "100n", "package": "0402", "c_f": 1e-7, "esr_ohm": 0.05}},
 					"ics": []any{map[string]any{
 						"ref": "U5", "status": "gaps", "target_ohm": 0.18, "gaps": [][]float64{{1e5, 1e6}},
 						"worst": map[string]any{"hz": 1e5, "ohm": 1.96, "excess_db": 20.8},
-						"caps":  []any{map[string]any{"ref": "C1", "pin": "5", "distance_mm": 1.1, "ground_vias": 1, "useful_up_to_hz": 1.86e7}},
+						"caps":  []any{map[string]any{"ref": "C1", "pin": "5", "l_h": 1e-9, "distance_mm": 1.1, "ground_vias": 1, "useful_up_to_hz": 1.86e7}},
 						"recommendations": []any{
 							map[string]any{"kind": "remove", "text": "Remove C1", "improvement_db": -19.7, "at_hz": 1e5},
-							map[string]any{"kind": "add", "text": "Add 10 uF within 3 mm of U5", "improvement_db": 22.5, "at_hz": 1e5},
+							map[string]any{"kind": "add", "text": "Add 10 uF within 3 mm of U5", "improvement_db": 22.5, "at_hz": 1e5,
+								"change": map[string]any{"op": "add", "branch": map[string]any{"id": "new", "c_f": 1e-5, "l_h": 2e-9, "r_ohm": 0.01}}},
 						},
 					}}},
 				map[string]any{"net": "+3V3", "v": 3.3, "status": "ok", "parts": map[string]any{}, "ics": []any{}},
@@ -205,6 +206,31 @@ func TestDecoupling(t *testing.T) {
 	}
 	if e := call(t, cs, "decoupling", map[string]any{"project_id": p, "rail": "+9V"}, &decouplingOut{}); !strings.Contains(e, "no decoupling data") {
 		t.Errorf("unknown rail: %q", e)
+	}
+
+	// The impedance, at the frequencies asked: 100 nF alone, then with the 10 uF added.
+	var z decouplingOut
+	if e := call(t, cs, "decoupling", map[string]any{"project_id": p, "ic": "U5", "impedance_hz": []float64{1e5, 1e6}}, &z); e != "" {
+		t.Fatal(e)
+	}
+	got := z.ICs[0].Impedance
+	if got == nil || !strings.HasPrefix(got.Note, "Experimental") || len(got.Hz) != 2 || len(got.Changes) != 1 {
+		t.Fatalf("impedance = %+v", got)
+	}
+	// 1/(2 pi 100 kHz 100 nF) = 15.92 ohm, less the 1 nH; the 10 uF brings it to 0.16 ohm.
+	if got.AsLaidOut[0] != 15.91 || got.Changes[0].Change != "Add 10 uF within 3 mm of U5" || got.Changes[0].Ohm[0] > 0.17 {
+		t.Errorf("impedance = %+v", got)
+	}
+	var grid decouplingOut
+	call(t, cs, "decoupling", map[string]any{"project_id": p, "ic": "U5", "impedance": true}, &grid)
+	if n := len(grid.ICs[0].Impedance.Hz); n != 31 {
+		t.Errorf("default grid over 100 kHz to 100 MHz: %d points", n)
+	}
+	if e := call(t, cs, "decoupling", map[string]any{"project_id": p, "impedance": true}, &decouplingOut{}); !strings.Contains(e, "needs a rail or an ic") {
+		t.Errorf("impedance without an IC: %q", e)
+	}
+	if e := call(t, cs, "decoupling", map[string]any{"project_id": p, "ic": "U5", "impedance_hz": []float64{5e9}}, &decouplingOut{}); !strings.Contains(e, "outside the model's range") {
+		t.Errorf("5 GHz: %q", e)
 	}
 }
 
