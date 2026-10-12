@@ -152,6 +152,13 @@ func TestMCPEndToEnd(t *testing.T) {
 	if len(dec.Rails) == 0 && dec.Missing == "" {
 		t.Errorf("decoupling = %+v", dec)
 	}
+	if len(dec.Rails) > 0 {
+		var z decouplingOut
+		call("decoupling", map[string]any{"project_id": first.ProjectID, "rail": dec.Rails[0].Net, "impedance_hz": []float64{4e5, 1e6}}, &z)
+		if len(z.ICs) == 0 || z.ICs[0].Impedance == nil || len(z.ICs[0].Impedance.AsLaidOut) != 2 || z.ICs[0].Impedance.AsLaidOut[0] <= 0 {
+			t.Errorf("impedance = %+v", z.ICs)
+		}
+	}
 
 	// 3. Unchanged: nothing is sent and nothing re-runs.
 	var again analyzeOut
