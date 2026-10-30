@@ -148,8 +148,11 @@ Then continue at step 3. Without Homebrew:
 apps that are not code-signed:
 
 ```bash
+brew trust embeddedci-com/tap
 brew install --cask embeddedci-com/tap/emi-analyzer
 ```
+
+Recent versions of Homebrew ask you to trust a tap before they load anything from it.
 
 Then open **EMI Analyzer** from Applications. Update it later with
 `brew upgrade --cask embeddedci-com/tap/emi-analyzer`. No Homebrew? Install it from <https://brew.sh>, or use the
