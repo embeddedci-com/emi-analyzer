@@ -39,7 +39,7 @@ ARG OPENEMS_IMAGE=ghcr.io/embeddedci-com/emi-openems:f73bf97906a3-d8d7b18d@sha25
 # Pinned by digest so a rebuild of an old tag gets the Debian it was tested on. The tag stays
 # in the reference for readers; Dependabot bumps the digest. openems-image/Dockerfile uses the
 # same one, so every OPENEMS_SOURCE gets the same Debian.
-FROM debian:bookworm-slim@sha256:3783cc01769c7b2b1b83a5c5ad96c815348e28ed7da68e2e3687004faa906251 AS os-apt
+FROM debian:bookworm-slim@sha256:99c0b25c46d0214d5a2091092e7908907dcaecd6a962cde0ac700acee222b6f3 AS os-apt
 FROM os-apt AS os-none
 # Debian, openEMS's runtime libraries and openEMS in /usr/local. BuildKit fetches it only
 # when OPENEMS_SOURCE=build asks for this stage.
