@@ -24,7 +24,7 @@ ARG OPENEMS_REF=f73bf97906a38ef1693f59f311ce13cc1b531474
 
 # The same Debian as the worker's own base stage (worker/Dockerfile), because the worker
 # installs its Python and tools on top of this image. test_openems_image checks the two match.
-FROM debian:bookworm-slim@sha256:3783cc01769c7b2b1b83a5c5ad96c815348e28ed7da68e2e3687004faa906251 AS os
+FROM debian:bookworm-slim@sha256:99c0b25c46d0214d5a2091092e7908907dcaecd6a962cde0ac700acee222b6f3 AS os
 
 ENV DEBIAN_FRONTEND=noninteractive
 
