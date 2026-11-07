@@ -8,6 +8,7 @@ data and an upload is somebody else's file running on our worker.
 from __future__ import annotations
 
 import math
+import re
 
 import pytest
 
@@ -281,3 +282,12 @@ def test_the_clamp_slope_is_fitted_through_the_rated_point():
     # 17 V at 5 A, less 6 V breakdown, the knee, and one forward junction.
     assert 1.8 < spec.r_dyn_ohm < 2.1
     assert any("fitted" in a for a in spec.assumptions)
+
+
+def test_no_generic_clamp_names_a_node_gnd():
+    # ngspice reads "gnd" as node 0 even inside a subcircuit, which would bypass the ground path.
+    for topology in parts.TOPOLOGIES:
+        spec = parts.ClampSpec(part=topology, topology=topology, v_br_v=6.0, r_dyn_ohm=0.5, c_j_pf=10)
+        text, pins = parts.clamp_subckt(spec, parts.safe_name(topology))
+        assert "gnd" in pins
+        assert not re.search(r"\bgnd\b", text, re.I), topology

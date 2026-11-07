@@ -34,6 +34,9 @@ SUPPLY_L_NH = 5.0
 DECOUPLING_NF = 100.0
 DECOUPLING_ESL_NH = 1.0
 
+#: The clamp subcircuits' ground port. Never "gnd": ngspice reads that as node 0.
+GROUND_PORT = "ref"
+
 TOPOLOGIES = ("tvs-uni", "tvs-bi", "steering-array", "rail-clamp")
 
 
@@ -175,7 +178,12 @@ def clamp_subckt(spec: ClampSpec, name: str) -> tuple[str, list[str]]:
                 f"IBV={_num(ibv)} CJO={_num(cj)})",
                 f"Dh io rail {s}", f"Dl gnd io {s}", "Rr rail gnd 1e9"]
 
-    text = "\n".join([f".subckt {name} {' '.join(pins)}", *body, f".ends {name}"])
+    # ngspice treats a node named "gnd" as the global ground even inside a subcircuit, so a port
+    # called gnd would bypass the clamp's ground inductance (and short any clamp that is not
+    # wired to ground). The port is "ref" in the text; the role list keeps calling it "gnd".
+    body = [re.sub(r"\bgnd\b", GROUND_PORT, line) for line in body]
+    ports = [GROUND_PORT if pin == "gnd" else pin for pin in pins]
+    text = "\n".join([f".subckt {name} {' '.join(ports)}", *body, f".ends {name}"])
     return text, pins
 
 

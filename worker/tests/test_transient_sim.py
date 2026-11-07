@@ -115,6 +115,27 @@ def test_a_clamp_far_behind_the_ic_protects_less_than_one_at_the_connector():
     assert not laid["unclamped"]
 
 
+def test_the_clamp_ground_inductance_is_in_the_circuit():
+    # 2 nH of clamp ground plus a 1.2 nH via, under a 0.8 ns rise of 15 A, is tens of volts at the
+    # clamp. Ideal ground must therefore be clearly lower; equal numbers mean the clamp's ground
+    # port is shorted to node 0 inside the subcircuit (a port named "gnd" is, in ngspice).
+    variants, _ = _simulate(_line(clamp_stub_mm=1.0))
+    laid, ideal = variants["as_laid_out"], variants["ideal_ground"]
+    assert abs(laid["v_clamp_peak_v"]) > abs(ideal["v_clamp_peak_v"]) + 5.0
+
+
+def test_a_clamp_between_two_signal_nodes_conducts():
+    spec = parts.ClampSpec(part="TEST", topology="tvs-bi", v_br_v=6.0, i_t_a=1e-3, r_dyn_ohm=0.5, c_j_pf=20)
+    text, pins = parts.clamp_subckt(spec, "EMI_TEST")
+    r = _run(f"""{text}
+Va a 0 PWL(0 0 10n 20)
+Rb b 0 1
+X1 a b EMI_TEST
+""", "10n", step="0.1n", tmax="0.1n", saves="v(b)")
+    # Across a and b, not to ground: the clamp must still conduct into the 1 ohm at b.
+    assert float(r["v(b)"].max()) > 5.0
+
+
 def test_an_unprotected_line_is_compared_with_a_clamp_at_the_connector():
     variants, _ = _simulate(_line(0.0, with_clamp=False))
     assert set(variants) == {"as_laid_out", "reference_clamp"}

@@ -403,6 +403,10 @@ this section is the one that is true.
   supply pin behind 10 µF of decoupling read like a bare logic input, at around a hundred volts.
 - **The clamp slope is fitted through the datasheet's rated point**, after subtracting the
   breakdown knee and, for steering arrays and bidirectional parts, one forward junction.
+- **A clamp's ground port is never called `gnd`.** ngspice reads a node named `gnd` as node 0 even
+  inside a subcircuit, so a port with that name silently bypassed the clamp's ground inductance:
+  "as laid out" and "clamp ground ideal" gave identical numbers, and a clamp wired between two
+  signal nodes did nothing. The generic subcircuits name the port `ref`.
 - **Element names never collide.** A clamp directly on the line gave its zero-length stub the
   same name as another resistor, and ngspice refused every such netlist.
 - **Models are stored with the run, not in a table.** A file goes through the ordinary
