@@ -33,6 +33,12 @@ def test_a_horizontal_dipole_over_ground_matches_nec2c(tmp_path, monkeypatch):
 
     monkeypatch.setattr(v, "OUT", tmp_path)
     monkeypatch.setattr(v, "FREQS", [30e6, 100e6, 300e6, 700e6])
+    # A tight end criterion, so the run stops at the same place every time. openEMS checks the
+    # energy only when it prints its status (on wall-clock time), so at the production 1e-4 the
+    # stopping step moves with the runner's speed: 4,961 to 5,566 steps on one commit, and the
+    # 30 MHz point (the longest ring-down) read +0.19 to +0.54 dB against nec2c, failing the
+    # 0.5 dB bound on 2026-11-24. At 1e-6 it reads +0.29 dB run after run, for about 5 s more.
+    monkeypatch.setenv("END", "1e-6")
     out = v.case("short-horizontal")
     for row in out["rows"]:
         assert abs(row["scan_diff_db"]) < 0.5, row["f_hz"]
